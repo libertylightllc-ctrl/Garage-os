@@ -16,9 +16,11 @@ PostgreSQL. Auth.js, Anthropic API, WhatsApp Cloud API, Stripe arrive in later b
 npm install
 npm run db:dev      # starts local Postgres; copy the DATABASE_URL/SHADOW_DATABASE_URL it prints into .env
 npm run db:push     # create the tables (see "Migrations" note below)
-npm run dev         # http://localhost:3000  — home page shows DB status; /api/health is a JSON probe
+npm run db:seed     # 1 demo garage, 4 staff logins, 2 customers, 1 vehicle
+npm run dev         # http://localhost:3000  -> /login ; /api/health is a JSON probe
 npm test            # Vitest
 ```
+Demo staff logins (password `password`): `owner@`, `advisor@`, `tech@`, `accountant@demo.garage`.
 > The local Prisma Postgres port is **dynamic** — if you restart `db:dev`, re-copy the printed
 > `DATABASE_URL` into `.env`.
 
@@ -29,5 +31,7 @@ will be generated against the real Supabase DB, which provides a proper shadow d
 source of truth either way.
 
 ## Build order
-See [`docs/GarageOS-Technical-Spec.md`](docs/GarageOS-Technical-Spec.md) §5. **Step 1 (this commit):**
-scaffold + Prisma schema + DB + running app + first test. **Next: Step 2** — Auth.js with 4 staff roles.
+See [`docs/GarageOS-Technical-Spec.md`](docs/GarageOS-Technical-Spec.md) §5.
+**Step 1:** scaffold + Prisma schema + DB + running app + first test. ✅
+**Step 2:** Auth.js (Credentials/JWT) with 4 staff roles + role-routed home screens + seed. ✅
+**Next: Step 3** — JobCard core + advisor timeline (the spine).

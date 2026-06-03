@@ -115,11 +115,12 @@ model User {
   id       String @id @default(cuid())
   garageId String
   garage   Garage @relation(fields: [garageId], references: [id])
-  role     Role
-  name     String
-  phone    String?
-  email    String? @unique
-  lang     Lang   @default(en)
+  role         Role
+  name         String
+  phone        String?
+  email        String  @unique // staff log in with email
+  passwordHash String? // bcrypt; null = not yet set (e.g. OAuth later)
+  lang         Lang    @default(en)
 
   advisorJobCards JobCard[] @relation("AdvisorJobCards")
   techSteps       JobStep[] @relation("TechSteps")

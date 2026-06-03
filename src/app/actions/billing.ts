@@ -11,6 +11,7 @@ import {
   paymentLedger,
   vatStrategyFor,
   qrPlaceholder,
+  isRecordableMethod,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -23,6 +24,12 @@ async function customerForJob(jobCardId: string) {
     include: { vehicle: { include: { customer: true } } },
   });
   return j?.vehicle.customer ?? null;
+}
+
+async function requireAnyRole(roles: string[]) {
+  const session = await auth();
+  if (!session?.user || !roles.includes(session.user.role)) throw new Error("Not authorized");
+  return session.user;
 }
 
 async function requireRoleUser(role: "ADVISOR" | "ACCOUNTANT") {
@@ -220,10 +227,16 @@ export async function generateInvoiceAction(formData: FormData) {
 }
 
 export async function recordPaymentAction(formData: FormData) {
-  const user = await requireRoleUser("ACCOUNTANT");
+  // Accountant or owner can mark an invoice paid.
+  const user = await requireAnyRole(["ACCOUNTANT", "OWNER"]);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const amount = Math.max(0, Number(formData.get("amount") ?? 0));
   const method = String(formData.get("method") ?? "CASH");
+
+  // Record-only: Cash / Card (POS). Online Link is not wired yet (Plan B / PSP).
+  if (!isRecordableMethod(method)) {
+    throw new Error("Online payment links aren’t available yet — use Cash or Card (POS).");
+  }
 
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId: user.garageId },

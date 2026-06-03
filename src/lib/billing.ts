@@ -89,6 +89,16 @@ export function arState(total: number, paid: number, dueDate: Date, now: Date): 
   return now.getTime() > dueDate.getTime() ? "OVERDUE" : "DUE";
 }
 
+// ---------- Payment methods ----------
+// We RECORD payments only — money is handled by the garage's own POS / cash drawer.
+// Cash and Card (POS) record immediately; Online Link is a stub (wired with the PSP later).
+export type PaymentMethod = "CASH" | "CARD_POS" | "ONLINE_LINK";
+export const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "CARD_POS", "ONLINE_LINK"];
+
+export function isRecordableMethod(method: string): method is "CASH" | "CARD_POS" {
+  return method === "CASH" || method === "CARD_POS";
+}
+
 // ---------- Invoice helpers ----------
 export function formatInvoiceNo(seq: number, year: number): string {
   return `INV-${year}-${String(seq).padStart(4, "0")}`;

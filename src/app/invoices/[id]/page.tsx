@@ -106,9 +106,10 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Accountants record payments here */}
-      {session.user.role === "ACCOUNTANT" && state !== "PAID" ? (
-        <form action={recordPaymentAction} className="flex items-end gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+      {/* Mark as paid — record-only (garage uses its own POS / cash drawer) */}
+      {["ACCOUNTANT", "OWNER"].includes(session.user.role) && state !== "PAID" ? (
+        <form action={recordPaymentAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <div className="w-full text-sm font-medium">{t("markAsPaid")}</div>
           <input type="hidden" name="invoiceId" value={inv.id} />
           <label className="text-sm">
             {t("amount")}
@@ -121,13 +122,15 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
               className="mt-1 block w-32 rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
             />
           </label>
-          <select name="method" className="rounded-md border border-black/15 bg-transparent px-2 py-2 text-sm dark:border-white/20">
+          <select name="method" defaultValue="CASH" className="rounded-md border border-black/15 bg-transparent px-2 py-2 text-sm dark:border-white/20">
             <option value="CASH">{t("methodCash")}</option>
-            <option value="CARD">{t("methodCard")}</option>
-            <option value="TRANSFER">{t("methodTransfer")}</option>
+            <option value="CARD_POS">{t("methodCardPos")}</option>
+            <option value="ONLINE_LINK" disabled>
+              {t("methodOnlineLink")} ({t("soon")})
+            </option>
           </select>
           <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
-            {t("recordPayment")}
+            {t("markAsPaid")}
           </button>
         </form>
       ) : null}

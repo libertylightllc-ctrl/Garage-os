@@ -60,7 +60,7 @@ export async function payInvoicePublic(formData: FormData) {
   if (balance <= 0) return;
 
   await prisma.$transaction(async (tx) => {
-    await tx.payment.create({ data: { invoiceId: inv.id, amount: balance, method: "ONLINE" } });
+    await tx.payment.create({ data: { invoiceId: inv.id, amount: balance, method: "ONLINE_LINK" } });
     await tx.ledgerEntry.createMany({
       data: paymentLedger(balance).map((e) => ({
         garageId: inv.garageId,

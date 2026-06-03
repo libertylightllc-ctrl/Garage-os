@@ -166,6 +166,10 @@ const en = {
   methodCash: "Cash",
   methodCard: "Card",
   methodTransfer: "Bank transfer",
+  methodCardPos: "Card (POS)",
+  methodOnlineLink: "Online Link",
+  markAsPaid: "Mark as Paid",
+  soon: "soon",
   qrPlaceholder: "QR placeholder",
 
   // customer estimate / invoice
@@ -380,6 +384,10 @@ const ar: typeof en = {
   methodCash: "نقدًا",
   methodCard: "بطاقة",
   methodTransfer: "تحويل بنكي",
+  methodCardPos: "بطاقة (نقاط بيع)",
+  methodOnlineLink: "رابط دفع إلكتروني",
+  markAsPaid: "تحديد كمدفوعة",
+  soon: "قريبًا",
   qrPlaceholder: "رمز QR (مؤقت)",
 
   yourEstimate: "تقديرك",

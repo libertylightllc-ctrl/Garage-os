@@ -7,6 +7,7 @@ import {
   isBalanced,
   arState,
   formatInvoiceNo,
+  isRecordableMethod,
   type DraftLine,
 } from "./billing";
 
@@ -46,6 +47,17 @@ describe("AR status", () => {
   });
   it("overdue when unpaid and past due date", () => {
     expect(arState(100, 40, due, new Date("2026-06-20T00:00:00Z"))).toBe("OVERDUE");
+  });
+});
+
+describe("payment methods", () => {
+  it("records Cash and Card (POS) immediately", () => {
+    expect(isRecordableMethod("CASH")).toBe(true);
+    expect(isRecordableMethod("CARD_POS")).toBe(true);
+  });
+  it("treats Online Link as a stub (not yet recordable)", () => {
+    expect(isRecordableMethod("ONLINE_LINK")).toBe(false);
+    expect(isRecordableMethod("anything")).toBe(false);
   });
 });
 

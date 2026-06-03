@@ -62,7 +62,8 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[20rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/15">
             <th className="py-1">Description</th>
@@ -82,6 +83,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           ))}
         </tbody>
       </table>
+      </div>
 
       <div className="flex items-end justify-between">
         {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}

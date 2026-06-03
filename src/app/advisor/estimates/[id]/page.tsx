@@ -44,7 +44,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         </p>
       </div>
 
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[20rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/15">
             <th className="py-1">Item</th>
@@ -83,6 +84,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           ) : null}
         </tbody>
       </table>
+      </div>
 
       <div className="ml-auto text-right text-sm">
         <div>Subtotal: {money(Number(est.subtotal))}</div>

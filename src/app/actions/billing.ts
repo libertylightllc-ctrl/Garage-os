@@ -14,6 +14,15 @@ import {
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
+import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
+
+async function customerForJob(jobCardId: string) {
+  const j = await prisma.jobCard.findUnique({
+    where: { id: jobCardId },
+    include: { vehicle: { include: { customer: true } } },
+  });
+  return j?.vehicle.customer ?? null;
+}
 
 async function requireRoleUser(role: "ADVISOR" | "ACCOUNTANT") {
   const session = await auth();
@@ -102,6 +111,17 @@ export async function setEstimateStatusAction(formData: FormData) {
     await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "APPROVED" } });
   } else if (status === "REJECTED") {
     await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "ESTIMATE" } });
+  } else if (status === "SENT") {
+    // Send the customer the WhatsApp approval link (mock if no Meta token).
+    const customer = await customerForJob(est.jobCardId);
+    if (customer) {
+      await sendWhatsApp({
+        customerId: customer.id,
+        waId: customer.waId ?? customer.phone,
+        template: "estimate_approval",
+        body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${est.id}`,
+      });
+    }
   }
   revalidatePath(`/advisor/estimates/${estimateId}`);
   revalidatePath(`/advisor/jobs/${est.jobCardId}`);
@@ -183,6 +203,17 @@ export async function generateInvoiceAction(formData: FormData) {
     await tx.jobCard.update({ where: { id: est.jobCardId }, data: { status: "INVOICED" } });
     return inv.id;
   });
+
+  // Send the customer the WhatsApp invoice/pay link (mock if no Meta token).
+  const customer = await customerForJob(est.jobCardId);
+  if (customer) {
+    await sendWhatsApp({
+      customerId: customer.id,
+      waId: customer.waId ?? customer.phone,
+      template: "invoice",
+      body: `Your invoice is ready. View & pay: ${appUrl()}/c/invoice/${invoiceId}`,
+    });
+  }
 
   redirect(`/invoices/${invoiceId}`);
 }

@@ -35,7 +35,11 @@ export const UAEStrategy: VatStrategy = { country: "UAE", rate: UAE_VAT_RATE, cl
 
 export function vatStrategyFor(country: string): VatStrategy {
   // Phase 1 ships UAE only; KSAFatooraStrategy plugs in here in Phase 2.
-  return UAEStrategy;
+  switch (country) {
+    case "UAE":
+    default:
+      return UAEStrategy;
+  }
 }
 
 // ---------- Zero-entry double-entry ledger ----------

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { approveEstimatePublic, rejectEstimatePublic } from "@/app/actions/public";
+import { approveEstimatePublic, rejectEstimatePublic, toggleLinePublic } from "@/app/actions/public";
 import { verifyToken } from "@/lib/tokens";
 import { getT } from "@/i18n/server";
 
@@ -36,12 +36,22 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
 
       <ul className="flex flex-col gap-1 text-sm">
         {est.lines.map((l) => (
-          <li
-            key={l.id}
-            className={"flex justify-between " + (l.declined ? "text-zinc-400 line-through" : "")}
-          >
-            <span>{l.description}</span>
-            <span>{Number(l.lineTotal).toFixed(2)}</span>
+          <li key={l.id} className="flex items-center justify-between gap-2">
+            <span className={l.declined ? "text-zinc-400 line-through" : ""}>{l.description}</span>
+            <span className="flex items-center gap-2">
+              <span className={l.declined ? "text-zinc-400 line-through" : ""}>
+                {Number(l.lineTotal).toFixed(2)}
+              </span>
+              {est.status === "SENT" ? (
+                <form action={toggleLinePublic}>
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="lineId" value={l.id} />
+                  <button className="text-xs text-zinc-500 hover:underline">
+                    {l.declined ? t("restore") : t("skip")}
+                  </button>
+                </form>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>

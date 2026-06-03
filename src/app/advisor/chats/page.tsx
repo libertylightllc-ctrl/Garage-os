@@ -23,6 +23,9 @@ export default async function ChatsInbox() {
     prisma.customer.findMany({ where: { garageId }, orderBy: { createdAt: "asc" } }),
   ]);
   const t = await getT();
+  const ordered = threads
+    .slice()
+    .sort((a, b) => Number(b.threadStatus === "NEEDS_HUMAN") - Number(a.threadStatus === "NEEDS_HUMAN"));
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -35,7 +38,7 @@ export default async function ChatsInbox() {
             {t("noChats")}
           </li>
         ) : (
-          threads.map((th) => (
+          ordered.map((th) => (
             <li key={th.id}>
               <Link
                 href={`/advisor/chats/${th.id}`}

@@ -14,6 +14,9 @@ CREATE TYPE "BookingChannel" AS ENUM ('WA', 'WEB', 'PHONE');
 CREATE TYPE "BookingStatus" AS ENUM ('PROPOSED', 'CONFIRMED', 'REJECTED');
 
 -- CreateEnum
+CREATE TYPE "HoldReason" AS ENUM ('AWAITING_PART', 'AWAITING_CUSTOMER', 'OTHER');
+
+-- CreateEnum
 CREATE TYPE "JobStatus" AS ENUM ('ARRIVED', 'INSPECTION', 'ESTIMATE', 'APPROVED', 'REPAIR', 'INVOICED', 'DELIVERED', 'ON_HOLD', 'CANCELLED');
 
 -- CreateEnum
@@ -29,10 +32,25 @@ CREATE TYPE "ClearanceStatus" AS ENUM ('NA', 'PENDING', 'CLEARED');
 CREATE TYPE "LineKind" AS ENUM ('LABOR', 'PART', 'FEE');
 
 -- CreateEnum
+CREATE TYPE "WaConnStatus" AS ENUM ('CONNECTED', 'DISCONNECTED');
+
+-- CreateEnum
+CREATE TYPE "WaMode" AS ENUM ('BOT', 'HUMAN');
+
+-- CreateEnum
+CREATE TYPE "WaThreadStatus" AS ENUM ('OPEN', 'NEEDS_HUMAN', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "WaMsgState" AS ENUM ('RECEIVED', 'SENT', 'PENDING_APPROVAL', 'DRAFT');
+
+-- CreateEnum
 CREATE TYPE "WaDirection" AS ENUM ('IN', 'OUT');
 
 -- CreateEnum
 CREATE TYPE "AiKind" AS ENUM ('INTAKE', 'COPILOT', 'OCR', 'RECEPTIONIST');
+
+-- CreateEnum
+CREATE TYPE "SubStatus" AS ENUM ('PILOT', 'TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED');
 
 -- CreateTable
 CREATE TABLE "Garage" (
@@ -43,10 +61,53 @@ CREATE TABLE "Garage" (
     "branchOfId" TEXT,
     "settingsJson" JSONB,
     "invoiceSeq" INTEGER NOT NULL DEFAULT 0,
+    "isPilot" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Garage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Plan" (
+    "id" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "priceMonthly" DECIMAL(12,2) NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'AED',
+    "stripePriceId" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Plan_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Subscription" (
+    "id" TEXT NOT NULL,
+    "garageId" TEXT NOT NULL,
+    "planId" TEXT,
+    "status" "SubStatus" NOT NULL DEFAULT 'PILOT',
+    "stripeCustomerId" TEXT,
+    "stripeSubscriptionId" TEXT,
+    "trialEnd" TIMESTAMP(3),
+    "currentPeriodEnd" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BillingEvent" (
+    "id" TEXT NOT NULL,
+    "stripeEventId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "payloadJson" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BillingEvent_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -122,6 +183,8 @@ CREATE TABLE "JobCard" (
     "bookingId" TEXT,
     "status" "JobStatus" NOT NULL DEFAULT 'ARRIVED',
     "heldFrom" "JobStatus",
+    "holdReason" "HoldReason",
+    "holdNote" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -168,6 +231,7 @@ CREATE TABLE "EstimateLine" (
     "unitPrice" DECIMAL(12,2) NOT NULL,
     "lineTotal" DECIMAL(12,2) NOT NULL,
     "vatRate" DECIMAL(5,4) NOT NULL DEFAULT 0.05,
+    "declined" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -269,10 +333,30 @@ CREATE TABLE "LedgerEntry" (
 );
 
 -- CreateTable
+CREATE TABLE "WhatsAppAccount" (
+    "id" TEXT NOT NULL,
+    "garageId" TEXT NOT NULL,
+    "wabaId" TEXT,
+    "phoneNumberId" TEXT,
+    "phoneNumber" TEXT,
+    "accessTokenEnc" TEXT,
+    "status" "WaConnStatus" NOT NULL DEFAULT 'DISCONNECTED',
+    "connectedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "WhatsAppAccount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "WhatsAppThread" (
     "id" TEXT NOT NULL,
+    "garageId" TEXT NOT NULL,
     "customerId" TEXT NOT NULL,
     "waId" TEXT NOT NULL,
+    "mode" "WaMode" NOT NULL DEFAULT 'BOT',
+    "threadStatus" "WaThreadStatus" NOT NULL DEFAULT 'OPEN',
+    "assignedAdvisorId" TEXT,
     "lastMessageAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -289,6 +373,8 @@ CREATE TABLE "WhatsAppMessage" (
     "body" TEXT,
     "waMessageId" TEXT NOT NULL,
     "status" TEXT,
+    "aiGenerated" BOOLEAN NOT NULL DEFAULT false,
+    "state" "WaMsgState" NOT NULL DEFAULT 'SENT',
     "payloadJson" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -313,6 +399,15 @@ CREATE TABLE "AiEvent" (
 
     CONSTRAINT "AiEvent_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Plan_code_key" ON "Plan"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Subscription_garageId_key" ON "Subscription"("garageId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BillingEvent_stripeEventId_key" ON "BillingEvent"("stripeEventId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
@@ -372,7 +467,13 @@ CREATE INDEX "PartMovement_partId_idx" ON "PartMovement"("partId");
 CREATE INDEX "LedgerEntry_garageId_account_idx" ON "LedgerEntry"("garageId", "account");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "WhatsAppThread_waId_key" ON "WhatsAppThread"("waId");
+CREATE UNIQUE INDEX "WhatsAppAccount_garageId_key" ON "WhatsAppAccount"("garageId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WhatsAppAccount_phoneNumberId_key" ON "WhatsAppAccount"("phoneNumberId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WhatsAppThread_garageId_waId_key" ON "WhatsAppThread"("garageId", "waId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "WhatsAppMessage_waMessageId_key" ON "WhatsAppMessage"("waMessageId");
@@ -385,6 +486,12 @@ CREATE INDEX "AiEvent_garageId_kind_idx" ON "AiEvent"("garageId", "kind");
 
 -- AddForeignKey
 ALTER TABLE "Garage" ADD CONSTRAINT "Garage_branchOfId_fkey" FOREIGN KEY ("branchOfId") REFERENCES "Garage"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_garageId_fkey" FOREIGN KEY ("garageId") REFERENCES "Garage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "Plan"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_garageId_fkey" FOREIGN KEY ("garageId") REFERENCES "Garage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -457,6 +564,12 @@ ALTER TABLE "PartMovement" ADD CONSTRAINT "PartMovement_jobCardId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "LedgerEntry" ADD CONSTRAINT "LedgerEntry_garageId_fkey" FOREIGN KEY ("garageId") REFERENCES "Garage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppAccount" ADD CONSTRAINT "WhatsAppAccount_garageId_fkey" FOREIGN KEY ("garageId") REFERENCES "Garage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WhatsAppThread" ADD CONSTRAINT "WhatsAppThread_garageId_fkey" FOREIGN KEY ("garageId") REFERENCES "Garage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "WhatsAppThread" ADD CONSTRAINT "WhatsAppThread_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

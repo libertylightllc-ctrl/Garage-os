@@ -47,6 +47,20 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         <p className="text-sm text-zinc-500 dark:text-zinc-400">{job.vehicle.plate}</p>
       </div>
 
+      {job.status === "ON_HOLD" && job.holdReason ? (
+        <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+          🟡 {t("onHold")}:{" "}
+          {(
+            {
+              AWAITING_PART: t("hrAwaitingPart"),
+              AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+              OTHER: t("hrOther"),
+            } as Record<string, string>
+          )[job.holdReason]}
+          {job.holdNote ? ` — ${job.holdNote}` : ""}
+        </p>
+      ) : null}
+
       {/* Big-button, no-typing actions */}
       <div className="grid grid-cols-2 gap-3">
         <form action={addStepAction} className={bigBtn}>

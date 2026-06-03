@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { paymentLedger } from "@/lib/billing";
+import { paymentLedger, totalsFor, type LineKind } from "@/lib/billing";
 import { recordInbound } from "@/lib/whatsapp";
 import { verifyToken } from "@/lib/tokens";
 
@@ -43,6 +43,35 @@ export async function rejectEstimatePublic(formData: FormData) {
   const c = est.jobCard.vehicle.customer;
   await logInbound(c.garageId, c.id, c.waId ?? c.phone, "REJECT");
   revalidatePath(`/c/estimate/${id}`);
+}
+
+// Customer skips/restores a line on their estimate (while it's awaiting their decision).
+export async function toggleLinePublic(formData: FormData) {
+  const token = String(formData.get("token") ?? "");
+  const estId = verifyToken("estimate", token);
+  if (!estId) return;
+  const lineId = String(formData.get("lineId") ?? "");
+
+  const est = await prisma.estimate.findUnique({ where: { id: estId } });
+  if (!est || est.status !== "SENT") return;
+  const line = await prisma.estimateLine.findFirst({ where: { id: lineId, estimateId: estId } });
+  if (!line) return;
+
+  await prisma.estimateLine.update({ where: { id: lineId }, data: { declined: !line.declined } });
+  const lines = await prisma.estimateLine.findMany({ where: { estimateId: estId, declined: false } });
+  const t = totalsFor(
+    lines.map((l) => ({
+      kind: l.kind as LineKind,
+      description: l.description,
+      qty: Number(l.qty),
+      unitPrice: Number(l.unitPrice),
+    })),
+  );
+  await prisma.estimate.update({
+    where: { id: estId },
+    data: { subtotal: t.subtotal, vatAmount: t.vatAmount, total: t.total },
+  });
+  revalidatePath(`/c/estimate/${token}`);
 }
 
 export async function payInvoicePublic(formData: FormData) {

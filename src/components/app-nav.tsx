@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { signOutAction } from "@/app/actions/auth";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { type StaffRole } from "@/lib/roles";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
@@ -30,6 +32,17 @@ const NAV: Record<StaffRole, NavItem[]> = {
 export async function AppNav({ role, active }: { role: StaffRole; active?: string }) {
   const items = NAV[role];
   const t = await getT();
+
+  // Advisor: badge the Chats tab with conversations needing a human.
+  let needsHuman = 0;
+  if (role === "ADVISOR") {
+    const session = await auth();
+    if (session?.user?.garageId) {
+      needsHuman = await prisma.whatsAppThread.count({
+        where: { garageId: session.user.garageId, threadStatus: "NEEDS_HUMAN" },
+      });
+    }
+  }
   return (
     <header className="sticky top-0 z-40 -mx-6 mb-2 border-b border-black/10 bg-white/80 px-6 py-3 backdrop-blur dark:border-white/15 dark:bg-black/60">
       <div className="flex items-center justify-between gap-3">
@@ -56,6 +69,11 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                 }
               >
                 {t(it.labelKey)}
+                {it.key === "chats" && needsHuman > 0 ? (
+                  <span className="ms-1 rounded-full bg-red-500 px-1.5 text-xs text-white">
+                    {needsHuman}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { recordInbound } from "@/lib/whatsapp";
+import { handleInbound } from "@/lib/receptionist-engine";
 
 // Meta webhook verification handshake.
 export async function GET(req: Request) {
@@ -18,34 +18,47 @@ interface WaMessage {
   id: string;
   text?: { body?: string };
 }
+interface WaChange {
+  value?: { metadata?: { phone_number_id?: string }; messages?: WaMessage[] };
+}
 
-// Inbound messages. Always 200 so Meta stops retrying; dedupe on message id.
+// Inbound — routes to the garage that owns the receiving number (multi-tenant), then
+// hands each message to the AI engine. Always 200 so Meta stops retrying.
 export async function POST(req: Request) {
   try {
-    const payload = (await req.json()) as {
-      entry?: { changes?: { value?: { messages?: WaMessage[] } }[] }[];
-    };
+    const payload = (await req.json()) as { entry?: { changes?: WaChange[] }[] };
     for (const entry of payload.entry ?? []) {
       for (const change of entry.changes ?? []) {
+        const phoneNumberId = change.value?.metadata?.phone_number_id;
+        if (!phoneNumberId) continue;
+        const acct = await prisma.whatsAppAccount.findUnique({ where: { phoneNumberId } });
+        if (!acct) continue; // unknown number — not ours
+        const garageId = acct.garageId;
+
         for (const m of change.value?.messages ?? []) {
           const waId = m.from;
-          const customer = await prisma.customer.findFirst({
-            where: { OR: [{ waId }, { phone: waId }] },
-            select: { id: true },
+          let customer = await prisma.customer.findFirst({
+            where: { garageId, OR: [{ waId }, { phone: waId }] },
+            select: { id: true, lang: true },
           });
-          if (customer) {
-            await recordInbound({
-              customerId: customer.id,
-              waId,
-              waMessageId: m.id,
-              body: m.text?.body ?? "",
+          if (!customer) {
+            customer = await prisma.customer.create({
+              data: { garageId, phone: waId, waId, name: waId, lang: "ar" },
+              select: { id: true, lang: true },
             });
           }
+          await handleInbound({
+            garageId,
+            customer: { id: customer.id, lang: customer.lang },
+            waId,
+            waMessageId: m.id,
+            body: m.text?.body ?? "",
+          });
         }
       }
     }
   } catch {
-    // swallow — never make Meta retry on our parse errors
+    // swallow — never trigger Meta retries on our parse errors
   }
   return new Response("ok", { status: 200 });
 }

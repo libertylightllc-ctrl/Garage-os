@@ -79,6 +79,29 @@ enum LineKind {
   FEE
 }
 
+enum WaConnStatus {
+  CONNECTED
+  DISCONNECTED
+}
+
+enum WaMode {
+  BOT
+  HUMAN
+}
+
+enum WaThreadStatus {
+  OPEN
+  NEEDS_HUMAN
+  CLOSED
+}
+
+enum WaMsgState {
+  RECEIVED
+  SENT
+  PENDING_APPROVAL
+  DRAFT
+}
+
 enum WaDirection {
   IN
   OUT
@@ -113,6 +136,8 @@ model Garage {
   ledgerEntries LedgerEntry[]
   aiEvents     AiEvent[]
   subscription Subscription?
+  whatsAppAccount WhatsAppAccount?
+  waThreads    WhatsAppThread[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -450,17 +475,40 @@ model LedgerEntry {
 }
 
 // ---------- WhatsApp ----------
+// Per-garage WhatsApp Business connection (Embedded Signup). Token stored ENCRYPTED.
+model WhatsAppAccount {
+  id             String   @id @default(cuid())
+  garageId       String   @unique
+  garage         Garage   @relation(fields: [garageId], references: [id])
+  wabaId         String?
+  phoneNumberId  String?  @unique
+  phoneNumber    String?
+  accessTokenEnc String? // AES-GCM ciphertext — never plaintext, never a raw token
+  status         WaConnStatus @default(DISCONNECTED)
+  connectedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model WhatsAppThread {
-  id            String    @id @default(cuid())
-  customerId    String
-  customer      Customer  @relation(fields: [customerId], references: [id])
-  waId          String    @unique
-  lastMessageAt DateTime?
+  id               String          @id @default(cuid())
+  garageId         String
+  garage           Garage          @relation(fields: [garageId], references: [id])
+  customerId       String
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  waId             String
+  mode             WaMode          @default(BOT) // BOT = AI handles; HUMAN = advisor took over
+  threadStatus     WaThreadStatus  @default(OPEN)
+  assignedAdvisorId String?
+  lastMessageAt    DateTime?
 
   messages WhatsAppMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([garageId, waId])
 }
 
 model WhatsAppMessage {
@@ -472,6 +520,8 @@ model WhatsAppMessage {
   body        String?
   waMessageId String         @unique // webhook idempotency
   status      String?
+  aiGenerated Boolean        @default(false)
+  state       WaMsgState     @default(SENT) // RECEIVED | SENT | PENDING_APPROVAL | DRAFT
   payloadJson Json?
 
   createdAt DateTime @default(now())

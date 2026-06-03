@@ -11,8 +11,8 @@ import { verifyToken } from "@/lib/tokens";
 // authorization is the unguessable record id acting as a capability token.
 // (Production: sign the token; here the cuid is sufficient for a pilot.)
 
-async function logInbound(customerId: string, waId: string, body: string) {
-  await recordInbound({ customerId, waId, waMessageId: `web-${randomUUID()}`, body });
+async function logInbound(garageId: string, customerId: string, waId: string, body: string) {
+  await recordInbound({ garageId, customerId, waId, waMessageId: `web-${randomUUID()}`, body });
 }
 
 export async function approveEstimatePublic(formData: FormData) {
@@ -26,7 +26,7 @@ export async function approveEstimatePublic(formData: FormData) {
   await prisma.estimate.update({ where: { id }, data: { status: "APPROVED" } });
   await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "APPROVED" } });
   const c = est.jobCard.vehicle.customer;
-  await logInbound(c.id, c.waId ?? c.phone, "APPROVE");
+  await logInbound(c.garageId, c.id, c.waId ?? c.phone, "APPROVE");
   revalidatePath(`/c/estimate/${id}`);
 }
 
@@ -41,7 +41,7 @@ export async function rejectEstimatePublic(formData: FormData) {
   await prisma.estimate.update({ where: { id }, data: { status: "REJECTED" } });
   await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "ESTIMATE" } });
   const c = est.jobCard.vehicle.customer;
-  await logInbound(c.id, c.waId ?? c.phone, "REJECT");
+  await logInbound(c.garageId, c.id, c.waId ?? c.phone, "REJECT");
   revalidatePath(`/c/estimate/${id}`);
 }
 
@@ -75,6 +75,6 @@ export async function payInvoicePublic(formData: FormData) {
   });
 
   const c = inv.jobCard.vehicle.customer;
-  await logInbound(c.id, c.waId ?? c.phone, "PAID");
+  await logInbound(c.garageId, c.id, c.waId ?? c.phone, "PAID");
   revalidatePath(`/c/invoice/${id}`);
 }

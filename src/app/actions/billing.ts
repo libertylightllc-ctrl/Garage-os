@@ -146,6 +146,7 @@ export async function setEstimateStatusAction(formData: FormData) {
     const customer = await customerForJob(est.jobCardId);
     if (customer) {
       await sendWhatsApp({
+        garageId: user.garageId,
         customerId: customer.id,
         waId: customer.waId ?? customer.phone,
         template: "estimate_approval",
@@ -240,6 +241,7 @@ export async function generateInvoiceAction(formData: FormData) {
   const customer = await customerForJob(est.jobCardId);
   if (customer) {
     await sendWhatsApp({
+      garageId: user.garageId,
       customerId: customer.id,
       waId: customer.waId ?? customer.phone,
       template: "invoice",

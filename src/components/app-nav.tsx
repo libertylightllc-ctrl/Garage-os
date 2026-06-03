@@ -15,10 +15,12 @@ const NAV: Record<StaffRole, NavItem[]> = {
     { href: "/owner", labelKey: "tabDashboard", key: "dashboard" },
     { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
     { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
+    { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
   ],
   ADVISOR: [
     { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
     { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
+    { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
   ],
   TECH: [{ href: "/technician", labelKey: "tabWorkshop", key: "workshop" }],
   ACCOUNTANT: [{ href: "/accountant", labelKey: "tabAccounts", key: "accounts" }],

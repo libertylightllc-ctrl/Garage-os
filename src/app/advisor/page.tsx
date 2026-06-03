@@ -9,14 +9,17 @@ export const dynamic = "force-dynamic";
 export default async function AdvisorHome() {
   const session = await requireRole("ADVISOR");
 
-  const jobs = await prisma.jobCard.findMany({
-    where: {
-      garageId: session.user.garageId,
-      status: { notIn: ["DELIVERED", "CANCELLED"] },
-    },
-    include: { vehicle: { include: { customer: true } } },
-    orderBy: { updatedAt: "desc" },
-  });
+  const [jobs, pendingBookings] = await Promise.all([
+    prisma.jobCard.findMany({
+      where: {
+        garageId: session.user.garageId,
+        status: { notIn: ["DELIVERED", "CANCELLED"] },
+      },
+      include: { vehicle: { include: { customer: true } } },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.booking.count({ where: { garageId: session.user.garageId, status: "PROPOSED" } }),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -32,12 +35,20 @@ export default async function AdvisorHome() {
         </form>
       </div>
 
-      <Link
-        href="/advisor/jobs/new"
-        className="rounded-lg bg-zinc-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-      >
-        + New job card
-      </Link>
+      <div className="flex gap-2">
+        <Link
+          href="/advisor/jobs/new"
+          className="flex-1 rounded-lg bg-zinc-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+        >
+          + New job card
+        </Link>
+        <Link
+          href="/advisor/bookings"
+          className="flex-1 rounded-lg border border-black/15 px-4 py-3 text-center text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          New bookings{pendingBookings > 0 ? ` (${pendingBookings})` : ""}
+        </Link>
+      </div>
 
       <ul className="flex flex-col gap-2">
         {jobs.length === 0 ? (

@@ -9,7 +9,10 @@ interface NavItem {
 }
 
 const NAV: Record<StaffRole, NavItem[]> = {
-  OWNER: [{ href: "/owner", label: "Dashboard", key: "dashboard" }],
+  OWNER: [
+    { href: "/owner", label: "Dashboard", key: "dashboard" },
+    { href: "/owner/staff", label: "Team", key: "team" },
+  ],
   ADVISOR: [
     { href: "/advisor", label: "Jobs", key: "jobs" },
     { href: "/advisor/bookings", label: "Bookings", key: "bookings" },

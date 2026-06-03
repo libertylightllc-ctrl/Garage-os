@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
@@ -20,9 +21,9 @@ async function loginAction(formData: FormData) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; new?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, new: isNew } = await searchParams;
   const t = await getT();
 
   return (
@@ -31,6 +32,12 @@ export default async function LoginPage({
         <p className="text-sm text-zinc-500 dark:text-zinc-400">GarageOS</p>
         <h1 className="text-2xl font-semibold tracking-tight">{t("signInTitle")}</h1>
       </div>
+
+      {isNew ? (
+        <p className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+          Garage created — sign in with your owner account.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
@@ -70,6 +77,13 @@ export default async function LoginPage({
           <li>tech@demo.garage · accountant@demo.garage</li>
         </ul>
       </div>
+
+      <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+        New garage?{" "}
+        <Link href="/signup" className="font-medium underline-offset-2 hover:underline">
+          Set one up
+        </Link>
+      </p>
     </main>
   );
 }

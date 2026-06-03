@@ -15,6 +15,7 @@ import {
   type LineKind,
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
+import { signId } from "@/lib/tokens";
 
 async function customerForJob(jobCardId: string) {
   const j = await prisma.jobCard.findUnique({
@@ -119,7 +120,7 @@ export async function setEstimateStatusAction(formData: FormData) {
         customerId: customer.id,
         waId: customer.waId ?? customer.phone,
         template: "estimate_approval",
-        body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${est.id}`,
+        body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${signId("estimate", est.id)}`,
       });
     }
   }
@@ -211,7 +212,7 @@ export async function generateInvoiceAction(formData: FormData) {
       customerId: customer.id,
       waId: customer.waId ?? customer.phone,
       template: "invoice",
-      body: `Your invoice is ready. View & pay: ${appUrl()}/c/invoice/${invoiceId}`,
+      body: `Your invoice is ready. View & pay: ${appUrl()}/c/invoice/${signId("invoice", invoiceId)}`,
     });
   }
 

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { paymentLedger } from "@/lib/billing";
 import { recordInbound } from "@/lib/whatsapp";
+import { verifyToken } from "@/lib/tokens";
 
 // These are the customer's surface (reached via a WhatsApp link). No staff auth;
 // authorization is the unguessable record id acting as a capability token.
@@ -15,7 +16,8 @@ async function logInbound(customerId: string, waId: string, body: string) {
 }
 
 export async function approveEstimatePublic(formData: FormData) {
-  const id = String(formData.get("estimateId") ?? "");
+  const id = verifyToken("estimate", String(formData.get("token") ?? ""));
+  if (!id) return;
   const est = await prisma.estimate.findUnique({
     where: { id },
     include: { jobCard: { include: { vehicle: { include: { customer: true } } } } },
@@ -29,7 +31,8 @@ export async function approveEstimatePublic(formData: FormData) {
 }
 
 export async function rejectEstimatePublic(formData: FormData) {
-  const id = String(formData.get("estimateId") ?? "");
+  const id = verifyToken("estimate", String(formData.get("token") ?? ""));
+  if (!id) return;
   const est = await prisma.estimate.findUnique({
     where: { id },
     include: { jobCard: { include: { vehicle: { include: { customer: true } } } } },
@@ -43,7 +46,8 @@ export async function rejectEstimatePublic(formData: FormData) {
 }
 
 export async function payInvoicePublic(formData: FormData) {
-  const id = String(formData.get("invoiceId") ?? "");
+  const id = verifyToken("invoice", String(formData.get("token") ?? ""));
+  if (!id) return;
   const inv = await prisma.invoice.findUnique({
     where: { id },
     include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },

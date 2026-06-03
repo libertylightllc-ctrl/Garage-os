@@ -2,13 +2,16 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { payInvoicePublic } from "@/app/actions/public";
 import { formatInvoiceNo } from "@/lib/billing";
+import { verifyToken } from "@/lib/tokens";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function CustomerInvoice({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: token } = await params;
+  const id = verifyToken("invoice", token);
+  if (!id) notFound();
   const inv = await prisma.invoice.findUnique({
     where: { id },
     include: {
@@ -56,7 +59,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
         </p>
       ) : (
         <form action={payInvoicePublic}>
-          <input type="hidden" name="invoiceId" value={inv.id} />
+          <input type="hidden" name="token" value={token} />
           <button className="w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-500">
             Pay {money(balance)} (simulated)
           </button>

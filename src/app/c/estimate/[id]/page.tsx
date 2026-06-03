@@ -1,13 +1,16 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { approveEstimatePublic, rejectEstimatePublic } from "@/app/actions/public";
+import { verifyToken } from "@/lib/tokens";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function CustomerEstimate({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: token } = await params;
+  const id = verifyToken("estimate", token);
+  if (!id) notFound();
   const est = await prisma.estimate.findUnique({
     where: { id },
     include: {
@@ -50,13 +53,13 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
       ) : est.status === "SENT" ? (
         <div className="flex gap-2">
           <form action={approveEstimatePublic} className="flex-1">
-            <input type="hidden" name="estimateId" value={est.id} />
+            <input type="hidden" name="token" value={token} />
             <button className="w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-500">
               Approve
             </button>
           </form>
           <form action={rejectEstimatePublic} className="flex-1">
-            <input type="hidden" name="estimateId" value={est.id} />
+            <input type="hidden" name="token" value={token} />
             <button className="w-full rounded-lg border border-black/15 px-4 py-3 font-medium dark:border-white/20">
               Decline
             </button>

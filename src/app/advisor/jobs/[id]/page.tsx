@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction } from "@/app/actions/jobs";
+import { createEstimateAction } from "@/app/actions/billing";
 import {
   TIMELINE,
   STATUS_LABEL,
@@ -20,7 +21,13 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
-    include: { vehicle: { include: { customer: true } } },
+    include: {
+      vehicle: { include: { customer: true } },
+      estimates: {
+        orderBy: { createdAt: "desc" },
+        include: { invoice: { select: { id: true } } },
+      },
+    },
   });
   if (!job) notFound();
 
@@ -145,6 +152,37 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           {delivered ? "🟢 Delivered — this job is complete." : "No further actions."}
         </p>
       )}
+
+      {/* Estimates & invoicing */}
+      <div className="border-t border-black/10 pt-4 dark:border-white/15">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Estimates</h2>
+          <form action={createEstimateAction}>
+            <input type="hidden" name="jobId" value={job.id} />
+            <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+              + New estimate
+            </button>
+          </form>
+        </div>
+        {job.estimates.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">No estimates yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-1 text-sm">
+            {job.estimates.map((e) => (
+              <li key={e.id} className="flex items-center justify-between">
+                <Link href={`/advisor/estimates/${e.id}`} className="hover:underline">
+                  Estimate · AED {Number(e.total).toFixed(2)} · {e.status}
+                </Link>
+                {e.invoice ? (
+                  <Link href={`/invoices/${e.invoice.id}`} className="text-zinc-500 hover:underline dark:text-zinc-400">
+                    invoice →
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </main>
   );
 }

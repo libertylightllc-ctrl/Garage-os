@@ -13,6 +13,7 @@ import {
   aiUsage,
   intakeAcceptance,
   avgConfirmMinutes,
+  technicianWork,
 } from "@/lib/owner-metrics";
 
 export const dynamic = "force-dynamic";
@@ -57,16 +58,18 @@ export default async function OwnerHome({
   const { q } = await searchParams;
 
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [rev, profit, cars, inv, trend, usage, acceptance, confirmMins] = await Promise.all([
-    revenue(garageId, monthFrom),
-    profitThisMonth(garageId, now),
-    carsToday(garageId, now),
-    inventoryHealth(garageId),
-    weekTrend(garageId, now),
-    aiUsage(garageId, monthFrom),
-    intakeAcceptance(garageId),
-    avgConfirmMinutes(garageId),
-  ]);
+  const [rev, profit, cars, inv, trend, usage, acceptance, confirmMins, techWork] =
+    await Promise.all([
+      revenue(garageId, monthFrom),
+      profitThisMonth(garageId, now),
+      carsToday(garageId, now),
+      inventoryHealth(garageId),
+      weekTrend(garageId, now),
+      aiUsage(garageId, monthFrom),
+      intakeAcceptance(garageId),
+      avgConfirmMinutes(garageId),
+      technicianWork(garageId),
+    ]);
 
   let answer: string | null = null;
   if (q && q.trim()) {
@@ -170,6 +173,43 @@ export default async function OwnerHome({
         <p className="mt-2 text-xs text-zinc-400">
           AI cost is metered per call (AiEvent) so Layer-2 usage can’t silently outrun the subscription.
         </p>
+      </div>
+
+      {/* Per-technician productivity */}
+      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+        <h2 className="mb-2 text-sm font-medium">Technician activity</h2>
+        {techWork.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">No technician activity logged yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                  <th className="py-1 pe-3">Technician</th>
+                  <th className="py-1 px-2 text-right">Jobs</th>
+                  <th className="py-1 px-2 text-right">Steps</th>
+                  <th className="py-1 px-2 text-right">📷</th>
+                  <th className="py-1 px-2 text-right">🎤</th>
+                  <th className="py-1 px-2 text-right">📦</th>
+                  <th className="py-1 ps-2 text-right">✅</th>
+                </tr>
+              </thead>
+              <tbody>
+                {techWork.map((t) => (
+                  <tr key={t.techId} className="border-t border-black/5 dark:border-white/10">
+                    <td className="py-1 pe-3 font-medium">{t.name}</td>
+                    <td className="py-1 px-2 text-right">{t.jobs}</td>
+                    <td className="py-1 px-2 text-right">{t.steps}</td>
+                    <td className="py-1 px-2 text-right">{t.photos}</td>
+                    <td className="py-1 px-2 text-right">{t.voice}</td>
+                    <td className="py-1 px-2 text-right">{t.parts}</td>
+                    <td className="py-1 ps-2 text-right">{t.finishes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </main>
   );

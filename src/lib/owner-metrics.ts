@@ -127,3 +127,49 @@ export async function whoOwes(garageId: string, now = new Date()): Promise<OwesR
     })
     .filter((r) => r.balance > 0);
 }
+
+export interface TechWork {
+  techId: string;
+  name: string;
+  steps: number;
+  jobs: number;
+  photos: number;
+  voice: number;
+  parts: number;
+  finishes: number;
+}
+
+// How much each technician worked individually (job steps logged, jobs touched).
+export async function technicianWork(garageId: string): Promise<TechWork[]> {
+  const steps = await prisma.jobStep.findMany({
+    where: { jobCard: { garageId }, techId: { not: null } },
+    select: { techId: true, type: true, jobCardId: true, tech: { select: { name: true } } },
+  });
+  const map = new Map<string, TechWork & { jobSet: Set<string> }>();
+  for (const s of steps) {
+    const k = s.techId as string;
+    if (!map.has(k)) {
+      map.set(k, {
+        techId: k,
+        name: s.tech?.name ?? "Technician",
+        steps: 0,
+        jobs: 0,
+        photos: 0,
+        voice: 0,
+        parts: 0,
+        finishes: 0,
+        jobSet: new Set<string>(),
+      });
+    }
+    const e = map.get(k)!;
+    e.steps++;
+    e.jobSet.add(s.jobCardId);
+    if (s.type === "PHOTO") e.photos++;
+    else if (s.type === "VOICE") e.voice++;
+    else if (s.type === "PART_REQUEST") e.parts++;
+    else if (s.type === "FINISH") e.finishes++;
+  }
+  return [...map.values()]
+    .map(({ jobSet, ...rest }) => ({ ...rest, jobs: jobSet.size }))
+    .sort((a, b) => b.steps - a.steps);
+}

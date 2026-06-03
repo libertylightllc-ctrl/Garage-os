@@ -28,6 +28,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         orderBy: { createdAt: "desc" },
         include: { invoice: { select: { id: true } } },
       },
+      steps: { orderBy: { createdAt: "desc" }, include: { tech: { select: { name: true } } } },
     },
   });
   if (!job) notFound();
@@ -185,6 +186,31 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </ul>
         )}
       </div>
+
+      {/* Technician activity — the live link from the workshop into this job */}
+      {job.steps.length > 0 ? (
+        <div className="border-t border-black/10 pt-4 dark:border-white/15">
+          <h2 className="mb-2 text-sm font-medium">Technician activity</h2>
+          <ul className="flex flex-col gap-2 text-sm">
+            {job.steps.map((s) => (
+              <li key={s.id} className="rounded-lg border border-black/10 p-2 dark:border-white/15">
+                <div className="text-zinc-500 dark:text-zinc-400">
+                  {(
+                    { PHOTO: "📷", VOICE: "🎤", PART_REQUEST: "📦", FINISH: "✅" } as Record<string, string>
+                  )[s.type] ?? "•"}{" "}
+                  {s.type.replace("_", " ").toLowerCase()} · {s.tech?.name ?? "Technician"}
+                </div>
+                {s.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.photoUrl} alt="job photo" className="mt-1 max-h-40 rounded-md" />
+                ) : null}
+                {s.voiceNoteUrl ? <audio controls src={s.voiceNoteUrl} className="mt-1 w-full" /> : null}
+                {s.transcript ? <p className="text-zinc-600 dark:text-zinc-300">{s.transcript}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </main>
   );
 }

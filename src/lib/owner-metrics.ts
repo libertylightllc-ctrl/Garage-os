@@ -72,6 +72,42 @@ export interface OwesRow {
   overdue: boolean;
 }
 
+// AI usage (the Layer-2 margin trap) — events + estimated cost over a range.
+export async function aiUsage(
+  garageId: string,
+  from?: Date,
+): Promise<{ events: number; costUsd: number }> {
+  const where: Record<string, unknown> = { garageId };
+  if (from) where.createdAt = { gte: from };
+  const agg = await prisma.aiEvent.aggregate({ where, _sum: { costEstimate: true }, _count: true });
+  return { events: agg._count, costUsd: Number(agg._sum.costEstimate ?? 0) };
+}
+
+// Pilot hypothesis: AI intake proposal accepted by advisor without rejection.
+export async function intakeAcceptance(
+  garageId: string,
+): Promise<{ confirmed: number; rejected: number; rate: number | null }> {
+  const [confirmed, rejected] = await Promise.all([
+    prisma.booking.count({ where: { garageId, status: "CONFIRMED" } }),
+    prisma.booking.count({ where: { garageId, status: "REJECTED" } }),
+  ]);
+  const decided = confirmed + rejected;
+  return { confirmed, rejected, rate: decided ? confirmed / decided : null };
+}
+
+// Pilot hypothesis: time from customer booking to advisor confirmation (minutes).
+export async function avgConfirmMinutes(garageId: string): Promise<number | null> {
+  const bookings = await prisma.booking.findMany({
+    where: { garageId, status: "CONFIRMED", jobCard: { isNot: null } },
+    include: { jobCard: { select: { createdAt: true } } },
+  });
+  const diffs = bookings
+    .filter((b) => b.jobCard)
+    .map((b) => (b.jobCard!.createdAt.getTime() - b.createdAt.getTime()) / 60000);
+  if (diffs.length === 0) return null;
+  return Math.round((diffs.reduce((a, c) => a + c, 0) / diffs.length) * 10) / 10;
+}
+
 export async function whoOwes(garageId: string, now = new Date()): Promise<OwesRow[]> {
   const invoices = await prisma.invoice.findMany({
     where: { garageId, status: { not: "PAID" } },

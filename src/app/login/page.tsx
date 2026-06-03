@@ -1,6 +1,7 @@
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
+import { getT } from "@/i18n/server";
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -22,17 +23,18 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const t = await getT();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
       <div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">GarageOS</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Staff sign in</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("signInTitle")}</h1>
       </div>
 
       {error ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          Invalid email or password.
+          {t("invalid")}
         </p>
       ) : null}
 
@@ -40,7 +42,7 @@ export default async function LoginPage({
         <input
           name="email"
           type="email"
-          placeholder="Email"
+          placeholder={t("email")}
           required
           autoComplete="username"
           className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-transparent"
@@ -48,7 +50,7 @@ export default async function LoginPage({
         <input
           name="password"
           type="password"
-          placeholder="Password"
+          placeholder={t("password")}
           required
           autoComplete="current-password"
           className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-transparent"
@@ -57,12 +59,12 @@ export default async function LoginPage({
           type="submit"
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
-          Sign in
+          {t("signIn")}
         </button>
       </form>
 
       <div className="rounded-md border border-black/10 p-3 text-xs text-zinc-500 dark:border-white/15 dark:text-zinc-400">
-        <p className="mb-1 font-medium">Demo logins (password: password)</p>
+        <p className="mb-1 font-medium">{t("demoTitle")}</p>
         <ul className="space-y-0.5">
           <li>owner@demo.garage · advisor@demo.garage</li>
           <li>tech@demo.garage · accountant@demo.garage</li>

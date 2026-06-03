@@ -10,6 +10,9 @@ import {
   inventoryHealth,
   weekTrend,
   whoOwes,
+  aiUsage,
+  intakeAcceptance,
+  avgConfirmMinutes,
 } from "@/lib/owner-metrics";
 
 export const dynamic = "force-dynamic";
@@ -54,12 +57,15 @@ export default async function OwnerHome({
   const { q } = await searchParams;
 
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [rev, profit, cars, inv, trend] = await Promise.all([
+  const [rev, profit, cars, inv, trend, usage, acceptance, confirmMins] = await Promise.all([
     revenue(garageId, monthFrom),
     profitThisMonth(garageId, now),
     carsToday(garageId, now),
     inventoryHealth(garageId),
     weekTrend(garageId, now),
+    aiUsage(garageId, monthFrom),
+    intakeAcceptance(garageId),
+    avgConfirmMinutes(garageId),
   ]);
 
   let answer: string | null = null;
@@ -146,6 +152,33 @@ export default async function OwnerHome({
           <p className="mt-3 rounded-md bg-zinc-100 p-3 text-sm dark:bg-zinc-800">{answer}</p>
         ) : null}
         <p className="mt-2 text-xs text-zinc-400">Read-only · scoped to your garage.</p>
+      </div>
+
+      {/* Pilot instrumentation + AI margin meter */}
+      <div className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
+        <h2 className="mb-2 text-sm font-medium">Pilot metrics &amp; AI usage</h2>
+        <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+          <li>
+            Intake acceptance:{" "}
+            <span className="font-medium">
+              {acceptance.rate === null ? "—" : `${Math.round(acceptance.rate * 100)}%`}
+            </span>{" "}
+            <span className="text-zinc-400">({acceptance.confirmed}/{acceptance.confirmed + acceptance.rejected})</span>
+          </li>
+          <li>
+            Avg booking→confirm:{" "}
+            <span className="font-medium">{confirmMins === null ? "—" : `${confirmMins} min`}</span>
+          </li>
+          <li>
+            AI calls (mo): <span className="font-medium">{usage.events}</span>
+          </li>
+          <li>
+            AI cost (mo): <span className="font-medium">${usage.costUsd.toFixed(4)}</span>
+          </li>
+        </ul>
+        <p className="mt-2 text-xs text-zinc-400">
+          AI cost is metered per call (AiEvent) so Layer-2 usage can’t silently outrun the subscription.
+        </p>
       </div>
     </main>
   );

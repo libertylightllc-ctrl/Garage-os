@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { jobActionAction } from "@/app/actions/jobs";
+import { jobActionAction, skipToStageAction } from "@/app/actions/jobs";
 import { createEstimateAction } from "@/app/actions/billing";
 import { AppNav } from "@/components/app-nav";
 import {
   TIMELINE,
   availableActions,
   nextStatus,
+  skippableTargets,
   type JobAction,
   type JobStatus,
 } from "@/lib/jobcard-status";
@@ -89,6 +90,20 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </p>
       ) : null}
 
+      {status === "ON_HOLD" && job.holdReason ? (
+        <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+          🟡 {t("onHold")}:{" "}
+          {(
+            {
+              AWAITING_PART: t("hrAwaitingPart"),
+              AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+              OTHER: t("hrOther"),
+            } as Record<string, string>
+          )[job.holdReason]}
+          {job.holdNote ? ` — ${job.holdNote}` : ""}
+        </p>
+      ) : null}
+
       <ol className="flex flex-col gap-1">
         {TIMELINE.map((stage, i) => {
           const done = delivered || i < curIdx;
@@ -151,12 +166,50 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               ))}
             </div>
           ) : null}
+          {all.includes("HOLD") ? (
+            <div className="flex flex-wrap gap-2">
+              <select
+                name="holdReason"
+                defaultValue="AWAITING_PART"
+                className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
+              >
+                <option value="AWAITING_PART">{t("hrAwaitingPart")}</option>
+                <option value="AWAITING_CUSTOMER">{t("hrAwaitingCustomer")}</option>
+                <option value="OTHER">{t("hrOther")}</option>
+              </select>
+              <input
+                name="holdNote"
+                placeholder={t("holdNote")}
+                className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
+              />
+            </div>
+          ) : null}
         </form>
       ) : (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {delivered ? t("deliveredComplete") : t("noFurtherActions")}
         </p>
       )}
+
+      {skippableTargets(status).length > 0 ? (
+        <form action={skipToStageAction} className="flex items-center gap-2 text-sm">
+          <input type="hidden" name="jobId" value={job.id} />
+          <span className="text-zinc-500 dark:text-zinc-400">{t("skipTo")}</span>
+          <select
+            name="target"
+            className="rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+          >
+            {skippableTargets(status).map((s) => (
+              <option key={s} value={s}>
+                {t(statusKey(s))}
+              </option>
+            ))}
+          </select>
+          <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            →
+          </button>
+        </form>
+      ) : null}
 
       {/* Estimates & invoicing */}
       <div className="border-t border-black/10 pt-4 dark:border-white/15">

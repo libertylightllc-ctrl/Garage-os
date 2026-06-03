@@ -6,6 +6,8 @@ import {
   isActive,
   availableActions,
   transition,
+  skippableTargets,
+  skipTo,
   type JobState,
 } from "./jobcard-status";
 
@@ -57,6 +59,14 @@ describe("jobcard state machine", () => {
     expect(availableActions(s("APPROVED"))).toEqual(["ADVANCE", "REWORK", "HOLD", "CANCEL"]);
     expect(availableActions(s("ON_HOLD", "REPAIR"))).toEqual(["RESUME", "CANCEL"]);
     expect(availableActions(s("DELIVERED"))).toEqual([]);
+  });
+
+  it("skip-to offers forward stages but never INVOICED/DELIVERED", () => {
+    expect(skippableTargets("ARRIVED")).toEqual(["INSPECTION", "ESTIMATE", "APPROVED", "REPAIR"]);
+    expect(skippableTargets("REPAIR")).toEqual([]);
+    expect(skipTo(s("ARRIVED"), "REPAIR").status).toBe("REPAIR");
+    expect(() => skipTo(s("ARRIVED"), "INVOICED")).toThrow();
+    expect(() => skipTo(s("ESTIMATE"), "ARRIVED")).toThrow(); // no backward skip
   });
 
   it("cannot hold or resume from invalid states", () => {

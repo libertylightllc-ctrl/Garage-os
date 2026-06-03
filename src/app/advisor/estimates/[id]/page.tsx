@@ -7,6 +7,7 @@ import { getT } from "@/i18n/server";
 import {
   addEstimateLineAction,
   removeEstimateLineAction,
+  toggleEstimateLineAction,
   setEstimateStatusAction,
   generateInvoiceAction,
 } from "@/app/actions/billing";
@@ -31,6 +32,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const t = await getT();
 
   const editable = est.status === "DRAFT";
+  const canDecline = !est.invoice; // advisor can skip lines until the invoice is cut
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -54,25 +56,44 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <th className="py-1 text-right">{t("colQty")}</th>
             <th className="py-1 text-right">{t("colUnit")}</th>
             <th className="py-1 text-right">{t("colTotal")}</th>
-            {editable ? <th /> : null}
+            {editable || canDecline ? <th /> : null}
           </tr>
         </thead>
         <tbody>
           {est.lines.map((l) => (
-            <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
+            <tr
+              key={l.id}
+              className={
+                "border-b border-black/5 dark:border-white/10 " +
+                (l.declined ? "text-zinc-400 line-through" : "")
+              }
+            >
               <td className="py-1">
                 <span className="text-zinc-400">{l.kind}</span> {l.description}
               </td>
               <td className="py-1 text-right">{Number(l.qty)}</td>
               <td className="py-1 text-right">{Number(l.unitPrice).toFixed(2)}</td>
               <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
-              {editable ? (
-                <td className="py-1 pl-2 text-right">
-                  <form action={removeEstimateLineAction}>
-                    <input type="hidden" name="estimateId" value={est.id} />
-                    <input type="hidden" name="lineId" value={l.id} />
-                    <button className="text-red-600">✕</button>
-                  </form>
+              {editable || canDecline ? (
+                <td className="py-1 pl-2 text-right no-underline">
+                  <div className="flex justify-end gap-2">
+                    {canDecline ? (
+                      <form action={toggleEstimateLineAction}>
+                        <input type="hidden" name="estimateId" value={est.id} />
+                        <input type="hidden" name="lineId" value={l.id} />
+                        <button className="text-xs text-zinc-500 hover:underline">
+                          {l.declined ? t("restore") : t("skip")}
+                        </button>
+                      </form>
+                    ) : null}
+                    {editable ? (
+                      <form action={removeEstimateLineAction}>
+                        <input type="hidden" name="estimateId" value={est.id} />
+                        <input type="hidden" name="lineId" value={l.id} />
+                        <button className="text-red-600">✕</button>
+                      </form>
+                    ) : null}
+                  </div>
                 </td>
               ) : null}
             </tr>
@@ -102,6 +123,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
               <option value="LABOR">{t("labor")}</option>
               <option value="PART">{t("part")}</option>
               <option value="FEE">{t("fee")}</option>
+              <option value="DISCOUNT">{t("discount")}</option>
             </select>
             <input name="description" placeholder={t("description")} required className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
           </div>

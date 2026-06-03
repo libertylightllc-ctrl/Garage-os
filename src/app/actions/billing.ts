@@ -57,7 +57,8 @@ export async function createEstimateAction(formData: FormData) {
 }
 
 async function recomputeEstimate(estimateId: string) {
-  const lines = await prisma.estimateLine.findMany({ where: { estimateId } });
+  // Totals reflect only ACCEPTED lines — declined (customer-skipped) items don't count.
+  const lines = await prisma.estimateLine.findMany({ where: { estimateId, declined: false } });
   const draft: DraftLine[] = lines.map((l) => ({
     kind: l.kind as LineKind,
     description: l.description,
@@ -86,15 +87,36 @@ export async function addEstimateLineAction(formData: FormData) {
   const est = await ownedEstimate(estimateId, user.garageId);
   if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
 
-  const kind = String(formData.get("kind") ?? "LABOR") as LineKind;
-  const description = String(formData.get("description") ?? "").trim() || "Item";
+  // "DISCOUNT" is a convenience: stored as a FEE line with a negative amount.
+  const rawKind = String(formData.get("kind") ?? "LABOR");
+  const isDiscount = rawKind === "DISCOUNT";
+  const kind = (isDiscount ? "FEE" : rawKind) as LineKind;
+  const description =
+    String(formData.get("description") ?? "").trim() || (isDiscount ? "Discount" : "Item");
   const qty = Math.max(0, Number(formData.get("qty") ?? 1));
-  const unitPrice = Math.max(0, Number(formData.get("unitPrice") ?? 0));
+  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
+  const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
   await prisma.estimateLine.create({
     data: { estimateId, kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
   });
   await recomputeEstimate(estimateId);
+  revalidatePath(`/advisor/estimates/${estimateId}`);
+}
+
+export async function toggleEstimateLineAction(formData: FormData) {
+  const user = await requireRoleUser("ADVISOR");
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const lineId = String(formData.get("lineId") ?? "");
+  await ownedEstimate(estimateId, user.garageId);
+  const line = await prisma.estimateLine.findFirst({ where: { id: lineId, estimateId } });
+  if (line) {
+    await prisma.estimateLine.update({
+      where: { id: lineId },
+      data: { declined: !line.declined },
+    });
+    await recomputeEstimate(estimateId);
+  }
   revalidatePath(`/advisor/estimates/${estimateId}`);
 }
 
@@ -183,14 +205,16 @@ export async function generateInvoiceAction(formData: FormData) {
           isoDate: now.toISOString(),
         }),
         lines: {
-          create: est.lines.map((l) => ({
-            kind: l.kind,
-            description: l.description,
-            qty: l.qty,
-            unitPrice: l.unitPrice,
-            lineTotal: l.lineTotal,
-            vatRate: l.vatRate,
-          })),
+          create: est.lines
+            .filter((l) => !l.declined)
+            .map((l) => ({
+              kind: l.kind,
+              description: l.description,
+              qty: l.qty,
+              unitPrice: l.unitPrice,
+              lineTotal: l.lineTotal,
+              vatRate: l.vatRate,
+            })),
         },
       },
       select: { id: true },

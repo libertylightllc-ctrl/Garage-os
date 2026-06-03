@@ -36,7 +36,10 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
 
       <ul className="flex flex-col gap-1 text-sm">
         {est.lines.map((l) => (
-          <li key={l.id} className="flex justify-between">
+          <li
+            key={l.id}
+            className={"flex justify-between " + (l.declined ? "text-zinc-400 line-through" : "")}
+          >
             <span>{l.description}</span>
             <span>{Number(l.lineTotal).toFixed(2)}</span>
           </li>

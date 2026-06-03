@@ -77,6 +77,21 @@ export function availableActions(state: JobState): JobAction[] {
   return actions;
 }
 
+// Advisor override: forward stages an active job may jump to. INVOICED/DELIVERED are
+// excluded — those are reached via the real invoice flow / a normal advance, not a skip.
+export function skippableTargets(current: JobStatus): JobStatus[] {
+  if (!isLinear(current)) return [];
+  const i = TIMELINE.indexOf(current);
+  return TIMELINE.slice(i + 1).filter((s) => s !== "INVOICED" && s !== "DELIVERED");
+}
+
+export function skipTo(state: JobState, target: JobStatus): JobState {
+  if (!skippableTargets(state.status).includes(target)) {
+    throw new Error(`Cannot skip from ${state.status} to ${target}`);
+  }
+  return { status: target, heldFrom: null };
+}
+
 /** Apply an action; returns the new state or throws on an invalid transition. */
 export function transition(state: JobState, action: JobAction): JobState {
   const { status, heldFrom } = state;

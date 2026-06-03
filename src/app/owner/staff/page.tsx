@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { addStaffAction, removeStaffAction } from "@/app/actions/onboarding";
+import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function StaffPage({
 }) {
   const session = await requireRole("OWNER");
   const { error } = await searchParams;
+  const t = await getT();
 
   const staff = await prisma.user.findMany({
     where: { garageId: session.user.garageId },
@@ -24,11 +26,11 @@ export default async function StaffPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="OWNER" active="team" />
-      <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("team")}</h1>
 
       {error ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {error === "exists" ? "That email is already registered." : "Check the fields (password min 6)."}
+          {error === "exists" ? t("emailExists") : t("teamError")}
         </p>
       ) : null}
 
@@ -45,30 +47,30 @@ export default async function StaffPage({
             {u.role !== "OWNER" ? (
               <form action={removeStaffAction}>
                 <input type="hidden" name="userId" value={u.id} />
-                <button className="text-xs text-red-600 hover:underline">Remove</button>
+                <button className="text-xs text-red-600 hover:underline">{t("remove")}</button>
               </form>
             ) : (
-              <span className="text-xs text-zinc-400">owner</span>
+              <span className="text-xs text-zinc-400">{t("ownerTag")}</span>
             )}
           </li>
         ))}
       </ul>
 
       <form action={addStaffAction} className="flex flex-col gap-2 rounded-lg border border-black/10 p-4 dark:border-white/15">
-        <h2 className="text-sm font-medium">Add staff</h2>
+        <h2 className="text-sm font-medium">{t("addStaff")}</h2>
         <div className="flex flex-wrap gap-2">
-          <input name="name" placeholder="Name" required className={`${field} flex-1`} />
+          <input name="name" placeholder={t("name")} required className={`${field} flex-1`} />
           <select name="role" className={field} defaultValue="ADVISOR">
-            <option value="ADVISOR">Advisor</option>
-            <option value="TECH">Technician</option>
-            <option value="ACCOUNTANT">Accountant</option>
+            <option value="ADVISOR">{t("optAdvisor")}</option>
+            <option value="TECH">{t("optTechnician")}</option>
+            <option value="ACCOUNTANT">{t("optAccountant")}</option>
           </select>
         </div>
         <div className="flex flex-wrap gap-2">
-          <input name="email" type="email" placeholder="Email" required className={`${field} flex-1`} />
-          <input name="password" type="password" placeholder="Temp password (min 6)" required minLength={6} className={`${field} flex-1`} />
+          <input name="email" type="email" placeholder={t("email")} required className={`${field} flex-1`} />
+          <input name="password" type="password" placeholder={t("tempPassword")} required minLength={6} className={`${field} flex-1`} />
           <button className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black">
-            Add
+            {t("add")}
           </button>
         </div>
       </form>

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { classifyIntent, SAMPLE_QUESTIONS, UNKNOWN_REPLY } from "@/lib/copilot";
+import { classifyIntent } from "@/lib/copilot";
+import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
 import {
   revenue,
   profitThisMonth,
@@ -19,31 +21,39 @@ import {
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+type T = (k: MessageKey) => string;
 
-async function answerCopilot(garageId: string, question: string, now: Date): Promise<string> {
+function fill(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+}
+
+async function answerCopilot(t: T, garageId: string, question: string, now: Date): Promise<string> {
   switch (classifyIntent(question)) {
     case "PROFIT_MONTH": {
       const p = await profitThisMonth(garageId, now);
-      return `This month's profit is ${money(p)} so far (revenue minus parts cost).`;
+      return fill(t("ansProfit"), { v: money(p) });
     }
     case "WHO_OWES": {
       const rows = await whoOwes(garageId, now);
-      if (rows.length === 0) return "Nobody owes you money right now — all invoices are paid. 🟢";
+      if (rows.length === 0) return t("ansNobodyOwes");
       const total = rows.reduce((s, r) => s + r.balance, 0);
       const list = rows
         .map((r) => `${r.overdue ? "🔴" : "🟡"} ${r.customer}: ${money(r.balance)}`)
         .join("; ");
-      return `${rows.length} customer(s) owe ${money(total)} in total — ${list}.`;
+      return fill(t("ansOwes"), { n: String(rows.length), total: money(total), list });
     }
     case "WEEK_TREND": {
-      const t = await weekTrend(garageId, now);
-      const dir = t.delta > 0 ? "up" : t.delta < 0 ? "down" : "flat";
-      return `You're ${dir} this week: ${money(t.thisWeek)} vs ${money(t.lastWeek)} last week (${
-        t.delta >= 0 ? "+" : ""
-      }${money(t.delta)}).`;
+      const w = await weekTrend(garageId, now);
+      const dir = w.delta > 0 ? t("dirUp") : w.delta < 0 ? t("dirDown") : t("dirFlat");
+      return fill(t("ansTrend"), {
+        dir,
+        a: money(w.thisWeek),
+        b: money(w.lastWeek),
+        d: `${w.delta >= 0 ? "+" : ""}${money(w.delta)}`,
+      });
     }
     default:
-      return UNKNOWN_REPLY;
+      return t("copilotUnknown");
   }
 }
 
@@ -53,6 +63,7 @@ export default async function OwnerHome({
   searchParams: Promise<{ q?: string }>;
 }) {
   const session = await requireRole("OWNER");
+  const t = await getT();
   const garageId = session.user.garageId;
   const now = new Date();
   const { q } = await searchParams;
@@ -73,8 +84,7 @@ export default async function OwnerHome({
 
   let answer: string | null = null;
   if (q && q.trim()) {
-    answer = await answerCopilot(garageId, q, now);
-    // Meter the copilot interaction (read-only; answer derived from DB only).
+    answer = await answerCopilot(t, garageId, q, now);
     await prisma.aiEvent.create({
       data: {
         garageId,
@@ -90,104 +100,111 @@ export default async function OwnerHome({
     });
   }
 
-  const metrics = [
-    { icon: "💰", label: "Revenue (mo)", value: money(rev) },
-    { icon: "📈", label: "Profit (mo)", value: money(profit) },
-    { icon: "🚗", label: "Cars today", value: String(cars) },
-    { icon: "⭐", label: "Satisfaction", value: "—" },
-    { icon: "📦", label: "Inventory", value: `${inv.low} low / ${inv.total}` },
+  const metrics: { icon: string; key: MessageKey; value: string }[] = [
+    { icon: "💰", key: "mRevenueMo", value: money(rev) },
+    { icon: "📈", key: "mProfitMo", value: money(profit) },
+    { icon: "🚗", key: "mCarsToday", value: String(cars) },
+    { icon: "⭐", key: "mSatisfaction", value: "—" },
+    { icon: "📦", key: "mInventory", value: `${inv.low} ${t("low")} / ${inv.total}` },
   ];
+
+  const samples: MessageKey[] = ["sampleUpDown", "sampleProfit", "sampleOwes"];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="OWNER" active="dashboard" />
-      <h1 className="text-2xl font-semibold tracking-tight">Owner dashboard</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("ownerDashboard")}</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {metrics.map((m) => (
-          <div key={m.label} className="rounded-xl border border-black/10 p-3 dark:border-white/15">
+          <div key={m.key} className="rounded-xl border border-black/10 p-3 dark:border-white/15">
             <div className="text-2xl">{m.icon}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{m.label}</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t(m.key)}</div>
             <div className="text-base font-semibold">{m.value}</div>
           </div>
         ))}
       </div>
       <p className="-mt-3 text-xs text-zinc-400">
-        This week: {money(trend.thisWeek)} ({trend.delta >= 0 ? "+" : ""}
-        {money(trend.delta)} vs last week). Satisfaction tracking arrives with reviews.
+        {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ? "+" : ""}
+        {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
 
       {/* Copilot */}
       <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-        <h2 className="mb-2 text-sm font-medium">Ask the copilot</h2>
+        <h2 className="mb-2 text-sm font-medium">{t("askCopilot")}</h2>
         <form method="GET" className="flex gap-2">
           <input
             name="q"
             defaultValue={q ?? ""}
-            placeholder="e.g. Who owes us money?"
+            placeholder={t("sampleOwes")}
             className="flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
           />
           <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black">
-            Ask
+            {t("ask")}
           </button>
         </form>
         <div className="mt-2 flex flex-wrap gap-2">
-          {SAMPLE_QUESTIONS.map((s) => (
-            <Link
-              key={s}
-              href={`/owner?q=${encodeURIComponent(s)}`}
-              className="rounded-full border border-black/10 px-3 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"
-            >
-              {s}
-            </Link>
-          ))}
+          {samples.map((key) => {
+            const s = t(key);
+            return (
+              <Link
+                key={key}
+                href={`/owner?q=${encodeURIComponent(s)}`}
+                className="rounded-full border border-black/10 px-3 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"
+              >
+                {s}
+              </Link>
+            );
+          })}
         </div>
         {answer ? (
           <p className="mt-3 rounded-md bg-zinc-100 p-3 text-sm dark:bg-zinc-800">{answer}</p>
         ) : null}
-        <p className="mt-2 text-xs text-zinc-400">Read-only · scoped to your garage.</p>
+        <p className="mt-2 text-xs text-zinc-400">{t("copilotReadonly")}</p>
       </div>
 
       {/* Pilot instrumentation + AI margin meter */}
       <div className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
-        <h2 className="mb-2 text-sm font-medium">Pilot metrics &amp; AI usage</h2>
+        <h2 className="mb-2 text-sm font-medium">{t("pilotMetrics")}</h2>
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
           <li>
-            Intake acceptance:{" "}
+            {t("intakeAcceptance")}:{" "}
             <span className="font-medium">
               {acceptance.rate === null ? "—" : `${Math.round(acceptance.rate * 100)}%`}
             </span>{" "}
-            <span className="text-zinc-400">({acceptance.confirmed}/{acceptance.confirmed + acceptance.rejected})</span>
+            <span className="text-zinc-400">
+              ({acceptance.confirmed}/{acceptance.confirmed + acceptance.rejected})
+            </span>
           </li>
           <li>
-            Avg booking→confirm:{" "}
-            <span className="font-medium">{confirmMins === null ? "—" : `${confirmMins} min`}</span>
+            {t("avgConfirm")}:{" "}
+            <span className="font-medium">
+              {confirmMins === null ? "—" : `${confirmMins} ${t("min")}`}
+            </span>
           </li>
           <li>
-            AI calls (mo): <span className="font-medium">{usage.events}</span>
+            {t("aiCalls")}: <span className="font-medium">{usage.events}</span>
           </li>
           <li>
-            AI cost (mo): <span className="font-medium">${usage.costUsd.toFixed(4)}</span>
+            {t("aiCost")}: <span className="font-medium">${usage.costUsd.toFixed(4)}</span>
           </li>
         </ul>
-        <p className="mt-2 text-xs text-zinc-400">
-          AI cost is metered per call (AiEvent) so Layer-2 usage can’t silently outrun the subscription.
-        </p>
+        <p className="mt-2 text-xs text-zinc-400">{t("aiCostNote")}</p>
       </div>
 
       {/* Per-technician productivity */}
       <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-        <h2 className="mb-2 text-sm font-medium">Technician activity</h2>
+        <h2 className="mb-2 text-sm font-medium">{t("techActivity")}</h2>
         {techWork.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No technician activity logged yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noTechActivity")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-zinc-500 dark:text-zinc-400">
-                  <th className="py-1 pe-3">Technician</th>
-                  <th className="py-1 px-2 text-right">Jobs</th>
-                  <th className="py-1 px-2 text-right">Steps</th>
+                  <th className="py-1 pe-3">{t("colTechnician")}</th>
+                  <th className="py-1 px-2 text-right">{t("colJobs")}</th>
+                  <th className="py-1 px-2 text-right">{t("colSteps")}</th>
                   <th className="py-1 px-2 text-right">📷</th>
                   <th className="py-1 px-2 text-right">🎤</th>
                   <th className="py-1 px-2 text-right">📦</th>
@@ -195,15 +212,15 @@ export default async function OwnerHome({
                 </tr>
               </thead>
               <tbody>
-                {techWork.map((t) => (
-                  <tr key={t.techId} className="border-t border-black/5 dark:border-white/10">
-                    <td className="py-1 pe-3 font-medium">{t.name}</td>
-                    <td className="py-1 px-2 text-right">{t.jobs}</td>
-                    <td className="py-1 px-2 text-right">{t.steps}</td>
-                    <td className="py-1 px-2 text-right">{t.photos}</td>
-                    <td className="py-1 px-2 text-right">{t.voice}</td>
-                    <td className="py-1 px-2 text-right">{t.parts}</td>
-                    <td className="py-1 ps-2 text-right">{t.finishes}</td>
+                {techWork.map((tw) => (
+                  <tr key={tw.techId} className="border-t border-black/5 dark:border-white/10">
+                    <td className="py-1 pe-3 font-medium">{tw.name}</td>
+                    <td className="py-1 px-2 text-right">{tw.jobs}</td>
+                    <td className="py-1 px-2 text-right">{tw.steps}</td>
+                    <td className="py-1 px-2 text-right">{tw.photos}</td>
+                    <td className="py-1 px-2 text-right">{tw.voice}</td>
+                    <td className="py-1 px-2 text-right">{tw.parts}</td>
+                    <td className="py-1 ps-2 text-right">{tw.finishes}</td>
                   </tr>
                 ))}
               </tbody>

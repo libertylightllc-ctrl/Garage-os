@@ -2,12 +2,15 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { STATUS_LABEL, type JobStatus } from "@/lib/jobcard-status";
+import { type JobStatus } from "@/lib/jobcard-status";
+import { getT } from "@/i18n/server";
+import { statusKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdvisorHome() {
   const session = await requireRole("ADVISOR");
+  const t = await getT();
 
   const [jobs, pendingBookings] = await Promise.all([
     prisma.jobCard.findMany({
@@ -24,27 +27,27 @@ export default async function AdvisorHome() {
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="jobs" />
-      <h1 className="text-2xl font-semibold tracking-tight">Active jobs</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("activeJobs")}</h1>
 
       <div className="flex gap-2">
         <Link
           href="/advisor/jobs/new"
           className="flex-1 rounded-lg bg-zinc-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
-          + New job card
+          {t("newJobCard")}
         </Link>
         <Link
           href="/advisor/bookings"
           className="flex-1 rounded-lg border border-black/15 px-4 py-3 text-center text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
         >
-          New bookings{pendingBookings > 0 ? ` (${pendingBookings})` : ""}
+          {t("newBookings")}{pendingBookings > 0 ? ` (${pendingBookings})` : ""}
         </Link>
       </div>
 
       <ul className="flex flex-col gap-2">
         {jobs.length === 0 ? (
           <li className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
-            No active jobs. Create one to start the timeline.
+            {t("noActiveJobs")}
           </li>
         ) : (
           jobs.map((job) => (
@@ -65,7 +68,7 @@ export default async function AdvisorHome() {
                   </span>
                 </span>
                 <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium dark:bg-zinc-800">
-                  {STATUS_LABEL[job.status as JobStatus]}
+                  {t(statusKey(job.status as JobStatus))}
                 </span>
               </Link>
             </li>

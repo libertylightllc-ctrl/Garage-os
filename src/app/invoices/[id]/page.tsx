@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { recordPaymentAction } from "@/app/actions/billing";
 import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
+import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
     },
   });
   if (!inv) notFound();
+  const t = await getT();
 
   const total = Number(inv.total);
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -34,7 +36,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Tax Invoice</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           </p>
@@ -48,7 +50,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
 
       <div className="flex justify-between text-sm">
         <div>
-          <div className="text-zinc-500 dark:text-zinc-400">Bill to</div>
+          <div className="text-zinc-500 dark:text-zinc-400">{t("billTo")}</div>
           <div className="font-medium">{customer.name}</div>
           <div className="text-zinc-500 dark:text-zinc-400">{customer.phone}</div>
           <div className="text-zinc-500 dark:text-zinc-400">
@@ -56,9 +58,9 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           </div>
         </div>
         <div className="text-right text-zinc-500 dark:text-zinc-400">
-          <div>Issued: {inv.issuedAt.toISOString().slice(0, 10)}</div>
-          <div>Due: {inv.dueDate.toISOString().slice(0, 10)}</div>
-          <div>Clearance: {inv.clearanceStatus}</div>
+          <div>{t("issued")}: {inv.issuedAt.toISOString().slice(0, 10)}</div>
+          <div>{t("due")}: {inv.dueDate.toISOString().slice(0, 10)}</div>
+          <div>{t("clearance")}: {inv.clearanceStatus}</div>
         </div>
       </div>
 
@@ -66,10 +68,10 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
       <table className="w-full min-w-[20rem] text-sm">
         <thead>
           <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/15">
-            <th className="py-1">Description</th>
-            <th className="py-1 text-right">Qty</th>
-            <th className="py-1 text-right">Unit</th>
-            <th className="py-1 text-right">Amount</th>
+            <th className="py-1">{t("colDescription")}</th>
+            <th className="py-1 text-right">{t("colQty")}</th>
+            <th className="py-1 text-right">{t("colUnit")}</th>
+            <th className="py-1 text-right">{t("colAmount")}</th>
           </tr>
         </thead>
         <tbody>
@@ -91,15 +93,15 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           <div className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-black/20 text-[10px] text-zinc-400 dark:border-white/20">
             QR
           </div>
-          <span className="mt-1 text-[10px] text-zinc-400">QR placeholder</span>
+          <span className="mt-1 text-[10px] text-zinc-400">{t("qrPlaceholder")}</span>
         </div>
         <div className="text-right text-sm">
-          <div>Subtotal: {money(Number(inv.subtotal))}</div>
-          <div>VAT (5%): {money(Number(inv.vatAmount))}</div>
-          <div className="text-base font-semibold">Total: {money(total)}</div>
-          <div className="mt-1">Paid: {money(paid)}</div>
+          <div>{t("subtotal")}: {money(Number(inv.subtotal))}</div>
+          <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
+          <div className="text-base font-semibold">{t("total")}: {money(total)}</div>
+          <div className="mt-1">{t("paid")}: {money(paid)}</div>
           <div className="font-medium">
-            {AR_EMOJI[state]} {state === "PAID" ? "Paid" : `Balance ${money(balance)}`}
+            {AR_EMOJI[state]} {state === "PAID" ? t("paid") : `${t("balance")} ${money(balance)}`}
           </div>
         </div>
       </div>
@@ -109,7 +111,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         <form action={recordPaymentAction} className="flex items-end gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
           <input type="hidden" name="invoiceId" value={inv.id} />
           <label className="text-sm">
-            Amount
+            {t("amount")}
             <input
               name="amount"
               type="number"
@@ -120,12 +122,12 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
             />
           </label>
           <select name="method" className="rounded-md border border-black/15 bg-transparent px-2 py-2 text-sm dark:border-white/20">
-            <option value="CASH">Cash</option>
-            <option value="CARD">Card</option>
-            <option value="TRANSFER">Bank transfer</option>
+            <option value="CASH">{t("methodCash")}</option>
+            <option value="CARD">{t("methodCard")}</option>
+            <option value="TRANSFER">{t("methodTransfer")}</option>
           </select>
           <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
-            Record payment
+            {t("recordPayment")}
           </button>
         </form>
       ) : null}

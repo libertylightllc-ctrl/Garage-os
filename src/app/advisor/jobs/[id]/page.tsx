@@ -7,18 +7,20 @@ import { createEstimateAction } from "@/app/actions/billing";
 import { AppNav } from "@/components/app-nav";
 import {
   TIMELINE,
-  STATUS_LABEL,
   availableActions,
   nextStatus,
   type JobAction,
   type JobStatus,
 } from "@/lib/jobcard-status";
+import { getT } from "@/i18n/server";
+import { statusKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
 export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await requireRole("ADVISOR");
+  const t = await getT();
 
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
@@ -54,15 +56,15 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const label = (a: JobAction): string => {
     switch (a) {
       case "ADVANCE":
-        return `Advance to ${STATUS_LABEL[nextStatus(status)!]}`;
+        return `${t("advanceTo")} ${t(statusKey(nextStatus(status)!))}`;
       case "RESUME":
-        return `Resume ${STATUS_LABEL[heldFrom ?? "ARRIVED"]}`;
+        return `${t("resume")} ${t(statusKey(heldFrom ?? "ARRIVED"))}`;
       case "HOLD":
-        return "Put on hold";
+        return t("putOnHold");
       case "REWORK":
-        return "Send back to Estimate";
+        return t("sendBackToEstimate");
       case "CANCEL":
-        return "Cancel job";
+        return t("cancelJob");
     }
   };
 
@@ -71,7 +73,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link href="/advisor" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-          ← Active jobs
+          {t("backActiveJobs")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           {job.vehicle.make} {job.vehicle.model}
@@ -83,7 +85,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       {cancelled ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          🔴 This job was cancelled.
+          {t("jobCancelled")}
         </p>
       ) : null}
 
@@ -113,8 +115,8 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                       : "text-zinc-400 dark:text-zinc-600"
                 }
               >
-                {STATUS_LABEL[stage]}
-                {onHold ? " — on hold" : ""}
+                {t(statusKey(stage))}
+                {onHold ? ` — ${t("st_ON_HOLD")}` : ""}
               </span>
             </li>
           );
@@ -152,33 +154,33 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </form>
       ) : (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          {delivered ? "🟢 Delivered — this job is complete." : "No further actions."}
+          {delivered ? t("deliveredComplete") : t("noFurtherActions")}
         </p>
       )}
 
       {/* Estimates & invoicing */}
       <div className="border-t border-black/10 pt-4 dark:border-white/15">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium">Estimates</h2>
+          <h2 className="text-sm font-medium">{t("estimates")}</h2>
           <form action={createEstimateAction}>
             <input type="hidden" name="jobId" value={job.id} />
             <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-              + New estimate
+              {t("newEstimate")}
             </button>
           </form>
         </div>
         {job.estimates.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No estimates yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noEstimates")}</p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
             {job.estimates.map((e) => (
               <li key={e.id} className="flex items-center justify-between">
                 <Link href={`/advisor/estimates/${e.id}`} className="hover:underline">
-                  Estimate · AED {Number(e.total).toFixed(2)} · {e.status}
+                  {t("estimate")} · AED {Number(e.total).toFixed(2)} · {e.status}
                 </Link>
                 {e.invoice ? (
                   <Link href={`/invoices/${e.invoice.id}`} className="text-zinc-500 hover:underline dark:text-zinc-400">
-                    invoice →
+                    {t("invoiceArrow")}
                   </Link>
                 ) : null}
               </li>
@@ -190,7 +192,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       {/* Technician activity — the live link from the workshop into this job */}
       {job.steps.length > 0 ? (
         <div className="border-t border-black/10 pt-4 dark:border-white/15">
-          <h2 className="mb-2 text-sm font-medium">Technician activity</h2>
+          <h2 className="mb-2 text-sm font-medium">{t("techActivity")}</h2>
           <ul className="flex flex-col gap-2 text-sm">
             {job.steps.map((s) => (
               <li key={s.id} className="rounded-lg border border-black/10 p-2 dark:border-white/15">

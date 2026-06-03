@@ -12,9 +12,12 @@ export const SAMPLE_QUESTIONS = [
 
 export function classifyIntent(question: string): CopilotIntent {
   const q = question.toLowerCase();
-  if (/(owe|owed|owes|outstanding|unpaid|receivable|who.*pay)/.test(q)) return "WHO_OWES";
-  if (/profit|margin|earn|made/.test(q)) return "PROFIT_MONTH";
-  if (/(up or down|this week|last week|trend|compared|better|worse)/.test(q)) return "WEEK_TREND";
+  // English + Arabic keywords.
+  if (/(owe|owed|owes|outstanding|unpaid|receivable|who.*pay|مستحق|مدين|ديون|الذمم)/.test(q))
+    return "WHO_OWES";
+  if (/(profit|margin|earn|made|ربح|أرباح|الربح)/.test(q)) return "PROFIT_MONTH";
+  if (/(up or down|this week|last week|trend|compared|better|worse|ارتفاع|انخفاض|الأسبوع|أفضل|أسوأ)/.test(q))
+    return "WEEK_TREND";
   return "UNKNOWN";
 }
 

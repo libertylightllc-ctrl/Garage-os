@@ -2,12 +2,15 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { STATUS_LABEL, type JobStatus } from "@/lib/jobcard-status";
+import { type JobStatus } from "@/lib/jobcard-status";
+import { getT } from "@/i18n/server";
+import { statusKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
 export default async function TechnicianHome() {
   const session = await requireRole("TECH");
+  const t = await getT();
 
   const jobs = await prisma.jobCard.findMany({
     where: { garageId: session.user.garageId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
@@ -18,13 +21,13 @@ export default async function TechnicianHome() {
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="TECH" active="workshop" />
-      <h1 className="text-2xl font-semibold tracking-tight">Workshop</h1>
-      <p className="-mt-4 text-sm text-zinc-500 dark:text-zinc-400">Tap a job to work on it.</p>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("tabWorkshop")}</h1>
+      <p className="-mt-4 text-sm text-zinc-500 dark:text-zinc-400">{t("tapJob")}</p>
 
       <ul className="flex flex-col gap-2">
         {jobs.length === 0 ? (
           <li className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
-            No active jobs right now.
+            {t("noActiveJobsTech")}
           </li>
         ) : (
           jobs.map((job) => (
@@ -40,7 +43,7 @@ export default async function TechnicianHome() {
                   </span>
                 </span>
                 <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium dark:bg-zinc-800">
-                  {STATUS_LABEL[job.status as JobStatus]}
+                  {t(statusKey(job.status as JobStatus))}
                 </span>
               </Link>
             </li>

@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { AppNav } from "@/components/app-nav";
+import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const session = await requireRole("TECH");
 
+  const t = await getT();
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
     include: { vehicle: true, steps: { orderBy: { createdAt: "desc" } } },
@@ -37,7 +39,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       <AppNav role="TECH" active="workshop" />
       <div>
         <Link href="/technician" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-          ← Workshop
+          {t("backWorkshop")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           {job.vehicle.make} {job.vehicle.model}
@@ -51,7 +53,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="type" value="PHOTO" />
           <span className="text-3xl">📷</span>
-          Add Photo
+          {t("addPhoto")}
           <input
             type="file"
             name="file"
@@ -61,7 +63,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             className="w-full text-xs"
           />
           <button type="submit" className="text-sm font-semibold underline">
-            Upload
+            {t("upload")}
           </button>
         </form>
 
@@ -69,10 +71,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="type" value="VOICE" />
           <span className="text-3xl">🎤</span>
-          Voice Note
+          {t("voiceNote")}
           <input type="file" name="file" accept="audio/*" capture required className="w-full text-xs" />
           <button type="submit" className="text-sm font-semibold underline">
-            Upload
+            {t("upload")}
           </button>
         </form>
 
@@ -81,7 +83,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <input type="hidden" name="type" value="PART_REQUEST" />
           <div className={bigBtn}>
             <span className="text-3xl">📦</span>
-            Request Part
+            {t("requestPart")}
             <select
               name="partId"
               required
@@ -89,7 +91,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
             >
               <option value="" disabled>
-                Pick a part…
+                {t("pickPart")}
               </option>
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -98,7 +100,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               ))}
             </select>
             <button type="submit" className="mt-1 text-sm font-semibold underline">
-              Request
+              {t("request")}
             </button>
           </div>
         </form>
@@ -108,16 +110,16 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <input type="hidden" name="type" value="FINISH" />
           <button type="submit" className={bigBtn}>
             <span className="text-3xl">✅</span>
-            Finish
+            {t("finish")}
           </button>
         </form>
       </div>
 
       {/* Activity */}
       <div>
-        <h2 className="mb-2 text-sm font-medium">Activity</h2>
+        <h2 className="mb-2 text-sm font-medium">{t("activity")}</h2>
         {job.steps.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Nothing yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("nothingYet")}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {job.steps.map((s) => (

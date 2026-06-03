@@ -3,11 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { confirmBookingAction, rejectBookingAction } from "@/app/actions/intake";
 import type { IntakeProposal } from "@/lib/ai";
+import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function BookingsInbox() {
   const session = await requireRole("ADVISOR");
+  const t = await getT();
 
   const bookings = await prisma.booking.findMany({
     where: { garageId: session.user.garageId, status: "PROPOSED" },
@@ -19,15 +21,13 @@ export default async function BookingsInbox() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="bookings" />
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New bookings</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          AI proposed — you confirm. Confirming creates a job card.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("newBookings")}</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("bookingsIntro")}</p>
       </div>
 
       {bookings.length === 0 ? (
         <p className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
-          No pending bookings.
+          {t("noPendingBookings")}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -56,13 +56,13 @@ export default async function BookingsInbox() {
                   <form action={confirmBookingAction}>
                     <input type="hidden" name="bookingId" value={b.id} />
                     <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black">
-                      Confirm → create job
+                      {t("confirmCreateJob")}
                     </button>
                   </form>
                   <form action={rejectBookingAction}>
                     <input type="hidden" name="bookingId" value={b.id} />
                     <button className="rounded-md border border-black/15 px-4 py-2 text-sm font-medium dark:border-white/20">
-                      Reject
+                      {t("reject")}
                     </button>
                   </form>
                 </div>

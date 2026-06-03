@@ -3,6 +3,8 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
+import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,7 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function AccountantHome() {
   const session = await requireRole("ACCOUNTANT");
+  const t = await getT();
   const garageId = session.user.garageId;
 
   const [invoices, ledger] = await Promise.all([
@@ -33,31 +36,31 @@ export default async function AccountantHome() {
 
   const now = new Date();
 
-  const metrics = [
-    { label: "Revenue", value: revenue },
-    { label: "VAT collected", value: vatCollected },
-    { label: "Cash in", value: cash },
-    { label: "AR outstanding", value: arOutstanding },
+  const metrics: { key: MessageKey; value: number }[] = [
+    { key: "mRevenue", value: revenue },
+    { key: "mVatCollected", value: vatCollected },
+    { key: "mCashIn", value: cash },
+    { key: "mArOutstanding", value: arOutstanding },
   ];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="ACCOUNTANT" active="accounts" />
-      <h1 className="text-2xl font-semibold tracking-tight">Accounts</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {metrics.map((m) => (
-          <div key={m.label} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">{m.label}</div>
+          <div key={m.key} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">{t(m.key)}</div>
             <div className="text-lg font-semibold">{money(m.value)}</div>
           </div>
         ))}
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-medium">Receivables</h2>
+        <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>
         {invoices.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No invoices yet.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noInvoices")}</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {invoices.map((inv) => {
@@ -79,7 +82,7 @@ export default async function AccountantHome() {
                     <span className="text-right">
                       <span className="block">{money(total)}</span>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                        {state === "PAID" ? "paid" : `due ${inv.dueDate.toISOString().slice(0, 10)}`}
+                        {state === "PAID" ? t("paidLower") : `${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
                       </span>
                     </span>
                   </Link>
@@ -90,9 +93,7 @@ export default async function AccountantHome() {
         )}
       </div>
 
-      <p className="text-xs text-zinc-400">
-        All figures are generated from auto-posted ledger entries — no manual bookkeeping.
-      </p>
+      <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>
     </main>
   );
 }

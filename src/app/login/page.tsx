@@ -35,7 +35,7 @@ export default async function LoginPage({
 
       {isNew ? (
         <p className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
-          Garage created — sign in with your owner account.
+          {t("garageCreated")}
         </p>
       ) : null}
 
@@ -79,9 +79,9 @@ export default async function LoginPage({
       </div>
 
       <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-        New garage?{" "}
+        {t("newGarageQ")}{" "}
         <Link href="/signup" className="font-medium underline-offset-2 hover:underline">
-          Set one up
+          {t("setOneUp")}
         </Link>
       </p>
     </main>

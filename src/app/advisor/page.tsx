@@ -1,7 +1,75 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/guard";
-import { StaffHome } from "@/components/staff-home";
+import { prisma } from "@/lib/prisma";
+import { signOutAction } from "@/app/actions/auth";
+import { STATUS_LABEL, type JobStatus } from "@/lib/jobcard-status";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdvisorHome() {
   const session = await requireRole("ADVISOR");
-  return <StaffHome role="ADVISOR" name={session.user.name} />;
+
+  const jobs = await prisma.jobCard.findMany({
+    where: {
+      garageId: session.user.garageId,
+      status: { notIn: ["DELIVERED", "CANCELLED"] },
+    },
+    include: { vehicle: { include: { customer: true } } },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">GarageOS</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Active jobs</h1>
+        </div>
+        <form action={signOutAction}>
+          <button className="text-xs text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400">
+            Sign out
+          </button>
+        </form>
+      </div>
+
+      <Link
+        href="/advisor/jobs/new"
+        className="rounded-lg bg-zinc-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+      >
+        + New job card
+      </Link>
+
+      <ul className="flex flex-col gap-2">
+        {jobs.length === 0 ? (
+          <li className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
+            No active jobs. Create one to start the timeline.
+          </li>
+        ) : (
+          jobs.map((job) => (
+            <li key={job.id}>
+              <Link
+                href={`/advisor/jobs/${job.id}`}
+                className="flex items-center justify-between rounded-lg border border-black/10 p-4 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+              >
+                <span>
+                  <span className="block font-medium">
+                    {job.vehicle.make} {job.vehicle.model}
+                    <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">
+                      {job.vehicle.plate}
+                    </span>
+                  </span>
+                  <span className="block text-sm text-zinc-500 dark:text-zinc-400">
+                    {job.vehicle.customer.name}
+                  </span>
+                </span>
+                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium dark:bg-zinc-800">
+                  {STATUS_LABEL[job.status as JobStatus]}
+                </span>
+              </Link>
+            </li>
+          ))
+        )}
+      </ul>
+    </main>
+  );
 }

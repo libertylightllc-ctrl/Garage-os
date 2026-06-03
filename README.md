@@ -34,4 +34,5 @@ source of truth either way.
 See [`docs/GarageOS-Technical-Spec.md`](docs/GarageOS-Technical-Spec.md) §5.
 **Step 1:** scaffold + Prisma schema + DB + running app + first test. ✅
 **Step 2:** Auth.js (Credentials/JWT) with 4 staff roles + role-routed home screens + seed. ✅
-**Next: Step 3** — JobCard core + advisor timeline (the spine).
+**Step 3:** JobCard core + advisor one-tap timeline (ARRIVED→DELIVERED, +ON_HOLD/CANCELLED/rework). ✅
+**Next: Step 4** — Technician workshop mode (photo / voice / request part / finish).

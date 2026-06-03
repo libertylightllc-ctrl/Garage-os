@@ -208,6 +208,7 @@ model JobCard {
   bookingId String?   @unique
   booking   Booking?  @relation("BookingJobCard", fields: [bookingId], references: [id])
   status    JobStatus @default(ARRIVED)
+  heldFrom  JobStatus? // stage to resume to after ON_HOLD
 
   steps         JobStep[]
   estimates     Estimate[]

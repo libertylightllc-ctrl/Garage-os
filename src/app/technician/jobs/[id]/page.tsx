@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
+import { AppNav } from "@/components/app-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <AppNav role="TECH" active="workshop" />
       <div>
         <Link href="/technician" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Workshop

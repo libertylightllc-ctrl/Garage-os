@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { signOutAction } from "@/app/actions/auth";
+import { AppNav } from "@/components/app-nav";
 import { STATUS_LABEL, type JobStatus } from "@/lib/jobcard-status";
 
 export const dynamic = "force-dynamic";
@@ -23,17 +23,8 @@ export default async function AdvisorHome() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">GarageOS</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Active jobs</h1>
-        </div>
-        <form action={signOutAction}>
-          <button className="text-xs text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <AppNav role="ADVISOR" active="jobs" />
+      <h1 className="text-2xl font-semibold tracking-tight">Active jobs</h1>
 
       <div className="flex gap-2">
         <Link

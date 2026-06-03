@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
+import { AppNav } from "@/components/app-nav";
 import {
   addEstimateLineAction,
   removeEstimateLineAction,
@@ -31,6 +32,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link href={`/advisor/jobs/${est.jobCardId}`} className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Job

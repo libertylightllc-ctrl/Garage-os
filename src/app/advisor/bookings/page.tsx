@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
+import { AppNav } from "@/components/app-nav";
 import { confirmBookingAction, rejectBookingAction } from "@/app/actions/intake";
 import type { IntakeProposal } from "@/lib/ai";
 
@@ -17,11 +17,9 @@ export default async function BookingsInbox() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <AppNav role="ADVISOR" active="bookings" />
       <div>
-        <Link href="/advisor" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-          ← Active jobs
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">New bookings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">New bookings</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           AI proposed — you confirm. Confirming creates a job card.
         </p>

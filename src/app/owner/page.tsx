@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { signOutAction } from "@/app/actions/auth";
+import { AppNav } from "@/components/app-nav";
 import { classifyIntent, SAMPLE_QUESTIONS, UNKNOWN_REPLY } from "@/lib/copilot";
 import {
   revenue,
@@ -97,17 +97,8 @@ export default async function OwnerHome({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">GarageOS</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Owner dashboard</h1>
-        </div>
-        <form action={signOutAction}>
-          <button className="text-xs text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <AppNav role="OWNER" active="dashboard" />
+      <h1 className="text-2xl font-semibold tracking-tight">Owner dashboard</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {metrics.map((m) => (

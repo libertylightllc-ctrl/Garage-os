@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { createJobCardAction } from "@/app/actions/jobs";
+import { AppNav } from "@/components/app-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function NewJobCard() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link href="/advisor" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Active jobs

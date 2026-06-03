@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction } from "@/app/actions/jobs";
 import { createEstimateAction } from "@/app/actions/billing";
+import { AppNav } from "@/components/app-nav";
 import {
   TIMELINE,
   STATUS_LABEL,
@@ -66,6 +67,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+      <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link href="/advisor" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Active jobs

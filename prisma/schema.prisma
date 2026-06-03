@@ -102,6 +102,7 @@ model Garage {
   branches     Garage[] @relation("GarageBranches")
   settingsJson Json?
   invoiceSeq   Int     @default(0) // per-garage gapless invoice counter
+  isPilot      Boolean @default(true) // pilots are NEVER charged (subscription billing)
 
   users        User[]
   customers    Customer[]
@@ -111,9 +112,59 @@ model Garage {
   parts        Part[]
   ledgerEntries LedgerEntry[]
   aiEvents     AiEvent[]
+  subscription Subscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------- Subscription billing (Plan B) ----------
+enum SubStatus {
+  PILOT
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  code         String   @unique // STARTER | GROWTH | PRO
+  name         String
+  priceMonthly Decimal  @db.Decimal(12, 2) // plan prices live in the DB
+  currency     String   @default("AED")
+  stripePriceId String?
+  active        Boolean @default(true)
+
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  garageId             String    @unique
+  garage               Garage    @relation(fields: [garageId], references: [id])
+  planId               String?
+  plan                 Plan?     @relation(fields: [planId], references: [id])
+  status               SubStatus @default(PILOT)
+  stripeCustomerId     String? // never store raw card data — only gateway ids
+  stripeSubscriptionId String?
+  trialEnd             DateTime?
+  currentPeriodEnd     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Idempotent webhook log (dedupe on the gateway event id).
+model BillingEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  payloadJson   Json?
+  createdAt     DateTime @default(now())
 }
 
 // Staff only — has login. Customers are NOT here.

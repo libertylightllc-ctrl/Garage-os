@@ -83,7 +83,21 @@ async function main() {
     });
   }
 
-  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle, 4 parts.");
+  // Subscription plans (prices live in the DB; map stripePriceId per env when wiring Stripe).
+  const plans = [
+    { code: "STARTER", name: "Starter", priceMonthly: 299 },
+    { code: "GROWTH", name: "Growth", priceMonthly: 599 },
+    { code: "PRO", name: "Pro", priceMonthly: 1499 },
+  ];
+  for (const p of plans) {
+    await prisma.plan.upsert({
+      where: { code: p.code },
+      update: { name: p.name, priceMonthly: p.priceMonthly },
+      create: { code: p.code, name: p.name, priceMonthly: p.priceMonthly, currency: "AED" },
+    });
+  }
+
+  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle, 4 parts, 3 plans.");
 }
 
 main()

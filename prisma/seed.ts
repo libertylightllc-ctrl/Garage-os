@@ -68,7 +68,22 @@ async function main() {
     });
   }
 
-  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle.");
+  // Sample parts (for the technician "Request Part" flow + later inventory).
+  const parts = [
+    { sku: "OIL-5W30", name: "Engine Oil 5W-30 (1L)", cost: 18, price: 35, qtyOnHand: 40 },
+    { sku: "FLT-AIR", name: "Air Filter", cost: 25, price: 60, qtyOnHand: 15 },
+    { sku: "BRK-PAD-F", name: "Front Brake Pads", cost: 90, price: 180, qtyOnHand: 8 },
+    { sku: "BAT-70AH", name: "Battery 70Ah", cost: 220, price: 380, qtyOnHand: 6 },
+  ];
+  for (const p of parts) {
+    await prisma.part.upsert({
+      where: { garageId_sku: { garageId: garage.id, sku: p.sku } },
+      update: {},
+      create: { garageId: garage.id, ...p },
+    });
+  }
+
+  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle, 4 parts.");
 }
 
 main()

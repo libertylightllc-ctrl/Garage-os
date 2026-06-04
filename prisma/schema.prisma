@@ -295,6 +295,9 @@ model JobCard {
   heldFrom  JobStatus?   // stage to resume to after ON_HOLD
   holdReason HoldReason? // why it's on hold
   holdNote   String?
+  assignedToId String?   // advisor pre-assignment to a specific tech (optional)
+  claimedById  String?   // technician who claimed it — the atomic claim lock (null = in pool)
+  claimedAt    DateTime?
 
   steps         JobStep[]
   estimates     Estimate[]

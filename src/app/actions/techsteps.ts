@@ -19,9 +19,20 @@ export async function addStepAction(formData: FormData) {
 
   const job = await prisma.jobCard.findFirst({
     where: { id: jobId, garageId: user.garageId },
-    select: { id: true },
+    select: { id: true, claimedById: true },
   });
   if (!job) throw new Error("Job not found in this garage");
+
+  // Only the claimer may log work; an unclaimed car is auto-claimed on first action.
+  if (job.claimedById && job.claimedById !== user.id) {
+    throw new Error("This car is being handled by another technician.");
+  }
+  if (!job.claimedById) {
+    await prisma.jobCard.updateMany({
+      where: { id: job.id, claimedById: null },
+      data: { claimedById: user.id, claimedAt: new Date() },
+    });
+  }
 
   let photoUrl: string | undefined;
   let voiceNoteUrl: string | undefined;

@@ -11,11 +11,18 @@ export default async function NewJobCard() {
   const session = await requireRole("ADVISOR");
   const t = await getT();
 
-  const vehicles = await prisma.vehicle.findMany({
-    where: { customer: { garageId: session.user.garageId } },
-    include: { customer: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const [vehicles, techs] = await Promise.all([
+    prisma.vehicle.findMany({
+      where: { customer: { garageId: session.user.garageId } },
+      include: { customer: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.findMany({
+      where: { garageId: session.user.garageId, role: "TECH" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -34,6 +41,21 @@ export default async function NewJobCard() {
         </p>
       ) : (
         <form action={createJobCardAction} className="flex flex-col gap-2">
+          <label className="text-sm text-zinc-500 dark:text-zinc-400">
+            {t("assignTo")}
+            <select
+              name="assignedToId"
+              defaultValue=""
+              className="mt-1 block w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            >
+              <option value="">{t("unassigned")}</option>
+              {techs.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          </label>
           {vehicles.map((v) => (
             <button
               key={v.id}

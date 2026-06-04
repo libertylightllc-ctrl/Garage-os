@@ -16,6 +16,12 @@ async function requireAdvisor() {
   return session.user;
 }
 
+async function requireTech() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
+  return session.user;
+}
+
 export async function createJobCardAction(formData: FormData) {
   const user = await requireAdvisor();
   const vehicleId = String(formData.get("vehicleId") ?? "");
@@ -27,12 +33,24 @@ export async function createJobCardAction(formData: FormData) {
   });
   if (!vehicle) throw new Error("Vehicle not found in this garage");
 
+  // Optional check-in assignment to a specific technician (else shared pool).
+  const assignedToRaw = String(formData.get("assignedToId") ?? "");
+  let assignedToId: string | null = null;
+  if (assignedToRaw) {
+    const tech = await prisma.user.findFirst({
+      where: { id: assignedToRaw, garageId: user.garageId, role: "TECH" },
+      select: { id: true },
+    });
+    assignedToId = tech?.id ?? null;
+  }
+
   const job = await prisma.jobCard.create({
     data: {
       garageId: user.garageId,
       vehicleId: vehicle.id,
       advisorId: user.id,
       status: "ARRIVED",
+      assignedToId,
     },
     select: { id: true },
   });
@@ -75,6 +93,36 @@ export async function jobActionAction(formData: FormData) {
 
   revalidatePath(`/advisor/jobs/${job.id}`);
   revalidatePath("/advisor");
+}
+
+// Atomic claim: a single conditional UPDATE (compare-and-set). Two simultaneous claims
+// are serialized by the row lock — only the one matching `claimedById: null` writes; the
+// loser's WHERE matches 0 rows (count 0). No read-then-write, so no double-assignment.
+export async function claimJobAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const res = await prisma.jobCard.updateMany({
+    where: {
+      id: jobId,
+      garageId: user.garageId,
+      claimedById: null, // the guard
+      status: { notIn: ["DELIVERED", "CANCELLED"] },
+      OR: [{ assignedToId: null }, { assignedToId: user.id }],
+    },
+    data: { claimedById: user.id, claimedAt: new Date() },
+  });
+  revalidatePath("/technician");
+  if (res.count === 0) redirect("/technician?taken=1"); // already taken / not eligible
+}
+
+export async function releaseJobAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  await prisma.jobCard.updateMany({
+    where: { id: jobId, claimedById: user.id }, // only the claimer can release
+    data: { claimedById: null, claimedAt: null },
+  });
+  revalidatePath("/technician");
 }
 
 export async function skipToStageAction(formData: FormData) {

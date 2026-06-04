@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { transition, skipTo, type JobAction, type JobStatus } from "@/lib/jobcard-status";
+import { saveUpload } from "@/lib/storage";
+import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
+import { signId } from "@/lib/tokens";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
@@ -154,6 +157,52 @@ export async function reassignJobAction(formData: FormData) {
   revalidatePath(`/advisor/jobs/${job.id}`);
   revalidatePath("/advisor");
   revalidatePath("/technician");
+}
+
+// Tier 3 #11 — check-in photo prompt (dispute shield). The advisor photographs the
+// car at intake; reuses the existing JobStep PHOTO feed (techId null = advisor).
+export async function checkInPhotoAction(formData: FormData) {
+  const user = await requireAdvisor();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await jobInGarage(jobId, user.garageId);
+
+  const f = formData.get("file");
+  if (!(f instanceof File) || f.size === 0) throw new Error("No photo selected");
+  const photoUrl = await saveUpload(f);
+
+  await prisma.jobStep.create({
+    data: { jobCardId: job.id, type: "PHOTO", transcript: "Check-in photo", photoUrl },
+  });
+  revalidatePath(`/advisor/jobs/${job.id}`);
+}
+
+async function jobInGarage(jobId: string, garageId: string) {
+  const job = await prisma.jobCard.findFirst({ where: { id: jobId, garageId }, select: { id: true } });
+  if (!job) throw new Error("Job not found in this garage");
+  return job;
+}
+
+// Tier 2 #9 — nudge a customer whose car is ready but not collected (WhatsApp).
+export async function nudgeCollectionAction(formData: FormData) {
+  const user = await requireAdvisor();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    include: { vehicle: { include: { customer: true } }, invoices: { select: { id: true }, take: 1 } },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+
+  const customer = job.vehicle.customer;
+  const invId = job.invoices[0]?.id;
+  const link = invId ? ` ${appUrl()}/c/invoice/${signId("invoice", invId)}` : "";
+  await sendWhatsApp({
+    garageId: user.garageId,
+    customerId: customer.id,
+    waId: customer.waId ?? customer.phone,
+    template: "ready_for_collection",
+    body: `Your ${job.vehicle.make} ${job.vehicle.model} is ready for collection.${link}`,
+  });
+  revalidatePath("/advisor/eod");
 }
 
 export async function skipToStageAction(formData: FormData) {

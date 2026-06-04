@@ -56,6 +56,12 @@ export default async function AdvisorHome() {
         >
           {t("newBookings")}{pendingBookings > 0 ? ` (${pendingBookings})` : ""}
         </Link>
+        <Link
+          href="/advisor/eod"
+          className="flex-1 rounded-lg border border-black/15 px-4 py-3 text-center text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          {t("tabEod")}
+        </Link>
       </div>
 
       <ul className="flex flex-col gap-2">

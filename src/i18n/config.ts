@@ -339,6 +339,22 @@ const en = {
   rs_SENT: "Sent",
   rs_CANCELLED: "Cancelled",
 
+  // end-of-day view + check-in photo (Tier 3) + collection nudge (Tier 2 #9)
+  tabEod: "End of day",
+  eodTitle: "End of day",
+  eodIntro: "What's still open before you close — and what each car is waiting on.",
+  eodEmpty: "Nothing open — all clear. 🎉",
+  eod_IN_PROGRESS: "In progress",
+  eod_WAITING_PARTS: "Waiting on parts",
+  eod_WAITING_CUSTOMER: "Waiting on customer",
+  eod_READY: "Ready for collection",
+  eod_OTHER: "On hold",
+  nudgeCollect: "Nudge to collect",
+  nudged: "Nudged ✓",
+  checkInPhotoPrompt: "Photograph the car at check-in — protects against “you damaged it” claims.",
+  addCheckInPhoto: "Add check-in photo",
+  checkInDone: "Check-in photo on file ✓",
+
   // owner
   ownerDashboard: "Owner dashboard",
   mRevenueMo: "Revenue (mo)",
@@ -698,6 +714,22 @@ const ar: typeof en = {
   rs_SCHEDULED: "مجدولة",
   rs_SENT: "مُرسلة",
   rs_CANCELLED: "ملغاة",
+
+  // end-of-day view + check-in photo + collection nudge
+  tabEod: "نهاية اليوم",
+  eodTitle: "نهاية اليوم",
+  eodIntro: "ما الذي ما زال مفتوحًا قبل الإغلاق — وعلى ماذا تنتظر كل سيارة.",
+  eodEmpty: "لا يوجد شيء مفتوح — كل شيء جاهز. 🎉",
+  eod_IN_PROGRESS: "قيد التنفيذ",
+  eod_WAITING_PARTS: "بانتظار القطع",
+  eod_WAITING_CUSTOMER: "بانتظار العميل",
+  eod_READY: "جاهزة للاستلام",
+  eod_OTHER: "معلّقة",
+  nudgeCollect: "تذكير بالاستلام",
+  nudged: "تم التذكير ✓",
+  checkInPhotoPrompt: "صوّر السيارة عند الاستلام — يحميك من ادعاءات «أنتم أتلفتموها».",
+  addCheckInPhoto: "إضافة صورة الاستلام",
+  checkInDone: "صورة الاستلام محفوظة ✓",
 
   ownerDashboard: "لوحة المالك",
   mRevenueMo: "الإيرادات (شهر)",

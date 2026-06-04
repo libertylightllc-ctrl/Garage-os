@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { jobActionAction, skipToStageAction, reassignJobAction } from "@/app/actions/jobs";
+import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction } from "@/app/actions/jobs";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
@@ -134,6 +134,27 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </button>
         </form>
       </div>
+
+      {/* Check-in photo prompt (Tier 3 #11 — dispute shield) */}
+      {!cancelled && !delivered ? (
+        job.steps.some((s) => s.type === "PHOTO") ? (
+          <p className="text-xs text-green-700 dark:text-green-400">📷 {t("checkInDone")}</p>
+        ) : (curIdx <= TIMELINE.indexOf("INSPECTION")) ? (
+          <form
+            action={checkInPhotoAction}
+            className="flex flex-col gap-2 rounded-lg border border-dashed border-black/20 p-3 text-sm dark:border-white/25"
+          >
+            <input type="hidden" name="jobId" value={job.id} />
+            <span className="text-zinc-600 dark:text-zinc-300">📷 {t("checkInPhotoPrompt")}</span>
+            <div className="flex items-center gap-2">
+              <input type="file" name="file" accept="image/*" capture="environment" required className="flex-1 text-xs" />
+              <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                {t("addCheckInPhoto")}
+              </button>
+            </div>
+          </form>
+        ) : null
+      ) : null}
 
       {cancelled ? (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">

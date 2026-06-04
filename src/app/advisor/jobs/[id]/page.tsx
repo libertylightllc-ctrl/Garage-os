@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { jobActionAction, skipToStageAction } from "@/app/actions/jobs";
+import { jobActionAction, skipToStageAction, reassignJobAction } from "@/app/actions/jobs";
 import { createEstimateAction } from "@/app/actions/billing";
 import { AppNav } from "@/components/app-nav";
 import {
@@ -35,6 +35,15 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     },
   });
   if (!job) notFound();
+
+  const techs = await prisma.user.findMany({
+    where: { garageId: session.user.garageId, role: "TECH" },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
+  const claimedName = techName(job.claimedById);
+  const assignedName = techName(job.assignedToId);
 
   const status = job.status as JobStatus;
   const heldFrom = (job.heldFrom ?? null) as JobStatus | null;
@@ -82,6 +91,38 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {job.vehicle.plate} · {job.vehicle.customer.name}
         </p>
+      </div>
+
+      {/* Technician assignment */}
+      <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+        <div className="mb-2">
+          {t("technicianLabel")}:{" "}
+          <span className="font-medium">
+            {claimedName
+              ? `${claimedName} · ${t("working")}`
+              : assignedName
+                ? `${assignedName} · ${t("assignedLabel")}`
+                : t("unassigned")}
+          </span>
+        </div>
+        <form action={reassignJobAction} className="flex gap-2">
+          <input type="hidden" name="jobId" value={job.id} />
+          <select
+            name="assignedToId"
+            defaultValue={job.assignedToId ?? ""}
+            className="rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+          >
+            <option value="">{t("unassigned")}</option>
+            {techs.map((tech) => (
+              <option key={tech.id} value={tech.id}>
+                {tech.name}
+              </option>
+            ))}
+          </select>
+          <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            {t("reassign")}
+          </button>
+        </form>
       </div>
 
       {cancelled ? (

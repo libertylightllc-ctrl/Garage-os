@@ -125,6 +125,37 @@ export async function releaseJobAction(formData: FormData) {
   revalidatePath("/technician");
 }
 
+// Advisor (re)assigns a car to a tech (or back to the shared pool). Clears any existing
+// claim so the newly-assigned tech can pick it up from their Waiting list.
+export async function reassignJobAction(formData: FormData) {
+  const user = await requireAdvisor();
+  const jobId = String(formData.get("jobId") ?? "");
+  const raw = String(formData.get("assignedToId") ?? "");
+
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: { id: true },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+
+  let assignedToId: string | null = null;
+  if (raw) {
+    const tech = await prisma.user.findFirst({
+      where: { id: raw, garageId: user.garageId, role: "TECH" },
+      select: { id: true },
+    });
+    assignedToId = tech?.id ?? null;
+  }
+
+  await prisma.jobCard.update({
+    where: { id: job.id },
+    data: { assignedToId, claimedById: null, claimedAt: null },
+  });
+  revalidatePath(`/advisor/jobs/${job.id}`);
+  revalidatePath("/advisor");
+  revalidatePath("/technician");
+}
+
 export async function skipToStageAction(formData: FormData) {
   const user = await requireAdvisor();
   const jobId = String(formData.get("jobId") ?? "");

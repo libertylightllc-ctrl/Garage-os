@@ -12,7 +12,7 @@ export default async function AdvisorHome() {
   const session = await requireRole("ADVISOR");
   const t = await getT();
 
-  const [jobs, pendingBookings] = await Promise.all([
+  const [jobs, pendingBookings, techs] = await Promise.all([
     prisma.jobCard.findMany({
       where: {
         garageId: session.user.garageId,
@@ -22,7 +22,12 @@ export default async function AdvisorHome() {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.booking.count({ where: { garageId: session.user.garageId, status: "PROPOSED" } }),
+    prisma.user.findMany({
+      where: { garageId: session.user.garageId, role: "TECH" },
+      select: { id: true, name: true },
+    }),
   ]);
+  const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -65,6 +70,11 @@ export default async function AdvisorHome() {
                   </span>
                   <span className="block text-sm text-zinc-500 dark:text-zinc-400">
                     {job.vehicle.customer.name}
+                    {techName(job.claimedById)
+                      ? ` · 🔧 ${techName(job.claimedById)}`
+                      : techName(job.assignedToId)
+                        ? ` · → ${techName(job.assignedToId)}`
+                        : ""}
                   </span>
                 </span>
                 <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium dark:bg-zinc-800">

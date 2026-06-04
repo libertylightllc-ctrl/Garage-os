@@ -173,6 +173,10 @@ const en = {
   forYou: "for you",
   assignTo: "Assign to",
   unassigned: "Unassigned (shared pool)",
+  technicianLabel: "Technician",
+  working: "working now",
+  assignedLabel: "assigned",
+  reassign: "Reassign",
 
   // estimate editor + invoice
   colItem: "Item",
@@ -442,6 +446,10 @@ const ar: typeof en = {
   forYou: "لك",
   assignTo: "تعيين إلى",
   unassigned: "غير معيّنة (مجموعة مشتركة)",
+  technicianLabel: "الفني",
+  working: "يعمل الآن",
+  assignedLabel: "معيّنة",
+  reassign: "إعادة تعيين",
 
   colItem: "البند",
   colQty: "الكمية",

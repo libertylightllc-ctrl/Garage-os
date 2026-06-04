@@ -8,11 +8,16 @@ import {
   handoffReply,
   draftFor,
   type Intent,
+  type Lang,
 } from "@/lib/receptionist";
 import { signId } from "@/lib/tokens";
 import { messages, statusKey } from "@/i18n/config";
 
-type Lang = "ar" | "en";
+const SUPPORTED: Lang[] = ["ar", "en", "hi", "ur"];
+function resolveLang(customerLang: string, body: string): Lang {
+  if (/[ऀ-ॿ]/.test(body)) return "hi"; // Devanagari script -> Hindi
+  return (SUPPORTED as string[]).includes(customerLang) ? (customerLang as Lang) : "en";
+}
 
 async function buildAutoReply(
   garageId: string,
@@ -26,7 +31,9 @@ async function buildAutoReply(
       orderBy: { updatedAt: "desc" },
       select: { status: true },
     });
-    const statusLabel = job ? messages[lang][statusKey(job.status)] : undefined;
+    const statusLabel = job
+      ? messages[lang === "ar" ? "ar" : "en"][statusKey(job.status)]
+      : undefined;
     return autoReply("STATUS", lang, { statusLabel });
   }
   if (intent === "INVOICE") {
@@ -65,7 +72,7 @@ export async function handleInbound(opts: {
   });
   if (rec.dupe || rec.mode === "HUMAN") return; // dupe, or advisor already handling
 
-  const lang: Lang = opts.customer.lang === "ar" ? "ar" : "en";
+  const lang: Lang = resolveLang(opts.customer.lang, opts.body);
   const cls = classifyConversation(opts.body);
 
   // Meter the AI interaction (the Layer-2 margin trap).

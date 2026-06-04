@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyConversation } from "./receptionist";
+import { classifyConversation, holdingReply, autoReply } from "./receptionist";
 
 describe("receptionist routing (propose / confirm / handoff)", () => {
   it("AUTO for routine: status, hours, booking, invoice", () => {
@@ -29,5 +29,12 @@ describe("receptionist routing (propose / confirm / handoff)", () => {
     expect(classifyConversation("هل سيارتي جاهزة؟").route).toBe("AUTO");
     expect(classifyConversation("كم سعر التصليح؟").route).toBe("PROPOSE");
     expect(classifyConversation("أريد التحدث مع مدير").route).toBe("HANDOFF");
+  });
+
+  it("replies in Hindi/Urdu, falling back to English", () => {
+    expect(holdingReply("hi")).toMatch(/[ऀ-ॿ]/); // Devanagari
+    expect(holdingReply("ur")).not.toBe(holdingReply("en"));
+    expect(autoReply("HOURS", "hi", {})).toMatch(/[ऀ-ॿ]/);
+    expect(autoReply("HOURS", "en", {})).toContain("Sat");
   });
 });

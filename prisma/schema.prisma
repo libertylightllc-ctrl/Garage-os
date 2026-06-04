@@ -21,6 +21,8 @@ enum Role {
 enum Lang {
   ar
   en
+  hi
+  ur
 }
 
 enum BookingChannel {

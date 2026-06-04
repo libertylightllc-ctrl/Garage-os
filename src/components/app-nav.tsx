@@ -22,6 +22,7 @@ const NAV: Record<StaffRole, NavItem[]> = {
   ADVISOR: [
     { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
     { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
+    { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
     { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
   ],
   TECH: [{ href: "/technician", labelKey: "tabWorkshop", key: "workshop" }],
@@ -33,14 +34,20 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
   const items = NAV[role];
   const t = await getT();
 
-  // Advisor: badge the Chats tab with conversations needing a human.
+  // Advisor: badge the Chats tab (needs-human) and the Parts tab (open requests).
   let needsHuman = 0;
+  let openParts = 0;
   if (role === "ADVISOR") {
     const session = await auth();
     if (session?.user?.garageId) {
-      needsHuman = await prisma.whatsAppThread.count({
-        where: { garageId: session.user.garageId, threadStatus: "NEEDS_HUMAN" },
-      });
+      [needsHuman, openParts] = await Promise.all([
+        prisma.whatsAppThread.count({
+          where: { garageId: session.user.garageId, threadStatus: "NEEDS_HUMAN" },
+        }),
+        prisma.partRequest.count({
+          where: { garageId: session.user.garageId, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
+        }),
+      ]);
     }
   }
   return (
@@ -72,6 +79,11 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                 {it.key === "chats" && needsHuman > 0 ? (
                   <span className="ms-1 rounded-full bg-red-500 px-1.5 text-xs text-white">
                     {needsHuman}
+                  </span>
+                ) : null}
+                {it.key === "parts" && openParts > 0 ? (
+                  <span className="ms-1 rounded-full bg-amber-500 px-1.5 text-xs text-white">
+                    {openParts}
                   </span>
                 ) : null}
               </Link>

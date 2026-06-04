@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
+import { requestPartAction } from "@/app/actions/parts";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
+import { partStatusKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const t = await getT();
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
-    include: { vehicle: true, steps: { orderBy: { createdAt: "desc" } } },
+    include: {
+      vehicle: true,
+      steps: { orderBy: { createdAt: "desc" } },
+      partRequests: { orderBy: { createdAt: "desc" } },
+    },
   });
   if (!job) notFound();
 
@@ -93,27 +99,36 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </button>
         </form>
 
-        <form action={addStepAction} className="contents">
+        <form action={requestPartAction} className="contents">
           <input type="hidden" name="jobId" value={job.id} />
-          <input type="hidden" name="type" value="PART_REQUEST" />
           <div className={bigBtn}>
             <span className="text-3xl">📦</span>
             {t("requestPart")}
             <select
               name="partId"
-              required
               defaultValue=""
               className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
             >
-              <option value="" disabled>
-                {t("pickPart")}
-              </option>
+              <option value="">{t("pickPart")}</option>
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} · {p.qtyOnHand} {t("inStockShort")}
                 </option>
               ))}
             </select>
+            <input
+              name="description"
+              placeholder={t("orTypePart")}
+              className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <input
+              name="qty"
+              type="number"
+              min="1"
+              defaultValue="1"
+              aria-label={t("colQty")}
+              className="mt-1 w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
             <button type="submit" className="mt-1 text-sm font-semibold underline">
               {t("request")}
             </button>
@@ -129,6 +144,28 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </button>
         </form>
       </div>
+
+      {/* Part requests + live status */}
+      {job.partRequests.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("partRequests")}</h2>
+          <ul className="flex flex-col gap-1 text-sm">
+            {job.partRequests.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between rounded-lg border border-black/10 p-2 dark:border-white/15"
+              >
+                <span>
+                  📦 {r.qty}× {r.description}
+                </span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {t(partStatusKey(r.status))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Activity */}
       <div>

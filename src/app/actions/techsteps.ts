@@ -51,17 +51,6 @@ export async function addStepAction(formData: FormData) {
     const f = formData.get("file");
     if (f instanceof File && f.size > 0) voiceNoteUrl = await saveUpload(f);
     else throw new Error("No voice note selected");
-  } else if (type === "PART_REQUEST") {
-    const partId = String(formData.get("partId") ?? "");
-    const part = partId
-      ? await prisma.part.findFirst({ where: { id: partId, garageId: user.garageId } })
-      : null;
-    transcript = part ? `Requested part: ${part.name} (${part.sku})` : "Requested a part";
-    if (part) {
-      await prisma.partMovement.create({
-        data: { partId: part.id, jobCardId: job.id, delta: -1, reason: "Technician request" },
-      });
-    }
   } else if (type === "FINISH") {
     transcript = "Technician marked work finished";
   } else {

@@ -259,6 +259,27 @@ const en = {
   dueLower: "due",
   ledgerNote: "All figures are generated from auto-posted ledger entries — no manual bookkeeping.",
 
+  // parts (Tier 1 #3 — part-request loop)
+  tabParts: "Parts",
+  partsQueue: "Part requests",
+  partRequests: "Part requests",
+  noOpenParts: "No open part requests.",
+  inStockShort: "in stock",
+  inStockTag: "in stock",
+  outOfStock: "out of stock",
+  orTypePart: "or type a part",
+  requestedByLabel: "requested by",
+  actFulfill: "Fulfill",
+  actOrder: "Order",
+  actArrived: "Mark arrived",
+  actCancelReq: "Cancel",
+  supplierNote: "Supplier / ETA (optional)",
+  pr_REQUESTED: "Requested",
+  pr_ORDERED: "Ordered",
+  pr_ARRIVED: "Arrived",
+  pr_FULFILLED: "Fulfilled",
+  pr_CANCELLED: "Cancelled",
+
   // owner
   ownerDashboard: "Owner dashboard",
   mRevenueMo: "Revenue (mo)",
@@ -539,6 +560,27 @@ const ar: typeof en = {
   dueLower: "تستحق",
   ledgerNote: "تُحتسب جميع الأرقام من قيود دفترية تلقائية — دون مسك دفاتر يدوي.",
 
+  // parts (Tier 1 #3)
+  tabParts: "القطع",
+  partsQueue: "طلبات القطع",
+  partRequests: "طلبات القطع",
+  noOpenParts: "لا توجد طلبات قطع مفتوحة.",
+  inStockShort: "متوفر",
+  inStockTag: "متوفر",
+  outOfStock: "غير متوفر",
+  orTypePart: "أو اكتب اسم القطعة",
+  requestedByLabel: "طلبها",
+  actFulfill: "تسليم",
+  actOrder: "طلب توريد",
+  actArrived: "تم الوصول",
+  actCancelReq: "إلغاء",
+  supplierNote: "المورّد / الوقت المتوقع (اختياري)",
+  pr_REQUESTED: "مطلوبة",
+  pr_ORDERED: "تم الطلب",
+  pr_ARRIVED: "وصلت",
+  pr_FULFILLED: "تم التسليم",
+  pr_CANCELLED: "ملغاة",
+
   ownerDashboard: "لوحة المالك",
   mRevenueMo: "الإيرادات (شهر)",
   mProfitMo: "الربح (شهر)",
@@ -583,4 +625,9 @@ export type MessageKey = keyof typeof en;
 /** Maps a JobStatus value to its translation key, e.g. "ARRIVED" -> "st_ARRIVED". */
 export function statusKey(status: string): MessageKey {
   return ("st_" + status) as MessageKey;
+}
+
+/** Maps a PartRequestStatus to its translation key, e.g. "ORDERED" -> "pr_ORDERED". */
+export function partStatusKey(status: string): MessageKey {
+  return ("pr_" + status) as MessageKey;
 }

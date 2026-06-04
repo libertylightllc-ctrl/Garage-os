@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { companyGarageIds } from "@/lib/branches";
 
 // PUBLIC — a new garage signs itself up (creates the Garage + its OWNER user).
 export async function signupAction(formData: FormData) {
@@ -36,6 +37,25 @@ async function requireOwner() {
 
 const STAFF_ROLES = ["ADVISOR", "TECH", "CASHIER"] as const;
 
+// Owner adds a branch (a child Garage under the company root).
+export async function addBranchAction(formData: FormData) {
+  const owner = await requireOwner();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) redirect("/owner/branches?error=1");
+
+  const g = await prisma.garage.findUnique({
+    where: { id: owner.garageId },
+    select: { branchOfId: true },
+  });
+  const rootId = g?.branchOfId ?? owner.garageId; // owner is at the company root
+
+  await prisma.garage.create({
+    data: { name, country: "UAE", branchOfId: rootId, isPilot: true },
+  });
+  revalidatePath("/owner/branches");
+  revalidatePath("/owner/staff");
+}
+
 export async function addStaffAction(formData: FormData) {
   const owner = await requireOwner();
   const name = String(formData.get("name") ?? "").trim();
@@ -46,12 +66,18 @@ export async function addStaffAction(formData: FormData) {
   if (!name || !email || password.length < 6 || !STAFF_ROLES.includes(role as never)) {
     redirect("/owner/staff?error=1");
   }
+
+  // Staff are assigned to a specific branch (defaults to the company root).
+  const branchRaw = String(formData.get("branchId") ?? "");
+  const companyIds = await companyGarageIds(owner.garageId);
+  const garageId = companyIds.includes(branchRaw) ? branchRaw : owner.garageId;
+
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) redirect("/owner/staff?error=exists");
 
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.user.create({
-    data: { garageId: owner.garageId, role: role as never, name, email, passwordHash },
+    data: { garageId, role: role as never, name, email, passwordHash },
   });
   revalidatePath("/owner/staff");
 }

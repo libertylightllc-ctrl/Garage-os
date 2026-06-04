@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { addStaffAction, removeStaffAction } from "@/app/actions/onboarding";
+import { listBranches } from "@/lib/branches";
 import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,12 @@ export default async function StaffPage({
   const { error } = await searchParams;
   const t = await getT();
 
+  const branches = await listBranches(session.user.garageId);
+  const branchName = new Map(branches.map((b) => [b.id, b.name]));
+  const multiBranch = branches.length > 1;
+
   const staff = await prisma.user.findMany({
-    where: { garageId: session.user.garageId },
+    where: { garageId: { in: branches.map((b) => b.id) } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -42,7 +47,10 @@ export default async function StaffPage({
           >
             <span>
               <span className="font-medium">{u.name}</span>{" "}
-              <span className="text-zinc-500 dark:text-zinc-400">· {u.role} · {u.email}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">
+                · {u.role} · {u.email}
+                {multiBranch ? ` · ${branchName.get(u.garageId) ?? ""}` : ""}
+              </span>
             </span>
             {u.role !== "OWNER" ? (
               <form action={removeStaffAction}>
@@ -65,6 +73,15 @@ export default async function StaffPage({
             <option value="TECH">{t("optTechnician")}</option>
             <option value="CASHIER">{t("optCashier")}</option>
           </select>
+          {multiBranch ? (
+            <select name="branchId" className={field} defaultValue={branches[0]?.id}>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <input name="email" type="email" placeholder={t("email")} required className={`${field} flex-1`} />

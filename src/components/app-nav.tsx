@@ -15,6 +15,7 @@ interface NavItem {
 const NAV: Record<StaffRole, NavItem[]> = {
   OWNER: [
     { href: "/owner", labelKey: "tabDashboard", key: "dashboard" },
+    { href: "/owner/branches", labelKey: "tabBranches", key: "branches" },
     { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
     { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
     { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },

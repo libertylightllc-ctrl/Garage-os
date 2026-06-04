@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { classifyIntent } from "@/lib/copilot";
+import { companyGarageIds } from "@/lib/branches";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import {
@@ -27,7 +28,7 @@ function fill(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 }
 
-async function answerCopilot(t: T, garageId: string, question: string, now: Date): Promise<string> {
+async function answerCopilot(t: T, garageId: string | string[], question: string, now: Date): Promise<string> {
   switch (classifyIntent(question)) {
     case "PROFIT_MONTH": {
       const p = await profitThisMonth(garageId, now);
@@ -65,26 +66,28 @@ export default async function OwnerHome({
   const session = await requireRole("OWNER");
   const t = await getT();
   const garageId = session.user.garageId;
+  // Owner sees ALL branches aggregated (company root + its branches).
+  const gids = await companyGarageIds(garageId);
   const now = new Date();
   const { q } = await searchParams;
 
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
   const [rev, profit, cars, inv, trend, usage, acceptance, confirmMins, techWork] =
     await Promise.all([
-      revenue(garageId, monthFrom),
-      profitThisMonth(garageId, now),
-      carsToday(garageId, now),
-      inventoryHealth(garageId),
-      weekTrend(garageId, now),
-      aiUsage(garageId, monthFrom),
-      intakeAcceptance(garageId),
-      avgConfirmMinutes(garageId),
-      technicianWork(garageId),
+      revenue(gids, monthFrom),
+      profitThisMonth(gids, now),
+      carsToday(gids, now),
+      inventoryHealth(gids),
+      weekTrend(gids, now),
+      aiUsage(gids, monthFrom),
+      intakeAcceptance(gids),
+      avgConfirmMinutes(gids),
+      technicianWork(gids),
     ]);
 
   let answer: string | null = null;
   if (q && q.trim()) {
-    answer = await answerCopilot(t, garageId, q, now);
+    answer = await answerCopilot(t, gids, q, now);
     await prisma.aiEvent.create({
       data: {
         garageId,

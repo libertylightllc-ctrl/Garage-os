@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ACCOUNTS, arState } from "@/lib/billing";
+import { scopeWhere } from "@/lib/branches";
+
+// All metrics accept one garageId or several (the owner's company = root + branches).
+type Scope = string | string[];
 
 // Read-only, ALWAYS garage-scoped metric queries. The copilot may only call these
 // (no raw SQL), which guarantees tenant isolation.
@@ -14,48 +18,48 @@ function daysAgo(now: Date, n: number): Date {
   return new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
 }
 
-async function sumAccount(garageId: string, account: string, from?: Date, to?: Date): Promise<number> {
-  const where: Record<string, unknown> = { garageId, account };
+async function sumAccount(garageId: Scope, account: string, from?: Date, to?: Date): Promise<number> {
+  const where: Record<string, unknown> = { garageId: scopeWhere(garageId), account };
   if (from || to) where.createdAt = { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) };
   const agg = await prisma.ledgerEntry.aggregate({ where, _sum: { credit: true, debit: true } });
   return Number(agg._sum.credit ?? 0) - Number(agg._sum.debit ?? 0);
 }
 
 /** Revenue (credit-normal Sales Revenue) over an optional date range. */
-export async function revenue(garageId: string, from?: Date, to?: Date): Promise<number> {
+export async function revenue(garageId: Scope, from?: Date, to?: Date): Promise<number> {
   return Math.round(((await sumAccount(garageId, ACCOUNTS.SALES, from, to)) || 0) * 100) / 100;
 }
 
 /** Parts COGS over a range from negative PartMovements * part cost. */
-async function partsCost(garageId: string, from?: Date): Promise<number> {
+async function partsCost(garageId: Scope, from?: Date): Promise<number> {
   const moves = await prisma.partMovement.findMany({
-    where: { part: { garageId }, delta: { lt: 0 }, ...(from ? { createdAt: { gte: from } } : {}) },
+    where: { part: { garageId: scopeWhere(garageId) }, delta: { lt: 0 }, ...(from ? { createdAt: { gte: from } } : {}) },
     include: { part: { select: { cost: true } } },
   });
   return moves.reduce((s, m) => s + Math.abs(m.delta) * Number(m.part.cost), 0);
 }
 
-export async function profitThisMonth(garageId: string, now = new Date()): Promise<number> {
+export async function profitThisMonth(garageId: Scope, now = new Date()): Promise<number> {
   const from = startOfMonth(now);
   const rev = await revenue(garageId, from);
   const cogs = await partsCost(garageId, from);
   return Math.round((rev - cogs) * 100) / 100;
 }
 
-export async function carsToday(garageId: string, now = new Date()): Promise<number> {
-  return prisma.jobCard.count({ where: { garageId, createdAt: { gte: startOfToday(now) } } });
+export async function carsToday(garageId: Scope, now = new Date()): Promise<number> {
+  return prisma.jobCard.count({ where: { garageId: scopeWhere(garageId), createdAt: { gte: startOfToday(now) } } });
 }
 
-export async function inventoryHealth(garageId: string): Promise<{ low: number; total: number }> {
+export async function inventoryHealth(garageId: Scope): Promise<{ low: number; total: number }> {
   const [low, total] = await Promise.all([
-    prisma.part.count({ where: { garageId, qtyOnHand: { lte: 5 } } }),
-    prisma.part.count({ where: { garageId } }),
+    prisma.part.count({ where: { garageId: scopeWhere(garageId), qtyOnHand: { lte: 5 } } }),
+    prisma.part.count({ where: { garageId: scopeWhere(garageId) } }),
   ]);
   return { low, total };
 }
 
 export async function weekTrend(
-  garageId: string,
+  garageId: Scope,
   now = new Date(),
 ): Promise<{ thisWeek: number; lastWeek: number; delta: number }> {
   const thisFrom = daysAgo(now, 7);
@@ -74,10 +78,10 @@ export interface OwesRow {
 
 // AI usage (the Layer-2 margin trap) — events + estimated cost over a range.
 export async function aiUsage(
-  garageId: string,
+  garageId: Scope,
   from?: Date,
 ): Promise<{ events: number; costUsd: number }> {
-  const where: Record<string, unknown> = { garageId };
+  const where: Record<string, unknown> = { garageId: scopeWhere(garageId) };
   if (from) where.createdAt = { gte: from };
   const agg = await prisma.aiEvent.aggregate({ where, _sum: { costEstimate: true }, _count: true });
   return { events: agg._count, costUsd: Number(agg._sum.costEstimate ?? 0) };
@@ -85,20 +89,20 @@ export async function aiUsage(
 
 // Pilot hypothesis: AI intake proposal accepted by advisor without rejection.
 export async function intakeAcceptance(
-  garageId: string,
+  garageId: Scope,
 ): Promise<{ confirmed: number; rejected: number; rate: number | null }> {
   const [confirmed, rejected] = await Promise.all([
-    prisma.booking.count({ where: { garageId, status: "CONFIRMED" } }),
-    prisma.booking.count({ where: { garageId, status: "REJECTED" } }),
+    prisma.booking.count({ where: { garageId: scopeWhere(garageId), status: "CONFIRMED" } }),
+    prisma.booking.count({ where: { garageId: scopeWhere(garageId), status: "REJECTED" } }),
   ]);
   const decided = confirmed + rejected;
   return { confirmed, rejected, rate: decided ? confirmed / decided : null };
 }
 
 // Pilot hypothesis: time from customer booking to advisor confirmation (minutes).
-export async function avgConfirmMinutes(garageId: string): Promise<number | null> {
+export async function avgConfirmMinutes(garageId: Scope): Promise<number | null> {
   const bookings = await prisma.booking.findMany({
-    where: { garageId, status: "CONFIRMED", jobCard: { isNot: null } },
+    where: { garageId: scopeWhere(garageId), status: "CONFIRMED", jobCard: { isNot: null } },
     include: { jobCard: { select: { createdAt: true } } },
   });
   const diffs = bookings
@@ -108,9 +112,9 @@ export async function avgConfirmMinutes(garageId: string): Promise<number | null
   return Math.round((diffs.reduce((a, c) => a + c, 0) / diffs.length) * 10) / 10;
 }
 
-export async function whoOwes(garageId: string, now = new Date()): Promise<OwesRow[]> {
+export async function whoOwes(garageId: Scope, now = new Date()): Promise<OwesRow[]> {
   const invoices = await prisma.invoice.findMany({
-    where: { garageId, status: { not: "PAID" } },
+    where: { garageId: scopeWhere(garageId), status: { not: "PAID" } },
     include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
   });
   return invoices
@@ -140,9 +144,9 @@ export interface TechWork {
 }
 
 // How much each technician worked individually (job steps logged, jobs touched).
-export async function technicianWork(garageId: string): Promise<TechWork[]> {
+export async function technicianWork(garageId: Scope): Promise<TechWork[]> {
   const steps = await prisma.jobStep.findMany({
-    where: { jobCard: { garageId }, techId: { not: null } },
+    where: { jobCard: { garageId: scopeWhere(garageId) }, techId: { not: null } },
     select: { techId: true, type: true, jobCardId: true, tech: { select: { name: true } } },
   });
   const map = new Map<string, TechWork & { jobSet: Set<string> }>();

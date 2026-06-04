@@ -6,7 +6,7 @@ describe("roleHome", () => {
     expect(roleHome("OWNER")).toBe("/owner");
     expect(roleHome("ADVISOR")).toBe("/advisor");
     expect(roleHome("TECH")).toBe("/technician");
-    expect(roleHome("ACCOUNTANT")).toBe("/accountant");
+    expect(roleHome("CASHIER")).toBe("/cashier");
   });
 
   it("maps every known staff role to a distinct route", () => {
@@ -23,7 +23,7 @@ describe("roleHome", () => {
 
   it("has exactly the 4 staff roles", () => {
     expect(Object.keys(ROLE_HOME).sort()).toEqual(
-      ["ACCOUNTANT", "ADVISOR", "OWNER", "TECH"],
+      ["ADVISOR", "CASHIER", "OWNER", "TECH"],
     );
   });
 });

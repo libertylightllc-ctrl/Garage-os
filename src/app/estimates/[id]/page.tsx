@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { type StaffRole } from "@/lib/roles";
 import { getT } from "@/i18n/server";
 import {
   addEstimateLineAction,
@@ -16,9 +17,12 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
+// Shared screen: the Cashier sets prices here; the Advisor can view + send it.
 export default async function EstimateEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "CASHIER", "OWNER"]);
+  const role = session.user.role as StaffRole;
+  const canPrice = role === "CASHIER" || role === "OWNER"; // edit lines / invoice
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -31,21 +35,25 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   if (!est) notFound();
   const t = await getT();
 
-  const editable = est.status === "DRAFT";
-  const canDecline = !est.invoice; // advisor can skip lines until the invoice is cut
+  const editable = canPrice && est.status === "DRAFT";
+  const canDecline = canPrice && !est.invoice; // skip lines until the invoice is cut
+  const backHref = role === "ADVISOR" ? `/advisor/jobs/${est.jobCardId}` : "/cashier";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <AppNav role="ADVISOR" active="jobs" />
+      <AppNav role={role} active={role === "ADVISOR" ? "jobs" : "accounts"} />
       <div>
-        <Link href={`/advisor/jobs/${est.jobCardId}`} className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-          {t("backJob")}
+        <Link href={backHref} className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
+          {role === "ADVISOR" ? t("backJob") : t("accounts")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("estimate")}</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{" "}
           <span className="font-medium">{est.status}</span>
         </p>
+        {!canPrice ? (
+          <p className="text-xs text-zinc-400">{t("pricingByCashier")}</p>
+        ) : null}
         {est.approvedAt ? (
           <p className="text-xs text-green-700 dark:text-green-400">
             ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{" "}
@@ -154,7 +162,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <StatusButton estimateId={est.id} status="REJECTED" label={t("markRejected")} />
           </>
         ) : null}
-        {est.status === "APPROVED" && !est.invoice ? (
+        {canPrice && est.status === "APPROVED" && !est.invoice ? (
           <form action={generateInvoiceAction}>
             <input type="hidden" name="estimateId" value={est.id} />
             <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
@@ -169,7 +177,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         ) : null}
       </div>
       <p className="text-xs text-zinc-400">
-        (Send/approve here simulates the customer; Step 6 wires the real WhatsApp approval.)
+        (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>
     </main>
   );

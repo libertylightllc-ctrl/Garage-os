@@ -12,7 +12,7 @@ const en = {
   roleOWNER: "Owner",
   roleADVISOR: "Service Advisor",
   roleTECH: "Technician",
-  roleACCOUNTANT: "Accountant",
+  roleCASHIER: "Cashier",
   tabDashboard: "Dashboard",
   tabTeam: "Team",
   tabJobs: "Jobs",
@@ -96,7 +96,7 @@ const en = {
   ownerTag: "owner",
   optAdvisor: "Advisor",
   optTechnician: "Technician",
-  optAccountant: "Accountant",
+  optCashier: "Cashier",
   teamError: "Check the fields (password min 6).",
 
   // booking (customer)
@@ -241,8 +241,14 @@ const en = {
   paidThanks: "✅ Paid — thank you!",
   payAtGarage: "Please pay at the garage (cash or card)",
 
-  // accountant
+  // cashier
   accounts: "Accounts",
+  jobsToPrice: "Jobs to price",
+  noJobsToPrice: "No jobs waiting to be priced.",
+  setPrice: "Set price",
+  continuePricing: "Continue pricing",
+  pricingByCashier: "Pricing is set by the cashier.",
+  awaitingPriceTag: "awaiting price",
   mRevenue: "Revenue",
   mVatCollected: "VAT collected",
   mCashIn: "Cash in",
@@ -297,7 +303,7 @@ const ar: typeof en = {
   roleOWNER: "المالك",
   roleADVISOR: "مستشار الخدمة",
   roleTECH: "الفني",
-  roleACCOUNTANT: "المحاسب",
+  roleCASHIER: "أمين الصندوق",
   tabDashboard: "لوحة التحكم",
   tabTeam: "الفريق",
   tabJobs: "المهام",
@@ -377,7 +383,7 @@ const ar: typeof en = {
   ownerTag: "المالك",
   optAdvisor: "مستشار",
   optTechnician: "فني",
-  optAccountant: "محاسب",
+  optCashier: "أمين الصندوق",
   teamError: "تحقق من الحقول (كلمة المرور 6+).",
 
   bookTitle: "احجز خدمة",
@@ -517,6 +523,12 @@ const ar: typeof en = {
   payAtGarage: "يرجى الدفع في الورشة (نقدًا أو بالبطاقة)",
 
   accounts: "الحسابات",
+  jobsToPrice: "مهام بانتظار التسعير",
+  noJobsToPrice: "لا توجد مهام بانتظار التسعير.",
+  setPrice: "تحديد السعر",
+  continuePricing: "متابعة التسعير",
+  pricingByCashier: "يحدد أمين الصندوق الأسعار.",
+  awaitingPriceTag: "بانتظار التسعير",
   mRevenue: "الإيرادات",
   mVatCollected: "الضريبة المحصّلة",
   mCashIn: "النقد الوارد",

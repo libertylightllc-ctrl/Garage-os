@@ -3,18 +3,18 @@ export const ROLE_HOME = {
   OWNER: "/owner",
   ADVISOR: "/advisor",
   TECH: "/technician",
-  ACCOUNTANT: "/accountant",
+  CASHIER: "/cashier",
 } as const;
 
 export type StaffRole = keyof typeof ROLE_HOME;
 
-export const STAFF_ROLES: StaffRole[] = ["OWNER", "ADVISOR", "TECH", "ACCOUNTANT"];
+export const STAFF_ROLES: StaffRole[] = ["OWNER", "ADVISOR", "TECH", "CASHIER"];
 
 export const ROLE_TITLE: Record<StaffRole, string> = {
   OWNER: "Owner",
   ADVISOR: "Service Advisor",
   TECH: "Technician",
-  ACCOUNTANT: "Accountant",
+  CASHIER: "Cashier",
 };
 
 /** Where a given role should land after login. Unknown/missing role -> /login. */

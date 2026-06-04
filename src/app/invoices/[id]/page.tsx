@@ -107,7 +107,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Mark as paid — record-only (garage uses its own POS / cash drawer) */}
-      {["ACCOUNTANT", "OWNER"].includes(session.user.role) && state !== "PAID" ? (
+      {["CASHIER", "OWNER"].includes(session.user.role) && state !== "PAID" ? (
         <form action={recordPaymentAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
           <div className="w-full text-sm font-medium">{t("markAsPaid")}</div>
           <input type="hidden" name="invoiceId" value={inv.id} />

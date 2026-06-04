@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction } from "@/app/actions/jobs";
-import { createEstimateAction } from "@/app/actions/billing";
 import { AppNav } from "@/components/app-nav";
 import {
   TIMELINE,
@@ -253,16 +252,11 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </form>
       ) : null}
 
-      {/* Estimates & invoicing */}
+      {/* Estimates & invoicing — pricing is set by the cashier; the advisor sends. */}
       <div className="border-t border-black/10 pt-4 dark:border-white/15">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-medium">{t("estimates")}</h2>
-          <form action={createEstimateAction}>
-            <input type="hidden" name="jobId" value={job.id} />
-            <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-              {t("newEstimate")}
-            </button>
-          </form>
+          <span className="text-xs text-zinc-400">{t("pricingByCashier")}</span>
         </div>
         {job.estimates.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noEstimates")}</p>
@@ -270,7 +264,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           <ul className="flex flex-col gap-1 text-sm">
             {job.estimates.map((e) => (
               <li key={e.id} className="flex items-center justify-between">
-                <Link href={`/advisor/estimates/${e.id}`} className="hover:underline">
+                <Link href={`/estimates/${e.id}`} className="hover:underline">
                   {t("estimate")} · AED {Number(e.total).toFixed(2)} · {e.status}
                 </Link>
                 {e.invoice ? (

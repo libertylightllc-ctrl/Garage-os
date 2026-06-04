@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
+import { createEstimateAction } from "@/app/actions/billing";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 
@@ -10,19 +11,33 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
-export default async function AccountantHome() {
-  const session = await requireRole("ACCOUNTANT");
+export default async function CashierHome() {
+  const session = await requireRole("CASHIER");
   const t = await getT();
   const garageId = session.user.garageId;
 
-  const [invoices, ledger] = await Promise.all([
+  const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
       where: { garageId },
       include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
       orderBy: { issuedAt: "desc" },
     }),
     prisma.ledgerEntry.findMany({ where: { garageId } }),
+    // Active jobs the cashier still needs to price: no estimate yet, or only a DRAFT.
+    prisma.jobCard.findMany({
+      where: { garageId, status: { notIn: ["DELIVERED", "CANCELLED", "INVOICED"] } },
+      include: {
+        vehicle: { include: { customer: true } },
+        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+
+  const toPrice = jobs.filter((j) => {
+    const e = j.estimates[0];
+    return !e || e.status === "DRAFT";
+  });
 
   // Zero-entry ledger rollup (auto-generated rows; nothing entered by hand).
   const byAccount = new Map<string, number>();
@@ -45,7 +60,7 @@ export default async function AccountantHome() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
-      <AppNav role="ACCOUNTANT" active="accounts" />
+      <AppNav role="CASHIER" active="accounts" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -55,6 +70,50 @@ export default async function AccountantHome() {
             <div className="text-lg font-semibold">{money(m.value)}</div>
           </div>
         ))}
+      </div>
+
+      {/* Jobs to price — the technician → cashier handoff. The cashier sets the price. */}
+      <div>
+        <h2 className="mb-2 text-sm font-medium">{t("jobsToPrice")}</h2>
+        {toPrice.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noJobsToPrice")}</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {toPrice.map((j) => {
+              const draft = j.estimates[0];
+              return (
+                <li
+                  key={j.id}
+                  className="flex items-center justify-between rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                >
+                  <span>
+                    <span className="font-medium">
+                      {j.vehicle.make} {j.vehicle.model}
+                    </span>
+                    <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                      {j.vehicle.plate} · {j.vehicle.customer.name}
+                    </span>
+                  </span>
+                  {draft ? (
+                    <Link
+                      href={`/estimates/${draft.id}`}
+                      className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                    >
+                      {t("continuePricing")}
+                    </Link>
+                  ) : (
+                    <form action={createEstimateAction}>
+                      <input type="hidden" name="jobId" value={j.id} />
+                      <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
+                        {t("setPrice")}
+                      </button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       <div>

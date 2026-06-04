@@ -18,6 +18,7 @@ import {
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
+import { PRICING_ROLES, SEND_ROLES } from "@/lib/permissions";
 
 async function customerForJob(jobCardId: string) {
   const j = await prisma.jobCard.findUnique({
@@ -33,12 +34,6 @@ async function requireAnyRole(roles: string[]) {
   return session.user;
 }
 
-async function requireRoleUser(role: "ADVISOR" | "ACCOUNTANT") {
-  const session = await auth();
-  if (!session?.user || session.user.role !== role) throw new Error("Not authorized");
-  return session.user;
-}
-
 async function jobInGarage(jobId: string, garageId: string) {
   const job = await prisma.jobCard.findFirst({ where: { id: jobId, garageId }, select: { id: true } });
   if (!job) throw new Error("Job not found in this garage");
@@ -46,15 +41,16 @@ async function jobInGarage(jobId: string, garageId: string) {
 }
 
 export async function createEstimateAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(PRICING_ROLES);
   const jobId = String(formData.get("jobId") ?? "");
   await jobInGarage(jobId, user.garageId);
   const est = await prisma.estimate.create({
     data: { jobCardId: jobId, subtotal: 0, vatAmount: 0, total: 0, status: "DRAFT" },
     select: { id: true },
   });
+  revalidatePath("/cashier");
   revalidatePath(`/advisor/jobs/${jobId}`);
-  redirect(`/advisor/estimates/${est.id}`);
+  redirect(`/estimates/${est.id}`);
 }
 
 async function recomputeEstimate(estimateId: string) {
@@ -83,7 +79,7 @@ async function ownedEstimate(estimateId: string, garageId: string) {
 }
 
 export async function addEstimateLineAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
   if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
@@ -102,11 +98,11 @@ export async function addEstimateLineAction(formData: FormData) {
     data: { estimateId, kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
   });
   await recomputeEstimate(estimateId);
-  revalidatePath(`/advisor/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}`);
 }
 
 export async function toggleEstimateLineAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   await ownedEstimate(estimateId, user.garageId);
@@ -118,21 +114,21 @@ export async function toggleEstimateLineAction(formData: FormData) {
     });
     await recomputeEstimate(estimateId);
   }
-  revalidatePath(`/advisor/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}`);
 }
 
 export async function removeEstimateLineAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   await ownedEstimate(estimateId, user.garageId);
   await prisma.estimateLine.deleteMany({ where: { id: lineId, estimateId } });
   await recomputeEstimate(estimateId);
-  revalidatePath(`/advisor/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}`);
 }
 
 export async function setEstimateStatusAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(SEND_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const status = String(formData.get("status") ?? "") as "SENT" | "APPROVED" | "REJECTED";
   const est = await ownedEstimate(estimateId, user.garageId);
@@ -183,12 +179,12 @@ export async function setEstimateStatusAction(formData: FormData) {
       }
     }
   }
-  revalidatePath(`/advisor/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}`);
   revalidatePath(`/advisor/jobs/${est.jobCardId}`);
 }
 
 export async function generateInvoiceAction(formData: FormData) {
-  const user = await requireRoleUser("ADVISOR");
+  const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const est = await prisma.estimate.findFirst({
     where: { id: estimateId, jobCard: { garageId: user.garageId } },
@@ -282,8 +278,8 @@ export async function generateInvoiceAction(formData: FormData) {
 }
 
 export async function recordPaymentAction(formData: FormData) {
-  // Accountant or owner can mark an invoice paid.
-  const user = await requireAnyRole(["ACCOUNTANT", "OWNER"]);
+  // Cashier or owner records payment (record-only: cash / card-POS).
+  const user = await requireAnyRole(PRICING_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const amount = Math.max(0, Number(formData.get("amount") ?? 0));
   const method = String(formData.get("method") ?? "CASH");
@@ -319,5 +315,5 @@ export async function recordPaymentAction(formData: FormData) {
   });
 
   revalidatePath(`/invoices/${invoiceId}`);
-  revalidatePath("/accountant");
+  revalidatePath("/cashier");
 }

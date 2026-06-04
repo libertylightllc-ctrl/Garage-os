@@ -63,7 +63,7 @@ export default async function StaffPage({
           <select name="role" className={field} defaultValue="ADVISOR">
             <option value="ADVISOR">{t("optAdvisor")}</option>
             <option value="TECH">{t("optTechnician")}</option>
-            <option value="ACCOUNTANT">{t("optAccountant")}</option>
+            <option value="CASHIER">{t("optCashier")}</option>
           </select>
         </div>
         <div className="flex flex-wrap gap-2">

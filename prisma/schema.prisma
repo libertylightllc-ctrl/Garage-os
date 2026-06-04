@@ -15,7 +15,7 @@ enum Role {
   OWNER
   ADVISOR
   TECH
-  ACCOUNTANT
+  CASHIER
 }
 
 enum Lang {

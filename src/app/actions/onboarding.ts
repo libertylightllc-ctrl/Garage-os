@@ -34,7 +34,7 @@ async function requireOwner() {
   return session.user;
 }
 
-const STAFF_ROLES = ["ADVISOR", "TECH", "ACCOUNTANT"] as const;
+const STAFF_ROLES = ["ADVISOR", "TECH", "CASHIER"] as const;
 
 export async function addStaffAction(formData: FormData) {
   const owner = await requireOwner();

@@ -74,7 +74,7 @@ export default async function LoginPage({
         <p className="mb-1 font-medium">{t("demoTitle")}</p>
         <ul className="space-y-0.5">
           <li>owner@demo.garage · advisor@demo.garage</li>
-          <li>tech@demo.garage · accountant@demo.garage</li>
+          <li>tech@demo.garage · cashier@demo.garage</li>
         </ul>
       </div>
 

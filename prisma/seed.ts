@@ -24,7 +24,7 @@ async function main() {
     { email: "owner@demo.garage", name: "Omar Owner", role: Role.OWNER },
     { email: "advisor@demo.garage", name: "Aisha Advisor", role: Role.ADVISOR },
     { email: "tech@demo.garage", name: "Tariq Tech", role: Role.TECH },
-    { email: "accountant@demo.garage", name: "Aliya Accountant", role: Role.ACCOUNTANT },
+    { email: "cashier@demo.garage", name: "Aliya Cashier", role: Role.CASHIER },
   ];
 
   for (const s of staff) {

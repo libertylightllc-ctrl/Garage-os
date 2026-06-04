@@ -40,6 +40,7 @@ enum BookingStatus {
 enum HoldReason {
   AWAITING_PART
   AWAITING_CUSTOMER
+  AWAITING_APPROVAL
   OTHER
 }
 
@@ -336,6 +337,8 @@ model Estimate {
   vatAmount Decimal        @db.Decimal(12, 2)
   total     Decimal        @db.Decimal(12, 2)
   status    EstimateStatus @default(DRAFT)
+  approvedAt     DateTime? // audit: when the customer approved (dispute shield)
+  approvedAmount Decimal?  @db.Decimal(12, 2)
 
   lines   EstimateLine[]
   invoice Invoice?

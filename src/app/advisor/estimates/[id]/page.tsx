@@ -46,6 +46,12 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{" "}
           <span className="font-medium">{est.status}</span>
         </p>
+        {est.approvedAt ? (
+          <p className="text-xs text-green-700 dark:text-green-400">
+            ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{" "}
+            {est.approvedAt.toISOString().slice(0, 10)}
+          </p>
+        ) : null}
       </div>
 
       <div className="overflow-x-auto">

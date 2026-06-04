@@ -99,6 +99,12 @@ export function isRecordableMethod(method: string): method is "CASH" | "CARD_POS
   return method === "CASH" || method === "CARD_POS";
 }
 
+// Extra-work guard: a revised quote that exceeds an already-approved total must be
+// re-approved by the customer before work continues. (First quote isn't an "increase".)
+export function isQuoteIncrease(newTotal: number, lastApprovedTotal: number): boolean {
+  return lastApprovedTotal > 0 && newTotal > lastApprovedTotal;
+}
+
 // ---------- Invoice helpers ----------
 export function formatInvoiceNo(seq: number, year: number): string {
   return `INV-${year}-${String(seq).padStart(4, "0")}`;

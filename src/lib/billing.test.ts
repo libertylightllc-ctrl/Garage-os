@@ -8,6 +8,7 @@ import {
   arState,
   formatInvoiceNo,
   isRecordableMethod,
+  isQuoteIncrease,
   type DraftLine,
 } from "./billing";
 
@@ -58,6 +59,19 @@ describe("payment methods", () => {
   it("treats Online Link as a stub (not yet recordable)", () => {
     expect(isRecordableMethod("ONLINE_LINK")).toBe(false);
     expect(isRecordableMethod("anything")).toBe(false);
+  });
+});
+
+describe("isQuoteIncrease (extra-work re-approval)", () => {
+  it("flags a higher revised quote", () => {
+    expect(isQuoteIncrease(500, 300)).toBe(true);
+  });
+  it("does not flag the first quote (no prior approval)", () => {
+    expect(isQuoteIncrease(300, 0)).toBe(false);
+  });
+  it("does not flag same-or-lower totals", () => {
+    expect(isQuoteIncrease(300, 300)).toBe(false);
+    expect(isQuoteIncrease(250, 300)).toBe(false);
   });
 });
 

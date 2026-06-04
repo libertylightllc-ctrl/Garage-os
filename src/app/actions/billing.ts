@@ -12,6 +12,7 @@ import {
   vatStrategyFor,
   qrPlaceholder,
   isRecordableMethod,
+  isQuoteIncrease,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -135,13 +136,22 @@ export async function setEstimateStatusAction(formData: FormData) {
   const estimateId = String(formData.get("estimateId") ?? "");
   const status = String(formData.get("status") ?? "") as "SENT" | "APPROVED" | "REJECTED";
   const est = await ownedEstimate(estimateId, user.garageId);
-  await prisma.estimate.update({ where: { id: est.id }, data: { status } });
-  // Reflect on the job timeline: approval moves it forward; rejection sends back to ESTIMATE.
+
   if (status === "APPROVED") {
-    await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "APPROVED" } });
+    // Record the approval (audit) and resume the job if it was paused for approval.
+    await prisma.estimate.update({
+      where: { id: est.id },
+      data: { status, approvedAt: new Date(), approvedAmount: est.total },
+    });
+    await prisma.jobCard.update({
+      where: { id: est.jobCardId },
+      data: { status: "APPROVED", heldFrom: null, holdReason: null, holdNote: null },
+    });
   } else if (status === "REJECTED") {
+    await prisma.estimate.update({ where: { id: est.id }, data: { status } });
     await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "ESTIMATE" } });
   } else if (status === "SENT") {
+    await prisma.estimate.update({ where: { id: est.id }, data: { status } });
     // Send the customer the WhatsApp approval link (mock if no Meta token).
     const customer = await customerForJob(est.jobCardId);
     if (customer) {
@@ -152,6 +162,25 @@ export async function setEstimateStatusAction(formData: FormData) {
         template: "estimate_approval",
         body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${signId("estimate", est.id)}`,
       });
+    }
+    // Quote-approval gate: if this revised quote exceeds an already-approved total,
+    // auto-pause the job to "waiting for approval" — no extra work until the customer approves.
+    const prior = await prisma.estimate.aggregate({
+      where: { jobCardId: est.jobCardId, status: "APPROVED", NOT: { id: est.id } },
+      _max: { total: true },
+    });
+    const lastApproved = Number(prior._max.total ?? 0);
+    if (isQuoteIncrease(Number(est.total), lastApproved)) {
+      const job = await prisma.jobCard.findUnique({
+        where: { id: est.jobCardId },
+        select: { status: true },
+      });
+      if (job && job.status !== "ON_HOLD") {
+        await prisma.jobCard.update({
+          where: { id: est.jobCardId },
+          data: { status: "ON_HOLD", heldFrom: job.status, holdReason: "AWAITING_APPROVAL" },
+        });
+      }
     }
   }
   revalidatePath(`/advisor/estimates/${estimateId}`);

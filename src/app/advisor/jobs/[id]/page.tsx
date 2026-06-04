@@ -138,6 +138,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             {
               AWAITING_PART: t("hrAwaitingPart"),
               AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+              AWAITING_APPROVAL: t("hrAwaitingApproval"),
               OTHER: t("hrOther"),
             } as Record<string, string>
           )[job.holdReason]}

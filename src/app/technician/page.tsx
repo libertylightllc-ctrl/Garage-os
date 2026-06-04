@@ -38,6 +38,18 @@ export default async function TechnicianHome({
     }),
   ]);
 
+  const inProgress = mine.filter((j) => j.status !== "ON_HOLD");
+  const paused = mine.filter((j) => j.status === "ON_HOLD");
+  const reasonLabel = (r: string | null) =>
+    (
+      {
+        AWAITING_PART: t("hrAwaitingPart"),
+        AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+        AWAITING_APPROVAL: t("hrAwaitingApproval"),
+        OTHER: t("hrOther"),
+      } as Record<string, string>
+    )[r ?? "OTHER"];
+
   const carLine = (j: { vehicle: { make: string; model: string; plate: string } }) =>
     `${j.vehicle.make} ${j.vehicle.model} · ${j.vehicle.plate}`;
 
@@ -88,11 +100,11 @@ export default async function TechnicianHome({
       {/* My in-progress */}
       <section>
         <h2 className="mb-2 text-sm font-medium">{t("inProgressMine")}</h2>
-        {mine.length === 0 ? (
+        {inProgress.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {mine.map((j) => (
+            {inProgress.map((j) => (
               <li
                 key={j.id}
                 className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
@@ -119,6 +131,34 @@ export default async function TechnicianHome({
           </ul>
         )}
       </section>
+
+      {/* Paused (leaves active work, stays visible & flagged) */}
+      {paused.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-medium">{t("paused")}</h2>
+          <ul className="flex flex-col gap-2">
+            {paused.map((j) => (
+              <li
+                key={j.id}
+                className="flex items-center justify-between rounded-xl border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950"
+              >
+                <span>
+                  <span className="block text-lg font-medium">{carLine(j)}</span>
+                  <span className="text-xs text-yellow-800 dark:text-yellow-300">
+                    🟡 {reasonLabel(j.holdReason)}
+                  </span>
+                </span>
+                <Link
+                  href={`/technician/jobs/${j.id}`}
+                  className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20"
+                >
+                  {t("open")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </main>
   );
 }

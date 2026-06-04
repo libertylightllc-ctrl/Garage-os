@@ -19,9 +19,14 @@ export async function addStepAction(formData: FormData) {
 
   const job = await prisma.jobCard.findFirst({
     where: { id: jobId, garageId: user.garageId },
-    select: { id: true, claimedById: true },
+    select: { id: true, claimedById: true, status: true, holdReason: true },
   });
   if (!job) throw new Error("Job not found in this garage");
+
+  // No work while waiting for customer approval of a revised quote.
+  if (job.status === "ON_HOLD" && job.holdReason === "AWAITING_APPROVAL") {
+    throw new Error("Waiting for customer approval before any further work.");
+  }
 
   // Only the claimer may log work; an unclaimed car is auto-claimed on first action.
   if (job.claimedById && job.claimedById !== user.id) {

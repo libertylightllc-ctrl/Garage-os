@@ -23,8 +23,15 @@ export async function approveEstimatePublic(formData: FormData) {
     include: { jobCard: { include: { vehicle: { include: { customer: true } } } } },
   });
   if (!est || est.status !== "SENT") return;
-  await prisma.estimate.update({ where: { id }, data: { status: "APPROVED" } });
-  await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "APPROVED" } });
+  // Record the approval (audit) and resume the job if it was paused awaiting approval.
+  await prisma.estimate.update({
+    where: { id },
+    data: { status: "APPROVED", approvedAt: new Date(), approvedAmount: est.total },
+  });
+  await prisma.jobCard.update({
+    where: { id: est.jobCardId },
+    data: { status: "APPROVED", heldFrom: null, holdReason: null, holdNote: null },
+  });
   const c = est.jobCard.vehicle.customer;
   await logInbound(c.garageId, c.id, c.waId ?? c.phone, "APPROVE");
   revalidatePath(`/c/estimate/${id}`);

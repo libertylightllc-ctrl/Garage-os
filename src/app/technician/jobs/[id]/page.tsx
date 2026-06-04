@@ -54,6 +54,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {
               AWAITING_PART: t("hrAwaitingPart"),
               AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+              AWAITING_APPROVAL: t("hrAwaitingApproval"),
               OTHER: t("hrOther"),
             } as Record<string, string>
           )[job.holdReason]}

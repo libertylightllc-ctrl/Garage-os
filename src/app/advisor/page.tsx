@@ -28,6 +28,15 @@ export default async function AdvisorHome() {
     }),
   ]);
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
+  const reasonLabel = (r: string | null) =>
+    (
+      {
+        AWAITING_PART: t("hrAwaitingPart"),
+        AWAITING_CUSTOMER: t("hrAwaitingCustomer"),
+        AWAITING_APPROVAL: t("hrAwaitingApproval"),
+        OTHER: t("hrOther"),
+      } as Record<string, string>
+    )[r ?? "OTHER"];
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -77,8 +86,17 @@ export default async function AdvisorHome() {
                         : ""}
                   </span>
                 </span>
-                <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium dark:bg-zinc-800">
-                  {t(statusKey(job.status as JobStatus))}
+                <span
+                  className={
+                    "rounded-full px-3 py-1 text-xs font-medium " +
+                    (job.status === "ON_HOLD"
+                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"
+                      : "bg-zinc-100 dark:bg-zinc-800")
+                  }
+                >
+                  {job.status === "ON_HOLD"
+                    ? `🟡 ${reasonLabel(job.holdReason)}`
+                    : t(statusKey(job.status as JobStatus))}
                 </span>
               </Link>
             </li>

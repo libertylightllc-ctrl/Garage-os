@@ -25,6 +25,7 @@ const en = {
   renewsLabel: "renews",
   perMonth: "mo",
   onPilotNotBilled: "You’re on a pilot — not billed.",
+  billingManual: "During the pilot, billing is handled manually by GarageOS — you won’t be charged through the app.",
   billingNotConfigured: "Billing isn’t configured yet.",
   subscribe: "Subscribe",
   cancelSubscription: "Cancel subscription",
@@ -238,7 +239,7 @@ const en = {
   estimateNotReady: "This estimate isn’t ready for approval yet.",
   yourInvoice: "Your invoice",
   paidThanks: "✅ Paid — thank you!",
-  paySimulated: "Pay (simulated)",
+  payAtGarage: "Please pay at the garage (cash or card)",
 
   // accountant
   accounts: "Accounts",
@@ -309,6 +310,7 @@ const ar: typeof en = {
   renewsLabel: "يتجدد",
   perMonth: "شهر",
   onPilotNotBilled: "أنت في مرحلة تجريبية — دون فوترة.",
+  billingManual: "خلال المرحلة التجريبية، تتم الفوترة يدويًا من GarageOS — لن تُحصّل أي مبالغ عبر التطبيق.",
   billingNotConfigured: "لم تُهيّأ الفوترة بعد.",
   subscribe: "اشترك",
   cancelSubscription: "إلغاء الاشتراك",
@@ -512,7 +514,7 @@ const ar: typeof en = {
   estimateNotReady: "هذا التقدير غير جاهز للموافقة بعد.",
   yourInvoice: "فاتورتك",
   paidThanks: "✅ مدفوعة — شكرًا لك!",
-  paySimulated: "ادفع (محاكاة)",
+  payAtGarage: "يرجى الدفع في الورشة (نقدًا أو بالبطاقة)",
 
   accounts: "الحسابات",
   mRevenue: "الإيرادات",

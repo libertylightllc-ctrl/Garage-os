@@ -136,10 +136,10 @@ export function autoReply(
       return data.link
         ? pick(
             {
-              en: `Here's your invoice and payment link: ${data.link}`,
-              ar: `هذه فاتورتك ورابط الدفع: ${data.link}`,
-              hi: `यह रही आपकी रसीद और भुगतान लिंक: ${data.link}`,
-              ur: `یہ آپ کا انوائس اور ادائیگی لنک ہے: ${data.link}`,
+              en: `Here's your invoice: ${data.link}`,
+              ar: `هذه فاتورتك: ${data.link}`,
+              hi: `यह रही आपकी रसीद: ${data.link}`,
+              ur: `یہ آپ کا انوائس ہے: ${data.link}`,
             },
             lang,
           )

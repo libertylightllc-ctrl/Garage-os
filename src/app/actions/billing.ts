@@ -274,7 +274,7 @@ export async function generateInvoiceAction(formData: FormData) {
       customerId: customer.id,
       waId: customer.waId ?? customer.phone,
       template: "invoice",
-      body: `Your invoice is ready. View & pay: ${appUrl()}/c/invoice/${signId("invoice", invoiceId)}`,
+      body: `Your invoice is ready. View it here: ${appUrl()}/c/invoice/${signId("invoice", invoiceId)}`,
     });
   }
 

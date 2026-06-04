@@ -125,9 +125,6 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           <select name="method" defaultValue="CASH" className="rounded-md border border-black/15 bg-transparent px-2 py-2 text-sm dark:border-white/20">
             <option value="CASH">{t("methodCash")}</option>
             <option value="CARD_POS">{t("methodCardPos")}</option>
-            <option value="ONLINE_LINK" disabled>
-              {t("methodOnlineLink")} ({t("soon")})
-            </option>
           </select>
           <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
             {t("markAsPaid")}

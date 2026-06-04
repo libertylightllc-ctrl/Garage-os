@@ -56,7 +56,7 @@ describe("payment methods", () => {
     expect(isRecordableMethod("CASH")).toBe(true);
     expect(isRecordableMethod("CARD_POS")).toBe(true);
   });
-  it("treats Online Link as a stub (not yet recordable)", () => {
+  it("only records cash/card — the app never processes online payments", () => {
     expect(isRecordableMethod("ONLINE_LINK")).toBe(false);
     expect(isRecordableMethod("anything")).toBe(false);
   });

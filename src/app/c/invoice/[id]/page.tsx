@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { payInvoicePublic } from "@/app/actions/public";
 import { formatInvoiceNo } from "@/lib/billing";
 import { verifyToken } from "@/lib/tokens";
 import { getT } from "@/i18n/server";
@@ -60,12 +59,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           {t("paidThanks")}
         </p>
       ) : (
-        <form action={payInvoicePublic}>
-          <input type="hidden" name="token" value={token} />
-          <button className="w-full rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-500">
-            {money(balance)} · {t("paySimulated")}
-          </button>
-        </form>
+        <p className="rounded-md bg-zinc-100 p-3 text-center text-sm dark:bg-zinc-800">
+          {t("payAtGarage")} · {money(balance)}
+        </p>
       )}
     </main>
   );

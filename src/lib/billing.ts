@@ -90,12 +90,12 @@ export function arState(total: number, paid: number, dueDate: Date, now: Date): 
 }
 
 // ---------- Payment methods ----------
-// We RECORD payments only — money is handled by the garage's own POS / cash drawer.
-// Cash and Card (POS) record immediately; Online Link is a stub (wired with the PSP later).
-export type PaymentMethod = "CASH" | "CARD_POS" | "ONLINE_LINK";
-export const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "CARD_POS", "ONLINE_LINK"];
+// We RECORD payments only — the app never processes money. The garage takes payment on
+// its own cash drawer / POS, then staff record it here as Cash or Card.
+export type PaymentMethod = "CASH" | "CARD_POS";
+export const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "CARD_POS"];
 
-export function isRecordableMethod(method: string): method is "CASH" | "CARD_POS" {
+export function isRecordableMethod(method: string): method is PaymentMethod {
   return method === "CASH" || method === "CARD_POS";
 }
 

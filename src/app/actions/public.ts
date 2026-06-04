@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { paymentLedger, totalsFor, type LineKind } from "@/lib/billing";
+import { totalsFor, type LineKind } from "@/lib/billing";
 import { recordInbound } from "@/lib/whatsapp";
 import { verifyToken } from "@/lib/tokens";
 
@@ -80,37 +80,5 @@ export async function toggleLinePublic(formData: FormData) {
   });
   revalidatePath(`/c/estimate/${token}`);
 }
-
-export async function payInvoicePublic(formData: FormData) {
-  const id = verifyToken("invoice", String(formData.get("token") ?? ""));
-  if (!id) return;
-  const inv = await prisma.invoice.findUnique({
-    where: { id },
-    include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
-  });
-  if (!inv || inv.status === "PAID") return;
-
-  const total = Number(inv.total);
-  const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
-  const balance = Math.max(0, total - paid);
-  if (balance <= 0) return;
-
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.create({ data: { invoiceId: inv.id, amount: balance, method: "ONLINE_LINK" } });
-    await tx.ledgerEntry.createMany({
-      data: paymentLedger(balance).map((e) => ({
-        garageId: inv.garageId,
-        account: e.account,
-        debit: e.debit,
-        credit: e.credit,
-        sourceType: "PAYMENT",
-        sourceId: inv.id,
-      })),
-    });
-    await tx.invoice.update({ where: { id: inv.id }, data: { status: "PAID" } });
-  });
-
-  const c = inv.jobCard.vehicle.customer;
-  await logInbound(c.garageId, c.id, c.waId ?? c.phone, "PAID");
-  revalidatePath(`/c/invoice/${id}`);
-}
+// NOTE: customers do NOT pay through the app. The garage takes payment on its own
+// cash/POS; staff record it via recordPaymentAction. (No payInvoicePublic.)

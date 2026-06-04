@@ -9,6 +9,7 @@ import { saveUpload } from "@/lib/storage";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { clampPriority } from "@/lib/priority";
+import { canJoinAsHelper } from "@/lib/claim";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
@@ -117,6 +118,50 @@ export async function claimJobAction(formData: FormData) {
   });
   revalidatePath("/technician");
   if (res.count === 0) redirect("/technician?taken=1"); // already taken / not eligible
+}
+
+// Tier 2 #4 — a second technician joins a claimed car as a helper.
+export async function joinJobAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: { id: true, status: true, claimedById: true, helpers: { select: { techId: true } } },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  const helperIds = job.helpers.map((h) => h.techId);
+  if (!canJoinAsHelper(job, user.id, helperIds)) {
+    redirect("/technician?taken=1");
+  }
+  await prisma.jobHelper.create({ data: { jobCardId: job.id, techId: user.id } });
+  revalidatePath("/technician");
+  revalidatePath(`/technician/jobs/${job.id}`);
+}
+
+export async function leaveHelperAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  await prisma.jobHelper.deleteMany({ where: { jobCardId: jobId, techId: user.id } });
+  revalidatePath("/technician");
+  revalidatePath(`/technician/jobs/${jobId}`);
+}
+
+// Tier 2 #7 — advisor assigns (or clears) the bay/ramp a car occupies.
+export async function setBayAction(formData: FormData) {
+  const user = await requireAdvisor();
+  const jobId = String(formData.get("jobId") ?? "");
+  const bayRaw = String(formData.get("bayId") ?? "");
+  let bayId: string | null = null;
+  if (bayRaw) {
+    const bay = await prisma.bay.findFirst({
+      where: { id: bayRaw, garageId: user.garageId },
+      select: { id: true },
+    });
+    bayId = bay?.id ?? null;
+  }
+  await prisma.jobCard.updateMany({ where: { id: jobId, garageId: user.garageId }, data: { bayId } });
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  revalidatePath("/advisor");
 }
 
 export async function releaseJobAction(formData: FormData) {

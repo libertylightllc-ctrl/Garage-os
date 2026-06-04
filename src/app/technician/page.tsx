@@ -6,7 +6,7 @@ import { getT } from "@/i18n/server";
 import { statusKey } from "@/i18n/config";
 import { type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
-import { claimJobAction, releaseJobAction } from "@/app/actions/jobs";
+import { claimJobAction, releaseJobAction, joinJobAction } from "@/app/actions/jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function TechnicianHome({
   const me = session.user.id;
   const garageId = session.user.garageId;
 
-  const [waiting, mine] = await Promise.all([
+  const [waiting, mine, others] = await Promise.all([
     prisma.jobCard.findMany({
       where: {
         garageId,
@@ -32,15 +32,38 @@ export default async function TechnicianHome({
       include: { vehicle: true },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     }),
+    // Mine = jobs I claimed (primary) OR jobs I'm helping on.
     prisma.jobCard.findMany({
-      where: { garageId, claimedById: me, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+      where: {
+        garageId,
+        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        OR: [{ claimedById: me }, { helpers: { some: { techId: me } } }],
+      },
       include: { vehicle: true },
       orderBy: { updatedAt: "desc" },
     }),
+    // Other techs' in-progress cars I could join as a helper (Tier 2 #4).
+    prisma.jobCard.findMany({
+      where: {
+        garageId,
+        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        claimedById: { not: null, notIn: [me] },
+        helpers: { none: { techId: me } },
+      },
+      include: { vehicle: true },
+      orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+    }),
   ]);
+
+  const techNames = new Map(
+    (await prisma.user.findMany({ where: { garageId, role: "TECH" }, select: { id: true, name: true } })).map(
+      (u) => [u.id, u.name] as const,
+    ),
+  );
 
   const inProgress = mine.filter((j) => j.status !== "ON_HOLD");
   const paused = mine.filter((j) => j.status === "ON_HOLD");
+  const amHelper = (j: { claimedById: string | null }) => j.claimedById !== me;
   const reasonLabel = (r: string | null) =>
     (
       {
@@ -113,7 +136,10 @@ export default async function TechnicianHome({
                 className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
               >
                 <Link href={`/technician/jobs/${j.id}`} className="text-lg font-medium hover:underline">
-                  {carLine(j)}
+                  {priorityMeta(j.priority).badge} {carLine(j)}
+                  {amHelper(j) ? (
+                    <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">· {t("helpingTag")}</span>
+                  ) : null}
                 </Link>
                 <div className="flex items-center gap-2">
                   <Link
@@ -122,18 +148,50 @@ export default async function TechnicianHome({
                   >
                     {t("open")}
                   </Link>
-                  <form action={releaseJobAction}>
-                    <input type="hidden" name="jobId" value={j.id} />
-                    <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">
-                      {t("releaseCar")}
-                    </button>
-                  </form>
+                  {amHelper(j) ? null : (
+                    <form action={releaseJobAction}>
+                      <input type="hidden" name="jobId" value={j.id} />
+                      <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">
+                        {t("releaseCar")}
+                      </button>
+                    </form>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {/* Other techs' jobs — join as a helper (Tier 2 #4) */}
+      {others.length > 0 ? (
+        <section>
+          <h2 className="mb-2 text-sm font-medium">{t("otherInProgress")}</h2>
+          <ul className="flex flex-col gap-2">
+            {others.map((j) => (
+              <li
+                key={j.id}
+                className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
+              >
+                <span>
+                  <span className="block font-medium">
+                    {priorityMeta(j.priority).badge} {carLine(j)}
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    🔧 {techNames.get(j.claimedById ?? "") ?? "—"}
+                  </span>
+                </span>
+                <form action={joinJobAction}>
+                  <input type="hidden" name="jobId" value={j.id} />
+                  <button className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                    {t("joinJob")}
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {/* Paused (leaves active work, stays visible & flagged) */}
       {paused.length > 0 ? (

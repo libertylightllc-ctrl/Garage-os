@@ -56,6 +56,35 @@ export async function addBranchAction(formData: FormData) {
   revalidatePath("/owner/staff");
 }
 
+// Tier 2 #7 — owner configures the garage's bays/ramps (capacity).
+export async function addBayAction(formData: FormData) {
+  const owner = await requireOwner();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) redirect("/owner/bays?error=1");
+  const existing = await prisma.bay.findFirst({
+    where: { garageId: owner.garageId, name },
+    select: { id: true },
+  });
+  if (existing) redirect("/owner/bays?error=exists");
+  await prisma.bay.create({ data: { garageId: owner.garageId, name } });
+  revalidatePath("/owner/bays");
+}
+
+export async function removeBayAction(formData: FormData) {
+  const owner = await requireOwner();
+  const bayId = String(formData.get("bayId") ?? "");
+  await prisma.$transaction(async (tx) => {
+    const bay = await tx.bay.findFirst({
+      where: { id: bayId, garageId: owner.garageId },
+      select: { id: true },
+    });
+    if (!bay) return;
+    await tx.jobCard.updateMany({ where: { bayId }, data: { bayId: null } });
+    await tx.bay.delete({ where: { id: bayId } });
+  });
+  revalidatePath("/owner/bays");
+}
+
 export async function addStaffAction(formData: FormData) {
   const owner = await requireOwner();
   const name = String(formData.get("name") ?? "").trim();

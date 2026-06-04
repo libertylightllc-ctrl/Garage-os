@@ -83,6 +83,15 @@ async function main() {
     });
   }
 
+  // Workshop bays/ramps (Tier 2 #7).
+  for (const name of ["Lift 1", "Lift 2", "Bay 3"]) {
+    await prisma.bay.upsert({
+      where: { garageId_name: { garageId: garage.id, name } },
+      update: {},
+      create: { garageId: garage.id, name },
+    });
+  }
+
   // Subscription plans (prices live in the DB; map stripePriceId per env when wiring Stripe).
   const plans = [
     { code: "STARTER", name: "Starter", priceMonthly: 299 },
@@ -97,7 +106,7 @@ async function main() {
     });
   }
 
-  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle, 4 parts, 3 plans.");
+  console.log("Seed complete: 1 garage, 4 staff, 2 customers, 1 vehicle, 4 parts, 3 bays, 3 plans.");
 }
 
 main()

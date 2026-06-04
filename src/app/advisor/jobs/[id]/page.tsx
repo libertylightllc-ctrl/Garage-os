@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction } from "@/app/actions/jobs";
+import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction, setBayAction } from "@/app/actions/jobs";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
 import { priorityMeta } from "@/lib/priority";
 import { REMINDER_TYPES } from "@/lib/reminders";
@@ -52,6 +52,13 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   });
   const canScheduleReminders = job.status === "INVOICED" || job.status === "DELIVERED";
   const today = new Date().toISOString().slice(0, 10);
+
+  // Bays/ramps (Tier 2 #7) — assign this car to a physical bay.
+  const bays = await prisma.bay.findMany({
+    where: { garageId: session.user.garageId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
   const claimedName = techName(job.claimedById);
   const assignedName = techName(job.assignedToId);
@@ -117,6 +124,29 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             <option value="0">{t("prNormal")}</option>
             <option value="1">{t("prUrgent")}</option>
             <option value="2">{t("prEmergency")}</option>
+          </select>
+          <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            {t("setPriority")}
+          </button>
+        </form>
+      ) : null}
+
+      {/* Bay / ramp assignment (Tier 2 #7) */}
+      {!cancelled && !delivered && bays.length > 0 ? (
+        <form action={setBayAction} className="flex items-center gap-2 text-sm">
+          <input type="hidden" name="jobId" value={job.id} />
+          <span className="text-zinc-500 dark:text-zinc-400">{t("bayLabel")}</span>
+          <select
+            name="bayId"
+            defaultValue={job.bayId ?? ""}
+            className="rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+          >
+            <option value="">{t("noBay")}</option>
+            {bays.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
           </select>
           <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
             {t("setPriority")}

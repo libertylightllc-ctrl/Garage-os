@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { saveUpload } from "@/lib/storage";
+import { canLogWork } from "@/lib/claim";
 
 async function requireTech() {
   const session = await auth();
@@ -19,7 +20,13 @@ export async function addStepAction(formData: FormData) {
 
   const job = await prisma.jobCard.findFirst({
     where: { id: jobId, garageId: user.garageId },
-    select: { id: true, claimedById: true, status: true, holdReason: true },
+    select: {
+      id: true,
+      claimedById: true,
+      status: true,
+      holdReason: true,
+      helpers: { select: { techId: true } },
+    },
   });
   if (!job) throw new Error("Job not found in this garage");
 
@@ -28,8 +35,8 @@ export async function addStepAction(formData: FormData) {
     throw new Error("Waiting for customer approval before any further work.");
   }
 
-  // Only the claimer may log work; an unclaimed car is auto-claimed on first action.
-  if (job.claimedById && job.claimedById !== user.id) {
+  // The primary claimer OR a helper may log work; an unclaimed car auto-claims.
+  if (!canLogWork(job, user.id, job.helpers.map((h) => h.techId))) {
     throw new Error("This car is being handled by another technician.");
   }
   if (!job.claimedById) {

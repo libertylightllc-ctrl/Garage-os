@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { requestPartAction } from "@/app/actions/parts";
+import { leaveHelperAction } from "@/app/actions/jobs";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
@@ -28,9 +29,13 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       vehicle: true,
       steps: { orderBy: { createdAt: "desc" } },
       partRequests: { orderBy: { createdAt: "desc" } },
+      helpers: { include: { tech: { select: { id: true, name: true } } } },
     },
   });
   if (!job) notFound();
+
+  const me = session.user.id;
+  const amHelper = job.claimedById !== null && job.claimedById !== me && job.helpers.some((h) => h.techId === me);
 
   const parts = await prisma.part.findMany({
     where: { garageId: session.user.garageId },
@@ -51,6 +56,19 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {job.vehicle.make} {job.vehicle.model}
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">{job.vehicle.plate}</p>
+        {job.helpers.length > 0 ? (
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {t("helpersLabel")}: {job.helpers.map((h) => h.tech.name).join(", ")}
+          </p>
+        ) : null}
+        {amHelper ? (
+          <form action={leaveHelperAction} className="mt-1">
+            <input type="hidden" name="jobId" value={job.id} />
+            <button className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:text-zinc-400">
+              {t("leaveJob")}
+            </button>
+          </form>
+        ) : null}
       </div>
 
       {job.status === "ON_HOLD" && job.holdReason ? (

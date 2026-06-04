@@ -213,6 +213,23 @@ const en = {
   prNormal: "Normal",
   prUrgent: "Urgent",
   prEmergency: "Emergency",
+  // multiple technicians (Tier 2 #4)
+  joinJob: "Join",
+  leaveJob: "Leave",
+  otherInProgress: "Other jobs in progress",
+  helpingTag: "helping",
+  helpersLabel: "Helpers",
+  primaryTag: "primary",
+  // bays / ramps (Tier 2 #7)
+  tabBays: "Bays",
+  baysTitle: "Bays & ramps",
+  baysIntro: "Your workshop's physical capacity. Assign a car to a bay; the count shows free space.",
+  addBay: "Add bay",
+  bayNamePh: "Bay name (e.g. Lift 1)",
+  bayLabel: "Bay",
+  noBay: "No bay",
+  baysInUse: "in use",
+  bayExists: "That bay name already exists.",
 
   // estimate editor + invoice
   colItem: "Item",
@@ -598,6 +615,23 @@ const ar: typeof en = {
   prNormal: "عادية",
   prUrgent: "عاجلة",
   prEmergency: "طارئة",
+  // multiple technicians
+  joinJob: "انضمام",
+  leaveJob: "مغادرة",
+  otherInProgress: "مهام أخرى قيد التنفيذ",
+  helpingTag: "مساعد",
+  helpersLabel: "المساعدون",
+  primaryTag: "أساسي",
+  // bays / ramps
+  tabBays: "المنصات",
+  baysTitle: "المنصات والرافعات",
+  baysIntro: "السعة الفعلية للورشة. عيّن سيارة لمنصة؛ يوضح العدد المساحة المتاحة.",
+  addBay: "إضافة منصة",
+  bayNamePh: "اسم المنصة (مثل رافعة 1)",
+  bayLabel: "المنصة",
+  noBay: "بدون منصة",
+  baysInUse: "قيد الاستخدام",
+  bayExists: "اسم المنصة موجود بالفعل.",
 
   colItem: "البند",
   colQty: "الكمية",

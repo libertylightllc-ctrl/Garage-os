@@ -168,6 +168,7 @@ model Garage {
   parts        Part[]
   partRequests PartRequest[]
   reminders    Reminder[]
+  bays         Bay[]
   ledgerEntries LedgerEntry[]
   aiEvents     AiEvent[]
   subscription Subscription?
@@ -242,6 +243,7 @@ model User {
   advisorJobCards JobCard[] @relation("AdvisorJobCards")
   techSteps       JobStep[] @relation("TechSteps")
   partRequests    PartRequest[] @relation("PartRequestedBy")
+  helperOf        JobHelper[] @relation("TechHelp")
   aiEvents        AiEvent[]
 
   createdAt DateTime @default(now())
@@ -331,9 +333,11 @@ model JobCard {
   holdReason HoldReason? // why it's on hold
   holdNote   String?
   assignedToId String?   // advisor pre-assignment to a specific tech (optional)
-  claimedById  String?   // technician who claimed it — the atomic claim lock (null = in pool)
+  claimedById  String?   // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
   claimedAt    DateTime?
   priority     Int       @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
+  bayId        String?   // physical bay/ramp this car occupies (Tier 2 #7)
+  bay          Bay?      @relation(fields: [bayId], references: [id])
 
   steps         JobStep[]
   estimates     Estimate[]
@@ -341,6 +345,7 @@ model JobCard {
   partMovements PartMovement[]
   partRequests  PartRequest[]
   reminders     Reminder[]
+  helpers       JobHelper[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -525,6 +530,36 @@ model PartRequest {
 
   @@index([garageId, status])
   @@index([jobCardId])
+}
+
+// Tier 2 #4 — additional technicians (helpers) on one car, alongside the primary
+// claimer. Helpers may log work; the claimer keeps the claim/release.
+model JobHelper {
+  id        String  @id @default(cuid())
+  jobCardId String
+  jobCard   JobCard @relation(fields: [jobCardId], references: [id])
+  techId    String
+  tech      User    @relation("TechHelp", fields: [techId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([jobCardId, techId])
+  @@index([techId])
+}
+
+// Tier 2 #7 — bays/ramps as a limited physical resource. A car may occupy one bay.
+model Bay {
+  id       String @id @default(cuid())
+  garageId String
+  garage   Garage @relation(fields: [garageId], references: [id])
+  name     String
+
+  jobCards JobCard[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([garageId, name])
 }
 
 // Workflow-Spec step 16 — automated maintenance reminders. Scheduled when a job

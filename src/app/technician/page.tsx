@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { statusKey } from "@/i18n/config";
 import { type JobStatus } from "@/lib/jobcard-status";
+import { priorityMeta } from "@/lib/priority";
 import { claimJobAction, releaseJobAction } from "@/app/actions/jobs";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function TechnicianHome({
         OR: [{ assignedToId: null }, { assignedToId: me }],
       },
       include: { vehicle: true },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     }),
     prisma.jobCard.findMany({
       where: { garageId, claimedById: me, status: { notIn: ["DELIVERED", "CANCELLED"] } },
@@ -79,7 +80,9 @@ export default async function TechnicianHome({
                 className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
               >
                 <span>
-                  <span className="block text-lg font-medium">{carLine(j)}</span>
+                  <span className="block text-lg font-medium">
+                    {priorityMeta(j.priority).badge} {carLine(j)}
+                  </span>
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">
                     {t(statusKey(j.status as JobStatus))}
                     {j.assignedToId === me ? ` · ${t("forYou")}` : ""}

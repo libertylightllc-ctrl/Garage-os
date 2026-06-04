@@ -21,11 +21,12 @@ export function shouldPauseForRequest(available: boolean): boolean {
   return !available;
 }
 
-// Allowed advisor/parts transitions from each status.
+// Allowed advisor/parts transitions from each status. ARRIVED -> ORDERED is the
+// "wrong / late part" path (Tier 2 #10): send it back and re-order.
 const TRANSITIONS: Record<PartRequestStatus, PartRequestStatus[]> = {
   REQUESTED: ["ORDERED", "FULFILLED", "CANCELLED"],
   ORDERED: ["ARRIVED", "CANCELLED"],
-  ARRIVED: ["FULFILLED", "CANCELLED"],
+  ARRIVED: ["FULFILLED", "ORDERED", "CANCELLED"],
   FULFILLED: [],
   CANCELLED: [],
 };
@@ -42,6 +43,18 @@ export function consumesStock(to: PartRequestStatus): boolean {
 /** Does moving INTO this status restock the catalog (the ordered part arrived)? */
 export function restocks(to: PartRequestStatus): boolean {
   return to === "ARRIVED";
+}
+
+/**
+ * Net stock change for a catalog part on a transition (caller multiplies nothing —
+ * pass qty in). Arrival adds; fulfilment consumes; sending an arrived (wrong/late)
+ * part back to re-order reverses the earlier receipt.
+ */
+export function stockDelta(from: PartRequestStatus, to: PartRequestStatus, qty: number): number {
+  if (to === "ARRIVED") return qty; // received from supplier
+  if (to === "FULFILLED") return -qty; // handed to the technician
+  if (from === "ARRIVED" && to === "ORDERED") return -qty; // wrong/late → returned & re-ordered
+  return 0;
 }
 
 /**

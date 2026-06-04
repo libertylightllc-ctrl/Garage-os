@@ -333,6 +333,7 @@ model JobCard {
   assignedToId String?   // advisor pre-assignment to a specific tech (optional)
   claimedById  String?   // technician who claimed it — the atomic claim lock (null = in pool)
   claimedAt    DateTime?
+  priority     Int       @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
 
   steps         JobStep[]
   estimates     Estimate[]

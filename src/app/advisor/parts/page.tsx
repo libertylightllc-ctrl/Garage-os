@@ -103,10 +103,16 @@ export default async function PartsQueue() {
                     </form>
                   ) : null}
                   {r.status === "ARRIVED" ? (
-                    <form action={fulfillPartRequestAction}>
-                      <input type="hidden" name="requestId" value={r.id} />
-                      <button className={btnPrimary}>{t("actFulfill")}</button>
-                    </form>
+                    <>
+                      <form action={fulfillPartRequestAction}>
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <button className={btnPrimary}>{t("actFulfill")}</button>
+                      </form>
+                      <form action={orderPartRequestAction}>
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <button className={btn}>{t("actReorder")}</button>
+                      </form>
+                    </>
                   ) : null}
                   <form action={cancelPartRequestAction}>
                     <input type="hidden" name="requestId" value={r.id} />

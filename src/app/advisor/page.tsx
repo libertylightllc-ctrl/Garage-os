@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { type JobStatus } from "@/lib/jobcard-status";
+import { priorityMeta } from "@/lib/priority";
 import { getT } from "@/i18n/server";
 import { statusKey } from "@/i18n/config";
 
@@ -19,7 +20,7 @@ export default async function AdvisorHome() {
         status: { notIn: ["DELIVERED", "CANCELLED"] },
       },
       include: { vehicle: { include: { customer: true } } },
-      orderBy: { updatedAt: "desc" },
+      orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     }),
     prisma.booking.count({ where: { garageId: session.user.garageId, status: "PROPOSED" } }),
     prisma.user.findMany({
@@ -78,7 +79,7 @@ export default async function AdvisorHome() {
               >
                 <span>
                   <span className="block font-medium">
-                    {job.vehicle.make} {job.vehicle.model}
+                    {priorityMeta(job.priority).badge} {job.vehicle.make} {job.vehicle.model}
                     <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">
                       {job.vehicle.plate}
                     </span>

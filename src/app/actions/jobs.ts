@@ -8,6 +8,7 @@ import { transition, skipTo, type JobAction, type JobStatus } from "@/lib/jobcar
 import { saveUpload } from "@/lib/storage";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
+import { clampPriority } from "@/lib/priority";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
@@ -203,6 +204,20 @@ export async function nudgeCollectionAction(formData: FormData) {
     body: `Your ${job.vehicle.make} ${job.vehicle.model} is ready for collection.${link}`,
   });
   revalidatePath("/advisor/eod");
+}
+
+// Tier 2 #6 — bump a car's queue priority (VIP / emergency / fleet).
+export async function setPriorityAction(formData: FormData) {
+  const user = await requireAdvisor();
+  const jobId = String(formData.get("jobId") ?? "");
+  const priority = clampPriority(Number(formData.get("priority") ?? 0));
+  await prisma.jobCard.updateMany({
+    where: { id: jobId, garageId: user.garageId },
+    data: { priority },
+  });
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  revalidatePath("/advisor");
+  revalidatePath("/technician");
 }
 
 export async function skipToStageAction(formData: FormData) {

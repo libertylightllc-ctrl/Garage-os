@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction } from "@/app/actions/jobs";
+import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction } from "@/app/actions/jobs";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
+import { priorityMeta } from "@/lib/priority";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
@@ -96,12 +97,32 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           {t("backActiveJobs")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          {job.vehicle.make} {job.vehicle.model}
+          {priorityMeta(job.priority).badge} {job.vehicle.make} {job.vehicle.model}
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {job.vehicle.plate} · {job.vehicle.customer.name}
         </p>
       </div>
+
+      {/* Queue priority (Tier 2 #6) */}
+      {!cancelled && !delivered ? (
+        <form action={setPriorityAction} className="flex items-center gap-2 text-sm">
+          <input type="hidden" name="jobId" value={job.id} />
+          <span className="text-zinc-500 dark:text-zinc-400">{t("priorityLabel")}</span>
+          <select
+            name="priority"
+            defaultValue={String(job.priority)}
+            className="rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+          >
+            <option value="0">{t("prNormal")}</option>
+            <option value="1">{t("prUrgent")}</option>
+            <option value="2">{t("prEmergency")}</option>
+          </select>
+          <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            {t("setPriority")}
+          </button>
+        </form>
+      ) : null}
 
       {/* Technician assignment */}
       <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">

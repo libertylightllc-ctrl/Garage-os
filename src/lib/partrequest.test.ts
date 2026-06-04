@@ -6,6 +6,7 @@ import {
   canTransition,
   consumesStock,
   restocks,
+  stockDelta,
   canResumeFromParts,
   type PartRequestStatus,
 } from "./partrequest";
@@ -43,6 +44,19 @@ describe("part-request lifecycle", () => {
     expect(canTransition("ORDERED", "FULFILLED")).toBe(false); // must arrive first
     expect(canTransition("FULFILLED", "REQUESTED")).toBe(false);
     expect(canTransition("CANCELLED", "ORDERED")).toBe(false);
+  });
+
+  it("allows an arrived (wrong/late) part to be re-ordered", () => {
+    expect(canTransition("ARRIVED", "ORDERED")).toBe(true);
+  });
+
+  it("stockDelta: receive adds, fulfil consumes, wrong-part return reverses", () => {
+    expect(stockDelta("ORDERED", "ARRIVED", 3)).toBe(3);
+    expect(stockDelta("ARRIVED", "FULFILLED", 3)).toBe(-3);
+    expect(stockDelta("REQUESTED", "FULFILLED", 2)).toBe(-2);
+    expect(stockDelta("ARRIVED", "ORDERED", 3)).toBe(-3); // wrong/late returned
+    expect(stockDelta("REQUESTED", "ORDERED", 3)).toBe(0);
+    expect(stockDelta("ARRIVED", "CANCELLED", 3)).toBe(0);
   });
 
   it("knows which transitions move stock", () => {

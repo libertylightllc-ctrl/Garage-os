@@ -7,8 +7,7 @@ import {
   inStock,
   shouldPauseForRequest,
   canTransition,
-  consumesStock,
-  restocks,
+  stockDelta,
   canResumeFromParts,
   type PartRequestStatus,
 } from "@/lib/partrequest";
@@ -139,17 +138,19 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
       data: { status: to, note: note ?? req.note },
     });
 
-    // Stock effects (catalog parts only): arrival restocks, fulfilment consumes.
+    // Stock effects (catalog parts only): arrival adds, fulfilment consumes, a
+    // wrong/late arrived part returned for re-order reverses the receipt.
     if (req.partId) {
-      if (restocks(to)) {
-        await tx.part.update({ where: { id: req.partId }, data: { qtyOnHand: { increment: req.qty } } });
-        await tx.partMovement.create({
-          data: { partId: req.partId, jobCardId: req.jobCardId, delta: req.qty, reason: "Part order received" },
+      const delta = stockDelta(req.status as PartRequestStatus, to, req.qty);
+      if (delta !== 0) {
+        await tx.part.update({
+          where: { id: req.partId },
+          data: { qtyOnHand: { increment: delta } },
         });
-      } else if (consumesStock(to)) {
-        await tx.part.update({ where: { id: req.partId }, data: { qtyOnHand: { decrement: req.qty } } });
+        const reason =
+          to === "ARRIVED" ? "Part order received" : to === "FULFILLED" ? "Used on job" : "Wrong/late part returned";
         await tx.partMovement.create({
-          data: { partId: req.partId, jobCardId: req.jobCardId, delta: -req.qty, reason: "Used on job" },
+          data: { partId: req.partId, jobCardId: req.jobCardId, delta, reason },
         });
       }
     }

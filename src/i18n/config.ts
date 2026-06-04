@@ -280,6 +280,35 @@ const en = {
   pr_FULFILLED: "Fulfilled",
   pr_CANCELLED: "Cancelled",
 
+  // maintenance reminders (Workflow-Spec step 16)
+  tabReminders: "Reminders",
+  remindersTitle: "Maintenance reminders",
+  scheduleReminders: "Schedule maintenance reminders",
+  scheduledReminders: "Scheduled reminders",
+  serviceDateLabel: "Service date",
+  scheduleBtn: "Schedule",
+  noReminders: "No reminders scheduled.",
+  dueNow: "Due now",
+  upcoming: "Upcoming",
+  sentTab: "Sent",
+  sendReminderBtn: "Send",
+  sendDueNow: "Send due now",
+  dueOn: "due",
+  sentOn: "sent",
+  cancelReminderBtn: "Cancel",
+  rt_OIL_5000: "Oil (5,000 km)",
+  rt_OIL_10000: "Oil (10,000 km)",
+  rt_BATTERY: "Battery",
+  rt_TIRE_ROTATION: "Tyre rotation",
+  rt_BRAKES: "Brakes",
+  rt_AC_SERVICE: "AC service",
+  rt_AIR_FILTER: "Air filter",
+  rt_COOLANT: "Coolant",
+  rt_TRANSMISSION: "Transmission",
+  rs_SCHEDULED: "Scheduled",
+  rs_SENT: "Sent",
+  rs_CANCELLED: "Cancelled",
+
   // owner
   ownerDashboard: "Owner dashboard",
   mRevenueMo: "Revenue (mo)",
@@ -581,6 +610,35 @@ const ar: typeof en = {
   pr_FULFILLED: "تم التسليم",
   pr_CANCELLED: "ملغاة",
 
+  // maintenance reminders (Workflow-Spec step 16)
+  tabReminders: "التذكيرات",
+  remindersTitle: "تذكيرات الصيانة",
+  scheduleReminders: "جدولة تذكيرات الصيانة",
+  scheduledReminders: "التذكيرات المجدولة",
+  serviceDateLabel: "تاريخ الخدمة",
+  scheduleBtn: "جدولة",
+  noReminders: "لا توجد تذكيرات مجدولة.",
+  dueNow: "مستحقة الآن",
+  upcoming: "قادمة",
+  sentTab: "مُرسلة",
+  sendReminderBtn: "إرسال",
+  sendDueNow: "إرسال المستحقة الآن",
+  dueOn: "مستحقة",
+  sentOn: "أُرسلت",
+  cancelReminderBtn: "إلغاء",
+  rt_OIL_5000: "زيت (5,000 كم)",
+  rt_OIL_10000: "زيت (10,000 كم)",
+  rt_BATTERY: "البطارية",
+  rt_TIRE_ROTATION: "تدوير الإطارات",
+  rt_BRAKES: "الفرامل",
+  rt_AC_SERVICE: "صيانة المكيف",
+  rt_AIR_FILTER: "فلتر الهواء",
+  rt_COOLANT: "سائل التبريد",
+  rt_TRANSMISSION: "ناقل الحركة",
+  rs_SCHEDULED: "مجدولة",
+  rs_SENT: "مُرسلة",
+  rs_CANCELLED: "ملغاة",
+
   ownerDashboard: "لوحة المالك",
   mRevenueMo: "الإيرادات (شهر)",
   mProfitMo: "الربح (شهر)",
@@ -630,4 +688,14 @@ export function statusKey(status: string): MessageKey {
 /** Maps a PartRequestStatus to its translation key, e.g. "ORDERED" -> "pr_ORDERED". */
 export function partStatusKey(status: string): MessageKey {
   return ("pr_" + status) as MessageKey;
+}
+
+/** Maps a ReminderType to its translation key, e.g. "BATTERY" -> "rt_BATTERY". */
+export function reminderTypeKey(type: string): MessageKey {
+  return ("rt_" + type) as MessageKey;
+}
+
+/** Maps a ReminderStatus to its translation key, e.g. "SENT" -> "rs_SENT". */
+export function reminderStatusKey(status: string): MessageKey {
+  return ("rs_" + status) as MessageKey;
 }

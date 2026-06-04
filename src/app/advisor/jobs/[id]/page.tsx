@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction } from "@/app/actions/jobs";
+import { scheduleRemindersAction } from "@/app/actions/reminders";
+import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
+import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
 import {
   TIMELINE,
   availableActions,
@@ -40,6 +43,14 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+
+  // Maintenance reminders for this vehicle (Workflow-Spec step 16).
+  const reminders = await prisma.reminder.findMany({
+    where: { vehicleId: job.vehicleId, status: { in: ["SCHEDULED", "SENT"] } },
+    orderBy: { dueAt: "asc" },
+  });
+  const canScheduleReminders = job.status === "INVOICED" || job.status === "DELIVERED";
+  const today = new Date().toISOString().slice(0, 10);
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
   const claimedName = techName(job.claimedById);
   const assignedName = techName(job.assignedToId);
@@ -277,6 +288,53 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </ul>
         )}
       </div>
+
+      {/* Maintenance reminders (Workflow-Spec step 16) */}
+      {canScheduleReminders || reminders.length > 0 ? (
+        <div className="border-t border-black/10 pt-4 dark:border-white/15">
+          <h2 className="mb-2 text-sm font-medium">{t("remindersTitle")}</h2>
+
+          {canScheduleReminders ? (
+            <form action={scheduleRemindersAction} className="mb-3 flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+              <input type="hidden" name="jobId" value={job.id} />
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("scheduleReminders")}</div>
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+                {REMINDER_TYPES.map((rt) => (
+                  <label key={rt} className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" name="types" value={rt} />
+                    {t(reminderTypeKey(rt))}
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">{t("serviceDateLabel")}</label>
+                <input
+                  type="date"
+                  name="serviceDate"
+                  defaultValue={today}
+                  className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                />
+                <button className="ms-auto rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black">
+                  {t("scheduleBtn")}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {reminders.length > 0 ? (
+            <ul className="flex flex-col gap-1 text-sm">
+              {reminders.map((r) => (
+                <li key={r.id} className="flex items-center justify-between">
+                  <span>🔧 {t(reminderTypeKey(r.type))}</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {t(reminderStatusKey(r.status))} · {r.dueAt.toISOString().slice(0, 10)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Technician activity — the live link from the workshop into this job */}
       {job.steps.length > 0 ? (

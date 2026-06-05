@@ -19,6 +19,7 @@ Specs in `/docs` (read before deciding):
 - `GarageOS-Technical-Spec.md` — stack, data model, services, MVP scope (buildable contract; DoD §4, order §5)
 - `Workflow-Spec.md` — the real 16-step garage flow + Tier 1/2/3 features
 - `Role-Based-Dashboards.md` — the four roles, job card, Moulkia OCR, VAT
+- `Job-Card-Data-Model.md` — every job-card field, by role + stage (schema/form source of truth)
 - `PWA-and-Device-Setup-Spec.md` — install/device model (not yet in repo)
 
 ## Stack (do not deviate without asking) — free tiers chosen

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction, setBayAction } from "@/app/actions/jobs";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
 import { priorityMeta } from "@/lib/priority";
+import { formatJobNo } from "@/lib/jobcard-fields";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
@@ -108,7 +109,61 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {job.vehicle.plate} · {job.vehicle.customer.name}
+          {formatJobNo(job.number, job.createdAt.getFullYear())
+            ? ` · ${formatJobNo(job.number, job.createdAt.getFullYear())}`
+            : ""}
         </p>
+      </div>
+
+      {/* Reception detail (Job-Card-Data-Model.md) */}
+      <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+          {job.complaint ? (
+            <div className="col-span-2">
+              <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("secComplaint")}</dt>
+              <dd>{job.complaint}</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("mileageInLabel")}</dt>
+            <dd>{job.mileageIn ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("fuelLevelLabel")}</dt>
+            <dd>{job.fuelLevel ? t(`fuel_${job.fuelLevel}` as never) : "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("oilTypeLabel")}</dt>
+            <dd>{t(`oil_${job.oilType}` as never)}</dd>
+          </div>
+          {job.exteriorCondition.length > 0 || job.exteriorRemarks ? (
+            <div className="col-span-2">
+              <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("exteriorLabel")}</dt>
+              <dd>
+                {job.exteriorCondition.map((v) => t(`ext_${v}` as never)).join(", ")}
+                {job.exteriorRemarks ? ` — ${job.exteriorRemarks}` : ""}
+              </dd>
+            </div>
+          ) : null}
+          {job.interiorCondition.length > 0 || job.interiorRemarks ? (
+            <div className="col-span-2">
+              <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("interiorLabel")}</dt>
+              <dd>
+                {job.interiorCondition.map((v) => t(`int_${v}` as never)).join(", ")}
+                {job.interiorRemarks ? ` — ${job.interiorRemarks}` : ""}
+              </dd>
+            </div>
+          ) : null}
+          {job.valuables.length > 0 ? (
+            <div className="col-span-2">
+              <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("secValuables")}</dt>
+              <dd>
+                {job.valuables.map((v) => t(`val_${v}` as never)).join(", ")}
+                {job.valuablesNote ? ` — ${job.valuablesNote}` : ""}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
       </div>
 
       {/* Queue priority (Tier 2 #6) */}

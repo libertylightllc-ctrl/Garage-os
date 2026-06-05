@@ -5,6 +5,14 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { extractMoulkia, ocrCostUsd } from "@/lib/ocr";
+import {
+  sanitizeChoices,
+  toOilType,
+  toFuelLevel,
+  EXTERIOR_OPTIONS,
+  INTERIOR_OPTIONS,
+  VALUABLES_OPTIONS,
+} from "@/lib/jobcard-fields";
 
 async function requireAdvisor() {
   const session = await auth();
@@ -99,23 +107,42 @@ export async function plateLookupAction(formData: FormData) {
   );
 }
 
-// Confirm step: create (or reuse) the customer + vehicle, then open the job card.
+// Confirm step (the Reception form): create/reuse customer + vehicle, then open the
+// job card with EVERY reception field — make/model/year always written (no blank Vehicle).
 export async function createCustomerVehicleJobAction(formData: FormData) {
   const user = await requireAdvisor();
   const get = (k: string) => String(formData.get(k) ?? "").trim();
+  const getAll = (k: string) => formData.getAll(k).map(String);
 
+  // Customer + vehicle identity
   const ownerName = get("ownerName");
   const phone = get("phone");
+  const email = get("email") || null;
   const plate = get("plate");
   const make = get("make");
   const model = get("model");
-  const vin = get("vin");
+  const vin = get("vin") || null;
   const yearRaw = parseInt(get("year"), 10);
   const year = Number.isFinite(yearRaw) ? yearRaw : null;
   const assignedToRaw = get("assignedToId");
   let vehicleId = get("vehicleId");
 
-  if (!ownerName || !phone || !plate || !make || !model) {
+  // Reception detail
+  const mileageRaw = parseInt(get("mileageIn"), 10);
+  const mileageIn = Number.isFinite(mileageRaw) ? mileageRaw : null;
+  const oilType = toOilType(get("oilType"));
+  const fuelLevel = toFuelLevel(get("fuelLevel"));
+  const complaint = get("complaint");
+  const exteriorCondition = sanitizeChoices(getAll("exterior"), EXTERIOR_OPTIONS);
+  const exteriorRemarks = get("exteriorRemarks") || null;
+  const interiorCondition = sanitizeChoices(getAll("interior"), INTERIOR_OPTIONS);
+  const interiorRemarks = get("interiorRemarks") || null;
+  const valuables = sanitizeChoices(getAll("valuables"), VALUABLES_OPTIONS);
+  const valuablesNote = get("valuablesNote") || null;
+  const consent = get("consent") === "on";
+
+  // Required: identity + complaint + consent.
+  if (!ownerName || !phone || !plate || !make || !model || !complaint || !consent) {
     redirect("/advisor/jobs/new?error=fields");
   }
 
@@ -129,47 +156,69 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
     assignedToId = tech?.id ?? null;
   }
 
-  if (vehicleId) {
-    // Repeat / sold-vehicle path: confirm it's ours; allow owner name/phone edits.
-    const existing = await prisma.vehicle.findFirst({
-      where: { id: vehicleId, customer: { garageId: user.garageId } },
-      include: { customer: true },
-    });
-    if (!existing) redirect("/advisor/jobs/new?error=fields");
-    const ex = existing!;
-    if (ex.customer.name !== ownerName || ex.customer.phone !== phone) {
-      await prisma.customer.update({
-        where: { id: ex.customerId },
-        data: { name: ownerName, phone },
+  const jobId = await prisma.$transaction(async (tx) => {
+    if (vehicleId) {
+      // Repeat / sold-vehicle path: confirm it's ours; keep details fresh.
+      const existing = await tx.vehicle.findFirst({
+        where: { id: vehicleId, customer: { garageId: user.garageId } },
+        select: { id: true, customerId: true },
       });
+      if (!existing) throw new Error("Vehicle not found in this garage");
+      await tx.customer.update({
+        where: { id: existing.customerId },
+        data: { name: ownerName, phone, email },
+      });
+      await tx.vehicle.update({
+        where: { id: existing.id },
+        data: { make, model, year, plate, vin },
+      });
+    } else {
+      // New customer + vehicle. Upsert customer by phone so a known number attaches.
+      const customer = await tx.customer.upsert({
+        where: { garageId_phone: { garageId: user.garageId, phone } },
+        update: { name: ownerName, email },
+        create: { garageId: user.garageId, name: ownerName, phone, email },
+        select: { id: true },
+      });
+      const vehicle = await tx.vehicle.create({
+        data: { customerId: customer.id, make, model, year, plate, vin },
+        select: { id: true },
+      });
+      vehicleId = vehicle.id;
     }
-  } else {
-    // New customer + vehicle (store only the extracted/confirmed fields). Upsert by
-    // phone so a known customer (same number) gets the new vehicle attached, not an error.
-    const customer = await prisma.customer.upsert({
-      where: { garageId_phone: { garageId: user.garageId, phone } },
-      update: { name: ownerName },
-      create: { garageId: user.garageId, name: ownerName, phone },
-      select: { id: true },
-    });
-    const vehicle = await prisma.vehicle.create({
-      data: { customerId: customer.id, make, model, year, plate, vin: vin || null },
-      select: { id: true },
-    });
-    vehicleId = vehicle.id;
-  }
 
-  const job = await prisma.jobCard.create({
-    data: {
-      garageId: user.garageId,
-      vehicleId,
-      advisorId: user.id,
-      status: "ARRIVED",
-      assignedToId,
-    },
-    select: { id: true },
+    // Gapless per-garage Job Card No.
+    const g = await tx.garage.update({
+      where: { id: user.garageId },
+      data: { jobSeq: { increment: 1 } },
+      select: { jobSeq: true },
+    });
+
+    const job = await tx.jobCard.create({
+      data: {
+        garageId: user.garageId,
+        vehicleId,
+        advisorId: user.id,
+        status: "ARRIVED",
+        assignedToId,
+        number: g.jobSeq,
+        mileageIn,
+        oilType,
+        fuelLevel,
+        complaint,
+        exteriorCondition,
+        exteriorRemarks,
+        interiorCondition,
+        interiorRemarks,
+        valuables,
+        valuablesNote,
+        moulkiaConsentAt: new Date(),
+      },
+      select: { id: true },
+    });
+    return job.id;
   });
 
   revalidatePath("/advisor");
-  redirect(`/advisor/jobs/${job.id}`);
+  redirect(`/advisor/jobs/${jobId}`);
 }

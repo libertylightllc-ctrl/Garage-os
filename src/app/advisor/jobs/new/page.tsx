@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { createJobCardAction } from "@/app/actions/jobs";
 import { moulkiaExtractAction, plateLookupAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -106,36 +105,42 @@ export default async function NewJobCard({
         </form>
       </section>
 
-      {/* Or pick an existing vehicle (the original flow) */}
+      {/* Or pick an existing vehicle — also goes through the Reception form (prefilled) */}
       {vehicles.length > 0 ? (
         <div>
           <h2 className="mb-2 text-sm font-medium">{t("orPickExisting")}</h2>
-          <form action={createJobCardAction} className="flex flex-col gap-2">
-            <label className="text-sm text-zinc-500 dark:text-zinc-400">
-              {t("assignTo")}
-              <div className="mt-1">
-                <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
-              </div>
-            </label>
-            {vehicles.map((v) => (
-              <button
-                key={v.id}
-                type="submit"
-                name="vehicleId"
-                value={v.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-4 text-left hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
-              >
-                <span>
-                  <span className="block font-medium">
-                    {v.make} {v.model}
-                    <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">{v.plate}</span>
-                  </span>
-                  <span className="block text-sm text-zinc-500 dark:text-zinc-400">{v.customer.name}</span>
-                </span>
-                <span className="text-sm font-medium">{t("start")}</span>
-              </button>
-            ))}
-          </form>
+          <ul className="flex flex-col gap-2">
+            {vehicles.map((v) => {
+              const q = new URLSearchParams({
+                vehicleId: v.id,
+                ownerName: v.customer.name,
+                phone: v.customer.phone,
+                plate: v.plate,
+                make: v.make,
+                model: v.model,
+                year: v.year ? String(v.year) : "",
+                vin: v.vin ?? "",
+              });
+              if (v.customer.email) q.set("email", v.customer.email);
+              return (
+                <li key={v.id}>
+                  <Link
+                    href={`/advisor/jobs/new/confirm?${q.toString()}`}
+                    className="flex items-center justify-between rounded-lg border border-black/10 p-4 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                  >
+                    <span>
+                      <span className="block font-medium">
+                        {v.make} {v.model}
+                        <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">{v.plate}</span>
+                      </span>
+                      <span className="block text-sm text-zinc-500 dark:text-zinc-400">{v.customer.name}</span>
+                    </span>
+                    <span className="text-sm font-medium">{t("start")}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
     </main>

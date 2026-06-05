@@ -3,12 +3,21 @@ import { requireRole } from "@/lib/guard";
 import { createCustomerVehicleJobAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
+import {
+  EXTERIOR_OPTIONS,
+  INTERIOR_OPTIONS,
+  VALUABLES_OPTIONS,
+  OIL_TYPES,
+  FUEL_LEVELS,
+} from "@/lib/jobcard-fields";
 
 export const dynamic = "force-dynamic";
 
 interface SP {
   ownerName?: string;
   phone?: string;
+  email?: string;
   plate?: string;
   make?: string;
   model?: string;
@@ -18,21 +27,40 @@ interface SP {
   assignedToId?: string;
 }
 
-export default async function ConfirmNewCustomer({
-  searchParams,
+type T = (k: MessageKey) => string;
+const FIELD = "mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
+
+function CheckboxGroup({
+  name,
+  options,
+  prefix,
+  t,
 }: {
-  searchParams: Promise<SP>;
+  name: string;
+  options: readonly string[];
+  prefix: string;
+  t: T;
 }) {
+  return (
+    <div className="mt-1 grid grid-cols-2 gap-1 sm:grid-cols-3">
+      {options.map((v) => (
+        <label key={v} className="flex items-center gap-1 text-sm">
+          <input type="checkbox" name={name} value={v} />
+          {t(`${prefix}_${v}` as MessageKey)}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+export default async function ReceptionForm({ searchParams }: { searchParams: Promise<SP> }) {
   await requireRole("ADVISOR");
   const t = await getT();
   const sp = await searchParams;
-
-  const field =
-    "mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
   const isRepeat = Boolean(sp.vehicleId);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-5 p-6">
       <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link href="/advisor/jobs/new" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
@@ -44,41 +72,109 @@ export default async function ConfirmNewCustomer({
         </p>
       </div>
 
-      <form action={createCustomerVehicleJobAction} className="flex flex-col gap-3">
+      <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
         <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
         <input type="hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />
 
-        <label className="text-sm text-zinc-500 dark:text-zinc-400">
-          {t("ownerName")}
-          <input name="ownerName" defaultValue={sp.ownerName ?? ""} required className={field} />
-        </label>
-        <label className="text-sm text-zinc-500 dark:text-zinc-400">
-          {t("mobile")}
-          <input name="phone" type="tel" defaultValue={sp.phone ?? ""} placeholder="+9715XXXXXXXX" required className={field} />
-        </label>
+        {/* Customer */}
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <legend className="px-1 text-sm font-medium">{t("secCustomer")}</legend>
+          <label className="text-xs text-zinc-500 dark:text-zinc-400">
+            {t("ownerName")}
+            <input name="ownerName" defaultValue={sp.ownerName ?? ""} required className={FIELD} />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("mobile")}
+              <input name="phone" type="tel" defaultValue={sp.phone ?? ""} placeholder="+9715XXXXXXXX" required className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("email")}
+              <input name="email" type="email" defaultValue={sp.email ?? ""} className={FIELD} />
+            </label>
+          </div>
+        </fieldset>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm text-zinc-500 dark:text-zinc-400">
-            {t("plate")}
-            <input name="plate" defaultValue={sp.plate ?? ""} required className={field} />
-          </label>
-          <label className="text-sm text-zinc-500 dark:text-zinc-400">
-            {t("yearLabel")}
-            <input name="year" type="number" min="1950" max="2100" defaultValue={sp.year ?? ""} className={field} />
-          </label>
-          <label className="text-sm text-zinc-500 dark:text-zinc-400">
-            {t("make")}
-            <input name="make" defaultValue={sp.make ?? ""} required className={field} />
-          </label>
-          <label className="text-sm text-zinc-500 dark:text-zinc-400">
-            {t("model")}
-            <input name="model" defaultValue={sp.model ?? ""} required className={field} />
-          </label>
-        </div>
+        {/* Vehicle */}
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <legend className="px-1 text-sm font-medium">{t("secVehicle")}</legend>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("plate")}
+              <input name="plate" defaultValue={sp.plate ?? ""} required className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("vinLabel")}
+              <input name="vin" defaultValue={sp.vin ?? ""} className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("make")}
+              <input name="make" defaultValue={sp.make ?? ""} required className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("model")}
+              <input name="model" defaultValue={sp.model ?? ""} required className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("yearLabel")}
+              <input name="year" type="number" min="1950" max="2100" defaultValue={sp.year ?? ""} className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("mileageInLabel")}
+              <input name="mileageIn" type="number" min="0" required className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("oilTypeLabel")}
+              <select name="oilType" defaultValue="NONE" className={FIELD}>
+                {OIL_TYPES.map((v) => (
+                  <option key={v} value={v}>
+                    {t(`oil_${v}` as MessageKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("fuelLevelLabel")}
+              <select name="fuelLevel" defaultValue="" className={FIELD}>
+                <option value="">—</option>
+                {FUEL_LEVELS.map((v) => (
+                  <option key={v} value={v}>
+                    {t(`fuel_${v}` as MessageKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </fieldset>
 
-        <label className="text-sm text-zinc-500 dark:text-zinc-400">
-          {t("vinLabel")}
-          <input name="vin" defaultValue={sp.vin ?? ""} className={field} />
+        {/* Complaint */}
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <legend className="px-1 text-sm font-medium">{t("secComplaint")}</legend>
+          <textarea name="complaint" rows={3} required placeholder={t("complaintLabel")} className={FIELD} />
+        </fieldset>
+
+        {/* Condition (dispute shield) */}
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <legend className="px-1 text-sm font-medium">{t("secCondition")}</legend>
+          <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("exteriorLabel")}</div>
+          <CheckboxGroup name="exterior" options={EXTERIOR_OPTIONS} prefix="ext" t={t} />
+          <input name="exteriorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
+          <div className="mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("interiorLabel")}</div>
+          <CheckboxGroup name="interior" options={INTERIOR_OPTIONS} prefix="int" t={t} />
+          <input name="interiorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
+        </fieldset>
+
+        {/* Valuables */}
+        <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <legend className="px-1 text-sm font-medium">{t("secValuables")}</legend>
+          <CheckboxGroup name="valuables" options={VALUABLES_OPTIONS} prefix="val" t={t} />
+          <input name="valuablesNote" placeholder={t("valuablesNoteLabel")} className={FIELD} />
+        </fieldset>
+
+        {/* Consent */}
+        <label className="flex items-start gap-2 rounded-lg border border-black/10 p-3 text-xs text-zinc-600 dark:border-white/15 dark:text-zinc-300">
+          <input type="checkbox" name="consent" className="mt-0.5" required />
+          {t("moulkiaConsent")}
         </label>
 
         <button className="rounded-lg bg-zinc-900 px-4 py-3 text-base font-semibold text-white dark:bg-white dark:text-black">

@@ -147,6 +147,21 @@ enum ReminderStatus {
   CANCELLED
 }
 
+// Job-card Reception fields (Job-Card-Data-Model.md).
+enum OilType {
+  KM_5000
+  KM_10000
+  NONE
+}
+
+enum FuelLevel {
+  EMPTY
+  QUARTER
+  HALF
+  THREE_QUARTER
+  FULL
+}
+
 // ---------- Tenancy ----------
 model Garage {
   id           String  @id @default(cuid())
@@ -158,6 +173,7 @@ model Garage {
   branches     Garage[] @relation("GarageBranches")
   settingsJson Json?
   invoiceSeq   Int     @default(0) // per-garage gapless invoice counter
+  jobSeq       Int     @default(0) // per-garage gapless Job Card No counter
   isPilot      Boolean @default(true) // pilots are NEVER charged (subscription billing)
 
   users        User[]
@@ -259,6 +275,7 @@ model Customer {
   garage   Garage @relation(fields: [garageId], references: [id])
   name     String
   phone    String
+  email    String? // optional, captured at reception
   lang     Lang   @default(ar)
   trn      String? // for B2B invoices
   waId     String? // WhatsApp id
@@ -339,6 +356,20 @@ model JobCard {
   bayId        String?   // physical bay/ramp this car occupies (Tier 2 #7)
   bay          Bay?      @relation(fields: [bayId], references: [id])
 
+  // ----- Reception (Job-Card-Data-Model.md) — captured at intake by the advisor -----
+  number            Int?       // gapless per-garage Job Card No, rendered JC-2026-0001
+  mileageIn         Int?       // odometer at arrival
+  oilType           OilType    @default(NONE) // feeds maintenance reminders
+  fuelLevel         FuelLevel? // Empty/¼/½/¾/Full
+  complaint         String?    // customer complaint(s)
+  exteriorCondition String[]   // checkbox values (NO_DAMAGE, SCRATCHES, ...)
+  exteriorRemarks   String?
+  interiorCondition String[]   // checkbox values (CLEAN, DIRTY, WARNING_LIGHT, OTHER)
+  interiorRemarks   String?
+  valuables         String[]   // checkbox values (NONE, DOCUMENTS, CASH, ...)
+  valuablesNote     String?
+  moulkiaConsentAt  DateTime?  // compliance: consent recorded at intake
+
   steps         JobStep[]
   estimates     Estimate[]
   invoices      Invoice[]
@@ -350,6 +381,7 @@ model JobCard {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([garageId, number])
   @@index([garageId, status])
 }
 

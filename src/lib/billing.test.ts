@@ -9,6 +9,7 @@ import {
   formatInvoiceNo,
   isRecordableMethod,
   isQuoteIncrease,
+  jobPartLineDescription,
   type DraftLine,
 } from "./billing";
 
@@ -22,6 +23,17 @@ describe("billing totals", () => {
     expect(lineTotal(2, 60)).toBe(120);
     const t = totalsFor(lines); // subtotal 270
     expect(t).toEqual({ subtotal: 270, vatAmount: 13.5, total: 283.5 });
+  });
+});
+
+describe("jobPartLineDescription", () => {
+  it("prefixes the part No when present", () => {
+    expect(jobPartLineDescription("BRK-PAD-F", "Front brake pads")).toBe("BRK-PAD-F — Front brake pads");
+  });
+  it("falls back to just the description", () => {
+    expect(jobPartLineDescription(null, "Ignition coil")).toBe("Ignition coil");
+    expect(jobPartLineDescription("  ", "Ignition coil")).toBe("Ignition coil");
+    expect(jobPartLineDescription(undefined, "Ignition coil")).toBe("Ignition coil");
   });
 });
 

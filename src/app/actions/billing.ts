@@ -13,6 +13,7 @@ import {
   qrPlaceholder,
   isRecordableMethod,
   isQuoteIncrease,
+  jobPartLineDescription,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -96,6 +97,58 @@ export async function addEstimateLineAction(formData: FormData) {
 
   await prisma.estimateLine.create({
     data: { estimateId, kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
+  });
+  await recomputeEstimate(estimateId);
+  revalidatePath(`/estimates/${estimateId}`);
+}
+
+// One-click itemise: turn a technician part (required/used) into a priced PART line,
+// pre-filled with the catalog price when the part is catalog-linked.
+export async function addLineFromPartAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const jobPartId = String(formData.get("jobPartId") ?? "");
+  const est = await ownedEstimate(estimateId, user.garageId);
+  if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
+
+  const jp = await prisma.jobPart.findFirst({
+    where: { id: jobPartId, jobCardId: est.jobCardId },
+    include: { part: { select: { price: true } } },
+  });
+  if (!jp) throw new Error("Part not found on this job");
+
+  const qty = Math.max(1, jp.qty);
+  const unitPrice = jp.part ? Number(jp.part.price) : 0; // catalog price, else cashier sets it
+  await prisma.estimateLine.create({
+    data: {
+      estimateId,
+      kind: "PART",
+      partId: jp.partId,
+      description: jobPartLineDescription(jp.partNo, jp.description),
+      qty,
+      unitPrice,
+      lineTotal: lineTotal(qty, unitPrice),
+    },
+  });
+  await recomputeEstimate(estimateId);
+  revalidatePath(`/estimates/${estimateId}`);
+}
+
+// Inline-edit a line's unit price (preserves the sign of discount lines).
+export async function updateEstimateLinePriceAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const lineId = String(formData.get("lineId") ?? "");
+  const est = await ownedEstimate(estimateId, user.garageId);
+  if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
+
+  const line = await prisma.estimateLine.findFirst({ where: { id: lineId, estimateId } });
+  if (!line) throw new Error("Line not found");
+  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
+  const unitPrice = Number(line.unitPrice) < 0 ? -priceAbs : priceAbs;
+  await prisma.estimateLine.update({
+    where: { id: lineId },
+    data: { unitPrice, lineTotal: lineTotal(Number(line.qty), unitPrice) },
   });
   await recomputeEstimate(estimateId);
   revalidatePath(`/estimates/${estimateId}`);

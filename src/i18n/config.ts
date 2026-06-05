@@ -278,6 +278,16 @@ const en = {
   catalogPartOptional: "Catalog part (optional)",
   techFindingsPanel: "Technician findings & parts required",
   enterFindingsFirst: "Enter findings before submitting.",
+  // repair stage (parts used + work notes)
+  jcRepair: "Repair — work completed",
+  workNotesLabel: "Work completed notes",
+  partsUsed: "Parts used",
+  noPartsUsed: "No parts used yet.",
+  markComplete: "Mark work complete",
+  workCompletedBadge: "Work completed",
+  repairLockedNote: "Work complete — read only.",
+  partsUsedPanel: "Parts used & work notes",
+  priceThisPart: "Price this part →",
   // bays / ramps (Tier 2 #7)
   tabBays: "Bays",
   baysTitle: "Bays & ramps",
@@ -738,6 +748,16 @@ const ar: typeof en = {
   catalogPartOptional: "قطعة من الكتالوج (اختياري)",
   techFindingsPanel: "نتائج الفني والقطع المطلوبة",
   enterFindingsFirst: "أدخل النتائج قبل الإرسال.",
+  // repair stage
+  jcRepair: "الإصلاح — اكتمل العمل",
+  workNotesLabel: "ملاحظات إنجاز العمل",
+  partsUsed: "القطع المستخدمة",
+  noPartsUsed: "لا توجد قطع مستخدمة بعد.",
+  markComplete: "تحديد اكتمال العمل",
+  workCompletedBadge: "اكتمل العمل",
+  repairLockedNote: "اكتمل العمل — للقراءة فقط.",
+  partsUsedPanel: "القطع المستخدمة وملاحظات العمل",
+  priceThisPart: "تسعير هذه القطعة ←",
   // bays / ramps
   tabBays: "المنصات",
   baysTitle: "المنصات والرافعات",

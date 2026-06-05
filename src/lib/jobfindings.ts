@@ -20,3 +20,14 @@ export function cleanQty(n: number): number {
   if (!Number.isFinite(n)) return 1;
   return Math.max(1, Math.trunc(n));
 }
+
+/**
+ * The repair section (work notes + parts used) is editable once the work is
+ * authorised (an approved estimate exists) and until the tech marks it complete.
+ */
+export function repairUnlocked(
+  hasApprovedEstimate: boolean,
+  workCompletedAt: Date | null | undefined,
+): boolean {
+  return hasApprovedEstimate && !workCompletedAt;
+}

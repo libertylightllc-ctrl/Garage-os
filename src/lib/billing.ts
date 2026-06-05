@@ -110,6 +110,16 @@ export function formatInvoiceNo(seq: number, year: number): string {
   return `INV-${year}-${String(seq).padStart(4, "0")}`;
 }
 
+/** Build an estimate-line description from a technician part (part No + name). */
+export function jobPartLineDescription(
+  partNo: string | null | undefined,
+  description: string,
+): string {
+  const no = (partNo ?? "").trim();
+  const desc = description.trim();
+  return no ? `${no} — ${desc}` : desc;
+}
+
 /** Placeholder QR content (UAE). KSA Phase 2 replaces with a signed ZATCA TLV/QR. */
 export function qrPlaceholder(opts: {
   seller: string;

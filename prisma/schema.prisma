@@ -378,6 +378,9 @@ model JobCard {
   valuables         String[]   // checkbox values (NONE, DOCUMENTS, CASH, ...)
   valuablesNote     String?
   moulkiaConsentAt  DateTime?  // compliance: consent recorded at intake
+  // ----- Repair stage (technician records actual work) -----
+  workNotes         String?    // work-completed notes
+  workCompletedAt   DateTime?  // set when the technician marks the work complete
 
   steps         JobStep[]
   estimates     Estimate[]

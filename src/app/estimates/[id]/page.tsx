@@ -5,8 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { type StaffRole } from "@/lib/roles";
 import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
 import {
   addEstimateLineAction,
+  addLineFromPartAction,
+  updateEstimateLinePriceAction,
   removeEstimateLineAction,
   toggleEstimateLineAction,
   setEstimateStatusAction,
@@ -16,6 +19,37 @@ import {
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+
+// A technician part row with a one-click "Price this part" button (when editable).
+function PartRow({
+  p,
+  estimateId,
+  editable,
+  t,
+}: {
+  p: { id: string; partNo: string | null; description: string; qty: number };
+  estimateId: string;
+  editable: boolean;
+  t: (k: MessageKey) => string;
+}) {
+  return (
+    <li className="flex items-center justify-between gap-2 text-zinc-600 dark:text-zinc-300">
+      <span>
+        • {p.partNo ? `${p.partNo} ` : ""}
+        {p.description} ×{p.qty}
+      </span>
+      {editable ? (
+        <form action={addLineFromPartAction}>
+          <input type="hidden" name="estimateId" value={estimateId} />
+          <input type="hidden" name="jobPartId" value={p.id} />
+          <button className="shrink-0 rounded-md border border-black/15 px-2 py-0.5 text-xs font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            {t("priceThisPart")}
+          </button>
+        </form>
+      ) : null}
+    </li>
+  );
+}
 
 // Shared screen: the Cashier sets prices here; the Advisor can view + send it.
 export default async function EstimateEditor({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +66,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         include: {
           vehicle: true,
           finding: true,
-          jobParts: { where: { kind: "REQUIRED" }, orderBy: { createdAt: "asc" } },
+          jobParts: { orderBy: { createdAt: "asc" } },
         },
       },
       invoice: { select: { id: true } },
@@ -41,7 +75,9 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   if (!est) notFound();
   const t = await getT();
   const finding = est.jobCard.finding;
-  const requiredParts = est.jobCard.jobParts;
+  const requiredParts = est.jobCard.jobParts.filter((p) => p.kind === "REQUIRED");
+  const usedParts = est.jobCard.jobParts.filter((p) => p.kind === "USED");
+  const workNotes = est.jobCard.workNotes;
 
   const editable = canPrice && est.status === "DRAFT";
   const canDecline = canPrice && !est.invoice; // skip lines until the invoice is cut
@@ -79,12 +115,24 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <p className="text-zinc-600 dark:text-zinc-300">{finding.diagnosis}</p>
           ) : null}
           {requiredParts.length > 0 ? (
-            <ul className="mt-2 flex flex-col gap-0.5">
+            <ul className="mt-2 flex flex-col gap-1">
               {requiredParts.map((p) => (
-                <li key={p.id} className="text-zinc-600 dark:text-zinc-300">
-                  • {p.partNo ? `${p.partNo} ` : ""}
-                  {p.description} ×{p.qty}
-                </li>
+                <PartRow key={p.id} p={p} estimateId={est.id} editable={editable} t={t} />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Parts used & work notes (Repair stage) — reconcile Final Billing */}
+      {usedParts.length > 0 || workNotes ? (
+        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+          <h2 className="mb-1 text-sm font-medium">{t("partsUsedPanel")}</h2>
+          {workNotes ? <p className="text-zinc-600 dark:text-zinc-300">{workNotes}</p> : null}
+          {usedParts.length > 0 ? (
+            <ul className="mt-1 flex flex-col gap-1">
+              {usedParts.map((p) => (
+                <PartRow key={p.id} p={p} estimateId={est.id} editable={editable} t={t} />
               ))}
             </ul>
           ) : null}
@@ -115,7 +163,25 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                 <span className="text-zinc-400">{l.kind}</span> {l.description}
               </td>
               <td className="py-1 text-right">{Number(l.qty)}</td>
-              <td className="py-1 text-right">{Number(l.unitPrice).toFixed(2)}</td>
+              <td className="py-1 text-right">
+                {editable ? (
+                  <form action={updateEstimateLinePriceAction} className="flex items-center justify-end gap-1">
+                    <input type="hidden" name="estimateId" value={est.id} />
+                    <input type="hidden" name="lineId" value={l.id} />
+                    <input
+                      name="unitPrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={Math.abs(Number(l.unitPrice)).toFixed(2)}
+                      className="w-16 rounded-md border border-black/15 bg-transparent px-1 py-0.5 text-right text-sm dark:border-white/20"
+                    />
+                    <button className="text-xs text-zinc-500 hover:underline">✓</button>
+                  </form>
+                ) : (
+                  Number(l.unitPrice).toFixed(2)
+                )}
+              </td>
               <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
               {editable || canDecline ? (
                 <td className="py-1 pl-2 text-right no-underline">

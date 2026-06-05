@@ -21,6 +21,7 @@ async function workableJob(jobId: string, garageId: string, userId: string) {
       status: true,
       claimedById: true,
       holdReason: true,
+      workCompletedAt: true,
       helpers: { select: { techId: true } },
       finding: { select: { submittedAt: true } },
     },
@@ -43,6 +44,10 @@ async function workableJob(jobId: string, garageId: string, userId: string) {
 
 function assertNotSubmitted(job: { finding: { submittedAt: Date | null } | null }) {
   if (job.finding?.submittedAt) throw new Error("Already submitted to the cashier.");
+}
+
+function assertRepairOpen(job: { workCompletedAt: Date | null }) {
+  if (job.workCompletedAt) throw new Error("Work already marked complete.");
 }
 
 // Save the findings/diagnosis draft.
@@ -140,6 +145,76 @@ export async function submitFindingsAction(formData: FormData) {
       data: { status: next as never },
     });
   }
+
+  revalidatePath(`/technician/jobs/${jobId}`);
+  revalidatePath("/technician");
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  revalidatePath("/cashier");
+}
+
+// ---------- Repair stage: work-completed notes + Parts Used ----------
+export async function saveWorkNotesAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const workNotes = String(formData.get("workNotes") ?? "").trim() || null;
+  const job = await workableJob(jobId, user.garageId, user.id);
+  assertRepairOpen(job);
+  await prisma.jobCard.update({ where: { id: jobId }, data: { workNotes } });
+  revalidatePath(`/technician/jobs/${jobId}`);
+}
+
+export async function addUsedPartAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await workableJob(jobId, user.garageId, user.id);
+  assertRepairOpen(job);
+
+  const partId = String(formData.get("partId") ?? "").trim() || null;
+  let partNo = String(formData.get("partNo") ?? "").trim() || null;
+  let description = String(formData.get("description") ?? "").trim();
+  const qty = cleanQty(Number(formData.get("qty") ?? 1));
+
+  if (partId) {
+    const part = await prisma.part.findFirst({
+      where: { id: partId, garageId: user.garageId },
+      select: { sku: true, name: true },
+    });
+    if (part) {
+      partNo = partNo || part.sku;
+      description = description || part.name;
+    }
+  }
+  if (!description) throw new Error("A part description is required.");
+
+  await prisma.jobPart.create({
+    data: { jobCardId: jobId, kind: "USED", partId, partNo, description, qty, createdById: user.id },
+  });
+  revalidatePath(`/technician/jobs/${jobId}`);
+}
+
+export async function removeUsedPartAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const partLineId = String(formData.get("partLineId") ?? "");
+  const job = await workableJob(jobId, user.garageId, user.id);
+  assertRepairOpen(job);
+  await prisma.jobPart.deleteMany({ where: { id: partLineId, jobCardId: jobId, kind: "USED" } });
+  revalidatePath(`/technician/jobs/${jobId}`);
+}
+
+// Mark the work complete → stamp the time + lock the repair section. The cashier
+// then finalises the invoice (Final Billing may differ from the estimate).
+export async function markWorkCompleteAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await workableJob(jobId, user.garageId, user.id);
+  if (job.workCompletedAt) return; // already complete
+
+  await prisma.jobCard.update({ where: { id: jobId }, data: { workCompletedAt: new Date() } });
+  await prisma.jobStep.create({
+    data: { jobCardId: jobId, type: "FINISH", techId: user.id, transcript: "Work marked complete" },
+  });
 
   revalidatePath(`/technician/jobs/${jobId}`);
   revalidatePath("/technician");

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSubmitFindings, nextStatusAfterFindings, cleanQty } from "./jobfindings";
+import { canSubmitFindings, nextStatusAfterFindings, cleanQty, repairUnlocked } from "./jobfindings";
 
 describe("technician findings", () => {
   it("can submit only when findings text is present", () => {
@@ -26,5 +26,12 @@ describe("technician findings", () => {
     expect(cleanQty(-5)).toBe(1);
     expect(cleanQty(2.9)).toBe(2);
     expect(cleanQty(NaN)).toBe(1);
+  });
+
+  it("repair is editable only when approved and not yet completed", () => {
+    expect(repairUnlocked(true, null)).toBe(true);
+    expect(repairUnlocked(true, undefined)).toBe(true);
+    expect(repairUnlocked(true, new Date("2026-06-05T00:00:00Z"))).toBe(false); // completed
+    expect(repairUnlocked(false, null)).toBe(false); // not yet approved
   });
 });

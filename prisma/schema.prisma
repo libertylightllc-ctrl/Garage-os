@@ -270,6 +270,7 @@ model User {
   findings        JobFinding[] @relation("TechFindings")
   jobPartsCreated JobPart[] @relation("CreatedJobParts")
   qcJobs          JobCard[] @relation("QcJobs")
+  deliveredJobs   JobCard[] @relation("DeliveredJobs")
   aiEvents        AiEvent[]
 
   createdAt DateTime @default(now())
@@ -387,6 +388,12 @@ model JobCard {
   qcById            String?    // QC inspector
   qcBy              User?      @relation("QcJobs", fields: [qcById], references: [id])
   qcAt              DateTime?  // sign-off time
+  // ----- Delivery (Job-Card-Data-Model.md) -----
+  mileageOut          Int?
+  deliveredById       String?
+  deliveredBy         User?     @relation("DeliveredJobs", fields: [deliveredById], references: [id])
+  deliveredAt         DateTime?
+  deliveryConfirmedAt DateTime? // customer collection record (WhatsApp confirm = signature equivalent)
 
   steps         JobStep[]
   estimates     Estimate[]

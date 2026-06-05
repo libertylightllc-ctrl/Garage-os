@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mockMoulkia, parseMoulkiaJson, ocrCostUsd } from "./ocr";
+import { mockMoulkia, parseMoulkiaJson, ocrCostUsd, extractMoulkia } from "./ocr";
 
 describe("Moulkia OCR", () => {
   it("mock returns a complete UAE-style record", () => {
@@ -35,5 +35,37 @@ describe("Moulkia OCR", () => {
   it("mock OCR is free; real model is metered", () => {
     expect(ocrCostUsd("mock-ocr", 0, 0)).toBe(0);
     expect(ocrCostUsd("claude-haiku-4-5", 1000, 1000)).toBeGreaterThan(0);
+  });
+
+  it("no API key → mock prefill, NOT marked failed (demo mode)", async () => {
+    const prevKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const r = await extractMoulkia("xxx", "image/jpeg");
+      expect(r.model).toBe("mock-ocr");
+      expect(r.failed).toBeUndefined();
+      expect(r.fields.make).toBe("Nissan");
+    } finally {
+      if (prevKey !== undefined) process.env.ANTHROPIC_API_KEY = prevKey;
+    }
+  });
+
+  it("API key set but the call fails → blank fields with failed=true (no fake data)", async () => {
+    const prevKey = process.env.ANTHROPIC_API_KEY;
+    const prevFetch = globalThis.fetch;
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    globalThis.fetch = (async () => {
+      throw new Error("network");
+    }) as typeof fetch;
+    try {
+      const r = await extractMoulkia("xxx", "image/jpeg");
+      expect(r.failed).toBe(true);
+      expect(r.model).toBe("ocr-failed");
+      expect(r.fields.make).toBe(""); // critically: NOT mock data
+    } finally {
+      globalThis.fetch = prevFetch;
+      if (prevKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = prevKey;
+    }
   });
 });

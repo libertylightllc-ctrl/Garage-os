@@ -64,8 +64,14 @@ export async function moulkiaExtractAction(formData: FormData) {
     },
   });
 
+  // True OCR failure → route to manual entry with a clear banner (no fake data).
+  if (r.failed) {
+    redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
+  }
+
   redirect(
     confirmUrl({
+      via: "moulkia",
       ownerName: r.fields.ownerName,
       plate: r.fields.plate,
       make: r.fields.make,
@@ -89,12 +95,13 @@ export async function plateLookupAction(formData: FormData) {
   });
 
   if (!vehicle) {
-    // Not on file → treat as a new customer, prefill just the plate.
-    redirect(confirmUrl({ plate }));
+    // Not on file → treat as a new customer (no Moulkia photo), prefill just the plate.
+    redirect(confirmUrl({ via: "manual", plate }));
   }
   const v = vehicle!;
   redirect(
     confirmUrl({
+      via: "repeat",
       vehicleId: v.id,
       ownerName: v.customer.name,
       phone: v.customer.phone,
@@ -139,10 +146,13 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const interiorRemarks = get("interiorRemarks") || null;
   const valuables = sanitizeChoices(getAll("valuables"), VALUABLES_OPTIONS);
   const valuablesNote = get("valuablesNote") || null;
+  // Consent is about extracting from a Moulkia photo — only required on the OCR path.
+  const via = get("via") || "moulkia";
   const consent = get("consent") === "on";
+  const consentOk = via !== "moulkia" || consent;
 
-  // Required: identity + complaint + consent.
-  if (!ownerName || !phone || !plate || !make || !model || !complaint || !consent) {
+  // Required: identity + complaint (+ consent on the OCR path).
+  if (!ownerName || !phone || !plate || !make || !model || !complaint || !consentOk) {
     redirect("/advisor/jobs/new?error=fields");
   }
 
@@ -212,7 +222,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         interiorRemarks,
         valuables,
         valuablesNote,
-        moulkiaConsentAt: new Date(),
+        moulkiaConsentAt: consent ? new Date() : null,
       },
       select: { id: true },
     });

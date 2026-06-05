@@ -25,6 +25,9 @@ interface SP {
   vin?: string;
   vehicleId?: string;
   assignedToId?: string;
+  // "moulkia" = OCR path (consent required); "manual" = no photo; "repeat" = pick-existing
+  via?: "moulkia" | "manual" | "repeat";
+  error?: string;
 }
 
 type T = (k: MessageKey) => string;
@@ -57,7 +60,11 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
   await requireRole("ADVISOR");
   const t = await getT();
   const sp = await searchParams;
-  const isRepeat = Boolean(sp.vehicleId);
+  const isRepeat = Boolean(sp.vehicleId) || sp.via === "repeat";
+  // Default to "moulkia" so older bookmarks / direct links still require consent.
+  const via = sp.via ?? "moulkia";
+  const isManual = via === "manual";
+  const ocrFailed = sp.error === "ocr";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-5 p-6">
@@ -68,13 +75,20 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("confirmCustomerTitle")}</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          {isRepeat ? t("prefilledFromRecord") : t("confirmHint")}
+          {isRepeat ? t("prefilledFromRecord") : isManual ? t("manualEntryIntro") : t("confirmHint")}
         </p>
       </div>
+
+      {ocrFailed ? (
+        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          ⚠️ {t("errOcrFailed")}
+        </p>
+      ) : null}
 
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
         <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
         <input type="hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />
+        <input type="hidden" name="via" defaultValue={via} />
 
         {/* Customer */}
         <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
@@ -171,11 +185,13 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <input name="valuablesNote" placeholder={t("valuablesNoteLabel")} className={FIELD} />
         </fieldset>
 
-        {/* Consent */}
-        <label className="flex items-start gap-2 rounded-lg border border-black/10 p-3 text-xs text-zinc-600 dark:border-white/15 dark:text-zinc-300">
-          <input type="checkbox" name="consent" className="mt-0.5" required />
-          {t("moulkiaConsent")}
-        </label>
+        {/* Consent — only relevant on the Moulkia OCR path (extracting from a photo) */}
+        {via === "moulkia" ? (
+          <label className="flex items-start gap-2 rounded-lg border border-black/10 p-3 text-xs text-zinc-600 dark:border-white/15 dark:text-zinc-300">
+            <input type="checkbox" name="consent" className="mt-0.5" required />
+            {t("moulkiaConsent")}
+          </label>
+        ) : null}
 
         <button className="rounded-lg bg-zinc-900 px-4 py-3 text-base font-semibold text-white dark:bg-white dark:text-black">
           {t("startJobCard")}

@@ -21,6 +21,12 @@ export interface OcrResult {
   model: string;
   tokensIn: number;
   tokensOut: number;
+  /**
+   * True when a real OCR call was attempted (key configured) AND it failed —
+   * the caller should route to a manual-entry fallback rather than trust the data.
+   * False in mock-only mode (no key) so demos keep working.
+   */
+  failed?: boolean;
 }
 
 export function ocrEnabled(): boolean {
@@ -107,13 +113,24 @@ async function callClaudeVision(base64: string, mediaType: string): Promise<OcrR
   };
 }
 
-/** Extract Moulkia fields from an image. Falls back to the mock on any failure. */
+/**
+ * Extract Moulkia fields from an image. In mock-only mode (no API key) returns the
+ * deterministic sample. When a real OCR call fails, returns blank fields with
+ * `failed: true` so the caller can route the advisor to manual entry — never silent
+ * mock data, which would look like a successful scan with wrong identity.
+ */
 export async function extractMoulkia(base64: string, mediaType: string): Promise<OcrResult> {
   if (ocrEnabled()) {
     try {
       return await callClaudeVision(base64, mediaType);
     } catch {
-      // graceful fallback — intake must never hard-fail
+      return {
+        fields: { ownerName: "", vin: "", plate: "", make: "", model: "", year: null },
+        model: "ocr-failed",
+        tokensIn: 0,
+        tokensOut: 0,
+        failed: true,
+      };
     }
   }
   return { fields: mockMoulkia(), model: "mock-ocr", tokensIn: 0, tokensOut: 0 };

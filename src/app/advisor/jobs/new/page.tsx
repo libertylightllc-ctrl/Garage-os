@@ -79,7 +79,10 @@ export default async function NewJobCard({
       {/* New customer — Moulkia OCR */}
       <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
         <h2 className="text-sm font-medium">{t("newCustomerMoulkia")}</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("moulkiaHint")}</p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {t("moulkiaHint")}
+          <span className="block">{t("moulkiaOrManualHint")}</span>
+        </p>
         <form action={moulkiaExtractAction} className="mt-3 flex flex-col gap-2">
           <input type="file" name="file" accept="image/*" capture="environment" required className={`${field} w-full`} />
           <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
@@ -105,6 +108,18 @@ export default async function NewJobCard({
         </form>
       </section>
 
+      {/* Manual entry — no Moulkia photo (or OCR failed/skipped) */}
+      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+        <h2 className="text-sm font-medium">{t("manualEntry")}</h2>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("manualEntryHint")}</p>
+        <Link
+          href="/advisor/jobs/new/confirm?via=manual"
+          className="mt-3 inline-block rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          {t("enterManually")}
+        </Link>
+      </section>
+
       {/* Or pick an existing vehicle — also goes through the Reception form (prefilled) */}
       {vehicles.length > 0 ? (
         <div>
@@ -112,6 +127,7 @@ export default async function NewJobCard({
           <ul className="flex flex-col gap-2">
             {vehicles.map((v) => {
               const q = new URLSearchParams({
+                via: "repeat",
                 vehicleId: v.id,
                 ownerName: v.customer.name,
                 phone: v.customer.phone,

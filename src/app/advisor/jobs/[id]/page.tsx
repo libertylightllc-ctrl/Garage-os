@@ -4,8 +4,10 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction, setBayAction } from "@/app/actions/jobs";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
+import { recordDeliveryAction } from "@/app/actions/delivery";
 import { priorityMeta } from "@/lib/priority";
 import { formatJobNo } from "@/lib/jobcard-fields";
+import { canRecordDelivery, deliveryStatus } from "@/lib/delivery";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
@@ -37,6 +39,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       },
       steps: { orderBy: { createdAt: "desc" }, include: { tech: { select: { name: true } } } },
       qcBy: { select: { name: true } },
+      deliveredBy: { select: { name: true } },
     },
   });
   if (!job) notFound();
@@ -73,11 +76,15 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const delivered = status === "DELIVERED";
 
   const all = availableActions({ status, heldFrom });
-  const primary: JobAction | null = all.includes("ADVANCE")
-    ? "ADVANCE"
-    : all.includes("RESUME")
-      ? "RESUME"
-      : null;
+  // INVOICED -> DELIVERED is handled by the Delivery form (mileage-out + delivered-by),
+  // so the bare ADVANCE button is hidden when the next step is delivery.
+  const hideAdvance = canRecordDelivery(status);
+  const primary: JobAction | null =
+    all.includes("ADVANCE") && !hideAdvance
+      ? "ADVANCE"
+      : all.includes("RESUME")
+        ? "RESUME"
+        : null;
   const secondary: JobAction[] = [];
   if (all.includes("REWORK")) secondary.push("REWORK");
   else if (all.includes("HOLD")) secondary.push("HOLD");
@@ -288,6 +295,59 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           )[job.holdReason]}
           {job.holdNote ? ` — ${job.holdNote}` : ""}
         </p>
+      ) : null}
+
+      {/* Delivery — form when INVOICED, read-only summary once delivered */}
+      {canRecordDelivery(status) ? (
+        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+          <input type="hidden" name="jobId" value={job.id} />
+          <h2 className="text-sm font-medium">{t("jcDelivery")}</h2>
+          <label className="text-xs text-zinc-500 dark:text-zinc-400">
+            {t("mileageOutLabel")}
+            <input
+              name="mileageOut"
+              type="number"
+              min="0"
+              required
+              className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+          </label>
+          <button className="self-start rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black">
+            {t("markDelivered")}
+          </button>
+        </form>
+      ) : job.deliveredAt ? (
+        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+          <h2 className="mb-1 text-sm font-medium">{t("jcDelivery")}</h2>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            {job.mileageOut !== null ? (
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("mileageOutLabel")}</dt>
+                <dd>{job.mileageOut}</dd>
+              </div>
+            ) : null}
+            {job.deliveredBy?.name ? (
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("deliveredByLabel")}</dt>
+                <dd>{job.deliveredBy.name}</dd>
+              </div>
+            ) : null}
+            <div className="col-span-2">
+              <dt className="text-xs text-zinc-500 dark:text-zinc-400">{t("deliveredAtLabel")}</dt>
+              <dd>{job.deliveredAt.toISOString().slice(0, 16).replace("T", " ")}</dd>
+            </div>
+          </dl>
+          <p className={
+            "mt-2 text-xs " +
+            (deliveryStatus(job.deliveredAt, job.deliveryConfirmedAt) === "CONFIRMED"
+              ? "text-green-700 dark:text-green-400"
+              : "text-zinc-500 dark:text-zinc-400")
+          }>
+            {job.deliveryConfirmedAt
+              ? `✅ ${t("collectionConfirmed")} · ${job.deliveryConfirmedAt.toISOString().slice(0, 16).replace("T", " ")}`
+              : `🟡 ${t("collectionAwaiting")}`}
+          </p>
+        </div>
       ) : null}
 
       <ol className="flex flex-col gap-1">

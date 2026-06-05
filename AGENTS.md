@@ -20,7 +20,7 @@ Specs in `/docs` (read before deciding):
 - `Workflow-Spec.md` — the real 16-step garage flow + Tier 1/2/3 features
 - `Role-Based-Dashboards.md` — the four roles, job card, Moulkia OCR, VAT
 - `Job-Card-Data-Model.md` — every job-card field, by role + stage (schema/form source of truth)
-- `PWA-and-Device-Setup-Spec.md` — install/device model (not yet in repo)
+- `PWA-and-Device-Setup-Spec.md` — install/device model (manifest + SW shell, A2HS prompt, shared-tablet tech login, admin onboarding)
 
 ## Stack (do not deviate without asking) — free tiers chosen
 - Next.js 16 (App Router) + TypeScript + Tailwind v4 + shadcn/ui

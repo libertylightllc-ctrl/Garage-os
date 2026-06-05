@@ -269,6 +269,7 @@ model User {
   helperOf        JobHelper[] @relation("TechHelp")
   findings        JobFinding[] @relation("TechFindings")
   jobPartsCreated JobPart[] @relation("CreatedJobParts")
+  qcJobs          JobCard[] @relation("QcJobs")
   aiEvents        AiEvent[]
 
   createdAt DateTime @default(now())
@@ -381,6 +382,11 @@ model JobCard {
   // ----- Repair stage (technician records actual work) -----
   workNotes         String?    // work-completed notes
   workCompletedAt   DateTime?  // set when the technician marks the work complete
+  // ----- Quality Control -----
+  qcChecks          String[]   // checkbox values (REPAIR_COMPLETED, ROAD_TEST, ...)
+  qcById            String?    // QC inspector
+  qcBy              User?      @relation("QcJobs", fields: [qcById], references: [id])
+  qcAt              DateTime?  // sign-off time
 
   steps         JobStep[]
   estimates     Estimate[]

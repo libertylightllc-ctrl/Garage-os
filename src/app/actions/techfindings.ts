@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canLogWork } from "@/lib/claim";
 import { canSubmitFindings, nextStatusAfterFindings, cleanQty } from "@/lib/jobfindings";
+import { sanitizeChoices, QC_CHECKS } from "@/lib/jobcard-fields";
 
 async function requireTech() {
   const session = await auth();
@@ -22,6 +23,7 @@ async function workableJob(jobId: string, garageId: string, userId: string) {
       claimedById: true,
       holdReason: true,
       workCompletedAt: true,
+      qcAt: true,
       helpers: { select: { techId: true } },
       finding: { select: { submittedAt: true } },
     },
@@ -151,6 +153,24 @@ export async function submitFindingsAction(formData: FormData) {
   revalidatePath("/advisor");
   revalidatePath(`/advisor/jobs/${jobId}`);
   revalidatePath("/cashier");
+}
+
+// ---------- Quality Control: checklist + sign-off ----------
+export async function signOffQcAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await workableJob(jobId, user.garageId, user.id);
+  if (!job.workCompletedAt) throw new Error("Mark the work complete before QC.");
+  if (job.qcAt) return; // already signed off
+
+  const qcChecks = sanitizeChoices(formData.getAll("qc").map(String), QC_CHECKS);
+  await prisma.jobCard.update({
+    where: { id: jobId },
+    data: { qcChecks, qcById: user.id, qcAt: new Date() },
+  });
+  revalidatePath(`/technician/jobs/${jobId}`);
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
 }
 
 // ---------- Repair stage: work-completed notes + Parts Used ----------

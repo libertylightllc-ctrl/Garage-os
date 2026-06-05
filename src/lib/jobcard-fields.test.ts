@@ -4,8 +4,10 @@ import {
   sanitizeChoices,
   toOilType,
   toFuelLevel,
+  qcSignedOff,
   EXTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
+  QC_CHECKS,
 } from "./jobcard-fields";
 
 describe("job-card reception helpers", () => {
@@ -43,5 +45,16 @@ describe("job-card reception helpers", () => {
     expect(toFuelLevel("HALF")).toBe("HALF");
     expect(toFuelLevel("")).toBeNull();
     expect(toFuelLevel("x")).toBeNull();
+  });
+
+  it("sanitizes QC checks to the allowed set", () => {
+    expect(sanitizeChoices(["ROAD_TEST", "NOPE", "ROAD_TEST"], QC_CHECKS)).toEqual(["ROAD_TEST"]);
+    expect(sanitizeChoices([...QC_CHECKS], QC_CHECKS)).toHaveLength(4);
+  });
+
+  it("qcSignedOff reflects the timestamp", () => {
+    expect(qcSignedOff(new Date())).toBe(true);
+    expect(qcSignedOff(null)).toBe(false);
+    expect(qcSignedOff(undefined)).toBe(false);
   });
 });

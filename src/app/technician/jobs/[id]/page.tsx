@@ -14,11 +14,14 @@ import {
   addUsedPartAction,
   removeUsedPartAction,
   markWorkCompleteAction,
+  signOffQcAction,
 } from "@/app/actions/techfindings";
 import { canSubmitFindings, repairUnlocked } from "@/lib/jobfindings";
+import { QC_CHECKS, qcSignedOff } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
+import type { MessageKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +47,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       finding: true,
       jobParts: { orderBy: { createdAt: "asc" } },
       estimates: { where: { status: "APPROVED" }, select: { id: true }, take: 1 },
+      qcBy: { select: { name: true } },
     },
   });
   if (!job) notFound();
@@ -345,6 +349,44 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               </form>
             </>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* Quality Control — after work is complete */}
+      {job.workCompletedAt ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">{t("jcQc")}</h2>
+            {qcSignedOff(job.qcAt) ? (
+              <span className="text-xs text-green-700 dark:text-green-400">
+                ✅ {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} · {job.qcAt!.toISOString().slice(0, 10)}
+              </span>
+            ) : null}
+          </div>
+          {qcSignedOff(job.qcAt) ? (
+            <ul className="flex flex-col gap-0.5 text-sm">
+              {job.qcChecks.map((c) => (
+                <li key={c} className="text-green-700 dark:text-green-400">
+                  ✓ {t(`qc_${c}` as MessageKey)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <form action={signOffQcAction} className="flex flex-col gap-2">
+              <input type="hidden" name="jobId" value={job.id} />
+              <div className="grid grid-cols-2 gap-1">
+                {QC_CHECKS.map((c) => (
+                  <label key={c} className="flex items-center gap-1 text-sm">
+                    <input type="checkbox" name="qc" value={c} />
+                    {t(`qc_${c}` as MessageKey)}
+                  </label>
+                ))}
+              </div>
+              <button className="self-start rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+                {t("signOffQc")}
+              </button>
+            </form>
+          )}
         </div>
       ) : null}
 

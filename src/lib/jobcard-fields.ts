@@ -19,6 +19,13 @@ export const INTERIOR_OPTIONS = ["CLEAN", "DIRTY", "WARNING_LIGHT", "OTHER"] as 
 export const VALUABLES_OPTIONS = ["NONE", "DOCUMENTS", "CASH", "MOBILE_CHARGER", "OTHER"] as const;
 export const OIL_TYPES = ["KM_5000", "KM_10000", "NONE"] as const;
 export const FUEL_LEVELS = ["EMPTY", "QUARTER", "HALF", "THREE_QUARTER", "FULL"] as const;
+// Quality-control checklist (Job-Card-Data-Model.md).
+export const QC_CHECKS = ["REPAIR_COMPLETED", "ROAD_TEST", "NO_WARNING_LIGHTS", "VEHICLE_CLEANED"] as const;
+
+/** Has QC been signed off? */
+export function qcSignedOff(qcAt: Date | null | undefined): boolean {
+  return !!qcAt;
+}
 
 /** Keep only allowed values (drops anything unexpected, de-duplicates). */
 export function sanitizeChoices(values: string[], allowed: readonly string[]): string[] {

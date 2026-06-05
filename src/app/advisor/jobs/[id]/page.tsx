@@ -36,6 +36,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         include: { invoice: { select: { id: true } } },
       },
       steps: { orderBy: { createdAt: "desc" }, include: { tech: { select: { name: true } } } },
+      qcBy: { select: { name: true } },
     },
   });
   if (!job) notFound();
@@ -164,6 +165,12 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             </div>
           ) : null}
         </dl>
+        {job.qcAt ? (
+          <p className="mt-2 border-t border-black/5 pt-2 text-xs text-green-700 dark:border-white/10 dark:text-green-400">
+            ✅ {t("jcQc")}: {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} ·{" "}
+            {job.qcChecks.map((c) => t(`qc_${c}` as never)).join(", ")}
+          </p>
+        ) : null}
       </div>
 
       {/* Queue priority (Tier 2 #6) */}

@@ -288,6 +288,15 @@ const en = {
   repairLockedNote: "Work complete — read only.",
   partsUsedPanel: "Parts used & work notes",
   priceThisPart: "Price this part →",
+  // quality control
+  jcQc: "Quality control",
+  signOffQc: "Sign off QC",
+  qcPassedBadge: "QC passed",
+  qcInspector: "Inspector",
+  qc_REPAIR_COMPLETED: "Repair completed",
+  qc_ROAD_TEST: "Road test completed",
+  qc_NO_WARNING_LIGHTS: "No warning lights",
+  qc_VEHICLE_CLEANED: "Vehicle cleaned",
   // bays / ramps (Tier 2 #7)
   tabBays: "Bays",
   baysTitle: "Bays & ramps",
@@ -758,6 +767,15 @@ const ar: typeof en = {
   repairLockedNote: "اكتمل العمل — للقراءة فقط.",
   partsUsedPanel: "القطع المستخدمة وملاحظات العمل",
   priceThisPart: "تسعير هذه القطعة ←",
+  // quality control
+  jcQc: "ضبط الجودة",
+  signOffQc: "اعتماد الجودة",
+  qcPassedBadge: "اجتاز الفحص",
+  qcInspector: "المفتش",
+  qc_REPAIR_COMPLETED: "اكتمل الإصلاح",
+  qc_ROAD_TEST: "تم اختبار القيادة",
+  qc_NO_WARNING_LIGHTS: "لا أضواء تحذير",
+  qc_VEHICLE_CLEANED: "تم تنظيف المركبة",
   // bays / ramps
   tabBays: "المنصات",
   baysTitle: "المنصات والرافعات",

@@ -19,9 +19,10 @@ import {
 import { canSubmitFindings, repairUnlocked } from "@/lib/jobfindings";
 import { QC_CHECKS, qcSignedOff } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
+import { DictateInput, DictateTextarea } from "@/components/dictate";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,13 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const session = await requireRole("TECH");
 
   const t = await getT();
+  const locale = await getLocale();
+  const dictLabels = {
+    start: t("dictateStart"),
+    stop: t("dictateStop"),
+    listening: t("dictateListening"),
+    error: t("dictateError"),
+  };
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
     include: {
@@ -144,19 +152,23 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         ) : (
           <form action={saveFindingsAction} className="flex flex-col gap-2">
             <input type="hidden" name="jobId" value={job.id} />
-            <textarea
+            <DictateTextarea
+              locale={locale}
+              labels={dictLabels}
               name="findings"
               defaultValue={job.finding?.findings ?? ""}
               rows={3}
               placeholder={t("findingsLabel")}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
             />
-            <textarea
+            <DictateTextarea
+              locale={locale}
+              labels={dictLabels}
               name="diagnosis"
               defaultValue={job.finding?.diagnosis ?? ""}
               rows={2}
               placeholder={t("diagnosisLabel")}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
             />
             <button className="self-start rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
               {t("saveDraft")}
@@ -211,7 +223,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               placeholder={t("partNoLabel")}
               className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
             />
-            <input
+            <DictateInput
+              locale={locale}
+              labels={dictLabels}
               name="description"
               placeholder={t("colDescription")}
               className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
@@ -257,12 +271,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {repairOpen ? (
             <form action={saveWorkNotesAction} className="flex flex-col gap-2">
               <input type="hidden" name="jobId" value={job.id} />
-              <textarea
+              <DictateTextarea
+                locale={locale}
+                labels={dictLabels}
                 name="workNotes"
                 defaultValue={job.workNotes ?? ""}
                 rows={2}
                 placeholder={t("workNotesLabel")}
-                className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
               />
               <button className="self-start rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 {t("saveDraft")}
@@ -323,7 +339,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   placeholder={t("partNoLabel")}
                   className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
                 />
-                <input
+                <DictateInput
+                  locale={locale}
+                  labels={dictLabels}
                   name="description"
                   placeholder={t("colDescription")}
                   className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
@@ -438,7 +456,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 </option>
               ))}
             </select>
-            <input
+            <DictateInput
+              locale={locale}
+              labels={dictLabels}
               name="description"
               placeholder={t("orTypePart")}
               className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"

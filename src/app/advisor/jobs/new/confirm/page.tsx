@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { createCustomerVehicleJobAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getLocale, getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { DictateInput, DictateTextarea } from "@/components/dictate";
 import {
   EXTERIOR_OPTIONS,
   INTERIOR_OPTIONS,
@@ -59,6 +60,13 @@ function CheckboxGroup({
 export default async function ReceptionForm({ searchParams }: { searchParams: Promise<SP> }) {
   await requireRole("ADVISOR");
   const t = await getT();
+  const locale = await getLocale();
+  const dictLabels = {
+    start: t("dictateStart"),
+    stop: t("dictateStop"),
+    listening: t("dictateListening"),
+    error: t("dictateError"),
+  };
   const sp = await searchParams;
   const isRepeat = Boolean(sp.vehicleId) || sp.via === "repeat";
   // Default to "moulkia" so older bookmarks / direct links still require consent.
@@ -164,7 +172,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
         {/* Complaint */}
         <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
           <legend className="px-1 text-sm font-medium">{t("secComplaint")}</legend>
-          <textarea name="complaint" rows={3} required placeholder={t("complaintLabel")} className={FIELD} />
+          <DictateTextarea locale={locale} labels={dictLabels} name="complaint" rows={3} required placeholder={t("complaintLabel")} className={FIELD} />
         </fieldset>
 
         {/* Condition (dispute shield) */}
@@ -172,17 +180,17 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <legend className="px-1 text-sm font-medium">{t("secCondition")}</legend>
           <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("exteriorLabel")}</div>
           <CheckboxGroup name="exterior" options={EXTERIOR_OPTIONS} prefix="ext" t={t} />
-          <input name="exteriorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
+          <DictateInput locale={locale} labels={dictLabels} name="exteriorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
           <div className="mt-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("interiorLabel")}</div>
           <CheckboxGroup name="interior" options={INTERIOR_OPTIONS} prefix="int" t={t} />
-          <input name="interiorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
+          <DictateInput locale={locale} labels={dictLabels} name="interiorRemarks" placeholder={t("remarksLabel")} className={FIELD} />
         </fieldset>
 
         {/* Valuables */}
         <fieldset className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
           <legend className="px-1 text-sm font-medium">{t("secValuables")}</legend>
           <CheckboxGroup name="valuables" options={VALUABLES_OPTIONS} prefix="val" t={t} />
-          <input name="valuablesNote" placeholder={t("valuablesNoteLabel")} className={FIELD} />
+          <DictateInput locale={locale} labels={dictLabels} name="valuablesNote" placeholder={t("valuablesNoteLabel")} className={FIELD} />
         </fieldset>
 
         {/* Consent — only relevant on the Moulkia OCR path (extracting from a photo) */}

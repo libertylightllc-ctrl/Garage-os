@@ -4,8 +4,9 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { type StaffRole } from "@/lib/roles";
-import { getT } from "@/i18n/server";
+import { getLocale, getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { DictateInput } from "@/components/dictate";
 import {
   addEstimateLineAction,
   addLineFromPartAction,
@@ -74,6 +75,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   });
   if (!est) notFound();
   const t = await getT();
+  const locale = await getLocale();
+  const dictLabels = {
+    start: t("dictateStart"),
+    stop: t("dictateStop"),
+    listening: t("dictateListening"),
+    error: t("dictateError"),
+  };
   const finding = est.jobCard.finding;
   const requiredParts = est.jobCard.jobParts.filter((p) => p.kind === "REQUIRED");
   const usedParts = est.jobCard.jobParts.filter((p) => p.kind === "USED");
@@ -234,7 +242,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
               <option value="FEE">{t("fee")}</option>
               <option value="DISCOUNT">{t("discount")}</option>
             </select>
-            <input name="description" placeholder={t("description")} required className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
+            <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
           </div>
           <div className="flex gap-2">
             <input name="qty" type="number" step="0.5" min="0" defaultValue="1" className="w-20 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />

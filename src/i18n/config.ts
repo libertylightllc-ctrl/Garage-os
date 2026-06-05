@@ -303,6 +303,11 @@ const en = {
   qc_ROAD_TEST: "Road test completed",
   qc_NO_WARNING_LIGHTS: "No warning lights",
   qc_VEHICLE_CLEANED: "Vehicle cleaned",
+  // voice dictation
+  dictateStart: "Dictate",
+  dictateStop: "Stop",
+  dictateListening: "Listening… (tap to stop)",
+  dictateError: "Couldn't hear that — try again or type.",
   // delivery (Job-Card-Data-Model.md)
   jcDelivery: "Delivery",
   mileageOutLabel: "Mileage out (km)",
@@ -802,6 +807,11 @@ const ar: typeof en = {
   qc_ROAD_TEST: "تم اختبار القيادة",
   qc_NO_WARNING_LIGHTS: "لا أضواء تحذير",
   qc_VEHICLE_CLEANED: "تم تنظيف المركبة",
+  // voice dictation
+  dictateStart: "إملاء",
+  dictateStop: "إيقاف",
+  dictateListening: "جارٍ الاستماع… (انقر للإيقاف)",
+  dictateError: "تعذّر الفهم — حاول مجددًا أو اكتب.",
   // delivery
   jcDelivery: "التسليم",
   mileageOutLabel: "العداد عند التسليم (كم)",

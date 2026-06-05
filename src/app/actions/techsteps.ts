@@ -52,11 +52,11 @@ export async function addStepAction(formData: FormData) {
 
   if (type === "PHOTO") {
     const f = formData.get("file");
-    if (f instanceof File && f.size > 0) photoUrl = await saveUpload(f);
+    if (f instanceof File && f.size > 0) photoUrl = await saveUpload(f, user.garageId);
     else throw new Error("No photo selected");
   } else if (type === "VOICE") {
     const f = formData.get("file");
-    if (f instanceof File && f.size > 0) voiceNoteUrl = await saveUpload(f);
+    if (f instanceof File && f.size > 0) voiceNoteUrl = await saveUpload(f, user.garageId);
     else throw new Error("No voice note selected");
   } else if (type === "FINISH") {
     transcript = "Technician marked work finished";

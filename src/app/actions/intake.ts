@@ -33,7 +33,7 @@ export async function createBookingPublic(formData: FormData) {
 
   const photoUrls: string[] = [];
   const photo = formData.get("photo");
-  if (photo instanceof File && photo.size > 0) photoUrls.push(await saveUpload(photo));
+  if (photo instanceof File && photo.size > 0) photoUrls.push(await saveUpload(photo, garageId));
 
   // AI proposes (metered to AiEvent); a human advisor confirms later.
   const proposal = await runIntake({ garageId, text });

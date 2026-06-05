@@ -214,7 +214,7 @@ export async function checkInPhotoAction(formData: FormData) {
 
   const f = formData.get("file");
   if (!(f instanceof File) || f.size === 0) throw new Error("No photo selected");
-  const photoUrl = await saveUpload(f);
+  const photoUrl = await saveUpload(f, user.garageId);
 
   await prisma.jobStep.create({
     data: { jobCardId: job.id, type: "PHOTO", transcript: "Check-in photo", photoUrl },

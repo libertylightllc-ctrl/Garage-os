@@ -45,26 +45,28 @@ export async function moulkiaExtractAction(formData: FormData) {
   const base64 = Buffer.from(await f.arrayBuffer()).toString("base64");
   const mediaType = f.type || "image/jpeg";
 
-  const start = Date.now();
   const r = await extractMoulkia(base64, mediaType);
-  const latencyMs = Date.now() - start;
 
-  // Meter every OCR call (kind = OCR) — protects margins.
-  await prisma.aiEvent.create({
-    data: {
-      garageId: user.garageId,
-      userId: user.id,
-      kind: "OCR",
-      model: r.model,
-      sourceType: "MOULKIA",
-      tokensIn: r.tokensIn,
-      tokensOut: r.tokensOut,
-      costEstimate: ocrCostUsd(r.model, r.tokensIn, r.tokensOut),
-      latencyMs,
-    },
-  });
+  // Meter EVERY attempt as its own AiEvent (kind = OCR). If the primary model
+  // fails and the fallback succeeds, that's two rows — both visible in metering
+  // so cost + reliability per model can be inspected later.
+  for (const a of r.attempts) {
+    await prisma.aiEvent.create({
+      data: {
+        garageId: user.garageId,
+        userId: user.id,
+        kind: "OCR",
+        model: a.model,
+        sourceType: a.error ? `MOULKIA:${a.error}` : "MOULKIA",
+        tokensIn: a.tokensIn,
+        tokensOut: a.tokensOut,
+        costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
+        latencyMs: a.latencyMs,
+      },
+    });
+  }
 
-  // True OCR failure → route to manual entry with a clear banner (no fake data).
+  // Every real attempt failed → route to manual entry with a clear banner.
   if (r.failed) {
     redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
   }

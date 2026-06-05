@@ -88,9 +88,15 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
       </div>
 
       {ocrFailed ? (
-        <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          ⚠️ {t("errOcrFailed")}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <span>⚠️ {t("errOcrFailed")}</span>
+          <Link
+            href="/advisor/jobs/new"
+            className="rounded-md border border-amber-300 bg-white/60 px-3 py-1 text-xs font-medium hover:bg-white dark:border-amber-700 dark:bg-black/30 dark:hover:bg-black/50"
+          >
+            📷 {t("tryAgain")}
+          </Link>
+        </div>
       ) : null}
 
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">

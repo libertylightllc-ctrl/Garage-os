@@ -21,9 +21,13 @@ export function aiEnabled(): boolean {
 // Cheap model is the cost lever for high-volume intake.
 const INTAKE_MODEL = process.env.ANTHROPIC_INTAKE_MODEL ?? "claude-haiku-4-5";
 
-// Rough $/token (USD) for cost metering. Tune as pricing changes.
+// Per-token $ for cost metering. Verified against
+// https://platform.claude.com/docs (Models overview) on 2026-06-05.
+// Tune as pricing changes.
 const PRICING: Record<string, { in: number; out: number }> = {
   "claude-haiku-4-5": { in: 1 / 1_000_000, out: 5 / 1_000_000 },
+  "claude-sonnet-4-6": { in: 3 / 1_000_000, out: 15 / 1_000_000 },
+  "claude-opus-4-8": { in: 5 / 1_000_000, out: 25 / 1_000_000 },
   "heuristic-fallback": { in: 0, out: 0 },
 };
 

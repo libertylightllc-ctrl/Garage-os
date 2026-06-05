@@ -50,13 +50,17 @@ function useDictation<T extends HTMLInputElement | HTMLTextAreaElement>(
 ) {
   const ref = useRef<T | null>(null);
   const recRef = useRef<MinimalRecognition | null>(null);
-  // Lazy initializer: detect SpeechRecognition once at mount. Avoids the
-  // "setState in effect" lint trap and runs only on the client.
-  const [supported] = useState<boolean>(() => getRecognitionCtor() !== null);
+  // MUST start false so SSR markup matches the client's first hydration render
+  // (the lazy initializer ran on the server and saw no `window`, producing no
+  // button; if we initialised true on the client we'd hit a hydration mismatch).
+  // Flip to true in an effect after mount — the mic then appears post-hydration.
+  const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-API detection
+    setSupported(getRecognitionCtor() !== null);
     return () => {
       try {
         recRef.current?.stop();

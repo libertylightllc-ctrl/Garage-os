@@ -28,12 +28,20 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     where: { id, jobCard: { garageId: session.user.garageId } },
     include: {
       lines: { orderBy: { createdAt: "asc" } },
-      jobCard: { include: { vehicle: true } },
+      jobCard: {
+        include: {
+          vehicle: true,
+          finding: true,
+          jobParts: { where: { kind: "REQUIRED" }, orderBy: { createdAt: "asc" } },
+        },
+      },
       invoice: { select: { id: true } },
     },
   });
   if (!est) notFound();
   const t = await getT();
+  const finding = est.jobCard.finding;
+  const requiredParts = est.jobCard.jobParts;
 
   const editable = canPrice && est.status === "DRAFT";
   const canDecline = canPrice && !est.invoice; // skip lines until the invoice is cut
@@ -61,6 +69,27 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           </p>
         ) : null}
       </div>
+
+      {/* Technician findings & parts required — what the cashier prices from */}
+      {finding?.submittedAt || requiredParts.length > 0 ? (
+        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+          <h2 className="mb-1 text-sm font-medium">{t("techFindingsPanel")}</h2>
+          {finding?.findings ? <p>{finding.findings}</p> : null}
+          {finding?.diagnosis ? (
+            <p className="text-zinc-600 dark:text-zinc-300">{finding.diagnosis}</p>
+          ) : null}
+          {requiredParts.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-0.5">
+              {requiredParts.map((p) => (
+                <li key={p.id} className="text-zinc-600 dark:text-zinc-300">
+                  • {p.partNo ? `${p.partNo} ` : ""}
+                  {p.description} ×{p.qty}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto">
       <table className="w-full min-w-[20rem] text-sm">

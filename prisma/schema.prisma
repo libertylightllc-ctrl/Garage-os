@@ -162,6 +162,13 @@ enum FuelLevel {
   FULL
 }
 
+// Technician parts list (Job-Card-Data-Model.md). REQUIRED = quoted at diagnosis;
+// USED = actual at repair (USED handled in a later stage).
+enum JobPartKind {
+  REQUIRED
+  USED
+}
+
 // ---------- Tenancy ----------
 model Garage {
   id           String  @id @default(cuid())
@@ -260,6 +267,8 @@ model User {
   techSteps       JobStep[] @relation("TechSteps")
   partRequests    PartRequest[] @relation("PartRequestedBy")
   helperOf        JobHelper[] @relation("TechHelp")
+  findings        JobFinding[] @relation("TechFindings")
+  jobPartsCreated JobPart[] @relation("CreatedJobParts")
   aiEvents        AiEvent[]
 
   createdAt DateTime @default(now())
@@ -377,6 +386,8 @@ model JobCard {
   partRequests  PartRequest[]
   reminders     Reminder[]
   helpers       JobHelper[]
+  finding       JobFinding?
+  jobParts      JobPart[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -400,6 +411,42 @@ model JobStep {
   updatedAt DateTime @updatedAt
 
   @@index([jobCardId])
+}
+
+// Technician Findings (Job-Card-Data-Model.md) — one per job; submittedAt marks the
+// hand-off to the cashier (job advances to ESTIMATE).
+model JobFinding {
+  id          String   @id @default(cuid())
+  jobCardId   String   @unique
+  jobCard     JobCard  @relation(fields: [jobCardId], references: [id])
+  techId      String?
+  tech        User?    @relation("TechFindings", fields: [techId], references: [id])
+  findings    String?
+  diagnosis   String?
+  submittedAt DateTime? // set when submitted to the cashier
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Technician parts list (REQUIRED at diagnosis; USED later). Free-text part No /
+// description + optional catalog link. No price — pricing is the cashier's.
+model JobPart {
+  id          String      @id @default(cuid())
+  jobCardId   String
+  jobCard     JobCard     @relation(fields: [jobCardId], references: [id])
+  kind        JobPartKind @default(REQUIRED)
+  partId      String?     // optional catalog link
+  part        Part?       @relation(fields: [partId], references: [id])
+  partNo      String?
+  description String
+  qty         Int         @default(1)
+  createdById String?
+  createdBy   User?       @relation("CreatedJobParts", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([jobCardId, kind])
 }
 
 // ---------- Estimate / Invoice / Payment ----------
@@ -518,6 +565,7 @@ model Part {
   movements     PartMovement[]
   estimateLines EstimateLine[]
   partRequests  PartRequest[]
+  jobParts      JobPart[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

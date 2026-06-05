@@ -5,6 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { requestPartAction } from "@/app/actions/parts";
 import { leaveHelperAction } from "@/app/actions/jobs";
+import {
+  saveFindingsAction,
+  addRequiredPartAction,
+  removeJobPartAction,
+  submitFindingsAction,
+} from "@/app/actions/techfindings";
+import { canSubmitFindings } from "@/lib/jobfindings";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
@@ -30,12 +37,15 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       steps: { orderBy: { createdAt: "desc" } },
       partRequests: { orderBy: { createdAt: "desc" } },
       helpers: { include: { tech: { select: { id: true, name: true } } } },
+      finding: true,
+      jobParts: { where: { kind: "REQUIRED" }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!job) notFound();
 
   const me = session.user.id;
   const amHelper = job.claimedById !== null && job.claimedById !== me && job.helpers.some((h) => h.techId === me);
+  const submitted = Boolean(job.finding?.submittedAt);
 
   const parts = await prisma.part.findMany({
     where: { garageId: session.user.garageId },
@@ -85,6 +95,139 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {job.holdNote ? ` — ${job.holdNote}` : ""}
         </p>
       ) : null}
+
+      {/* Customer complaint (from reception) */}
+      {job.complaint ? (
+        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("complaintFromReception")}</div>
+          <p>{job.complaint}</p>
+          {job.mileageIn ? (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {t("mileageInLabel")}: {job.mileageIn}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Findings & diagnosis + parts required (Job-Card-Data-Model.md) */}
+      <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium">{t("jcFindings")}</h2>
+          {submitted ? (
+            <span className="text-xs text-green-700 dark:text-green-400">
+              ✅ {t("submittedToCashier")} · {job.finding!.submittedAt!.toISOString().slice(0, 16).replace("T", " ")}
+            </span>
+          ) : null}
+        </div>
+
+        {submitted ? (
+          <div className="text-sm">
+            <p>{job.finding?.findings}</p>
+            {job.finding?.diagnosis ? (
+              <p className="mt-1 text-zinc-600 dark:text-zinc-300">{job.finding.diagnosis}</p>
+            ) : null}
+            <p className="mt-1 text-xs text-zinc-400">{t("findingsLocked")}</p>
+          </div>
+        ) : (
+          <form action={saveFindingsAction} className="flex flex-col gap-2">
+            <input type="hidden" name="jobId" value={job.id} />
+            <textarea
+              name="findings"
+              defaultValue={job.finding?.findings ?? ""}
+              rows={3}
+              placeholder={t("findingsLabel")}
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <textarea
+              name="diagnosis"
+              defaultValue={job.finding?.diagnosis ?? ""}
+              rows={2}
+              placeholder={t("diagnosisLabel")}
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <button className="self-start rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+              {t("saveDraft")}
+            </button>
+          </form>
+        )}
+
+        {/* Parts required */}
+        <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("partsRequired")}</h3>
+        {job.jobParts.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noPartsRequired")}</p>
+        ) : (
+          <ul className="flex flex-col gap-1 text-sm">
+            {job.jobParts.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between rounded-md border border-black/10 p-2 dark:border-white/15"
+              >
+                <span>
+                  {p.partNo ? <span className="text-zinc-400">{p.partNo} </span> : null}
+                  {p.description} <span className="text-zinc-500 dark:text-zinc-400">×{p.qty}</span>
+                </span>
+                {!submitted ? (
+                  <form action={removeJobPartAction}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="partLineId" value={p.id} />
+                    <button className="text-red-600">✕</button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!submitted ? (
+          <form action={addRequiredPartAction} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="jobId" value={job.id} />
+            <select
+              name="partId"
+              defaultValue=""
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            >
+              <option value="">{t("catalogPartOptional")}</option>
+              {parts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <input
+              name="partNo"
+              placeholder={t("partNoLabel")}
+              className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <input
+              name="description"
+              placeholder={t("colDescription")}
+              className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <input
+              name="qty"
+              type="number"
+              min="1"
+              defaultValue="1"
+              aria-label={t("colQty")}
+              className="w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+              {t("addPartLine")}
+            </button>
+          </form>
+        ) : null}
+
+        <p className="text-xs text-zinc-400">📷 {t("photographDamaged")}</p>
+
+        {!submitted && canSubmitFindings(job.finding) ? (
+          <form action={submitFindingsAction}>
+            <input type="hidden" name="jobId" value={job.id} />
+            <button className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black">
+              {t("submitToCashier")}
+            </button>
+          </form>
+        ) : null}
+      </div>
 
       {/* Big-button, no-typing actions */}
       <div className="grid grid-cols-2 gap-3">

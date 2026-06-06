@@ -1,0 +1,183 @@
+[
+{"created":1780736770428,"date":1780736770428,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736770428850324239400000","text":"Build cache uploaded: 4.265s","type":"stdout","serial":"1780736770428850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736766170,"date":1780736766170,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736766170850324239400000","text":"Uploading build cache [200.90 MB]","type":"stdout","serial":"1780736766170850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736766169,"date":1780736766169,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736766169850324239400002","text":"Created build cache: 18s","type":"stdout","serial":"1780736766169850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736748332,"date":1780736748332,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736748332850324239400000","text":"Creating build cache...","type":"stdout","serial":"1780736748332850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736748214,"date":1780736748214,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736748214850324239400000","text":"Deployment completed","type":"stdout","serial":"1780736748214850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736742723,"date":1780736742723,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736742723850324239400000","text":"Deploying outputs...","type":"stdout","serial":"1780736742723850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736742214,"date":1780736742214,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736742214850324239400000","text":"Build Completed in /vercel/output [26s]","type":"stderr","serial":"1780736742214850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741740,"date":1780736741740,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741740850324239400004","text":"","type":"stdout","serial":"1780736741740850324239400004","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741740,"date":1780736741740,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741740850324239400003","text":"ƒ  (Dynamic)  server-rendered on demand","type":"stdout","serial":"1780736741740850324239400003","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741740,"date":1780736741740,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741740850324239400002","text":"","type":"stdout","serial":"1780736741740850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741740,"date":1780736741740,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741740850324239400001","text":"","type":"stdout","serial":"1780736741740850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741740,"date":1780736741740,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741740850324239400000","text":"└ ƒ /technician/jobs/[id]","type":"stdout","serial":"1780736741740850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400011","text":"├ ƒ /technician","type":"stdout","serial":"1780736741739850324239400011","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400010","text":"├ ƒ /signup","type":"stdout","serial":"1780736741739850324239400010","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400009","text":"├ ƒ /owner/whatsapp","type":"stdout","serial":"1780736741739850324239400009","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400008","text":"├ ƒ /owner/staff","type":"stdout","serial":"1780736741739850324239400008","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400007","text":"├ ƒ /owner/branches","type":"stdout","serial":"1780736741739850324239400007","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400006","text":"├ ƒ /owner/billing","type":"stdout","serial":"1780736741739850324239400006","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400005","text":"├ ƒ /owner/bays","type":"stdout","serial":"1780736741739850324239400005","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400004","text":"├ ƒ /owner","type":"stdout","serial":"1780736741739850324239400004","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400003","text":"├ ƒ /login","type":"stdout","serial":"1780736741739850324239400003","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400002","text":"├ ƒ /invoices/[id]","type":"stdout","serial":"1780736741739850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400001","text":"├ ƒ /estimates/[id]","type":"stdout","serial":"1780736741739850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741739,"date":1780736741739,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741739850324239400000","text":"├ ƒ /cashier","type":"stdout","serial":"1780736741739850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741735,"date":1780736741735,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741735850324239400002","text":"├ ƒ /c/invoice/[id]","type":"stdout","serial":"1780736741735850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741735,"date":1780736741735,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741735850324239400001","text":"├ ƒ /c/estimate/[id]","type":"stdout","serial":"1780736741735850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741735,"date":1780736741735,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741735850324239400000","text":"├ ƒ /c/delivery/[id]","type":"stdout","serial":"1780736741735850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400005","text":"├ ƒ /c/booking/[id]","type":"stdout","serial":"1780736741734850324239400005","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400004","text":"├ ƒ /c/book/[garageId]","type":"stdout","serial":"1780736741734850324239400004","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400003","text":"├ ƒ /api/whatsapp/webhook","type":"stdout","serial":"1780736741734850324239400003","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400002","text":"├ ƒ /api/health","type":"stdout","serial":"1780736741734850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400001","text":"├ ƒ /api/files/[name]","type":"stdout","serial":"1780736741734850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741734,"date":1780736741734,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741734850324239400000","text":"├ ƒ /api/auth/[...nextauth]","type":"stdout","serial":"1780736741734850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741733,"date":1780736741733,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741733850324239400004","text":"├ ƒ /advisor/reminders","type":"stdout","serial":"1780736741733850324239400004","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741733,"date":1780736741733,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741733850324239400003","text":"├ ƒ /advisor/parts","type":"stdout","serial":"1780736741733850324239400003","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741733,"date":1780736741733,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741733850324239400002","text":"├ ƒ /advisor/jobs/new/confirm","type":"stdout","serial":"1780736741733850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741733,"date":1780736741733,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741733850324239400001","text":"├ ƒ /advisor/jobs/new","type":"stdout","serial":"1780736741733850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741733,"date":1780736741733,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741733850324239400000","text":"├ ƒ /advisor/jobs/[id]","type":"stdout","serial":"1780736741733850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741732,"date":1780736741732,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741732850324239400004","text":"├ ƒ /advisor/eod","type":"stdout","serial":"1780736741732850324239400004","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741732,"date":1780736741732,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741732850324239400003","text":"├ ƒ /advisor/chats/[id]","type":"stdout","serial":"1780736741732850324239400003","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741732,"date":1780736741732,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741732850324239400002","text":"├ ƒ /advisor/chats","type":"stdout","serial":"1780736741732850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741732,"date":1780736741732,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741732850324239400001","text":"├ ƒ /advisor/bookings","type":"stdout","serial":"1780736741732850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741732,"date":1780736741732,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741732850324239400000","text":"├ ƒ /advisor","type":"stdout","serial":"1780736741732850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741731,"date":1780736741731,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741731850324239400001","text":"├ ƒ /_not-found","type":"stdout","serial":"1780736741731850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741731,"date":1780736741731,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741731850324239400000","text":"┌ ƒ /","type":"stdout","serial":"1780736741731850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741730,"date":1780736741730,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741730850324239400000","text":"Route (app)","type":"stdout","serial":"1780736741730850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741728,"date":1780736741728,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741728850324239400000","text":"","type":"stdout","serial":"1780736741728850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741626,"date":1780736741626,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741626850324239400000","text":"  Running onBuildComplete from Vercel","type":"stdout","serial":"1780736741626850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741549,"date":1780736741549,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741549850324239400000","text":"  Finalizing page optimization ...","type":"stdout","serial":"1780736741549850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741543,"date":1780736741543,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741543850324239400000","text":"✓ Generating static pages using 1 worker (7/7) in 133ms","type":"stdout","serial":"1780736741543850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741525,"date":1780736741525,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741525850324239400000","text":"  Generating static pages using 1 worker (5/7) \r","type":"stdout","serial":"1780736741525850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741512,"date":1780736741512,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741512850324239400000","text":"  Generating static pages using 1 worker (3/7) \r","type":"stdout","serial":"1780736741512850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741448,"date":1780736741448,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741448850324239400000","text":"  Generating static pages using 1 worker (1/7) \r","type":"stdout","serial":"1780736741448850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736741410,"date":1780736741410,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736741410850324239400000","text":"  Generating static pages using 1 worker (0/7) ...","type":"stdout","serial":"1780736741410850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736740615,"date":1780736740615,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736740615850324239400000","text":"  Collecting page data using 1 worker ...","type":"stdout","serial":"1780736740615850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736740612,"date":1780736740612,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736740612850324239400000","text":"  Finished TypeScript in 9.6s ...","type":"stdout","serial":"1780736740612850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736730966,"date":1780736730966,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736730966850324239400000","text":"  Running TypeScript ...","type":"stdout","serial":"1780736730966850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736730958,"date":1780736730958,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736730958850324239400000","text":"✓ Compiled successfully in 10.3s","type":"stdout","serial":"1780736730958850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736720340,"date":1780736720340,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736720340850324239400000","text":"  Creating an optimized production build ...","type":"stdout","serial":"1780736720340850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736720303,"date":1780736720303,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736720303850324239400001","text":"","type":"stdout","serial":"1780736720303850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736720303,"date":1780736720303,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736720303850324239400000","text":"▲ Next.js 16.2.7 (Turbopack)","type":"stdout","serial":"1780736720303850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736720287,"date":1780736720287,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736720287850324239400000","text":"  Applying modifyConfig from Vercel","type":"stdout","serial":"1780736720287850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719487,"date":1780736719487,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719487850324239400002","text":"","type":"stdout","serial":"1780736719487850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719487,"date":1780736719487,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719487850324239400001","text":"> next build","type":"stdout","serial":"1780736719487850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719487,"date":1780736719487,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719487850324239400000","text":"> garageos@0.1.0 build","type":"stdout","serial":"1780736719487850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719486,"date":1780736719486,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719486850324239400000","text":"","type":"stdout","serial":"1780736719486850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719343,"date":1780736719343,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719343850324239400000","text":"Running \"npm run build\"","type":"stdout","serial":"1780736719343850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719337,"date":1780736719337,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719337850324239400000","text":"Detected Next.js version: 16.2.7","type":"stdout","serial":"1780736719337850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719306,"date":1780736719306,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719306850324239400001","text":"  run `npm fund` for details","type":"stdout","serial":"1780736719306850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719306,"date":1780736719306,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719306850324239400000","text":"173 packages are looking for funding","type":"stdout","serial":"1780736719306850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719305,"date":1780736719305,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719305850324239400001","text":"","type":"stdout","serial":"1780736719305850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719305,"date":1780736719305,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719305850324239400000","text":"up to date in 3s","type":"stdout","serial":"1780736719305850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719304,"date":1780736719304,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719304850324239400000","text":"","type":"stdout","serial":"1780736719304850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719279,"date":1780736719279,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719279850324239400001","text":"","type":"stdout","serial":"1780736719279850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719279,"date":1780736719279,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719279850324239400000","text":"✔ Generated Prisma Client (7.8.0) to ./src/generated/prisma in 493ms","type":"stdout","serial":"1780736719279850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736719278,"date":1780736719278,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736719278850324239400000","text":"","type":"stdout","serial":"1780736719278850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736718455,"date":1780736718455,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736718455850324239400000","text":"Prisma schema loaded from prisma/schema.prisma.","type":"stderr","serial":"1780736718455850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736718307,"date":1780736718307,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736718307850324239400000","text":"","type":"stderr","serial":"1780736718307850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736718306,"date":1780736718306,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736718306850324239400000","text":"Loaded Prisma config from prisma.config.ts.","type":"stderr","serial":"1780736718306850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736717404,"date":1780736717404,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736717404850324239400002","text":"","type":"stdout","serial":"1780736717404850324239400002","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736717404,"date":1780736717404,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736717404850324239400001","text":"> prisma generate","type":"stdout","serial":"1780736717404850324239400001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736717404,"date":1780736717404,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736717404850324239400000","text":"> garageos@0.1.0 postinstall","type":"stdout","serial":"1780736717404850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736717403,"date":1780736717403,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736717403850324239400000","text":"","type":"stdout","serial":"1780736717403850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736716354,"date":1780736716354,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736716354850324239400000","text":"Installing dependencies...","type":"stdout","serial":"1780736716354850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736716097,"date":1780736716097,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736716097850324239400000","text":"Vercel CLI 54.9.0","type":"stderr","serial":"1780736716097850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736716077,"date":1780736716077,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736716077850324239400000","text":"Running \"vercel build\"","type":"stdout","serial":"1780736716077850324239400000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736715879,"date":1780736715879,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736715879358212047900001","text":"Restored build cache from previous deployment (AAbwyaD7BE2MDaNx8r7YKhVp4NC2)","type":"stdout","serial":"1780736715879358212047900001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736713927,"date":1780736713927,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736713927358212047900000","text":"Cloning completed: 364.000ms","type":"stdout","serial":"1780736713927358212047900000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736713563,"date":1780736713563,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736713563358212047900001","text":"Cloning github.com/libertylightllc-ctrl/Garage-os (Branch: main, Commit: b0eb50b)","type":"stdout","serial":"1780736713563358212047900001","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736713374,"date":1780736713374,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736713374358212047900000","text":"Build machine configuration: 2 cores, 8 GB","type":"stdout","serial":"1780736713374358212047900000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+,
+{"created":1780736713373,"date":1780736713373,"deploymentId":"dpl_7yiiFF2RoySVfnWqGPtGo3E7swN8","id":"1780736713373358212047900000","text":"Running build in Washington, D.C., USA (East) – iad1","type":"stdout","serial":"1780736713373358212047900000","info":{"type":"build","name":"bld_ibp46djbr","entrypoint":"."}}
+]

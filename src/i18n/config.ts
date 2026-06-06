@@ -186,6 +186,7 @@ const en = {
   // Post-capture blur gate (lenient threshold)
   blurryWarn: "📷 The photo looks blurry — retake for a sharper read?",
   useAnyway: "Use anyway",
+  checkingPhoto: "Checking photo…",
   retake: "Retake",
   usePhoto: "Use this photo →",
   useRecording: "Use this recording →",
@@ -722,6 +723,7 @@ const ar: typeof en = {
   // Blur gate
   blurryWarn: "📷 تبدو الصورة غير واضحة — أعد التصوير لقراءة أوضح؟",
   useAnyway: "استخدمها كما هي",
+  checkingPhoto: "جارٍ فحص الصورة…",
   retake: "إعادة التصوير",
   usePhoto: "استخدام هذه الصورة ←",
   useRecording: "استخدام هذا التسجيل ←",

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { moulkiaExtractAction, plateLookupAction } from "@/app/actions/intake-moulkia";
+import { moulkiaFrontAction, plateLookupAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
@@ -14,6 +14,7 @@ const ERR: Record<string, MessageKey> = {
   nofile: "errNoFile",
   noplate: "errFields",
   fields: "errFields",
+  ocr: "errOcrFailed",
 };
 
 const FIELD = "rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
@@ -88,7 +89,8 @@ export default async function NewJobCard({
           {t("moulkiaConsentInline")}
           <span className="block">{t("moulkiaOrManualHint")}</span>
         </p>
-        <form action={moulkiaExtractAction} className="mt-3 flex flex-col gap-3">
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("step1of2")}</p>
+        <form action={moulkiaFrontAction} className="mt-3 flex flex-col gap-3">
           <input type="hidden" name="consent" value="on" />
           <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
           <PhotoCapture
@@ -96,7 +98,7 @@ export default async function NewJobCard({
             mode="auto-submit"
             kind="photo"
             required
-            buttonLabel={t("takePhotoMoulkia")}
+            buttonLabel={t("takePhotoMoulkiaFront")}
             retakeLabel={t("retake")}
             continueLabel={t("usePhoto")}
             tooBigLabel={t("fileTooBig")}
@@ -145,6 +147,7 @@ export default async function NewJobCard({
                 model: v.model,
                 year: v.year ? String(v.year) : "",
                 vin: v.vin ?? "",
+                engineNumber: v.engineNumber ?? "",
               });
               if (v.customer.email) q.set("email", v.customer.email);
               return (

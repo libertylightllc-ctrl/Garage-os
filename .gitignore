@@ -47,18 +47,25 @@ yarn-error.log*
 .cookies-*.txt
 .cookies-*.json
 .tiny.png
+.realish.*
 .booking-*.txt
 .booking-*.html
 .scan-*.txt
 .scan-*.html
+.confirm-*.html
+.upload-*.html
 .owner.html
 .advisor.html
 .cashier.html
 .tech.html
+.events.json
 .vercel-env-tmp.json
+.iphone-sized.jpg
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
 /src/generated/prisma
+
+.vercel

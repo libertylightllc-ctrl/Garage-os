@@ -303,14 +303,15 @@ model Customer {
 }
 
 model Vehicle {
-  id         String  @id @default(cuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  make       String
-  model      String
-  year       Int?
-  plate      String
-  vin        String?
+  id           String  @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  make         String
+  model        String
+  year         Int?
+  plate        String
+  vin          String?
+  engineNumber String? // captured from the back of the Moulkia (Phase-1 two-photo OCR)
 
   jobCards JobCard[]
   bookings Booking[]

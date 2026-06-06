@@ -4,7 +4,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { extractMoulkia, ocrCostUsd } from "@/lib/ocr";
+import {
+  extractMoulkiaFront,
+  extractMoulkiaBack,
+  mergeMoulkiaFields,
+  ocrCostUsd,
+  type OcrAttempt,
+  type MoulkiaFront,
+} from "@/lib/ocr";
 import {
   sanitizeChoices,
   toOilType,
@@ -20,21 +27,53 @@ async function requireAdvisor() {
   return session.user;
 }
 
-function confirmUrl(params: Record<string, string>): string {
+function buildQuery(params: Record<string, string>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
-  return `/advisor/jobs/new/confirm?${q.toString()}`;
+  return q.toString();
 }
 
-// Upload a Moulkia photo → OCR (in-memory, image not persisted) → prefilled confirm page.
-export async function moulkiaExtractAction(formData: FormData) {
+function confirmUrl(params: Record<string, string>): string {
+  return `/advisor/jobs/new/confirm?${buildQuery(params)}`;
+}
+
+function backUrl(params: Record<string, string>): string {
+  return `/advisor/jobs/new/back?${buildQuery(params)}`;
+}
+
+async function logAttempts(
+  attempts: OcrAttempt[],
+  garageId: string,
+  userId: string,
+  sourceSide: "FRONT" | "BACK",
+) {
+  for (const a of attempts) {
+    await prisma.aiEvent.create({
+      data: {
+        garageId,
+        userId,
+        kind: "OCR",
+        model: a.model,
+        sourceType: a.error ? `MOULKIA_${sourceSide}:${a.error}` : `MOULKIA_${sourceSide}`,
+        tokensIn: a.tokensIn,
+        tokensOut: a.tokensOut,
+        costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
+        latencyMs: a.latencyMs,
+      },
+    });
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Step 1 — Photograph the FRONT of the Moulkia (owner + plate)
+// ----------------------------------------------------------------------------
+export async function moulkiaFrontAction(formData: FormData) {
   const user = await requireAdvisor();
 
-  // Consent is required before we extract personal data from the Moulkia.
+  // Consent gate (kept; covered by hidden consent=on input from the by-action UX).
   if (String(formData.get("consent") ?? "") !== "on") {
     redirect("/advisor/jobs/new?error=consent");
   }
-
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     redirect("/advisor/jobs/new?error=nofile");
@@ -45,42 +84,85 @@ export async function moulkiaExtractAction(formData: FormData) {
   const base64 = Buffer.from(await f.arrayBuffer()).toString("base64");
   const mediaType = f.type || "image/jpeg";
 
-  const r = await extractMoulkia(base64, mediaType);
+  const r = await extractMoulkiaFront(base64, mediaType);
+  await logAttempts(r.attempts, user.garageId, user.id, "FRONT");
 
-  // Meter EVERY attempt as its own AiEvent (kind = OCR). If the primary model
-  // fails and the fallback succeeds, that's two rows — both visible in metering
-  // so cost + reliability per model can be inspected later.
-  for (const a of r.attempts) {
-    await prisma.aiEvent.create({
-      data: {
-        garageId: user.garageId,
-        userId: user.id,
-        kind: "OCR",
-        model: a.model,
-        sourceType: a.error ? `MOULKIA:${a.error}` : "MOULKIA",
-        tokensIn: a.tokensIn,
-        tokensOut: a.tokensOut,
-        costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
-        latencyMs: a.latencyMs,
-      },
-    });
-  }
-
-  // Every real attempt failed → route to manual entry with a clear banner.
   if (r.failed) {
+    // Can't read the front — no point asking for the back. Go straight to manual entry.
     redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
   }
 
+  // Front succeeded → go to step 2 (back), carrying the front fields.
+  redirect(
+    backUrl({
+      ownerName: r.fields.ownerName,
+      plate: r.fields.plate,
+      assignedToId,
+    }),
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Step 2 — Photograph the BACK of the Moulkia (VIN + make + model + year + engine)
+// ----------------------------------------------------------------------------
+export async function moulkiaBackAction(formData: FormData) {
+  const user = await requireAdvisor();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    // Treat as a skip back — let the advisor fill the back fields manually.
+    const front: MoulkiaFront = {
+      ownerName: String(formData.get("frontOwnerName") ?? "").trim(),
+      plate: String(formData.get("frontPlate") ?? "").trim(),
+    };
+    redirect(
+      confirmUrl({
+        via: "moulkia",
+        skippedBack: "1",
+        assignedToId: String(formData.get("assignedToId") ?? ""),
+        ownerName: front.ownerName,
+        plate: front.plate,
+      }),
+    );
+  }
+  const f = file as File;
+  const assignedToId = String(formData.get("assignedToId") ?? "");
+  const front: MoulkiaFront = {
+    ownerName: String(formData.get("frontOwnerName") ?? "").trim(),
+    plate: String(formData.get("frontPlate") ?? "").trim(),
+  };
+
+  const base64 = Buffer.from(await f.arrayBuffer()).toString("base64");
+  const mediaType = f.type || "image/jpeg";
+
+  const r = await extractMoulkiaBack(base64, mediaType);
+  await logAttempts(r.attempts, user.garageId, user.id, "BACK");
+
+  if (r.failed) {
+    // Back unreadable — still proceed with the front fields and flag the gap.
+    redirect(
+      confirmUrl({
+        via: "moulkia",
+        error: "ocrBack",
+        assignedToId,
+        ownerName: front.ownerName,
+        plate: front.plate,
+      }),
+    );
+  }
+
+  const merged = mergeMoulkiaFields(front, r.fields);
   redirect(
     confirmUrl({
       via: "moulkia",
-      ownerName: r.fields.ownerName,
-      plate: r.fields.plate,
-      make: r.fields.make,
-      model: r.fields.model,
-      year: r.fields.year ? String(r.fields.year) : "",
-      vin: r.fields.vin,
       assignedToId,
+      ownerName: merged.ownerName,
+      plate: merged.plate,
+      vin: merged.vin,
+      make: merged.make,
+      model: merged.model,
+      year: merged.year ? String(merged.year) : "",
+      engineNumber: merged.engineNumber,
     }),
   );
 }
@@ -112,12 +194,13 @@ export async function plateLookupAction(formData: FormData) {
       model: v.model,
       year: v.year ? String(v.year) : "",
       vin: v.vin ?? "",
+      engineNumber: v.engineNumber ?? "",
     }),
   );
 }
 
 // Confirm step (the Reception form): create/reuse customer + vehicle, then open the
-// job card with EVERY reception field — make/model/year always written (no blank Vehicle).
+// job card with EVERY reception field — make/model/year/engineNumber always written.
 export async function createCustomerVehicleJobAction(formData: FormData) {
   const user = await requireAdvisor();
   const get = (k: string) => String(formData.get(k) ?? "").trim();
@@ -131,6 +214,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const make = get("make");
   const model = get("model");
   const vin = get("vin") || null;
+  const engineNumber = get("engineNumber") || null;
   const yearRaw = parseInt(get("year"), 10);
   const year = Number.isFinite(yearRaw) ? yearRaw : null;
   const assignedToRaw = get("assignedToId");
@@ -182,7 +266,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       });
       await tx.vehicle.update({
         where: { id: existing.id },
-        data: { make, model, year, plate, vin },
+        data: { make, model, year, plate, vin, engineNumber },
       });
     } else {
       // New customer + vehicle. Upsert customer by phone so a known number attaches.
@@ -193,7 +277,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         select: { id: true },
       });
       const vehicle = await tx.vehicle.create({
-        data: { customerId: customer.id, make, model, year, plate, vin },
+        data: { customerId: customer.id, make, model, year, plate, vin, engineNumber },
         select: { id: true },
       });
       vehicleId = vehicle.id;

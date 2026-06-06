@@ -1,108 +1,138 @@
 import { describe, it, expect } from "vitest";
 import {
-  mockMoulkia,
-  parseMoulkiaJson,
+  parseMoulkiaFrontJson,
+  parseMoulkiaBackJson,
+  mergeMoulkiaFields,
+  isEmptyFront,
+  isEmptyBack,
   ocrCostUsd,
-  extractMoulkia,
-  isEmptyExtraction,
+  extractMoulkiaFront,
+  extractMoulkiaBack,
   OCR_PRIMARY,
   OCR_FALLBACK,
+  type MoulkiaFront,
+  type MoulkiaBack,
 } from "./ocr";
 
 describe("Moulkia OCR — pure helpers", () => {
-  it("mock returns a complete UAE-style record", () => {
-    const m = mockMoulkia();
-    expect(m.ownerName.length).toBeGreaterThan(0);
-    expect(m.plate.length).toBeGreaterThan(0);
-    expect(m.make).toBe("Nissan");
-    expect(m.year).toBe(2022);
+  it("parses front-only JSON", () => {
+    const f = parseMoulkiaFrontJson('{"ownerName":"Ali Hassan","plate":"A 55555"}');
+    expect(f).toEqual({ ownerName: "Ali Hassan", plate: "A 55555" });
   });
 
-  it("parses a clean JSON reply", () => {
-    const f = parseMoulkiaJson(
-      '{"ownerName":"Ali Hassan","vin":"WDB1234567","plate":"A 55555","make":"Toyota","model":"Camry","year":2019}',
+  it("parses back-only JSON including engine number + year", () => {
+    const b = parseMoulkiaBackJson(
+      '{"vin":"VIN123","make":"Toyota","model":"Camry","year":2020,"engineNumber":"2GR-12345"}',
     );
-    expect(f.ownerName).toBe("Ali Hassan");
-    expect(f.plate).toBe("A 55555");
-    expect(f.year).toBe(2019);
+    expect(b).toEqual({
+      vin: "VIN123",
+      make: "Toyota",
+      model: "Camry",
+      year: 2020,
+      engineNumber: "2GR-12345",
+    });
   });
 
-  it("tolerates prose around the JSON", () => {
-    const f = parseMoulkiaJson('Here you go:\n{"make":"Honda","model":"Accord","year":2020} — done');
-    expect(f.make).toBe("Honda");
-    expect(f.year).toBe(2020);
-    expect(f.ownerName).toBe(""); // missing → empty
+  it("tolerates prose around the JSON on either side", () => {
+    expect(parseMoulkiaFrontJson('hello {"ownerName":"Ali","plate":""} bye').ownerName).toBe("Ali");
+    expect(parseMoulkiaBackJson("nope { not json").make).toBe("");
   });
 
-  it("rejects an implausible year", () => {
-    expect(parseMoulkiaJson('{"year":123}').year).toBeNull();
-    expect(parseMoulkiaJson('{"year":0}').year).toBeNull();
-    expect(parseMoulkiaJson("not json").year).toBeNull();
+  it("rejects implausible year on the back", () => {
+    expect(parseMoulkiaBackJson('{"year":1900}').year).toBeNull();
+    expect(parseMoulkiaBackJson('{"year":0}').year).toBeNull();
+    expect(parseMoulkiaBackJson('{"year":"2023"}').year).toBe(2023); // string ok
   });
 
-  it("detects an empty extraction (every field blank)", () => {
-    const empty = parseMoulkiaJson('{"ownerName":"","vin":"","plate":"","make":"","model":"","year":0}');
-    expect(isEmptyExtraction(empty)).toBe(true);
-    const partial = parseMoulkiaJson('{"make":"Toyota","year":0,"ownerName":"","vin":"","plate":"","model":""}');
-    expect(isEmptyExtraction(partial)).toBe(false); // make populated → not empty
+  it("isEmptyFront/Back detect blank extractions", () => {
+    expect(isEmptyFront({ ownerName: "", plate: "" })).toBe(true);
+    expect(isEmptyFront({ ownerName: "Ali", plate: "" })).toBe(false);
+    expect(isEmptyBack({ vin: "", make: "", model: "", year: 0, engineNumber: "" })).toBe(true);
+    expect(isEmptyBack({ vin: "VIN", make: "", model: "", year: null, engineNumber: "" })).toBe(false);
   });
 
-  it("mock OCR is free; real models are metered with verified pricing", () => {
+  it("verified pricing for the two OCR models", () => {
     expect(ocrCostUsd("mock-ocr", 0, 0)).toBe(0);
-    // Haiku 4.5: $1/Mtok in + $5/Mtok out
     expect(ocrCostUsd("claude-haiku-4-5", 1_000_000, 0)).toBeCloseTo(1, 5);
-    expect(ocrCostUsd("claude-haiku-4-5", 0, 1_000_000)).toBeCloseTo(5, 5);
-    // Sonnet 4.6: $3/Mtok in + $15/Mtok out
-    expect(ocrCostUsd("claude-sonnet-4-6", 1_000_000, 0)).toBeCloseTo(3, 5);
-    expect(ocrCostUsd("claude-sonnet-4-6", 0, 1_000_000)).toBeCloseTo(15, 5);
+    expect(ocrCostUsd("claude-sonnet-4-6", 1_000_000, 1_000_000)).toBeCloseTo(18, 5); // 3 + 15
   });
 });
 
-// ---- end-to-end: extractMoulkia with a stubbed fetch ----
+describe("mergeMoulkiaFields — back wins year, no empty overwrites", () => {
+  it("happy path — front identity + back specs", () => {
+    const front: MoulkiaFront = { ownerName: "Khalid", plate: "A 1" };
+    const back: MoulkiaBack = {
+      vin: "VIN",
+      make: "Toyota",
+      model: "Camry",
+      year: 2020,
+      engineNumber: "ENG",
+    };
+    expect(mergeMoulkiaFields(front, back)).toEqual({
+      ownerName: "Khalid",
+      plate: "A 1",
+      vin: "VIN",
+      make: "Toyota",
+      model: "Camry",
+      year: 2020,
+      engineNumber: "ENG",
+    });
+  });
 
-interface FetchCall {
-  model: string;
+  it("trims whitespace on every string field", () => {
+    expect(mergeMoulkiaFields({ ownerName: "  Khalid  ", plate: " A 1 " }, { make: "  Toyota  " }))
+      .toMatchObject({ ownerName: "Khalid", plate: "A 1", make: "Toyota" });
+  });
+
+  it("year: back wins on overlap (decision A)", () => {
+    const back: MoulkiaBack = {
+      vin: "",
+      make: "",
+      model: "",
+      year: 2022,
+      engineNumber: "",
+    };
+    // Even if a front sneaks a year in (shouldn't, but defensive), back's year is the answer.
+    const result = mergeMoulkiaFields({ ownerName: "", plate: "" }, back);
+    expect(result.year).toBe(2022);
+  });
+
+  it("missing back → identity-only, no fake vehicle specs", () => {
+    const result = mergeMoulkiaFields({ ownerName: "Khalid", plate: "A 1" }, {});
+    expect(result.vin).toBe("");
+    expect(result.make).toBe("");
+    expect(result.year).toBeNull();
+  });
+
+  it("missing front → vehicle-only, no fake identity", () => {
+    const result = mergeMoulkiaFields({}, { make: "Toyota", year: 2020 } as MoulkiaBack);
+    expect(result.ownerName).toBe("");
+    expect(result.plate).toBe("");
+    expect(result.make).toBe("Toyota");
+  });
+});
+
+// ---- end-to-end: extractMoulkiaFront / Back with stubbed fetch ----
+
+function makeResp(ok: boolean, body: object): Response {
+  return { ok, status: ok ? 200 : 500, json: async () => body } as unknown as Response;
 }
 
-function makeAnthropicResponse(ok: boolean, body: object): Response {
-  return {
-    ok,
-    status: ok ? 200 : 500,
-    json: async () => body,
-  } as unknown as Response;
-}
-
-/** Builds a fetch stub that returns the given results in order, and records the model used in each call. */
-function stubFetch(results: ({ ok: boolean; body: object })[]): {
+function stubFetch(results: { ok: boolean; body: object }[]): {
   fetch: typeof fetch;
-  calls: FetchCall[];
+  calls: { model: string }[];
 } {
-  const calls: FetchCall[] = [];
+  const calls: { model: string }[] = [];
   let i = 0;
   const f = (async (_url: string, init?: RequestInit) => {
     const reqBody = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
     calls.push({ model: reqBody.model ?? "" });
     const r = results[i] ?? results[results.length - 1];
     i++;
-    return makeAnthropicResponse(r.ok, r.body);
+    return makeResp(r.ok, r.body);
   }) as unknown as typeof fetch;
   return { fetch: f, calls };
 }
-
-const validPayload = {
-  content: [
-    {
-      text:
-        '{"ownerName":"Khalid","vin":"VIN123","plate":"A 1","make":"Toyota","model":"Camry","year":2020}',
-    },
-  ],
-  usage: { input_tokens: 100, output_tokens: 50 },
-};
-
-const emptyPayload = {
-  content: [{ text: '{"ownerName":"","vin":"","plate":"","make":"","model":"","year":0}' }],
-  usage: { input_tokens: 100, output_tokens: 20 },
-};
 
 async function withMockedEnv(fn: () => Promise<void>) {
   const prevKey = process.env.ANTHROPIC_API_KEY;
@@ -117,14 +147,36 @@ async function withMockedEnv(fn: () => Promise<void>) {
   }
 }
 
-describe("Moulkia OCR — primary + fallback chain", () => {
-  it("no API key → mock prefill, one mock attempt logged, NOT marked failed", async () => {
+const frontPayload = {
+  content: [{ text: '{"ownerName":"Khalid","plate":"A 1"}' }],
+  usage: { input_tokens: 50, output_tokens: 20 },
+};
+const emptyFrontPayload = {
+  content: [{ text: '{"ownerName":"","plate":""}' }],
+  usage: { input_tokens: 50, output_tokens: 10 },
+};
+const backPayload = {
+  content: [
+    {
+      text:
+        '{"vin":"VIN1","make":"Toyota","model":"Camry","year":2020,"engineNumber":"ENG1"}',
+    },
+  ],
+  usage: { input_tokens: 80, output_tokens: 40 },
+};
+const emptyBackPayload = {
+  content: [{ text: '{"vin":"","make":"","model":"","year":0,"engineNumber":""}' }],
+  usage: { input_tokens: 80, output_tokens: 12 },
+};
+
+describe("extractMoulkiaFront — primary + fallback chain", () => {
+  it("no API key → mock prefill, one mock attempt logged", async () => {
     const prevKey = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
     try {
-      const r = await extractMoulkia("xxx", "image/jpeg");
+      const r = await extractMoulkiaFront("xxx", "image/jpeg");
       expect(r.failed).toBeUndefined();
-      expect(r.fields.make).toBe("Nissan");
+      expect(r.fields.ownerName.length).toBeGreaterThan(0);
       expect(r.attempts).toHaveLength(1);
       expect(r.attempts[0].model).toBe("mock-ocr");
     } finally {
@@ -132,76 +184,105 @@ describe("Moulkia OCR — primary + fallback chain", () => {
     }
   });
 
-  it("primary succeeds → ONE AiEvent row, no fallback called", async () => {
+  it("primary succeeds → 1 attempt, only Haiku called", async () => {
     await withMockedEnv(async () => {
-      const { fetch: f, calls } = stubFetch([{ ok: true, body: validPayload }]);
+      const { fetch: f, calls } = stubFetch([{ ok: true, body: frontPayload }]);
       globalThis.fetch = f;
-      const r = await extractMoulkia("xxx", "image/jpeg");
+      const r = await extractMoulkiaFront("xxx", "image/jpeg");
       expect(r.failed).toBeUndefined();
-      expect(r.fields.make).toBe("Toyota");
+      expect(r.fields.ownerName).toBe("Khalid");
       expect(r.attempts).toHaveLength(1);
-      expect(r.attempts[0].model).toBe(OCR_PRIMARY);
-      expect(calls).toHaveLength(1);
-      expect(calls[0].model).toBe(OCR_PRIMARY);
+      expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY]);
     });
   });
 
-  it("primary HTTP error → fallback fires → TWO AiEvent rows, second succeeds", async () => {
+  it("primary HTTP error → 2 attempts, Sonnet succeeds", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([
-        { ok: false, body: { error: { message: "Invalid image" } } },
-        { ok: true, body: validPayload },
+        { ok: false, body: { error: { message: "Bad image" } } },
+        { ok: true, body: frontPayload },
       ]);
       globalThis.fetch = f;
-      const r = await extractMoulkia("xxx", "image/jpeg");
-      expect(r.failed).toBeUndefined();
-      expect(r.fields.make).toBe("Toyota");
+      const r = await extractMoulkiaFront("xxx", "image/jpeg");
+      expect(r.fields.ownerName).toBe("Khalid");
       expect(r.attempts).toHaveLength(2);
-      expect(r.attempts[0].model).toBe(OCR_PRIMARY);
-      expect(r.attempts[0].error).toMatch(/Invalid image|500/);
-      expect(r.attempts[1].model).toBe(OCR_FALLBACK);
-      expect(r.attempts[1].error).toBeUndefined();
+      expect(r.attempts[0].error).toBeTruthy();
       expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY, OCR_FALLBACK]);
     });
   });
 
-  it("primary returns ALL-EMPTY → soft-fail triggers fallback (real Moulkia photo case)", async () => {
+  it("primary all-empty → soft-fail triggers fallback", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([
-        { ok: true, body: emptyPayload }, // Haiku "I can't read this"
-        { ok: true, body: validPayload }, // Sonnet recovers it
+        { ok: true, body: emptyFrontPayload },
+        { ok: true, body: frontPayload },
       ]);
       globalThis.fetch = f;
-      const r = await extractMoulkia("xxx", "image/jpeg");
-      expect(r.failed).toBeUndefined();
-      expect(r.fields.make).toBe("Toyota");
+      const r = await extractMoulkiaFront("xxx", "image/jpeg");
+      expect(r.fields.ownerName).toBe("Khalid");
       expect(r.attempts).toHaveLength(2);
       expect(r.attempts[0].error).toBe("empty-extraction");
       expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY, OCR_FALLBACK]);
     });
   });
 
-  it("BOTH attempts fail → failed=true, blank fields (no fake data), TWO AiEvent rows", async () => {
+  it("BOTH fail → failed=true, empty fields, 2 attempts", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([
-        { ok: false, body: { error: { message: "first failure" } } },
-        { ok: false, body: { error: { message: "second failure" } } },
+        { ok: false, body: { error: { message: "first" } } },
+        { ok: false, body: { error: { message: "second" } } },
       ]);
       globalThis.fetch = f;
-      const r = await extractMoulkia("xxx", "image/jpeg");
+      const r = await extractMoulkiaFront("xxx", "image/jpeg");
       expect(r.failed).toBe(true);
-      expect(r.fields.make).toBe(""); // critically: NOT mock data, NOT stale data
+      expect(r.fields).toEqual({ ownerName: "", plate: "" });
       expect(r.attempts).toHaveLength(2);
-      expect(r.attempts[0].error).toBeTruthy();
-      expect(r.attempts[1].error).toBeTruthy();
+      expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY, OCR_FALLBACK]);
+    });
+  });
+});
+
+describe("extractMoulkiaBack — same chain, different fields", () => {
+  it("primary succeeds → 1 attempt", async () => {
+    await withMockedEnv(async () => {
+      const { fetch: f, calls } = stubFetch([{ ok: true, body: backPayload }]);
+      globalThis.fetch = f;
+      const r = await extractMoulkiaBack("xxx", "image/jpeg");
+      expect(r.fields.engineNumber).toBe("ENG1");
+      expect(r.fields.year).toBe(2020);
+      expect(r.attempts).toHaveLength(1);
+      expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY]);
+    });
+  });
+
+  it("empty back triggers fallback (real-world case for Sonnet to rescue)", async () => {
+    await withMockedEnv(async () => {
+      const { fetch: f, calls } = stubFetch([
+        { ok: true, body: emptyBackPayload },
+        { ok: true, body: backPayload },
+      ]);
+      globalThis.fetch = f;
+      const r = await extractMoulkiaBack("xxx", "image/jpeg");
+      expect(r.fields.engineNumber).toBe("ENG1");
+      expect(r.attempts).toHaveLength(2);
       expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY, OCR_FALLBACK]);
     });
   });
 
-  it("model identifiers match Anthropic's docs (verified 2026-06-05)", () => {
-    // These must be valid against https://platform.claude.com/docs (Models overview).
-    // If Anthropic deprecates one, update both this test AND the OCR constants together
-    // so the fallback doesn't silently break on a wrong name.
+  it("BOTH fail → failed=true, empty fields, 2 attempts", async () => {
+    await withMockedEnv(async () => {
+      const { fetch: f } = stubFetch([
+        { ok: false, body: { error: { message: "first" } } },
+        { ok: false, body: { error: { message: "second" } } },
+      ]);
+      globalThis.fetch = f;
+      const r = await extractMoulkiaBack("xxx", "image/jpeg");
+      expect(r.failed).toBe(true);
+      expect(r.fields).toEqual({ vin: "", make: "", model: "", year: null, engineNumber: "" });
+    });
+  });
+
+  it("model identifiers are still the verified Anthropic strings", () => {
     expect(OCR_PRIMARY).toBe("claude-haiku-4-5");
     expect(OCR_FALLBACK).toBe("claude-sonnet-4-6");
   });

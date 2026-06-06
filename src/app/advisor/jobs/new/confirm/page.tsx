@@ -24,11 +24,14 @@ interface SP {
   model?: string;
   year?: string;
   vin?: string;
+  engineNumber?: string;
   vehicleId?: string;
   assignedToId?: string;
   // "moulkia" = OCR path (consent required); "manual" = no photo; "repeat" = pick-existing
   via?: "moulkia" | "manual" | "repeat";
   error?: string;
+  // "1" = advisor skipped the back-photo step
+  skippedBack?: string;
 }
 
 type T = (k: MessageKey) => string;
@@ -73,6 +76,8 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
   const via = sp.via ?? "moulkia";
   const isManual = via === "manual";
   const ocrFailed = sp.error === "ocr";
+  const ocrBackFailed = sp.error === "ocrBack";
+  const backSkipped = sp.skippedBack === "1";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-5 p-6">
@@ -96,6 +101,18 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           >
             📷 {t("tryAgain")}
           </Link>
+        </div>
+      ) : null}
+
+      {ocrBackFailed ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <span>⚠️ {t("errOcrBackFailed")}</span>
+        </div>
+      ) : null}
+
+      {backSkipped ? (
+        <div className="rounded-md bg-zinc-100 p-3 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          ℹ️ {t("backSkipped")}
         </div>
       ) : null}
 
@@ -134,6 +151,10 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
             <label className="text-xs text-zinc-500 dark:text-zinc-400">
               {t("vinLabel")}
               <input name="vin" defaultValue={sp.vin ?? ""} className={FIELD} />
+            </label>
+            <label className="text-xs text-zinc-500 dark:text-zinc-400">
+              {t("engineNumberLabel")}
+              <input name="engineNumber" defaultValue={sp.engineNumber ?? ""} className={FIELD} />
             </label>
             <label className="text-xs text-zinc-500 dark:text-zinc-400">
               {t("make")}

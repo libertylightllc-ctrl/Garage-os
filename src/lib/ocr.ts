@@ -1,28 +1,34 @@
-// Moulkia (UAE vehicle registration card) OCR. Uses Claude vision when
-// ANTHROPIC_API_KEY is set; otherwise a deterministic mock so new-customer intake
-// is fully demoable. Every caller meters each attempt to AiEvent (kind = OCR).
+// Moulkia (UAE vehicle registration card) OCR — TWO-SIDED.
+//   Front side  → owner name + plate number
+//   Back side   → VIN + make + model + year + engine number
+// Splitting by side gives Claude a focused prompt per call and avoids cross-side
+// confusion; each side has its own AI metering row so cost + reliability per
+// model + per side is visible.
 //
-// Privacy: the image is processed in-memory and NEVER persisted — we store only
-// the extracted fields, and only after the advisor confirms (consent at intake).
+// Each side uses the same primary→fallback chain (Haiku 4.5 → Sonnet 4.6).
 //
-// Fallback chain: PRIMARY (cheap/fast Haiku) → FALLBACK (Sonnet, stronger OCR).
-// If both fail, the result is marked failed=true and the caller routes to manual entry.
+// Privacy: images are processed in-memory and NEVER persisted — we store only
+// the extracted fields, and only after the advisor confirms.
 
 import { estimateCostUsd } from "@/lib/ai";
 
-export interface MoulkiaFields {
+export interface MoulkiaFront {
   ownerName: string;
-  vin: string;
   plate: string;
+}
+
+export interface MoulkiaBack {
+  vin: string;
   make: string;
   model: string;
   year: number | null;
+  engineNumber: string;
 }
 
-/**
- * One OCR attempt's metering record — the caller writes one AiEvent row per
- * attempt so cost + reliability per model is visible.
- */
+/** The full set carried into the confirm form (after merging front + back). */
+export interface MoulkiaFields extends MoulkiaFront, MoulkiaBack {}
+
+/** One OCR attempt's metering record — the caller writes one AiEvent per row. */
 export interface OcrAttempt {
   model: string;
   tokensIn: number;
@@ -31,11 +37,9 @@ export interface OcrAttempt {
   error?: string; // present when this attempt failed
 }
 
-export interface OcrResult {
-  fields: MoulkiaFields;
-  /** One entry per HTTP attempt (1 on success / 2 if fallback ran / 1 if mock mode). */
+export interface OcrResult<T> {
+  fields: T;
   attempts: OcrAttempt[];
-  /** True when every real attempt failed → caller routes to manual entry. */
   failed?: boolean;
 }
 
@@ -44,30 +48,32 @@ export function ocrEnabled(): boolean {
 }
 
 // Verified against https://platform.claude.com/docs (Models overview) on 2026-06-05:
-//   - Haiku 4.5: $1/$5 per Mtok, fastest, vision-capable
-//   - Sonnet 4.6: $3/$15 per Mtok, stronger OCR, vision-capable
-// Aliases used here are convenience pointers; both resolve to pinned snapshots.
+//   Haiku 4.5: $1/$5 per Mtok, fastest, vision-capable
+//   Sonnet 4.6: $3/$15 per Mtok, stronger OCR, vision-capable
 export const OCR_PRIMARY = process.env.ANTHROPIC_OCR_MODEL ?? "claude-haiku-4-5";
 export const OCR_FALLBACK = process.env.ANTHROPIC_OCR_FALLBACK_MODEL ?? "claude-sonnet-4-6";
 
-const EMPTY_FIELDS: MoulkiaFields = {
-  ownerName: "",
+export const EMPTY_FRONT: MoulkiaFront = { ownerName: "", plate: "" };
+export const EMPTY_BACK: MoulkiaBack = {
   vin: "",
-  plate: "",
   make: "",
   model: "",
   year: null,
+  engineNumber: "",
 };
+export const EMPTY_FIELDS: MoulkiaFields = { ...EMPTY_FRONT, ...EMPTY_BACK };
 
-/** Deterministic sample used when no API key is configured (demo / tests). */
-export function mockMoulkia(): MoulkiaFields {
+/** Demo sample (no API key) so reception intake stays demoable. */
+export function mockMoulkiaFront(): MoulkiaFront {
+  return { ownerName: "Mohammed Al Maktoum", plate: "D 12345" };
+}
+export function mockMoulkiaBack(): MoulkiaBack {
   return {
-    ownerName: "Mohammed Al Maktoum",
     vin: "JN1TANT32U0123456",
-    plate: "D 12345",
     make: "Nissan",
     model: "Patrol",
     year: 2022,
+    engineNumber: "VQ40-123456",
   };
 }
 
@@ -76,45 +82,93 @@ function toYear(v: unknown): number | null {
   return Number.isFinite(n) && n >= 1950 && n <= 2100 ? n : null;
 }
 
-/** Parse the model's JSON reply into clean fields (tolerant of extra prose). */
-export function parseMoulkiaJson(raw: string): MoulkiaFields {
-  let obj: Record<string, unknown> = {};
+function pickStr(obj: Record<string, unknown>, key: string): string {
+  return String(obj[key] ?? "").trim();
+}
+
+function parseJsonLoose(raw: string): Record<string, unknown> {
   try {
     const a = raw.indexOf("{");
     const b = raw.lastIndexOf("}");
-    obj = a >= 0 && b > a ? (JSON.parse(raw.slice(a, b + 1)) as Record<string, unknown>) : {};
+    return a >= 0 && b > a ? (JSON.parse(raw.slice(a, b + 1)) as Record<string, unknown>) : {};
   } catch {
-    obj = {};
+    return {};
   }
-  const str = (k: string) => String(obj[k] ?? "").trim();
+}
+
+export function parseMoulkiaFrontJson(raw: string): MoulkiaFront {
+  const o = parseJsonLoose(raw);
+  return { ownerName: pickStr(o, "ownerName"), plate: pickStr(o, "plate") };
+}
+
+export function parseMoulkiaBackJson(raw: string): MoulkiaBack {
+  const o = parseJsonLoose(raw);
   return {
-    ownerName: str("ownerName"),
-    vin: str("vin"),
-    plate: str("plate"),
-    make: str("make"),
-    model: str("model"),
-    year: toYear(obj["year"]),
+    vin: pickStr(o, "vin"),
+    make: pickStr(o, "make"),
+    model: pickStr(o, "model"),
+    year: toYear(o["year"]),
+    engineNumber: pickStr(o, "engineNumber"),
   };
 }
 
-/** All fields empty means the model couldn't read anything useful — treat as a failure. */
-export function isEmptyExtraction(f: MoulkiaFields): boolean {
-  return (
-    !f.ownerName && !f.vin && !f.plate && !f.make && !f.model && (f.year == null || f.year === 0)
-  );
+export function isEmptyFront(f: MoulkiaFront): boolean {
+  return !f.ownerName && !f.plate;
 }
 
-interface ClaudeAttempt {
-  fields: MoulkiaFields;
+export function isEmptyBack(b: MoulkiaBack): boolean {
+  return !b.vin && !b.make && !b.model && (b.year == null || b.year === 0) && !b.engineNumber;
+}
+
+/**
+ * Merge front + back into one field set. Identity (owner/plate) comes from
+ * front; vehicle specs (VIN/make/model/engine) come from back. Year overlaps —
+ * back wins (it's the manufacture/model year on the spec card). Empty values
+ * never overwrite populated ones.
+ */
+export function mergeMoulkiaFields(
+  front: Partial<MoulkiaFront>,
+  back: Partial<MoulkiaBack>,
+): MoulkiaFields {
+  return {
+    ownerName: front.ownerName?.trim() || "",
+    plate: front.plate?.trim() || "",
+    vin: back.vin?.trim() || "",
+    make: back.make?.trim() || "",
+    model: back.model?.trim() || "",
+    // Back-wins-on-year decision — manufacture year is what cashier/tech need
+    year: back.year ?? null,
+    engineNumber: back.engineNumber?.trim() || "",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Claude vision call (shared between front and back; prompt is the variable)
+// ---------------------------------------------------------------------------
+
+const FRONT_SYSTEM_PROMPT =
+  "You read the FRONT side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
+  '{"ownerName": string, "plate": string}. ' +
+  "Use the Latin/English text. If a field is unreadable use an empty string. No prose.";
+
+const BACK_SYSTEM_PROMPT =
+  "You read the BACK side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
+  '{"vin": string, "make": string, "model": string, "year": number, "engineNumber": string}. ' +
+  "VIN is the chassis number. Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.";
+
+interface ClaudeRaw {
+  text: string;
   tokensIn: number;
   tokensOut: number;
 }
 
 async function callClaudeVision(
   model: string,
+  systemPrompt: string,
+  userText: string,
   base64: string,
   mediaType: string,
-): Promise<ClaudeAttempt> {
+): Promise<ClaudeRaw> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -125,16 +179,13 @@ async function callClaudeVision(
     body: JSON.stringify({
       model,
       max_tokens: 400,
-      system:
-        "You read a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
-        '{"ownerName": string, "vin": string, "plate": string, "make": string, "model": string, "year": number}. ' +
-        "Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.",
+      system: systemPrompt,
       messages: [
         {
           role: "user",
           content: [
             { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: "Extract the registration fields as JSON." },
+            { type: "text", text: userText },
           ],
         },
       ],
@@ -149,24 +200,27 @@ async function callClaudeVision(
     throw new Error(`Anthropic vision error ${res.status}: ${j.error?.message ?? "(no message)"}`);
   }
   return {
-    fields: parseMoulkiaJson(j.content?.[0]?.text ?? "{}"),
+    text: j.content?.[0]?.text ?? "{}",
     tokensIn: j.usage?.input_tokens ?? 0,
     tokensOut: j.usage?.output_tokens ?? 0,
   };
 }
 
-async function tryAttempt(
+async function tryAttempt<T>(
   model: string,
+  systemPrompt: string,
+  userText: string,
+  parser: (raw: string) => T,
+  isEmpty: (t: T) => boolean,
   base64: string,
   mediaType: string,
-): Promise<{ attempt: OcrAttempt; fields: MoulkiaFields | null }> {
+): Promise<{ attempt: OcrAttempt; fields: T | null }> {
   const start = Date.now();
   try {
-    const r = await callClaudeVision(model, base64, mediaType);
+    const r = await callClaudeVision(model, systemPrompt, userText, base64, mediaType);
     const latencyMs = Date.now() - start;
-    // Soft failure: HTTP 200 but the model returned nothing usable — same outcome as a
-    // hard failure from the user's perspective, so let the fallback take a shot.
-    if (isEmptyExtraction(r.fields)) {
+    const fields = parser(r.text);
+    if (isEmpty(fields)) {
       return {
         attempt: {
           model,
@@ -180,7 +234,7 @@ async function tryAttempt(
     }
     return {
       attempt: { model, tokensIn: r.tokensIn, tokensOut: r.tokensOut, latencyMs },
-      fields: r.fields,
+      fields,
     };
   } catch (e) {
     return {
@@ -196,31 +250,58 @@ async function tryAttempt(
   }
 }
 
-/**
- * Extract Moulkia fields from an image with a primary→fallback model chain.
- * Mock mode (no API key) returns the deterministic sample with one mock attempt
- * row so AiEvent metering remains consistent.
- */
-export async function extractMoulkia(base64: string, mediaType: string): Promise<OcrResult> {
+async function extractWithFallback<T>(
+  systemPrompt: string,
+  userText: string,
+  parser: (raw: string) => T,
+  isEmpty: (t: T) => boolean,
+  emptyValue: T,
+  mockValue: T,
+  base64: string,
+  mediaType: string,
+): Promise<OcrResult<T>> {
   if (!ocrEnabled()) {
-    return {
-      fields: mockMoulkia(),
-      attempts: [{ model: "mock-ocr", tokensIn: 0, tokensOut: 0, latencyMs: 0 }],
-    };
+    return { fields: mockValue, attempts: [{ model: "mock-ocr", tokensIn: 0, tokensOut: 0, latencyMs: 0 }] };
   }
-
   const attempts: OcrAttempt[] = [];
-  const primary = await tryAttempt(OCR_PRIMARY, base64, mediaType);
+
+  const primary = await tryAttempt(OCR_PRIMARY, systemPrompt, userText, parser, isEmpty, base64, mediaType);
   attempts.push(primary.attempt);
   if (primary.fields) return { fields: primary.fields, attempts };
 
-  // Primary failed → escalate to the stronger model.
-  const fallback = await tryAttempt(OCR_FALLBACK, base64, mediaType);
+  const fallback = await tryAttempt(OCR_FALLBACK, systemPrompt, userText, parser, isEmpty, base64, mediaType);
   attempts.push(fallback.attempt);
   if (fallback.fields) return { fields: fallback.fields, attempts };
 
-  // Both failed → caller routes to manual entry; the empty fields prevent stale data.
-  return { fields: EMPTY_FIELDS, attempts, failed: true };
+  return { fields: emptyValue, attempts, failed: true };
+}
+
+/** OCR the FRONT side (owner name + plate). */
+export function extractMoulkiaFront(base64: string, mediaType: string): Promise<OcrResult<MoulkiaFront>> {
+  return extractWithFallback(
+    FRONT_SYSTEM_PROMPT,
+    "Extract owner name and plate from the FRONT of this Moulkia as JSON.",
+    parseMoulkiaFrontJson,
+    isEmptyFront,
+    EMPTY_FRONT,
+    mockMoulkiaFront(),
+    base64,
+    mediaType,
+  );
+}
+
+/** OCR the BACK side (VIN + make + model + year + engine number). */
+export function extractMoulkiaBack(base64: string, mediaType: string): Promise<OcrResult<MoulkiaBack>> {
+  return extractWithFallback(
+    BACK_SYSTEM_PROMPT,
+    "Extract VIN, make, model, year, engine number from the BACK of this Moulkia as JSON.",
+    parseMoulkiaBackJson,
+    isEmptyBack,
+    EMPTY_BACK,
+    mockMoulkiaBack(),
+    base64,
+    mediaType,
+  );
 }
 
 /** Cost in USD for one OCR attempt. Mock mode is free. */

@@ -80,7 +80,6 @@ export default async function NewJobMoulkiaBack({
               message: t("blurryWarn"),
               retake: t("retake"),
               useAnyway: t("useAnyway"),
-              checking: t("checkingPhoto"),
             }}
           />
         </form>

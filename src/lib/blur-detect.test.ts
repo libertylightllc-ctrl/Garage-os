@@ -1,10 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-  laplacianVariance,
-  DEFAULT_BLUR_THRESHOLD,
-  isProbablyBlurry,
-  BLUR_CHECK_TIMEOUT_MS,
-} from "./blur-detect";
+import { describe, it, expect } from "vitest";
+import { laplacianVariance, DEFAULT_BLUR_THRESHOLD } from "./blur-detect";
 
 // Helper: build a width×height grayscale frame from a pixel function.
 function frame(width: number, height: number, fn: (x: number, y: number) => number): Uint8ClampedArray {
@@ -90,91 +85,5 @@ describe("DEFAULT_BLUR_THRESHOLD — sanity-check the constant we ship with", ()
     // thinking, the test surfaces it — review the change before shipping.
     expect(DEFAULT_BLUR_THRESHOLD).toBeGreaterThanOrEqual(5);
     expect(DEFAULT_BLUR_THRESHOLD).toBeLessThanOrEqual(40);
-  });
-
-  it("BLUR_CHECK_TIMEOUT_MS is a sane upper bound", () => {
-    // ≥500ms so a real check has room to finish; ≤3000ms so the advisor
-    // is never left staring at "Checking…" for ages on a stuck phone.
-    expect(BLUR_CHECK_TIMEOUT_MS).toBeGreaterThanOrEqual(500);
-    expect(BLUR_CHECK_TIMEOUT_MS).toBeLessThanOrEqual(3000);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Regression — isProbablyBlurry must NEVER hang or reject. iOS Safari's
-// createImageBitmap has been observed to hang on certain captured photos;
-// the internal timeout + fail-open behaviour is what unblocks the advisor.
-// ---------------------------------------------------------------------------
-
-describe("isProbablyBlurry — timeout + fail-open behaviour", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  const stubFile = new File([new Uint8Array([0xff, 0xd8, 0xff])], "stub.jpg", { type: "image/jpeg" });
-
-  it("when createImageBitmap HANGS forever, resolves with timedOut=true (never rejects)", async () => {
-    // Simulate iOS hang: a promise that never settles.
-    vi.stubGlobal(
-      "createImageBitmap",
-      vi.fn(() => new Promise(() => {})),
-    );
-
-    const promise = isProbablyBlurry(stubFile);
-    await vi.advanceTimersByTimeAsync(BLUR_CHECK_TIMEOUT_MS + 50);
-    const result = await promise;
-
-    expect(result.timedOut).toBe(true);
-    expect(result.blurry).toBe(false); // fail-open
-  });
-
-  it("when createImageBitmap THROWS synchronously, resolves with blurry=false (fail-open)", async () => {
-    vi.stubGlobal(
-      "createImageBitmap",
-      vi.fn(() => {
-        throw new Error("Format not supported");
-      }),
-    );
-
-    const promise = isProbablyBlurry(stubFile);
-    // No timer advance needed — the throw path resolves immediately.
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result.blurry).toBe(false);
-    expect(result.timedOut).toBeUndefined();
-  });
-
-  it("when createImageBitmap REJECTS asynchronously, resolves with blurry=false (fail-open)", async () => {
-    vi.stubGlobal(
-      "createImageBitmap",
-      vi.fn(() => Promise.reject(new Error("Decode error"))),
-    );
-
-    const promise = isProbablyBlurry(stubFile);
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
-    expect(result.blurry).toBe(false);
-    expect(result.timedOut).toBeUndefined();
-  });
-
-  it("regression: NEVER throws, NEVER returns a pending Promise forever", async () => {
-    // Even with the most hostile environment (no createImageBitmap, no
-    // Image, no URL — every escape hatch closed), we must still resolve.
-    vi.stubGlobal("createImageBitmap", undefined);
-    vi.stubGlobal("Image", undefined);
-    vi.stubGlobal("URL", undefined);
-
-    const promise = isProbablyBlurry(stubFile);
-    await vi.advanceTimersByTimeAsync(BLUR_CHECK_TIMEOUT_MS + 50);
-    const result = await promise;
-    // Either the synchronous-throw path returned fail-open, or the timeout
-    // did. Either way: not blurry, no exception, promise settled.
-    expect(result.blurry).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import {
   fileTypeMatches,
   type CaptureKind,
 } from "@/lib/photo-capture";
-import { isProbablyBlurry, BLUR_CHECK_TIMEOUT_MS } from "@/lib/blur-detect";
+import { isProbablyBlurry } from "@/lib/blur-detect";
 
 type Mode =
   | "auto-submit" // Moulkia: tap → camera → take photo → form auto-submits, no preview
@@ -30,8 +30,6 @@ export interface BlurWarningLabels {
   retake: string;
   /** Submit anyway (override the warning). */
   useAnyway: string;
-  /** Visible during the post-capture blur check — e.g. "Checking photo…" */
-  checking: string;
 }
 
 interface Props {
@@ -128,25 +126,17 @@ export function PhotoCapture({
       // Without it, behave exactly as before: submit immediately.
       if (blurWarning && kind === "photo") {
         setChecking(true);
-        // Belt-and-braces timeout: isProbablyBlurry has its own internal
-        // timeout, but if the entire await chain ever hangs (e.g. the
-        // microtask queue stalls on iOS), this Promise.race guarantees
-        // we still submit. The advisor must not be blocked on our heuristic.
-        const TIMEOUT_GUARD = BLUR_CHECK_TIMEOUT_MS + 250;
-        type Outcome = { kind: "result"; blurry: boolean } | { kind: "timeout" };
-        const work: Promise<Outcome> = isProbablyBlurry(f)
-          .then((r): Outcome => ({ kind: "result", blurry: r.blurry && !r.timedOut }))
-          .catch((): Outcome => ({ kind: "timeout" }));
-        const guard: Promise<Outcome> = new Promise((resolve) => {
-          setTimeout(() => resolve({ kind: "timeout" }), TIMEOUT_GUARD);
-        });
-        const outcome = await Promise.race([work, guard]);
-        setChecking(false);
-        if (outcome.kind === "result" && outcome.blurry) {
-          setBlurry(true);
-          return;
+        try {
+          const result = await isProbablyBlurry(f);
+          setChecking(false);
+          if (result.blurry) {
+            setBlurry(true);
+            return;
+          }
+        } catch {
+          setChecking(false);
+          // Fail-open — never block submission on a check error.
         }
-        // result-but-sharp, or timeout → fall through and submit.
       }
       submitForm();
       return;
@@ -283,11 +273,8 @@ export function PhotoCapture({
           <span className="text-base font-semibold">{buttonLabel}</span>
         </label>
         {checking ? (
-          <p
-            className="rounded-md bg-zinc-100 px-3 py-2 text-center text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-            aria-live="polite"
-          >
-            {icon} {blurWarning?.checking ?? "Checking…"}
+          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400" aria-live="polite">
+            …
           </p>
         ) : null}
         {error ? (

@@ -78,42 +78,10 @@ export const DEFAULT_BLUR_THRESHOLD = 15;
  */
 export const BLUR_SAMPLE_MAX_EDGE = 256;
 
-/**
- * Hard cap on how long the blur check is allowed to take. iOS Safari's
- * `createImageBitmap` has been observed to hang on certain captured photos
- * (HEIC, awkward EXIF orientation, very large files). Past this budget we
- * give up, fail-open, and let the photo submit — never block the advisor
- * on our heuristic.
- */
-export const BLUR_CHECK_TIMEOUT_MS = 1500;
-
 export interface BlurResult {
   blurry: boolean;
   variance: number;
   threshold: number;
-  /** True when the timeout fired before we could decide — caller should fail-open. */
-  timedOut?: boolean;
-}
-
-/**
- * Race a promise against a timeout. On timeout, resolves with `onTimeout`
- * value; the underlying work is NOT cancelled (we can't cancel
- * createImageBitmap) but its eventual result is ignored.
- */
-function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: T): Promise<T> {
-  return new Promise((resolve) => {
-    const id = setTimeout(() => resolve(onTimeout), ms);
-    p.then(
-      (v) => {
-        clearTimeout(id);
-        resolve(v);
-      },
-      () => {
-        clearTimeout(id);
-        resolve(onTimeout);
-      },
-    );
-  });
 }
 
 /**
@@ -121,36 +89,32 @@ function withTimeout<T>(p: Promise<T>, ms: number, onTimeout: T): Promise<T> {
  * + the blurry verdict. Designed to be called from onChange in the
  * PhotoCapture component, BEFORE the form auto-submits.
  *
- * Internal timeout (BLUR_CHECK_TIMEOUT_MS) guards against iOS Safari
- * `createImageBitmap` hangs — past the budget we return `timedOut: true`
- * with a non-blurry verdict so the caller submits the photo anyway. The
- * caller MAY also impose its own timeout (PhotoCapture does); both are
- * belt-and-braces.
+ * Implementation note: uses createImageBitmap (modern, off-thread on
+ * Safari 17+; falls back to HTMLImageElement on older Safari). Renders to
+ * an OffscreenCanvas when available, regular canvas otherwise. Bails out
+ * (returns {blurry:false, variance:0}) when no canvas is available — we
+ * never want this check to block submission on an environment quirk.
  */
 export async function isProbablyBlurry(
   file: File,
   threshold = DEFAULT_BLUR_THRESHOLD,
 ): Promise<BlurResult> {
-  const failOpen: BlurResult = { blurry: false, variance: 0, threshold };
-  const timedOut: BlurResult = { ...failOpen, timedOut: true };
-
-  const work = (async (): Promise<BlurResult> => {
-    try {
-      const { gray, width, height } = await fileToDownscaledGrayscale(
-        file,
-        BLUR_SAMPLE_MAX_EDGE,
-      );
-      if (width < 3 || height < 3) return failOpen;
-      const variance = laplacianVariance(gray, width, height);
-      return { blurry: variance < threshold, variance, threshold };
-    } catch {
-      // createImageBitmap unsupported, canvas missing, file corrupt — let
-      // the OCR fallback chain handle the photo. Failing-open is the call.
-      return failOpen;
+  try {
+    const { gray, width, height } = await fileToDownscaledGrayscale(
+      file,
+      BLUR_SAMPLE_MAX_EDGE,
+    );
+    if (width < 3 || height < 3) {
+      return { blurry: false, variance: 0, threshold };
     }
-  })();
-
-  return withTimeout(work, BLUR_CHECK_TIMEOUT_MS, timedOut);
+    const variance = laplacianVariance(gray, width, height);
+    return { blurry: variance < threshold, variance, threshold };
+  } catch {
+    // If anything fails (createImageBitmap unsupported, canvas missing,
+    // file is corrupt), let the photo through — the OCR fallback chain
+    // will still handle it. Failing-open is the right call here.
+    return { blurry: false, variance: 0, threshold };
+  }
 }
 
 interface DownscaledFrame {
@@ -163,17 +127,7 @@ async function fileToDownscaledGrayscale(
   file: File,
   maxEdge: number,
 ): Promise<DownscaledFrame> {
-  const { bitmap, revoke } = await loadBitmap(file);
-  try {
-    return await drawAndExtract(bitmap, maxEdge);
-  } finally {
-    // Revoke the object URL ONLY after drawImage has consumed it (Safari
-    // requires the source URL still resolve when drawImage runs).
-    revoke?.();
-  }
-}
-
-async function drawAndExtract(bitmap: LoadedFrame, maxEdge: number): Promise<DownscaledFrame> {
+  const bitmap = await loadBitmap(file);
   const { width, height } = fitWithin(bitmap.width, bitmap.height, maxEdge);
 
   // Prefer OffscreenCanvas — avoids touching the DOM, runs slightly faster
@@ -225,38 +179,26 @@ async function drawAndExtract(bitmap: LoadedFrame, maxEdge: number): Promise<Dow
 // includes VideoFrame, which doesn't — hence this dedicated type.)
 type LoadedFrame = (ImageBitmap | HTMLImageElement) & { width: number; height: number };
 
-interface LoadedBitmap {
-  bitmap: LoadedFrame;
-  /** Caller MUST invoke this once it's done drawing — releases the object URL. */
-  revoke?: () => void;
-}
-
-async function loadBitmap(file: File): Promise<LoadedBitmap> {
+async function loadBitmap(file: File): Promise<LoadedFrame> {
   const g = globalThis as unknown as {
     createImageBitmap?: (f: Blob) => Promise<ImageBitmap>;
     Image?: new () => HTMLImageElement;
     URL?: typeof URL;
   };
-  if (g.createImageBitmap) {
-    const bitmap = (await g.createImageBitmap(file)) as LoadedFrame;
-    return { bitmap };
-  }
+  if (g.createImageBitmap) return (await g.createImageBitmap(file)) as LoadedFrame;
 
   // Safari < 14.0 fallback — load via <img> + object URL.
   if (!g.Image || !g.URL) throw new Error("No image loader available");
   const url = g.URL.createObjectURL(file);
   try {
-    const bitmap = await new Promise<LoadedFrame>((resolve, reject) => {
+    return await new Promise<LoadedFrame>((resolve, reject) => {
       const img = new g.Image!();
       img.onload = () => resolve(img as LoadedFrame);
       img.onerror = () => reject(new Error("Image decode failed"));
       img.src = url;
     });
-    return { bitmap, revoke: () => g.URL!.revokeObjectURL(url) };
-  } catch (e) {
-    // Decode failed → release the URL now; nothing to draw.
+  } finally {
     g.URL.revokeObjectURL(url);
-    throw e;
   }
 }
 

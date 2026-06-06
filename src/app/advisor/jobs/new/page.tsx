@@ -113,7 +113,6 @@ export default async function NewJobCard({
               message: t("blurryWarn"),
               retake: t("retake"),
               useAnyway: t("useAnyway"),
-              checking: t("checkingPhoto"),
             }}
           />
         </form>

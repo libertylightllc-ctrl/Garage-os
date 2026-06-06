@@ -14,6 +14,7 @@ import {
   isRecordableMethod,
   isQuoteIncrease,
   jobPartLineDescription,
+  parseLineEditInput,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -174,8 +175,45 @@ export async function removeEstimateLineAction(formData: FormData) {
   const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
-  await ownedEstimate(estimateId, user.garageId);
+  const est = await ownedEstimate(estimateId, user.garageId);
+  // Lock once the estimate has left DRAFT — UI hides the button, but a
+  // hand-crafted POST would otherwise still succeed and corrupt a sent
+  // estimate's audit trail.
+  if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
   await prisma.estimateLine.deleteMany({ where: { id: lineId, estimateId } });
+  await recomputeEstimate(estimateId);
+  revalidatePath(`/estimates/${estimateId}`);
+}
+
+/**
+ * Full inline edit of a line: kind + description + qty + unit price.
+ * DISCOUNT is sugar for a FEE line with a negative amount — same convention
+ * as addEstimateLineAction. Gated on DRAFT status (server-side enforcement
+ * matches the UI gate).
+ */
+export async function updateEstimateLineAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const lineId = String(formData.get("lineId") ?? "");
+  const est = await ownedEstimate(estimateId, user.garageId);
+  if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
+
+  const line = await prisma.estimateLine.findFirst({ where: { id: lineId, estimateId } });
+  if (!line) throw new Error("Line not found");
+
+  const parsed = parseLineEditInput({
+    kind: formData.get("kind"),
+    description: formData.get("description"),
+    qty: formData.get("qty"),
+    unitPrice: formData.get("unitPrice"),
+  });
+  if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
+  const { kind, description, qty, unitPrice } = parsed;
+
+  await prisma.estimateLine.update({
+    where: { id: lineId },
+    data: { kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
+  });
   await recomputeEstimate(estimateId);
   revalidatePath(`/estimates/${estimateId}`);
 }

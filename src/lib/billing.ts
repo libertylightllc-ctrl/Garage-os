@@ -18,6 +18,55 @@ export function lineTotal(qty: number, unitPrice: number): number {
   return round2(qty * unitPrice);
 }
 
+/**
+ * Validate + normalise the raw inputs from an estimate-line edit form.
+ * Pulled out as a pure helper so the server action stays thin and the
+ * validation rules are unit-testable. DISCOUNT is sugar for a FEE line
+ * with a negative amount — same convention as addEstimateLineAction.
+ *
+ * Returns { ok: true, ... } on success or { ok: false, error: <key> }
+ * with a short error code the caller can throw / surface in the UI.
+ */
+export type LineEditError =
+  | "missing-description"
+  | "bad-qty"
+  | "bad-price"
+  | "unknown-kind";
+
+export type LineEditResult =
+  | { ok: true; kind: LineKind; description: string; qty: number; unitPrice: number }
+  | { ok: false; error: LineEditError };
+
+export function parseLineEditInput(input: {
+  kind: unknown;
+  description: unknown;
+  qty: unknown;
+  unitPrice: unknown;
+}): LineEditResult {
+  const rawKind = String(input.kind ?? "").toUpperCase();
+  if (!["LABOR", "PART", "FEE", "DISCOUNT"].includes(rawKind)) {
+    return { ok: false, error: "unknown-kind" };
+  }
+  const isDiscount = rawKind === "DISCOUNT";
+  const kind: LineKind = isDiscount ? "FEE" : (rawKind as LineKind);
+
+  const description = String(input.description ?? "").trim();
+  if (!description) return { ok: false, error: "missing-description" };
+
+  const qty = Number(input.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "bad-qty" };
+
+  const price = Number(input.unitPrice);
+  if (!Number.isFinite(price)) return { ok: false, error: "bad-price" };
+  // For LABOR/PART/FEE, a negative price is a data error. DISCOUNT is the
+  // sanctioned sign-flip — accept any input and re-sign to negative below.
+  if (!isDiscount && price < 0) return { ok: false, error: "bad-price" };
+  const priceAbs = Math.abs(price);
+  const unitPrice = isDiscount ? -priceAbs : priceAbs;
+
+  return { ok: true, kind, description, qty, unitPrice };
+}
+
 /** Sum lines (VAT-exclusive) → {subtotal, vatAmount, total} at the given country's rate. */
 export function totalsFor(lines: DraftLine[], rate: number = UAE_VAT_RATE) {
   const subtotal = round2(lines.reduce((s, l) => s + lineTotal(l.qty, l.unitPrice), 0));

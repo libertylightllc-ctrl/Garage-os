@@ -10,12 +10,10 @@ import { DictateInput } from "@/components/dictate";
 import {
   addEstimateLineAction,
   addLineFromPartAction,
-  updateEstimateLinePriceAction,
-  removeEstimateLineAction,
-  toggleEstimateLineAction,
   setEstimateStatusAction,
   generateInvoiceAction,
 } from "@/app/actions/billing";
+import { EstimateLineRow } from "@/components/estimate-line-row";
 
 export const dynamic = "force-dynamic";
 
@@ -160,60 +158,34 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         </thead>
         <tbody>
           {est.lines.map((l) => (
-            <tr
+            <EstimateLineRow
               key={l.id}
-              className={
-                "border-b border-black/5 dark:border-white/10 " +
-                (l.declined ? "text-zinc-400 line-through" : "")
-              }
-            >
-              <td className="py-1">
-                <span className="text-zinc-400">{l.kind}</span> {l.description}
-              </td>
-              <td className="py-1 text-right">{Number(l.qty)}</td>
-              <td className="py-1 text-right">
-                {editable ? (
-                  <form action={updateEstimateLinePriceAction} className="flex items-center justify-end gap-1">
-                    <input type="hidden" name="estimateId" value={est.id} />
-                    <input type="hidden" name="lineId" value={l.id} />
-                    <input
-                      name="unitPrice"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={Math.abs(Number(l.unitPrice)).toFixed(2)}
-                      className="w-16 rounded-md border border-black/15 bg-transparent px-1 py-0.5 text-right text-sm dark:border-white/20"
-                    />
-                    <button className="text-xs text-zinc-500 hover:underline">✓</button>
-                  </form>
-                ) : (
-                  Number(l.unitPrice).toFixed(2)
-                )}
-              </td>
-              <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
-              {editable || canDecline ? (
-                <td className="py-1 pl-2 text-right no-underline">
-                  <div className="flex justify-end gap-2">
-                    {canDecline ? (
-                      <form action={toggleEstimateLineAction}>
-                        <input type="hidden" name="estimateId" value={est.id} />
-                        <input type="hidden" name="lineId" value={l.id} />
-                        <button className="text-xs text-zinc-500 hover:underline">
-                          {l.declined ? t("restore") : t("skip")}
-                        </button>
-                      </form>
-                    ) : null}
-                    {editable ? (
-                      <form action={removeEstimateLineAction}>
-                        <input type="hidden" name="estimateId" value={est.id} />
-                        <input type="hidden" name="lineId" value={l.id} />
-                        <button className="text-red-600">✕</button>
-                      </form>
-                    ) : null}
-                  </div>
-                </td>
-              ) : null}
-            </tr>
+              estimateId={est.id}
+              editable={editable}
+              canDecline={canDecline}
+              line={{
+                id: l.id,
+                kind: l.kind,
+                description: l.description,
+                qty: Number(l.qty),
+                unitPrice: Number(l.unitPrice),
+                lineTotal: Number(l.lineTotal),
+                declined: l.declined,
+              }}
+              labels={{
+                edit: t("editLine"),
+                delete: t("deleteLine"),
+                save: t("saveLine"),
+                cancel: t("cancelLine"),
+                skip: t("skip"),
+                restore: t("restore"),
+                confirmDelete: t("confirmDeleteLine"),
+                kindLabor: t("labor"),
+                kindPart: t("part"),
+                kindFee: t("fee"),
+                kindDiscount: t("discount"),
+              }}
+            />
           ))}
           {est.lines.length === 0 ? (
             <tr>

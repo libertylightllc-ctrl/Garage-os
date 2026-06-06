@@ -70,6 +70,17 @@ export default async function NewJobMoulkiaBack({
             continueLabel={t("usePhoto")}
             tooBigLabel={t("fileTooBig")}
             wrongTypeLabel={t("wrongFileType")}
+            framingTips={{
+              heading: t("framingTipsHeading"),
+              fill: t("framingTipFill"),
+              flat: t("framingTipFlat"),
+              glare: t("framingTipGlare"),
+            }}
+            blurWarning={{
+              message: t("blurryWarn"),
+              retake: t("retake"),
+              useAnyway: t("useAnyway"),
+            }}
           />
         </form>
       </section>

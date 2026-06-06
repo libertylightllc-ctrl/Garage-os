@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createBookingPublic } from "@/app/actions/intake";
+import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -34,10 +35,21 @@ export default async function CustomerBooking({ params }: { params: Promise<{ ga
           <input name="plate" placeholder={t("plate")} className={field} />
         </div>
         <textarea name="text" required rows={3} placeholder={t("describe")} className={field} />
-        <label className="text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="text-sm text-zinc-500 dark:text-zinc-400">
           {t("optionalPhoto")}
-          <input type="file" name="photo" accept="image/*" capture="environment" className="mt-1 block w-full text-xs" />
-        </label>
+          <div className="mt-2">
+            <PhotoCapture
+              name="photo"
+              mode="preview"
+              kind="photo"
+              buttonLabel={t("takePhoto")}
+              retakeLabel={t("retake")}
+              continueLabel={t("usePhoto")}
+              tooBigLabel={t("fileTooBig")}
+              wrongTypeLabel={t("wrongFileType")}
+            />
+          </div>
+        </div>
         <button className="rounded-lg bg-zinc-900 px-4 py-3 font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200">
           {t("getProposal")}
         </button>

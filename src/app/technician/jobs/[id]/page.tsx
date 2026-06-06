@@ -23,6 +23,7 @@ import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
+import { PhotoCapture } from "@/components/photo-capture";
 
 export const dynamic = "force-dynamic";
 
@@ -410,33 +411,36 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
       {/* Big-button, no-typing actions */}
       <div className="grid grid-cols-2 gap-3">
-        <form action={addStepAction} className={bigBtn}>
+        <form action={addStepAction} className="contents">
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="type" value="PHOTO" />
-          <span className="text-3xl">📷</span>
-          {t("addPhoto")}
-          <input
-            type="file"
+          <PhotoCapture
             name="file"
-            accept="image/*"
-            capture="environment"
+            mode="preview"
+            kind="photo"
             required
-            className="w-full text-xs"
+            buttonLabel={t("addPhoto")}
+            retakeLabel={t("retake")}
+            continueLabel={t("usePhoto")}
+            tooBigLabel={t("fileTooBig")}
+            wrongTypeLabel={t("wrongFileType")}
           />
-          <button type="submit" className="text-sm font-semibold underline">
-            {t("upload")}
-          </button>
         </form>
 
-        <form action={addStepAction} className={bigBtn}>
+        <form action={addStepAction} className="contents">
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="type" value="VOICE" />
-          <span className="text-3xl">🎤</span>
-          {t("voiceNote")}
-          <input type="file" name="file" accept="audio/*" capture required className="w-full text-xs" />
-          <button type="submit" className="text-sm font-semibold underline">
-            {t("upload")}
-          </button>
+          <PhotoCapture
+            name="file"
+            mode="preview"
+            kind="voice"
+            required
+            buttonLabel={t("voiceNote")}
+            retakeLabel={t("retake")}
+            continueLabel={t("useRecording")}
+            tooBigLabel={t("fileTooBig")}
+            wrongTypeLabel={t("wrongFileType")}
+          />
         </form>
 
         <form action={requestPartAction} className="contents">

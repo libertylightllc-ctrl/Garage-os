@@ -1,0 +1,174 @@
+"use client";
+
+import { useId, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+import {
+  defaultAccept,
+  defaultCapture,
+  fileTooBig,
+  fileTypeMatches,
+  type CaptureKind,
+} from "@/lib/photo-capture";
+
+type Mode =
+  | "auto-submit" // Moulkia: tap → camera → take photo → form auto-submits, no preview
+  | "preview"; //   Everything else: tap → camera → thumbnail → Retake / Continue
+
+interface Props {
+  /** Form field name — the underlying <input type="file"> uses this. */
+  name: string;
+  mode: Mode;
+  /** "photo" → camera; "voice" → microphone. Default photo. */
+  kind?: CaptureKind;
+  required?: boolean;
+  /** Idle-state CTA, e.g. "Take photo of Moulkia". */
+  buttonLabel: string;
+  retakeLabel: string;
+  /** Preview-mode submit button, e.g. "Use this photo". Ignored in auto-submit. */
+  continueLabel?: string;
+  tooBigLabel: string;
+  wrongTypeLabel: string;
+}
+
+/**
+ * One-tap photo / voice capture. Renders a big tappable label that wraps a hidden
+ * <input type="file" accept capture> so:
+ *   - On iPhone Safari (modern iOS): tap → camera opens directly (no chooser sheet)
+ *   - On Android Chrome: tap → "Camera | Files" sheet
+ *   - On desktop: tap → file picker (capture is silently ignored)
+ *
+ * Auto-submit mode is for the Moulkia OCR path: the form fires immediately after
+ * the photo is captured so the advisor never has to hunt for a separate "submit"
+ * button. Preview mode lets the user retake/confirm before submitting.
+ */
+export function PhotoCapture({
+  name,
+  mode,
+  kind = "photo",
+  required = false,
+  buttonLabel,
+  retakeLabel,
+  continueLabel = "Continue →",
+  tooBigLabel,
+  wrongTypeLabel,
+}: Props) {
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [filename, setFilename] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const icon = kind === "voice" ? "🎤" : "📷";
+
+  const onChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    if (!fileTypeMatches(f, kind)) {
+      setError(wrongTypeLabel);
+      e.target.value = "";
+      return;
+    }
+    if (fileTooBig(f.size)) {
+      setError(tooBigLabel);
+      e.target.value = "";
+      return;
+    }
+
+    setFilename(f.name);
+
+    if (mode === "auto-submit") {
+      // Submit the enclosing form right after capture — no extra button to hunt for.
+      inputRef.current?.closest("form")?.requestSubmit();
+      return;
+    }
+    // preview mode — show a thumbnail for photos, just the filename for voice
+    if (kind === "photo") {
+      const url = URL.createObjectURL(f);
+      setPreview(url);
+    }
+  };
+
+  const onRetake = () => {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    setFilename(null);
+    setError(null);
+    if (inputRef.current) {
+      inputRef.current.value = "";
+      // Re-open the camera immediately.
+      inputRef.current.click();
+    }
+  };
+
+  const fileInput = (
+    <input
+      ref={inputRef}
+      id={inputId}
+      type="file"
+      name={name}
+      accept={defaultAccept(kind)}
+      capture={defaultCapture(kind)}
+      required={required}
+      onChange={onChange}
+      className="sr-only"
+    />
+  );
+
+  // Preview state (only reachable in mode="preview")
+  if (preview || (filename && mode === "preview")) {
+    return (
+      <div className="flex flex-col gap-2">
+        {fileInput}
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt=""
+            className="max-h-64 rounded-lg border border-black/10 dark:border-white/15"
+          />
+        ) : (
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            {icon} {filename}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onRetake}
+            className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            {icon} {retakeLabel}
+          </button>
+          <button
+            type="submit"
+            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {continueLabel}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Idle state — one big tappable button
+  return (
+    <div className="flex flex-col gap-1">
+      <label
+        htmlFor={inputId}
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+      >
+        {fileInput}
+        <span className="text-4xl" aria-hidden>
+          {icon}
+        </span>
+        <span className="text-base font-semibold">{buttonLabel}</span>
+      </label>
+      {error ? (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}

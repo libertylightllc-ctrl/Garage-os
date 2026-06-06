@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { moulkiaExtractAction, plateLookupAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
+import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 
@@ -76,23 +77,31 @@ export default async function NewJobCard({
         </p>
       ) : null}
 
-      {/* New customer — Moulkia OCR */}
+      {/* New customer — Moulkia OCR. One-tap camera; the act of scanning IS consent.
+          NOTE (legal review pending): the explicit consent checkbox was replaced
+          with a clear by-action statement. moulkiaConsentAt is still stamped on
+          the resulting JobCard. If the legal review requires an explicit tick,
+          add the checkbox back and remove the hidden `consent=on` input. */}
       <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
         <h2 className="text-sm font-medium">{t("newCustomerMoulkia")}</h2>
         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {t("moulkiaHint")}
+          {t("moulkiaConsentInline")}
           <span className="block">{t("moulkiaOrManualHint")}</span>
         </p>
-        <form action={moulkiaExtractAction} className="mt-3 flex flex-col gap-2">
-          <input type="file" name="file" accept="image/*" capture="environment" required className={`${field} w-full`} />
+        <form action={moulkiaExtractAction} className="mt-3 flex flex-col gap-3">
+          <input type="hidden" name="consent" value="on" />
           <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
-          <label className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-300">
-            <input type="checkbox" name="consent" className="mt-0.5" required />
-            {t("moulkiaConsent")}
-          </label>
-          <button className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white dark:bg-white dark:text-black">
-            {t("scanMoulkia")}
-          </button>
+          <PhotoCapture
+            name="file"
+            mode="auto-submit"
+            kind="photo"
+            required
+            buttonLabel={t("takePhotoMoulkia")}
+            retakeLabel={t("retake")}
+            continueLabel={t("usePhoto")}
+            tooBigLabel={t("fileTooBig")}
+            wrongTypeLabel={t("wrongFileType")}
+          />
         </form>
       </section>
 

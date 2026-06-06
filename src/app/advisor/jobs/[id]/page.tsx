@@ -8,6 +8,7 @@ import { recordDeliveryAction } from "@/app/actions/delivery";
 import { priorityMeta } from "@/lib/priority";
 import { formatJobNo } from "@/lib/jobcard-fields";
 import { canRecordDelivery, deliveryStatus } from "@/lib/delivery";
+import { PhotoCapture } from "@/components/photo-capture";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
@@ -266,12 +267,17 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           >
             <input type="hidden" name="jobId" value={job.id} />
             <span className="text-zinc-600 dark:text-zinc-300">📷 {t("checkInPhotoPrompt")}</span>
-            <div className="flex items-center gap-2">
-              <input type="file" name="file" accept="image/*" capture="environment" required className="flex-1 text-xs" />
-              <button className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-                {t("addCheckInPhoto")}
-              </button>
-            </div>
+            <PhotoCapture
+              name="file"
+              mode="preview"
+              kind="photo"
+              required
+              buttonLabel={t("addCheckInPhoto")}
+              retakeLabel={t("retake")}
+              continueLabel={t("usePhoto")}
+              tooBigLabel={t("fileTooBig")}
+              wrongTypeLabel={t("wrongFileType")}
+            />
           </form>
         ) : null
       ) : null}

@@ -43,6 +43,20 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local debug / live-deploy probe artifacts (curl outputs, cookie jars, scrapes)
+.cookies-*.txt
+.cookies-*.json
+.tiny.png
+.booking-*.txt
+.booking-*.html
+.scan-*.txt
+.scan-*.html
+.owner.html
+.advisor.html
+.cashier.html
+.tech.html
+.vercel-env-tmp.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

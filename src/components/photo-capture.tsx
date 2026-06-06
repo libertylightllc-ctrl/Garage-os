@@ -9,28 +9,10 @@ import {
   fileTypeMatches,
   type CaptureKind,
 } from "@/lib/photo-capture";
-import { isProbablyBlurry } from "@/lib/blur-detect";
 
 type Mode =
   | "auto-submit" // Moulkia: tap → camera → take photo → form auto-submits, no preview
   | "preview"; //   Everything else: tap → camera → thumbnail → Retake / Continue
-
-export interface FramingTipLabels {
-  /** Heading above the three tips, e.g. "For best results:" */
-  heading: string;
-  fill: string;
-  flat: string;
-  glare: string;
-}
-
-export interface BlurWarningLabels {
-  /** e.g. "📷 Photo looks blurry — retake for a better read?" */
-  message: string;
-  /** Retake the photo (re-opens the camera). */
-  retake: string;
-  /** Submit anyway (override the warning). */
-  useAnyway: string;
-}
 
 interface Props {
   /** Form field name — the underlying <input type="file"> uses this. */
@@ -46,20 +28,6 @@ interface Props {
   continueLabel?: string;
   tooBigLabel: string;
   wrongTypeLabel: string;
-  /**
-   * Optional pre-capture framing tips shown above the Take Photo button.
-   * Set on the Moulkia front/back forms; leave off for voice notes and
-   * generic technician photos where framing is less critical.
-   */
-  framingTips?: FramingTipLabels;
-  /**
-   * Optional post-capture blur check. When provided AND mode === "auto-submit",
-   * runs a client-side Laplacian-variance check on the captured photo before
-   * auto-submitting. If the photo is judged blurry, the user sees a small
-   * "retake / use anyway" panel instead of immediate submit. Lenient by
-   * default — see DEFAULT_BLUR_THRESHOLD in blur-detect.ts.
-   */
-  blurWarning?: BlurWarningLabels;
 }
 
 /**
@@ -83,28 +51,16 @@ export function PhotoCapture({
   continueLabel = "Continue →",
   tooBigLabel,
   wrongTypeLabel,
-  framingTips,
-  blurWarning,
 }: Props) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Auto-submit + blur-check states. `checking` shows a brief "checking..."
-  // hint while we run the variance math (~30-100ms). `blurry` shows the
-  // retake / use-anyway panel when the photo failed the sharpness gate.
-  const [checking, setChecking] = useState(false);
-  const [blurry, setBlurry] = useState(false);
   const icon = kind === "voice" ? "🎤" : "📷";
 
-  const submitForm = () => {
-    inputRef.current?.closest("form")?.requestSubmit();
-  };
-
-  const onChange = async (e: ChangeEvent<HTMLInputElement>) => {
+  const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     setError(null);
-    setBlurry(false);
     const f = e.target.files?.[0];
     if (!f) return;
 
@@ -122,23 +78,8 @@ export function PhotoCapture({
     setFilename(f.name);
 
     if (mode === "auto-submit") {
-      // Blur gate — only when the parent opted in (Moulkia front/back).
-      // Without it, behave exactly as before: submit immediately.
-      if (blurWarning && kind === "photo") {
-        setChecking(true);
-        try {
-          const result = await isProbablyBlurry(f);
-          setChecking(false);
-          if (result.blurry) {
-            setBlurry(true);
-            return;
-          }
-        } catch {
-          setChecking(false);
-          // Fail-open — never block submission on a check error.
-        }
-      }
-      submitForm();
+      // Submit the enclosing form right after capture — no extra button to hunt for.
+      inputRef.current?.closest("form")?.requestSubmit();
       return;
     }
     // preview mode — show a thumbnail for photos, just the filename for voice
@@ -153,19 +94,11 @@ export function PhotoCapture({
     setPreview(null);
     setFilename(null);
     setError(null);
-    setBlurry(false);
-    setChecking(false);
     if (inputRef.current) {
       inputRef.current.value = "";
       // Re-open the camera immediately.
       inputRef.current.click();
     }
-  };
-
-  // Advisor overrides the blur warning — submit the captured file as-is.
-  const onUseAnyway = () => {
-    setBlurry(false);
-    submitForm();
   };
 
   const fileInput = (
@@ -218,71 +151,24 @@ export function PhotoCapture({
     );
   }
 
-  // Blurry-warn state — shown only after a failed sharpness check in
-  // auto-submit mode. Two equal-weight choices: retake (good for them) or
-  // submit anyway (their call — they're closer to the photo than we are).
-  if (blurry && blurWarning) {
-    return (
-      <div className="flex flex-col gap-2">
-        {fileInput}
-        <div className="rounded-lg border border-amber-400/60 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
-          {blurWarning.message}
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onRetake}
-            className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-          >
-            {icon} {blurWarning.retake}
-          </button>
-          <button
-            type="button"
-            onClick={onUseAnyway}
-            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            {blurWarning.useAnyway}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Idle state — one big tappable button (+ optional framing tips above it)
+  // Idle state — one big tappable button
   return (
-    <div className="flex flex-col gap-3">
-      {framingTips ? (
-        <div className="rounded-lg border border-black/10 bg-zinc-50 p-3 text-xs text-zinc-700 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-300">
-          <p className="font-medium">{framingTips.heading}</p>
-          <ul className="mt-1 flex flex-col gap-0.5">
-            <li>🖼️ {framingTips.fill}</li>
-            <li>📐 {framingTips.flat}</li>
-            <li>💡 {framingTips.glare}</li>
-          </ul>
-        </div>
+    <div className="flex flex-col gap-1">
+      <label
+        htmlFor={inputId}
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+      >
+        {fileInput}
+        <span className="text-4xl" aria-hidden>
+          {icon}
+        </span>
+        <span className="text-base font-semibold">{buttonLabel}</span>
+      </label>
+      {error ? (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {error}
+        </p>
       ) : null}
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor={inputId}
-          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          {fileInput}
-          <span className="text-4xl" aria-hidden>
-            {icon}
-          </span>
-          <span className="text-base font-semibold">{buttonLabel}</span>
-        </label>
-        {checking ? (
-          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400" aria-live="polite">
-            …
-          </p>
-        ) : null}
-        {error ? (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
     </div>
   );
 }

@@ -178,14 +178,6 @@ const en = {
   engineNumberLabel: "Engine no.",
   errOcrBackFailed: "Couldn't read the back of the Moulkia — please fill the vehicle details manually.",
   backSkipped: "Back side skipped — fill the vehicle details (VIN, make, model, year, engine no.) by hand.",
-  // Framing tips shown above the Take Photo button on the Moulkia steps
-  framingTipsHeading: "For a clean read:",
-  framingTipFill: "Fill the frame — get close, all four edges visible",
-  framingTipFlat: "Lay the card flat on a clean surface",
-  framingTipGlare: "Turn away from overhead lights to avoid glare",
-  // Post-capture blur gate (lenient threshold)
-  blurryWarn: "📷 The photo looks blurry — retake for a sharper read?",
-  useAnyway: "Use anyway",
   retake: "Retake",
   usePhoto: "Use this photo →",
   useRecording: "Use this recording →",
@@ -714,14 +706,6 @@ const ar: typeof en = {
   engineNumberLabel: "رقم المحرك",
   errOcrBackFailed: "تعذّر قراءة ظهر الملكية — يرجى إدخال بيانات المركبة يدويًا.",
   backSkipped: "تم تخطي ظهر الملكية — أدخل بيانات المركبة (رقم الهيكل، الصنع، الطراز، السنة، رقم المحرك) يدويًا.",
-  // Framing tips
-  framingTipsHeading: "للحصول على قراءة دقيقة:",
-  framingTipFill: "املأ الإطار — اقترب حتى تظهر الحواف الأربع",
-  framingTipFlat: "ضع البطاقة مستوية على سطح نظيف",
-  framingTipGlare: "ابتعد عن الأضواء العلوية لتجنّب الانعكاس",
-  // Blur gate
-  blurryWarn: "📷 تبدو الصورة غير واضحة — أعد التصوير لقراءة أوضح؟",
-  useAnyway: "استخدمها كما هي",
   retake: "إعادة التصوير",
   usePhoto: "استخدام هذه الصورة ←",
   useRecording: "استخدام هذا التسجيل ←",

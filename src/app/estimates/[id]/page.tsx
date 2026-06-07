@@ -32,7 +32,7 @@ function PartRow({
   t: (k: MessageKey) => string;
 }) {
   return (
-    <li className="flex items-center justify-between gap-2 text-zinc-600 dark:text-zinc-300">
+    <li className="flex flex-wrap items-center justify-between gap-2 text-base text-zinc-600 dark:text-zinc-300">
       <span>
         • {p.partNo ? `${p.partNo} ` : ""}
         {p.description} ×{p.qty}
@@ -41,7 +41,7 @@ function PartRow({
         <form action={addLineFromPartAction}>
           <input type="hidden" name="estimateId" value={estimateId} />
           <input type="hidden" name="jobPartId" value={p.id} />
-          <button className="shrink-0 rounded-md border border-black/15 px-2 py-0.5 text-xs font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+          <button className="shrink-0 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
             {t("priceThisPart")}
           </button>
         </form>
@@ -93,19 +93,19 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role={role} active={role === "ADVISOR" ? "jobs" : "accounts"} />
       <div>
-        <Link href={backHref} className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
+        <Link href={backHref} className="inline-block py-2 text-base text-zinc-500 hover:underline dark:text-zinc-400">
           {role === "ADVISOR" ? t("backJob") : t("accounts")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("estimate")}</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-base text-zinc-600 dark:text-zinc-300">
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{" "}
           <span className="font-medium">{est.status}</span>
         </p>
         {!canPrice ? (
-          <p className="text-xs text-zinc-400">{t("pricingByCashier")}</p>
+          <p className="text-sm text-zinc-400">{t("pricingByCashier")}</p>
         ) : null}
         {est.approvedAt ? (
-          <p className="text-xs text-green-700 dark:text-green-400">
+          <p className="text-sm text-green-700 dark:text-green-400">
             ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{" "}
             {est.approvedAt.toISOString().slice(0, 10)}
           </p>
@@ -114,8 +114,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Technician findings & parts required — what the cashier prices from */}
       {finding?.submittedAt || requiredParts.length > 0 ? (
-        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
-          <h2 className="mb-1 text-sm font-medium">{t("techFindingsPanel")}</h2>
+        <div className="rounded-lg border border-black/10 p-4 text-base dark:border-white/15">
+          <h2 className="mb-2 text-base font-semibold">{t("techFindingsPanel")}</h2>
           {finding?.findings ? <p>{finding.findings}</p> : null}
           {finding?.diagnosis ? (
             <p className="text-zinc-600 dark:text-zinc-300">{finding.diagnosis}</p>
@@ -132,8 +132,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Parts used & work notes (Repair stage) — reconcile Final Billing */}
       {usedParts.length > 0 || workNotes ? (
-        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
-          <h2 className="mb-1 text-sm font-medium">{t("partsUsedPanel")}</h2>
+        <div className="rounded-lg border border-black/10 p-4 text-base dark:border-white/15">
+          <h2 className="mb-2 text-base font-semibold">{t("partsUsedPanel")}</h2>
           {workNotes ? <p className="text-zinc-600 dark:text-zinc-300">{workNotes}</p> : null}
           {usedParts.length > 0 ? (
             <ul className="mt-1 flex flex-col gap-1">
@@ -146,13 +146,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       ) : null}
 
       <div className="overflow-x-auto">
-      <table className="w-full min-w-[20rem] text-sm">
+      <table className="w-full min-w-[20rem] text-base">
         <thead>
-          <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/15">
-            <th className="py-1">{t("colItem")}</th>
-            <th className="py-1 text-right">{t("colQty")}</th>
-            <th className="py-1 text-right">{t("colUnit")}</th>
-            <th className="py-1 text-right">{t("colTotal")}</th>
+          <tr className="border-b border-black/10 text-left text-sm font-medium text-zinc-500 dark:border-white/15">
+            <th className="py-2">{t("colItem")}</th>
+            <th className="py-2 text-right">{t("colQty")}</th>
+            <th className="py-2 text-right">{t("colUnit")}</th>
+            <th className="py-2 text-right">{t("colTotal")}</th>
             {editable || canDecline ? <th /> : null}
           </tr>
         </thead>
@@ -198,28 +198,28 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       </table>
       </div>
 
-      <div className="ml-auto text-right text-sm">
-        <div>{t("subtotal")}: {money(Number(est.subtotal))}</div>
-        <div>{t("vat5")}: {money(Number(est.vatAmount))}</div>
-        <div className="text-base font-semibold">{t("total")}: {money(Number(est.total))}</div>
+      <div className="ml-auto text-right text-base tabular-nums">
+        <div className="text-zinc-600 dark:text-zinc-300">{t("subtotal")}: {money(Number(est.subtotal))}</div>
+        <div className="text-zinc-600 dark:text-zinc-300">{t("vat5")}: {money(Number(est.vatAmount))}</div>
+        <div className="mt-1 text-lg font-semibold">{t("total")}: {money(Number(est.total))}</div>
       </div>
 
       {editable ? (
-        <form action={addEstimateLineAction} className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
           <input type="hidden" name="estimateId" value={est.id} />
-          <div className="flex gap-2">
-            <select name="kind" className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20">
+          <div className="flex flex-wrap gap-2">
+            <select name="kind" className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20">
               <option value="LABOR">{t("labor")}</option>
               <option value="PART">{t("part")}</option>
               <option value="FEE">{t("fee")}</option>
               <option value="DISCOUNT">{t("discount")}</option>
             </select>
-            <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
+            <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="min-w-40 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20" />
           </div>
-          <div className="flex gap-2">
-            <input name="qty" type="number" step="0.5" min="0" defaultValue="1" className="w-20 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
-            <input name="unitPrice" type="number" step="0.01" min="0" placeholder="Unit price" required className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20" />
-            <button className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black">
+          <div className="flex flex-wrap gap-2">
+            <input name="qty" type="number" step="0.5" min="0" defaultValue="1" className="w-20 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20" />
+            <input name="unitPrice" type="number" step="0.01" min="0" placeholder="Unit price" required className="min-w-32 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20" />
+            <button className="rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black">
               {t("addLine")}
             </button>
           </div>
@@ -240,13 +240,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         {canPrice && est.status === "APPROVED" && !est.invoice ? (
           <form action={generateInvoiceAction}>
             <input type="hidden" name="estimateId" value={est.id} />
-            <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+            <button className="rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white hover:bg-green-500">
               {t("generateInvoice")}
             </button>
           </form>
         ) : null}
         {est.invoice ? (
-          <Link href={`/invoices/${est.invoice.id}`} className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium dark:border-white/20">
+          <Link href={`/invoices/${est.invoice.id}`} className="rounded-lg border border-black/15 px-5 py-3 text-base font-medium dark:border-white/20">
             {t("viewInvoice")}
           </Link>
         ) : null}
@@ -276,8 +276,8 @@ function StatusButton({
       <button
         className={
           primary
-            ? "rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black"
-            : "rounded-lg border border-black/15 px-4 py-2 text-sm font-medium dark:border-white/20"
+            ? "rounded-lg bg-zinc-900 px-5 py-3 text-base font-semibold text-white dark:bg-white dark:text-black"
+            : "rounded-lg border border-black/15 px-5 py-3 text-base font-medium dark:border-white/20"
         }
       >
         {label}

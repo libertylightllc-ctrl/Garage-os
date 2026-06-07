@@ -39,9 +39,14 @@ export interface LineProps {
   };
 }
 
+// 16px (text-base) on inputs prevents iOS Safari from auto-zooming on focus.
+// Padding gives ~44px tap height — meets iOS HIG / Android Material minimums.
 const FIELD =
-  "rounded-md border border-black/15 bg-transparent px-1 py-0.5 text-sm dark:border-white/20";
-const LINK = "text-xs text-zinc-600 hover:underline dark:text-zinc-300";
+  "rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20";
+// Action "links" (Edit / Delete / Skip) are real tap targets — sized like
+// buttons, not the text-xs underlined links they were before.
+const ACTION =
+  "rounded-md px-3 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10";
 
 /**
  * One <tr> per estimate line. Two modes:
@@ -73,7 +78,7 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
   if (editing && editable) {
     return (
       <tr className="border-b border-black/5 dark:border-white/10">
-        <td colSpan={5} className="py-2">
+        <td colSpan={5} className="py-3">
           <form
             action={updateEstimateLineAction}
             className="flex flex-wrap items-center gap-2"
@@ -81,7 +86,7 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
           >
             <input type="hidden" name="estimateId" value={estimateId} />
             <input type="hidden" name="lineId" value={line.id} />
-            <select name="kind" defaultValue={displayKind} className={`${FIELD} w-24`}>
+            <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
               <option value="LABOR">{labels.kindLabor}</option>
               <option value="PART">{labels.kindPart}</option>
               <option value="FEE">{labels.kindFee}</option>
@@ -91,7 +96,7 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
               name="description"
               defaultValue={line.description}
               required
-              className={`${FIELD} min-w-40 flex-1`}
+              className={`${FIELD} min-w-48 flex-1`}
             />
             <input
               name="qty"
@@ -107,18 +112,18 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
               step="0.01"
               min="0"
               defaultValue={priceForInput}
-              className={`${FIELD} w-24 text-right`}
+              className={`${FIELD} w-28 text-right`}
             />
             <button
               type="submit"
-              className="rounded-md bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-white dark:bg-white dark:text-black"
+              className="rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black"
             >
               {labels.save}
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="rounded-md border border-black/15 px-2 py-0.5 text-xs font-medium dark:border-white/20"
+              className="rounded-md border border-black/15 px-4 py-2 text-base font-medium dark:border-white/20"
             >
               {labels.cancel}
             </button>
@@ -131,17 +136,22 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
   // ---- Idle mode: read-only display + actions ----
   return (
     <tr className={rowClass}>
-      <td className="py-1">
-        <span className="text-zinc-400">{displayKind}</span> {line.description}
+      <td className="py-3 pr-2 text-base">
+        <span className="text-xs uppercase tracking-wide text-zinc-400">{displayKind}</span>{" "}
+        {line.description}
       </td>
-      <td className="py-1 text-right">{Number(line.qty)}</td>
-      <td className="py-1 text-right">{Number(line.unitPrice).toFixed(2)}</td>
-      <td className="py-1 text-right">{Number(line.lineTotal).toFixed(2)}</td>
+      <td className="py-3 text-right text-base tabular-nums">{Number(line.qty)}</td>
+      <td className="py-3 text-right text-base tabular-nums">
+        {Number(line.unitPrice).toFixed(2)}
+      </td>
+      <td className="py-3 text-right text-base font-medium tabular-nums">
+        {Number(line.lineTotal).toFixed(2)}
+      </td>
       {editable || canDecline ? (
-        <td className="py-1 pl-2 text-right no-underline">
-          <div className="flex flex-wrap justify-end gap-2">
+        <td className="py-3 pl-2 text-right no-underline">
+          <div className="flex flex-wrap justify-end gap-1">
             {editable ? (
-              <button type="button" onClick={() => setEditing(true)} className={LINK}>
+              <button type="button" onClick={() => setEditing(true)} className={ACTION}>
                 {labels.edit}
               </button>
             ) : null}
@@ -149,7 +159,9 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
               <form action={toggleEstimateLineAction}>
                 <input type="hidden" name="estimateId" value={estimateId} />
                 <input type="hidden" name="lineId" value={line.id} />
-                <button className={LINK}>{line.declined ? labels.restore : labels.skip}</button>
+                <button className={ACTION}>
+                  {line.declined ? labels.restore : labels.skip}
+                </button>
               </form>
             ) : null}
             {editable ? (
@@ -158,7 +170,7 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
                 <input type="hidden" name="lineId" value={line.id} />
                 <ConfirmButton
                   message={labels.confirmDelete}
-                  className="text-xs font-medium text-red-600 hover:underline"
+                  className={`${ACTION} text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40`}
                 >
                   {labels.delete}
                 </ConfirmButton>

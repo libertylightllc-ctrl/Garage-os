@@ -62,6 +62,7 @@ yarn-error.log*
 .vercel-env-tmp.json
 .iphone-sized.jpg
 .t*.html
+.p*.html
 .est*.html
 .o_*.html
 .a_*.html

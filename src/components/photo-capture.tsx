@@ -9,6 +9,7 @@ import {
   fileTypeMatches,
   type CaptureKind,
 } from "@/lib/photo-capture";
+import { resizeForOcr } from "@/lib/resize-photo";
 
 type Mode =
   | "auto-submit" // Moulkia: tap → camera → take photo → form auto-submits, no preview
@@ -28,6 +29,17 @@ interface Props {
   continueLabel?: string;
   tooBigLabel: string;
   wrongTypeLabel: string;
+  /**
+   * If true, the captured file is downscaled to ~1024px JPEG before the form
+   * submits. Saves 1-3s per OCR call by skipping Anthropic's remote
+   * downsample step. Opt-in (Moulkia only) because we replace the user's
+   * file in the input via DataTransfer — a small DOM trick that's safe but
+   * unnecessary for non-OCR use cases. Fails open: if resize hangs / errors,
+   * we submit the original file. Label shown during work.
+   */
+  optimizeForOcr?: boolean;
+  /** Visible during the brief resize window, e.g. "Optimising photo…" */
+  optimizingLabel?: string;
 }
 
 /**
@@ -51,15 +63,35 @@ export function PhotoCapture({
   continueLabel = "Continue →",
   tooBigLabel,
   wrongTypeLabel,
+  optimizeForOcr = false,
+  optimizingLabel,
 }: Props) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
   const icon = kind === "voice" ? "🎤" : "📷";
 
-  const onChange = (e: ChangeEvent<HTMLInputElement>) => {
+  /**
+   * Replace the file currently in the input with a smaller one. Uses
+   * DataTransfer — supported on iPhone Safari 14.5+ and all modern
+   * Android browsers. If unsupported, silently keeps the original file.
+   */
+  function replaceInputFile(newFile: File) {
+    const input = inputRef.current;
+    if (!input) return;
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(newFile);
+      input.files = dt.files;
+    } catch {
+      // Older Safari / non-standard env — leave the original file alone.
+    }
+  }
+
+  const onChange = async (e: ChangeEvent<HTMLInputElement>) => {
     setError(null);
     const f = e.target.files?.[0];
     if (!f) return;
@@ -78,7 +110,20 @@ export function PhotoCapture({
     setFilename(f.name);
 
     if (mode === "auto-submit") {
-      // Submit the enclosing form right after capture — no extra button to hunt for.
+      // Optional resize: shrink ~3-5 MB iPhone photos to ~300-700 KB before
+      // the form auto-submits. resizeForOcr has its own internal timeout +
+      // fail-open, so the worst case is "we submit the original file".
+      if (optimizeForOcr && kind === "photo") {
+        setOptimizing(true);
+        try {
+          const r = await resizeForOcr(f);
+          if (!r.unchanged) replaceInputFile(r.file);
+        } catch {
+          // fail-open — leave the original file in place
+        } finally {
+          setOptimizing(false);
+        }
+      }
       inputRef.current?.closest("form")?.requestSubmit();
       return;
     }
@@ -164,6 +209,14 @@ export function PhotoCapture({
         </span>
         <span className="text-base font-semibold">{buttonLabel}</span>
       </label>
+      {optimizing && optimizingLabel ? (
+        <p
+          className="rounded-md bg-zinc-100 px-3 py-2 text-center text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+          aria-live="polite"
+        >
+          ⚙️ {optimizingLabel}
+        </p>
+      ) : null}
       {error ? (
         <p className="text-sm text-red-600 dark:text-red-400" role="alert">
           {error}

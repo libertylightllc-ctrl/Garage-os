@@ -70,6 +70,8 @@ export default async function NewJobMoulkiaBack({
             continueLabel={t("usePhoto")}
             tooBigLabel={t("fileTooBig")}
             wrongTypeLabel={t("wrongFileType")}
+            optimizeForOcr
+            optimizingLabel={t("optimizingPhoto")}
           />
         </form>
       </section>

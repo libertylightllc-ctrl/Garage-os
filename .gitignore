@@ -62,6 +62,21 @@ yarn-error.log*
 .vercel-env-tmp.json
 .iphone-sized.jpg
 .t*.html
+.est*.html
+.o_*.html
+.a_*.html
+.c_*.html
+.b*.html
+.br.html
+.x.html
+.chat.html
+.inv.html
+.signup.html
+.login.html
+.wap.html
+.job*.html
+.ttest.html
+.scan-*.html
 
 # typescript
 *.tsbuildinfo

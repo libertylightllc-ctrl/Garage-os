@@ -162,7 +162,6 @@ export async function moulkiaBackAction(formData: FormData) {
       make: merged.make,
       model: merged.model,
       year: merged.year ? String(merged.year) : "",
-      engineNumber: merged.engineNumber,
     }),
   );
 }
@@ -194,13 +193,12 @@ export async function plateLookupAction(formData: FormData) {
       model: v.model,
       year: v.year ? String(v.year) : "",
       vin: v.vin ?? "",
-      engineNumber: v.engineNumber ?? "",
     }),
   );
 }
 
 // Confirm step (the Reception form): create/reuse customer + vehicle, then open the
-// job card with EVERY reception field — make/model/year/engineNumber always written.
+// job card with EVERY reception field — make/model/year always written.
 export async function createCustomerVehicleJobAction(formData: FormData) {
   const user = await requireAdvisor();
   const get = (k: string) => String(formData.get(k) ?? "").trim();
@@ -214,7 +212,6 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const make = get("make");
   const model = get("model");
   const vin = get("vin") || null;
-  const engineNumber = get("engineNumber") || null;
   const yearRaw = parseInt(get("year"), 10);
   const year = Number.isFinite(yearRaw) ? yearRaw : null;
   const assignedToRaw = get("assignedToId");
@@ -266,7 +263,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       });
       await tx.vehicle.update({
         where: { id: existing.id },
-        data: { make, model, year, plate, vin, engineNumber },
+        data: { make, model, year, plate, vin },
       });
     } else {
       // New customer + vehicle. Upsert customer by phone so a known number attaches.
@@ -277,7 +274,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         select: { id: true },
       });
       const vehicle = await tx.vehicle.create({
-        data: { customerId: customer.id, make, model, year, plate, vin, engineNumber },
+        data: { customerId: customer.id, make, model, year, plate, vin },
         select: { id: true },
       });
       vehicleId = vehicle.id;

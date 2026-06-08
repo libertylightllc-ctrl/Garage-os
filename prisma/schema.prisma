@@ -311,7 +311,6 @@ model Vehicle {
   year         Int?
   plate        String
   vin          String?
-  engineNumber String? // captured from the back of the Moulkia (Phase-1 two-photo OCR)
 
   jobCards JobCard[]
   bookings Booking[]

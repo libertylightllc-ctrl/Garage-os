@@ -1,6 +1,6 @@
 // Moulkia (UAE vehicle registration card) OCR — TWO-SIDED.
 //   Front side  → owner name + plate number
-//   Back side   → VIN + make + model + year + engine number
+//   Back side   → VIN + make + model + year
 // Splitting by side gives Claude a focused prompt per call and avoids cross-side
 // confusion; each side has its own AI metering row so cost + reliability per
 // model + per side is visible.
@@ -22,7 +22,6 @@ export interface MoulkiaBack {
   make: string;
   model: string;
   year: number | null;
-  engineNumber: string;
 }
 
 /** The full set carried into the confirm form (after merging front + back). */
@@ -59,7 +58,6 @@ export const EMPTY_BACK: MoulkiaBack = {
   make: "",
   model: "",
   year: null,
-  engineNumber: "",
 };
 export const EMPTY_FIELDS: MoulkiaFields = { ...EMPTY_FRONT, ...EMPTY_BACK };
 
@@ -73,7 +71,6 @@ export function mockMoulkiaBack(): MoulkiaBack {
     make: "Nissan",
     model: "Patrol",
     year: 2022,
-    engineNumber: "VQ40-123456",
   };
 }
 
@@ -108,7 +105,6 @@ export function parseMoulkiaBackJson(raw: string): MoulkiaBack {
     make: pickStr(o, "make"),
     model: pickStr(o, "model"),
     year: toYear(o["year"]),
-    engineNumber: pickStr(o, "engineNumber"),
   };
 }
 
@@ -117,12 +113,12 @@ export function isEmptyFront(f: MoulkiaFront): boolean {
 }
 
 export function isEmptyBack(b: MoulkiaBack): boolean {
-  return !b.vin && !b.make && !b.model && (b.year == null || b.year === 0) && !b.engineNumber;
+  return !b.vin && !b.make && !b.model && (b.year == null || b.year === 0);
 }
 
 /**
  * Merge front + back into one field set. Identity (owner/plate) comes from
- * front; vehicle specs (VIN/make/model/engine) come from back. Year overlaps —
+ * front; vehicle specs (VIN/make/model) come from back. Year overlaps —
  * back wins (it's the manufacture/model year on the spec card). Empty values
  * never overwrite populated ones.
  */
@@ -138,7 +134,6 @@ export function mergeMoulkiaFields(
     model: back.model?.trim() || "",
     // Back-wins-on-year decision — manufacture year is what cashier/tech need
     year: back.year ?? null,
-    engineNumber: back.engineNumber?.trim() || "",
   };
 }
 
@@ -153,7 +148,7 @@ const FRONT_SYSTEM_PROMPT =
 
 const BACK_SYSTEM_PROMPT =
   "You read the BACK side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
-  '{"vin": string, "make": string, "model": string, "year": number, "engineNumber": string}. ' +
+  '{"vin": string, "make": string, "model": string, "year": number}. ' +
   "VIN is the chassis number. Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.";
 
 interface ClaudeRaw {
@@ -290,11 +285,11 @@ export function extractMoulkiaFront(base64: string, mediaType: string): Promise<
   );
 }
 
-/** OCR the BACK side (VIN + make + model + year + engine number). */
+/** OCR the BACK side (VIN + make + model + year). */
 export function extractMoulkiaBack(base64: string, mediaType: string): Promise<OcrResult<MoulkiaBack>> {
   return extractWithFallback(
     BACK_SYSTEM_PROMPT,
-    "Extract VIN, make, model, year, engine number from the BACK of this Moulkia as JSON.",
+    "Extract VIN, make, model, year from the BACK of this Moulkia as JSON.",
     parseMoulkiaBackJson,
     isEmptyBack,
     EMPTY_BACK,

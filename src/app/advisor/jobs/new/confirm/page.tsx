@@ -24,7 +24,6 @@ interface SP {
   model?: string;
   year?: string;
   vin?: string;
-  engineNumber?: string;
   vehicleId?: string;
   assignedToId?: string;
   // "moulkia" = OCR path (consent required); "manual" = no photo; "repeat" = pick-existing
@@ -151,10 +150,6 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
             <label className="text-xs text-zinc-500 dark:text-zinc-400">
               {t("vinLabel")}
               <input name="vin" defaultValue={sp.vin ?? ""} className={FIELD} />
-            </label>
-            <label className="text-xs text-zinc-500 dark:text-zinc-400">
-              {t("engineNumberLabel")}
-              <input name="engineNumber" defaultValue={sp.engineNumber ?? ""} className={FIELD} />
             </label>
             <label className="text-xs text-zinc-500 dark:text-zinc-400">
               {t("make")}

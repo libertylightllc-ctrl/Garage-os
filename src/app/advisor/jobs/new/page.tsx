@@ -149,7 +149,6 @@ export default async function NewJobCard({
                 model: v.model,
                 year: v.year ? String(v.year) : "",
                 vin: v.vin ?? "",
-                engineNumber: v.engineNumber ?? "",
               });
               if (v.customer.email) q.set("email", v.customer.email);
               return (

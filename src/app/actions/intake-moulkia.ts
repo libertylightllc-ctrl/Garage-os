@@ -92,29 +92,50 @@ export async function moulkiaFrontAction(formData: FormData) {
     redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
   }
 
-  // Front succeeded → go to step 2 (back), carrying the front fields.
+  // Front succeeded → go to step 2 (back), carrying every field the front
+  // captured (owner + plate + make + model + year + VIN). The back step
+  // can still override on overlap; if the advisor skips it, these values
+  // become the final answer.
   redirect(
     backUrl({
       ownerName: r.fields.ownerName,
       plate: r.fields.plate,
+      vin: r.fields.vin,
+      make: r.fields.make,
+      model: r.fields.model,
+      year: r.fields.year ? String(r.fields.year) : "",
       assignedToId,
     }),
   );
 }
 
 // ----------------------------------------------------------------------------
-// Step 2 — Photograph the BACK of the Moulkia (VIN + make + model + year + engine)
+// Step 2 — Photograph the BACK of the Moulkia (VIN + make + model + year)
 // ----------------------------------------------------------------------------
 export async function moulkiaBackAction(formData: FormData) {
   const user = await requireAdvisor();
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    // Treat as a skip back — let the advisor fill the back fields manually.
-    const front: MoulkiaFront = {
+  // Read the front fields that rode in via hidden inputs. The FRONT prompt
+  // now captures vehicle specs too, so we carry them through and let merge
+  // decide which wins. Back overrides on overlap; front fills the gaps.
+  function readFrontFromForm(): MoulkiaFront {
+    const yearRaw = String(formData.get("frontYear") ?? "").trim();
+    const yearN = parseInt(yearRaw, 10);
+    return {
       ownerName: String(formData.get("frontOwnerName") ?? "").trim(),
       plate: String(formData.get("frontPlate") ?? "").trim(),
+      vin: String(formData.get("frontVin") ?? "").trim(),
+      make: String(formData.get("frontMake") ?? "").trim(),
+      model: String(formData.get("frontModel") ?? "").trim(),
+      year: Number.isFinite(yearN) && yearN >= 1950 && yearN <= 2100 ? yearN : null,
     };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    // Treat as a skip back — let the advisor fill the back fields manually,
+    // but keep everything the FRONT scan already gave us.
+    const front = readFrontFromForm();
     redirect(
       confirmUrl({
         via: "moulkia",
@@ -122,15 +143,16 @@ export async function moulkiaBackAction(formData: FormData) {
         assignedToId: String(formData.get("assignedToId") ?? ""),
         ownerName: front.ownerName,
         plate: front.plate,
+        vin: front.vin,
+        make: front.make,
+        model: front.model,
+        year: front.year ? String(front.year) : "",
       }),
     );
   }
   const f = file as File;
   const assignedToId = String(formData.get("assignedToId") ?? "");
-  const front: MoulkiaFront = {
-    ownerName: String(formData.get("frontOwnerName") ?? "").trim(),
-    plate: String(formData.get("frontPlate") ?? "").trim(),
-  };
+  const front = readFrontFromForm();
 
   const base64 = Buffer.from(await f.arrayBuffer()).toString("base64");
   const mediaType = f.type || "image/jpeg";
@@ -147,6 +169,10 @@ export async function moulkiaBackAction(formData: FormData) {
         assignedToId,
         ownerName: front.ownerName,
         plate: front.plate,
+        vin: front.vin,
+        make: front.make,
+        model: front.model,
+        year: front.year ? String(front.year) : "",
       }),
     );
   }

@@ -15,9 +15,30 @@ import {
 } from "./ocr";
 
 describe("Moulkia OCR — pure helpers", () => {
-  it("parses front-only JSON", () => {
+  it("parses front JSON — owner + plate only (vehicle fields blank)", () => {
     const f = parseMoulkiaFrontJson('{"ownerName":"Ali Hassan","plate":"A 55555"}');
-    expect(f).toEqual({ ownerName: "Ali Hassan", plate: "A 55555" });
+    expect(f).toEqual({
+      ownerName: "Ali Hassan",
+      plate: "A 55555",
+      vin: "",
+      make: "",
+      model: "",
+      year: null,
+    });
+  });
+
+  it("parses front JSON — owner + plate + vehicle specs (the new prompt)", () => {
+    const f = parseMoulkiaFrontJson(
+      '{"ownerName":"Ali Hassan","plate":"A 55555","make":"Toyota","model":"Camry","year":2020,"vin":"JT123"}',
+    );
+    expect(f).toEqual({
+      ownerName: "Ali Hassan",
+      plate: "A 55555",
+      vin: "JT123",
+      make: "Toyota",
+      model: "Camry",
+      year: 2020,
+    });
   });
 
   it("parses back-only JSON (VIN + make + model + year)", () => {
@@ -54,8 +75,12 @@ describe("Moulkia OCR — pure helpers", () => {
   });
 
   it("isEmptyFront/Back detect blank extractions", () => {
-    expect(isEmptyFront({ ownerName: "", plate: "" })).toBe(true);
-    expect(isEmptyFront({ ownerName: "Ali", plate: "" })).toBe(false);
+    expect(
+      isEmptyFront({ ownerName: "", plate: "", vin: "", make: "", model: "", year: null }),
+    ).toBe(true);
+    expect(
+      isEmptyFront({ ownerName: "Ali", plate: "", vin: "", make: "", model: "", year: null }),
+    ).toBe(false);
     expect(isEmptyBack({ vin: "", make: "", model: "", year: 0 })).toBe(true);
     expect(isEmptyBack({ vin: "VIN", make: "", model: "", year: null })).toBe(false);
   });
@@ -69,13 +94,15 @@ describe("Moulkia OCR — pure helpers", () => {
 
 describe("mergeMoulkiaFields — back wins year, no empty overwrites", () => {
   it("happy path — front identity + back specs", () => {
-    const front: MoulkiaFront = { ownerName: "Khalid", plate: "A 1" };
-    const back: MoulkiaBack = {
-      vin: "VIN",
-      make: "Toyota",
-      model: "Camry",
-      year: 2020,
+    const front: MoulkiaFront = {
+      ownerName: "Khalid",
+      plate: "A 1",
+      vin: "",
+      make: "",
+      model: "",
+      year: null,
     };
+    const back: MoulkiaBack = { vin: "VIN", make: "Toyota", model: "Camry", year: 2020 };
     expect(mergeMoulkiaFields(front, back)).toEqual({
       ownerName: "Khalid",
       plate: "A 1",
@@ -87,27 +114,48 @@ describe("mergeMoulkiaFields — back wins year, no empty overwrites", () => {
   });
 
   it("trims whitespace on every string field", () => {
-    expect(mergeMoulkiaFields({ ownerName: "  Khalid  ", plate: " A 1 " }, { make: "  Toyota  " }))
-      .toMatchObject({ ownerName: "Khalid", plate: "A 1", make: "Toyota" });
+    expect(
+      mergeMoulkiaFields({ ownerName: "  Khalid  ", plate: " A 1 " }, { make: "  Toyota  " }),
+    ).toMatchObject({ ownerName: "Khalid", plate: "A 1", make: "Toyota" });
   });
 
   it("year: back wins on overlap (decision A)", () => {
-    const back: MoulkiaBack = {
-      vin: "",
-      make: "",
-      model: "",
-      year: 2022,
-    };
+    const back: MoulkiaBack = { vin: "", make: "", model: "", year: 2022 };
     // Even if a front sneaks a year in (shouldn't, but defensive), back's year is the answer.
-    const result = mergeMoulkiaFields({ ownerName: "", plate: "" }, back);
+    const result = mergeMoulkiaFields({ ownerName: "", plate: "", year: 2018 }, back);
     expect(result.year).toBe(2022);
   });
 
-  it("missing back → identity-only, no fake vehicle specs", () => {
-    const result = mergeMoulkiaFields({ ownerName: "Khalid", plate: "A 1" }, {});
-    expect(result.vin).toBe("");
-    expect(result.make).toBe("");
-    expect(result.year).toBeNull();
+  it("missing back → front's vehicle specs survive (new behaviour)", () => {
+    // Before the front prompt expansion, missing-back meant blank vehicle
+    // specs. Now the front captures them too — they ride through the merge.
+    const result = mergeMoulkiaFields(
+      { ownerName: "Khalid", plate: "A 1", vin: "FRONT-VIN", make: "Toyota", year: 2019 },
+      {},
+    );
+    expect(result.vin).toBe("FRONT-VIN");
+    expect(result.make).toBe("Toyota");
+    expect(result.year).toBe(2019);
+  });
+
+  it("back wins on overlap — front specs fall away when back has them", () => {
+    const result = mergeMoulkiaFields(
+      { ownerName: "K", plate: "A 1", vin: "WRONG", make: "Toyot", model: "Camrey", year: 2018 },
+      { vin: "RIGHT", make: "Toyota", model: "Camry", year: 2020 },
+    );
+    expect(result.vin).toBe("RIGHT");
+    expect(result.make).toBe("Toyota");
+    expect(result.model).toBe("Camry");
+    expect(result.year).toBe(2020);
+  });
+
+  it("back EMPTY for a single field → front fills the gap (no overwrite-with-blank)", () => {
+    const result = mergeMoulkiaFields(
+      { vin: "FRONT-VIN", make: "Toyota" },
+      { vin: "", make: "Honda" }, // back's VIN is blank, but make is set
+    );
+    expect(result.vin).toBe("FRONT-VIN"); // front fills the gap
+    expect(result.make).toBe("Honda"); // back overrides when it has a value
   });
 
   it("missing front → vehicle-only, no fake identity", () => {
@@ -154,11 +202,17 @@ async function withMockedEnv(fn: () => Promise<void>) {
 }
 
 const frontPayload = {
-  content: [{ text: '{"ownerName":"Khalid","plate":"A 1"}' }],
-  usage: { input_tokens: 50, output_tokens: 20 },
+  // New prompt asks for owner + plate + make + model + year + VIN.
+  content: [
+    {
+      text:
+        '{"ownerName":"Khalid","plate":"A 1","make":"Toyota","model":"Camry","year":2019,"vin":"FRONTVIN"}',
+    },
+  ],
+  usage: { input_tokens: 50, output_tokens: 30 },
 };
 const emptyFrontPayload = {
-  content: [{ text: '{"ownerName":"","plate":""}' }],
+  content: [{ text: '{"ownerName":"","plate":"","make":"","model":"","year":0,"vin":""}' }],
   usage: { input_tokens: 50, output_tokens: 10 },
 };
 const backPayload = {
@@ -190,15 +244,39 @@ describe("extractMoulkiaFront — primary + fallback chain", () => {
     }
   });
 
-  it("primary succeeds → 1 attempt, only Haiku called", async () => {
+  it("primary succeeds → 1 attempt, returns ALL six front fields (the new prompt)", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([{ ok: true, body: frontPayload }]);
       globalThis.fetch = f;
       const r = await extractMoulkiaFront("xxx", "image/jpeg");
       expect(r.failed).toBeUndefined();
-      expect(r.fields.ownerName).toBe("Khalid");
+      // Owner name + plate + vehicle specs must ALL come through.
+      expect(r.fields).toEqual({
+        ownerName: "Khalid",
+        plate: "A 1",
+        vin: "FRONTVIN",
+        make: "Toyota",
+        model: "Camry",
+        year: 2019,
+      });
       expect(r.attempts).toHaveLength(1);
       expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY]);
+    });
+  });
+
+  it("system prompt instructs the model to extract from the middle section + all four vehicle fields", async () => {
+    // Captures the exact instruction the user asked us to add. If somebody
+    // weakens the prompt later, this test surfaces it before the deploy.
+    await withMockedEnv(async () => {
+      let bodySeen = "";
+      globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+        bodySeen = String(init?.body ?? "");
+        return { ok: true, status: 200, json: async () => frontPayload } as unknown as Response;
+      }) as unknown as typeof fetch;
+      await extractMoulkiaFront("xxx", "image/jpeg");
+      expect(bodySeen).toContain("middle section of the front of the Moulkia");
+      expect(bodySeen).toContain("Also extract vehicle make, model, year, and VIN");
+      expect(bodySeen).toContain("Return all four fields");
     });
   });
 
@@ -241,7 +319,14 @@ describe("extractMoulkiaFront — primary + fallback chain", () => {
       globalThis.fetch = f;
       const r = await extractMoulkiaFront("xxx", "image/jpeg");
       expect(r.failed).toBe(true);
-      expect(r.fields).toEqual({ ownerName: "", plate: "" });
+      expect(r.fields).toEqual({
+        ownerName: "",
+        plate: "",
+        vin: "",
+        make: "",
+        model: "",
+        year: null,
+      });
       expect(r.attempts).toHaveLength(2);
       expect(calls.map((c) => c.model)).toEqual([OCR_PRIMARY, OCR_FALLBACK]);
     });

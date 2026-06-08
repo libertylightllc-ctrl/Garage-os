@@ -20,17 +20,34 @@ export default async function NewJobMoulkiaBack({
   searchParams: Promise<{
     ownerName?: string;
     plate?: string;
+    vin?: string;
+    make?: string;
+    model?: string;
+    year?: string;
     assignedToId?: string;
   }>;
 }) {
   await requireRole("ADVISOR");
   const t = await getT();
-  const { ownerName = "", plate = "", assignedToId = "" } = await searchParams;
+  const {
+    ownerName = "",
+    plate = "",
+    vin = "",
+    make = "",
+    model = "",
+    year = "",
+    assignedToId = "",
+  } = await searchParams;
 
-  // Build the skip URL — preserve everything we already extracted.
+  // Build the skip URL — preserve everything we already extracted from the
+  // front (owner + plate + vehicle specs).
   const skipParams = new URLSearchParams({ via: "moulkia", skippedBack: "1" });
   if (ownerName) skipParams.set("ownerName", ownerName);
   if (plate) skipParams.set("plate", plate);
+  if (vin) skipParams.set("vin", vin);
+  if (make) skipParams.set("make", make);
+  if (model) skipParams.set("model", model);
+  if (year) skipParams.set("year", year);
   if (assignedToId) skipParams.set("assignedToId", assignedToId);
   const skipHref = `/advisor/jobs/new/confirm?${skipParams.toString()}`;
 
@@ -52,13 +69,24 @@ export default async function NewJobMoulkiaBack({
         <p className="font-medium">{t("frontCaptured")}</p>
         {ownerName ? <p className="mt-1 text-xs">{ownerName}</p> : null}
         {plate ? <p className="text-xs">{plate}</p> : null}
+        {make || model || year ? (
+          <p className="text-xs">
+            {[make, model, year].filter(Boolean).join(" · ")}
+          </p>
+        ) : null}
+        {vin ? <p className="text-xs">{vin}</p> : null}
       </section>
 
       <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
         <form action={moulkiaBackAction} className="flex flex-col gap-3">
-          {/* Carry the front extraction across into the back action so we can merge. */}
+          {/* Carry the FRONT extraction across into the back action — every
+              field the front captured rides along so the merge can see them. */}
           <input type="hidden" name="frontOwnerName" value={ownerName} />
           <input type="hidden" name="frontPlate" value={plate} />
+          <input type="hidden" name="frontVin" value={vin} />
+          <input type="hidden" name="frontMake" value={make} />
+          <input type="hidden" name="frontModel" value={model} />
+          <input type="hidden" name="frontYear" value={year} />
           <input type="hidden" name="assignedToId" value={assignedToId} />
           <PhotoCapture
             name="file"

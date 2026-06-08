@@ -15,6 +15,13 @@ import { estimateCostUsd } from "@/lib/ai";
 export interface MoulkiaFront {
   ownerName: string;
   plate: string;
+  // The FRONT also shows vehicle make / model / year / VIN on most UAE
+  // Moulkias. We extract them here so a single front photo can prefill
+  // every spec — the back step still runs and overrides on overlap.
+  vin: string;
+  make: string;
+  model: string;
+  year: number | null;
 }
 
 export interface MoulkiaBack {
@@ -52,7 +59,14 @@ export function ocrEnabled(): boolean {
 export const OCR_PRIMARY = process.env.ANTHROPIC_OCR_MODEL ?? "claude-haiku-4-5";
 export const OCR_FALLBACK = process.env.ANTHROPIC_OCR_FALLBACK_MODEL ?? "claude-sonnet-4-6";
 
-export const EMPTY_FRONT: MoulkiaFront = { ownerName: "", plate: "" };
+export const EMPTY_FRONT: MoulkiaFront = {
+  ownerName: "",
+  plate: "",
+  vin: "",
+  make: "",
+  model: "",
+  year: null,
+};
 export const EMPTY_BACK: MoulkiaBack = {
   vin: "",
   make: "",
@@ -63,7 +77,14 @@ export const EMPTY_FIELDS: MoulkiaFields = { ...EMPTY_FRONT, ...EMPTY_BACK };
 
 /** Demo sample (no API key) so reception intake stays demoable. */
 export function mockMoulkiaFront(): MoulkiaFront {
-  return { ownerName: "Mohammed Al Maktoum", plate: "D 12345" };
+  return {
+    ownerName: "Mohammed Al Maktoum",
+    plate: "D 12345",
+    vin: "JN1TANT32U0123456",
+    make: "Nissan",
+    model: "Patrol",
+    year: 2022,
+  };
 }
 export function mockMoulkiaBack(): MoulkiaBack {
   return {
@@ -95,7 +116,14 @@ function parseJsonLoose(raw: string): Record<string, unknown> {
 
 export function parseMoulkiaFrontJson(raw: string): MoulkiaFront {
   const o = parseJsonLoose(raw);
-  return { ownerName: pickStr(o, "ownerName"), plate: pickStr(o, "plate") };
+  return {
+    ownerName: pickStr(o, "ownerName"),
+    plate: pickStr(o, "plate"),
+    vin: pickStr(o, "vin"),
+    make: pickStr(o, "make"),
+    model: pickStr(o, "model"),
+    year: toYear(o["year"]),
+  };
 }
 
 export function parseMoulkiaBackJson(raw: string): MoulkiaBack {
@@ -109,6 +137,10 @@ export function parseMoulkiaBackJson(raw: string): MoulkiaBack {
 }
 
 export function isEmptyFront(f: MoulkiaFront): boolean {
+  // Soft-fail when NONE of the front fields came back — owner + plate are
+  // the must-haves, but if vehicle specs are also blank that's a stronger
+  // signal the photo was unreadable. We still flag empty on any identity
+  // miss so the fallback model gets a chance, even when specs survived.
   return !f.ownerName && !f.plate;
 }
 
@@ -117,23 +149,29 @@ export function isEmptyBack(b: MoulkiaBack): boolean {
 }
 
 /**
- * Merge front + back into one field set. Identity (owner/plate) comes from
- * front; vehicle specs (VIN/make/model) come from back. Year overlaps —
- * back wins (it's the manufacture/model year on the spec card). Empty values
- * never overwrite populated ones.
+ * Merge front + back into one field set.
+ *
+ * Identity (owner / plate): front only — never on the back.
+ * Vehicle specs (VIN / make / model / year): now appear on BOTH sides.
+ *   - BACK wins on overlap — it's the spec card, more authoritative.
+ *   - When BACK is empty / missing, fall through to the FRONT value so a
+ *     skipped or unreadable back still keeps the data the front captured.
+ * Empty strings / null never overwrite a populated value.
  */
 export function mergeMoulkiaFields(
   front: Partial<MoulkiaFront>,
   back: Partial<MoulkiaBack>,
 ): MoulkiaFields {
+  const backFirst = (b: string | undefined, f: string | undefined) =>
+    b?.trim() || f?.trim() || "";
   return {
     ownerName: front.ownerName?.trim() || "",
     plate: front.plate?.trim() || "",
-    vin: back.vin?.trim() || "",
-    make: back.make?.trim() || "",
-    model: back.model?.trim() || "",
-    // Back-wins-on-year decision — manufacture year is what cashier/tech need
-    year: back.year ?? null,
+    vin: backFirst(back.vin, front.vin),
+    make: backFirst(back.make, front.make),
+    model: backFirst(back.model, front.model),
+    // back wins on year, but if back didn't capture it, take what the front got
+    year: back.year ?? front.year ?? null,
   };
 }
 
@@ -143,8 +181,10 @@ export function mergeMoulkiaFields(
 
 const FRONT_SYSTEM_PROMPT =
   "You read the FRONT side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
-  '{"ownerName": string, "plate": string}. ' +
-  "Use the Latin/English text. If a field is unreadable use an empty string. No prose.";
+  '{"ownerName": string, "plate": string, "make": string, "model": string, "year": number, "vin": string}. ' +
+  "Extract the owner name from the middle section of the front of the Moulkia card. " +
+  "Also extract vehicle make, model, year, and VIN. Return all four fields. " +
+  "Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.";
 
 const BACK_SYSTEM_PROMPT =
   "You read the BACK side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
@@ -275,7 +315,7 @@ async function extractWithFallback<T>(
 export function extractMoulkiaFront(base64: string, mediaType: string): Promise<OcrResult<MoulkiaFront>> {
   return extractWithFallback(
     FRONT_SYSTEM_PROMPT,
-    "Extract owner name and plate from the FRONT of this Moulkia as JSON.",
+    "Extract owner name, plate, make, model, year and VIN from the FRONT of this Moulkia as JSON.",
     parseMoulkiaFrontJson,
     isEmptyFront,
     EMPTY_FRONT,

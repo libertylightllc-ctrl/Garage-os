@@ -223,8 +223,12 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           </label>
         ) : null}
 
+        {/* The 'Send to Technician' button is the explicit handoff — tapping
+            it creates the job AND drops it into the shared technician pool
+            (or the specific tech the advisor picked earlier). No automatic
+            handoff happens before this tap. */}
         <button className="rounded-lg bg-zinc-900 px-4 py-3 text-base font-semibold text-white dark:bg-white dark:text-black">
-          {t("startJobCard")}
+          {t("sendToTechnician")}
         </button>
       </form>
     </main>

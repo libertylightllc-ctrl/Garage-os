@@ -339,5 +339,8 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   });
 
   revalidatePath("/advisor");
-  redirect(`/advisor/jobs/${jobId}`);
+  // Hand-off confirmation screen — explicit "you sent this to a tech" page
+  // before dropping the advisor onto the job timeline. Lets them queue up
+  // another intake without losing context, and makes the handoff feel real.
+  redirect(`/advisor/jobs/new/done?jobId=${jobId}`);
 }

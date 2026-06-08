@@ -98,19 +98,26 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
               required
               className={`${FIELD} min-w-48 flex-1`}
             />
+            {/* step="any" — let the user type any decimal (35, 35.5, 35.00).
+                The previous step="0.5" + min="0.01" combo made the browser
+                snap to a 0.01-offset grid (valid values 34.51 / 35.01), so
+                whole numbers like 35 were rejected. Server still enforces
+                qty > 0 and price >= 0, so the UI step is purely a hint. */}
             <input
               name="qty"
               type="number"
-              step="0.5"
-              min="0.01"
+              step="any"
+              min="0"
+              inputMode="decimal"
               defaultValue={line.qty}
               className={`${FIELD} w-20 text-right`}
             />
             <input
               name="unitPrice"
               type="number"
-              step="0.01"
+              step="any"
               min="0"
+              inputMode="decimal"
               defaultValue={priceForInput}
               className={`${FIELD} w-28 text-right`}
             />

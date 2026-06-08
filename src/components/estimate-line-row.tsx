@@ -43,18 +43,21 @@ export interface LineProps {
 // Padding gives ~44px tap height — meets iOS HIG / Android Material minimums.
 const FIELD =
   "rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20";
-// Action "links" (Edit / Delete / Skip) are real tap targets — sized like
-// buttons, not the text-xs underlined links they were before.
 const ACTION =
   "rounded-md px-3 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10";
 
 /**
- * One <tr> per estimate line. Two modes:
+ * One CARD per estimate line. Two modes:
  *
- *   idle    — read-only display + [Edit] [Delete] [Skip/Restore] buttons
+ *   idle    — read-only display + [Edit] [Skip/Restore] [Delete] buttons
  *   editing — inline form (kind dropdown + description + qty + unit price)
  *             + [Save] [Cancel] buttons. Cancel discards local edits, no
  *             server round-trip.
+ *
+ * We render as a <div> card (not a <tr>) so each line gets its own breathing
+ * room on narrow screens. The previous table layout collapsed numbers
+ * together on mobile ("185.511.00185.51") — cards fix that by giving the
+ * numbers labels and their own line.
  *
  * The kind dropdown shows DISCOUNT separately even though it stores as
  * FEE with a negative amount — matches addEstimateLineAction's sugar.
@@ -70,22 +73,18 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
   const displayKind = isDiscountLine ? "DISCOUNT" : line.kind;
   const priceForInput = Math.abs(line.unitPrice).toFixed(2);
 
-  const rowClass =
-    "border-b border-black/5 dark:border-white/10 " +
-    (line.declined && !editing ? "text-zinc-400 line-through" : "");
-
   // ---- Editing mode: full inline edit form ----
   if (editing && editable) {
     return (
-      <tr className="border-b border-black/5 dark:border-white/10">
-        <td colSpan={5} className="py-3">
-          <form
-            action={updateEstimateLineAction}
-            className="flex flex-wrap items-center gap-2"
-            onSubmit={() => setEditing(false)}
-          >
-            <input type="hidden" name="estimateId" value={estimateId} />
-            <input type="hidden" name="lineId" value={line.id} />
+      <div className="rounded-lg border border-zinc-900/30 bg-zinc-50 p-3 dark:border-white/30 dark:bg-zinc-900">
+        <form
+          action={updateEstimateLineAction}
+          className="flex flex-col gap-3"
+          onSubmit={() => setEditing(false)}
+        >
+          <input type="hidden" name="estimateId" value={estimateId} />
+          <input type="hidden" name="lineId" value={line.id} />
+          <div className="flex flex-wrap gap-2">
             <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
               <option value="LABOR">{labels.kindLabor}</option>
               <option value="PART">{labels.kindPart}</option>
@@ -96,96 +95,121 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
               name="description"
               defaultValue={line.description}
               required
-              className={`${FIELD} min-w-48 flex-1`}
+              className={`${FIELD} min-w-40 flex-1`}
             />
-            {/* step="any" — let the user type any decimal (35, 35.5, 35.00).
-                The previous step="0.5" + min="0.01" combo made the browser
-                snap to a 0.01-offset grid (valid values 34.51 / 35.01), so
-                whole numbers like 35 were rejected. Server still enforces
-                qty > 0 and price >= 0, so the UI step is purely a hint. */}
-            <input
-              name="qty"
-              type="number"
-              step="any"
-              min="0"
-              inputMode="decimal"
-              defaultValue={line.qty}
-              className={`${FIELD} w-20 text-right`}
-            />
-            <input
-              name="unitPrice"
-              type="number"
-              step="any"
-              min="0"
-              inputMode="decimal"
-              defaultValue={priceForInput}
-              className={`${FIELD} w-28 text-right`}
-            />
+          </div>
+          {/* step="any" — let the user type any decimal (35, 35.5, 35.00).
+              Server still enforces qty > 0 and price >= 0, so the UI step
+              is purely a hint. */}
+          <div className="flex flex-wrap gap-2">
+            <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
+              Qty
+              <input
+                name="qty"
+                type="number"
+                step="any"
+                min="0"
+                inputMode="decimal"
+                defaultValue={line.qty}
+                className={`${FIELD} mt-1 w-24 text-right`}
+              />
+            </label>
+            <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
+              Unit (AED)
+              <input
+                name="unitPrice"
+                type="number"
+                step="any"
+                min="0"
+                inputMode="decimal"
+                defaultValue={priceForInput}
+                className={`${FIELD} mt-1 flex-1 text-right`}
+              />
+            </label>
+          </div>
+          <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black"
+              className="flex-1 rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black"
             >
               {labels.save}
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="rounded-md border border-black/15 px-4 py-2 text-base font-medium dark:border-white/20"
+              className="flex-1 rounded-md border border-black/15 px-4 py-2 text-base font-medium dark:border-white/20"
             >
               {labels.cancel}
             </button>
-          </form>
-        </td>
-      </tr>
+          </div>
+        </form>
+      </div>
     );
   }
 
-  // ---- Idle mode: read-only display + actions ----
+  // ---- Idle mode: card display ----
+  const cardClass =
+    "rounded-lg border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-950 " +
+    (line.declined ? "opacity-60" : "");
+  const valueClass = line.declined ? "line-through" : "";
+
   return (
-    <tr className={rowClass}>
-      <td className="py-3 pr-2 text-base">
-        <span className="text-xs uppercase tracking-wide text-zinc-400">{displayKind}</span>{" "}
-        {line.description}
-      </td>
-      <td className="py-3 text-right text-base tabular-nums">{Number(line.qty)}</td>
-      <td className="py-3 text-right text-base tabular-nums">
-        {Number(line.unitPrice).toFixed(2)}
-      </td>
-      <td className="py-3 text-right text-base font-medium tabular-nums">
-        {Number(line.lineTotal).toFixed(2)}
-      </td>
-      {editable || canDecline ? (
-        <td className="py-3 pl-2 text-right no-underline">
-          <div className="flex flex-wrap justify-end gap-1">
-            {editable ? (
-              <button type="button" onClick={() => setEditing(true)} className={ACTION}>
-                {labels.edit}
-              </button>
-            ) : null}
-            {canDecline ? (
-              <form action={toggleEstimateLineAction}>
-                <input type="hidden" name="estimateId" value={estimateId} />
-                <input type="hidden" name="lineId" value={line.id} />
-                <button className={ACTION}>
-                  {line.declined ? labels.restore : labels.skip}
-                </button>
-              </form>
-            ) : null}
-            {editable ? (
-              <form action={removeEstimateLineAction}>
-                <input type="hidden" name="estimateId" value={estimateId} />
-                <input type="hidden" name="lineId" value={line.id} />
-                <ConfirmButton
-                  message={labels.confirmDelete}
-                  className={`${ACTION} text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40`}
-                >
-                  {labels.delete}
-                </ConfirmButton>
-              </form>
-            ) : null}
+    <div className={cardClass}>
+      {/* Row 1: kind badge + description */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            {displayKind}
+          </span>
+          <p className={`mt-1.5 text-base font-medium ${valueClass}`}>{line.description}</p>
+        </div>
+        {/* Big line total on the right — the cashier's eye lands here */}
+        <div className="text-right">
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
+          <div className={`text-lg font-semibold tabular-nums ${valueClass}`}>
+            AED {Number(line.lineTotal).toFixed(2)}
           </div>
-        </td>
+        </div>
+      </div>
+
+      {/* Row 2: qty × unit price breakdown */}
+      <div className="mt-2 flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-300">
+        <span className="tabular-nums">{Number(line.qty)}</span>
+        <span className="text-zinc-400">×</span>
+        <span className="tabular-nums">AED {Number(line.unitPrice).toFixed(2)}</span>
+      </div>
+
+      {/* Row 3: actions */}
+      {editable || canDecline ? (
+        <div className="mt-3 flex flex-wrap gap-1 border-t border-black/5 pt-2 dark:border-white/10">
+          {editable ? (
+            <button type="button" onClick={() => setEditing(true)} className={ACTION}>
+              {labels.edit}
+            </button>
+          ) : null}
+          {canDecline ? (
+            <form action={toggleEstimateLineAction}>
+              <input type="hidden" name="estimateId" value={estimateId} />
+              <input type="hidden" name="lineId" value={line.id} />
+              <button className={ACTION}>
+                {line.declined ? labels.restore : labels.skip}
+              </button>
+            </form>
+          ) : null}
+          {editable ? (
+            <form action={removeEstimateLineAction} className="ms-auto">
+              <input type="hidden" name="estimateId" value={estimateId} />
+              <input type="hidden" name="lineId" value={line.id} />
+              <ConfirmButton
+                message={labels.confirmDelete}
+                className={`${ACTION} text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40`}
+              >
+                {labels.delete}
+              </ConfirmButton>
+            </form>
+          ) : null}
+        </div>
       ) : null}
-    </tr>
+    </div>
   );
 }

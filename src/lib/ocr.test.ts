@@ -277,10 +277,13 @@ describe("extractMoulkiaFront — primary + fallback chain", () => {
       expect(bodySeen).toContain("middle section of the front of the Moulkia");
       expect(bodySeen).toContain("Also extract vehicle make, model, year, and VIN");
       expect(bodySeen).toContain("Return all four fields");
+      // Sharper-prompt cues from the iPhone-testing pass — pin them too.
+      expect(bodySeen).toContain("Read the Latin/English transcription, never the Arabic");
+      expect(bodySeen).toContain("Chassis No");
     });
   });
 
-  it("primary HTTP error → 2 attempts, Sonnet succeeds", async () => {
+  it("primary HTTP error → 2 attempts, fallback succeeds", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([
         { ok: false, body: { error: { message: "Bad image" } } },
@@ -346,7 +349,7 @@ describe("extractMoulkiaBack — same chain, different fields", () => {
     });
   });
 
-  it("empty back triggers fallback (real-world case for Sonnet to rescue)", async () => {
+  it("empty back triggers fallback (real-world case for the cheaper model to rescue)", async () => {
     await withMockedEnv(async () => {
       const { fetch: f, calls } = stubFetch([
         { ok: true, body: emptyBackPayload },
@@ -374,7 +377,9 @@ describe("extractMoulkiaBack — same chain, different fields", () => {
   });
 
   it("model identifiers are still the verified Anthropic strings", () => {
-    expect(OCR_PRIMARY).toBe("claude-haiku-4-5");
-    expect(OCR_FALLBACK).toBe("claude-sonnet-4-6");
+    // Sonnet-primary (accuracy first) after real iPhone testing showed
+    // Haiku misreads. Haiku stays as the cheaper/faster safety net.
+    expect(OCR_PRIMARY).toBe("claude-sonnet-4-6");
+    expect(OCR_FALLBACK).toBe("claude-haiku-4-5");
   });
 });

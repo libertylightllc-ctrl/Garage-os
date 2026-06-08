@@ -54,10 +54,14 @@ export function ocrEnabled(): boolean {
 }
 
 // Verified against https://platform.claude.com/docs (Models overview) on 2026-06-05:
-//   Haiku 4.5: $1/$5 per Mtok, fastest, vision-capable
-//   Sonnet 4.6: $3/$15 per Mtok, stronger OCR, vision-capable
-export const OCR_PRIMARY = process.env.ANTHROPIC_OCR_MODEL ?? "claude-haiku-4-5";
-export const OCR_FALLBACK = process.env.ANTHROPIC_OCR_FALLBACK_MODEL ?? "claude-sonnet-4-6";
+//   Sonnet 4.6: $3/$15 per Mtok, stronger OCR, vision-capable     ← PRIMARY
+//   Haiku  4.5: $1/$5  per Mtok, fastest, vision-capable          ← FALLBACK
+// Order was swapped (was Haiku-first) after real iPhone testing showed
+// Haiku misread UAE Moulkias often enough that the advisor had to retype
+// fields. Sonnet is ~2× slower per call but accuracy >> raw speed for the
+// reception flow — a correct first scan beats two fast wrong ones.
+export const OCR_PRIMARY = process.env.ANTHROPIC_OCR_MODEL ?? "claude-sonnet-4-6";
+export const OCR_FALLBACK = process.env.ANTHROPIC_OCR_FALLBACK_MODEL ?? "claude-haiku-4-5";
 
 export const EMPTY_FRONT: MoulkiaFront = {
   ownerName: "",
@@ -179,17 +183,29 @@ export function mergeMoulkiaFields(
 // Claude vision call (shared between front and back; prompt is the variable)
 // ---------------------------------------------------------------------------
 
+// Sharper prompts after real iPhone testing showed Haiku misreading fields.
+// We name the on-card labels we actually see on UAE Moulkias so the model
+// knows exactly where each value lives, and we explicitly say "prefer the
+// Latin/English transliteration" because the cards are bilingual and the
+// Arabic side is rendered with diacritics that often OCR poorly.
 const FRONT_SYSTEM_PROMPT =
   "You read the FRONT side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
   '{"ownerName": string, "plate": string, "make": string, "model": string, "year": number, "vin": string}. ' +
   "Extract the owner name from the middle section of the front of the Moulkia card. " +
   "Also extract vehicle make, model, year, and VIN. Return all four fields. " +
-  "Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.";
+  "Layout cues — the card has these labelled rows: 'Owner' (middle, bilingual — pick the Latin/English line, full name), " +
+  "'Plate No' / 'T.C No' (top, alphanumeric with emirate code like 'A 12345' or 'DXB A 12345'), " +
+  "'Veh. Type' / 'Make' (lower-middle), 'Model' (next to or below Make), " +
+  "'Model Year' (the four-digit year), and 'Chassis No' / 'VIN' (bottom row, 17 alphanumeric chars). " +
+  "Read the Latin/English transcription, never the Arabic. " +
+  "If a field is unreadable use an empty string (or 0 for year). No prose, no markdown, no code fences — just the JSON object.";
 
 const BACK_SYSTEM_PROMPT =
   "You read the BACK side of a UAE Moulkia (vehicle registration card) image and reply with ONLY a JSON object: " +
   '{"vin": string, "make": string, "model": string, "year": number}. ' +
-  "VIN is the chassis number. Use the Latin/English text. If a field is unreadable use an empty string (or 0 for year). No prose.";
+  "Layout cues — 'Chassis No' / 'VIN' (17 alphanumeric chars), 'Make' (manufacturer), 'Model' (variant), " +
+  "'Model Year' (four-digit year). Read the Latin/English transcription, never the Arabic. " +
+  "If a field is unreadable use an empty string (or 0 for year). No prose, no markdown, no code fences — just the JSON object.";
 
 interface ClaudeRaw {
   text: string;

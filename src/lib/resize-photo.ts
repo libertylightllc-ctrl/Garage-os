@@ -13,10 +13,20 @@
 //
 // All capped sizes / quality are constants so they're easy to tune.
 
-/** Longest-edge target after resize. ~1024px keeps Moulkia text crisp. */
-export const RESIZE_MAX_EDGE = 1024;
-/** JPEG quality — 0.85 is the sweet spot for document photos. */
-export const RESIZE_JPEG_QUALITY = 0.85;
+/**
+ * Longest-edge target after resize. 1568px matches Anthropic's internal
+ * vision-API downsample cap — anything bigger gets shrunk there anyway,
+ * and anything smaller loses text legibility on a card the size of a
+ * credit card. After real-iPhone testing showed too-small images caused
+ * OCR misreads, we moved up from 1024px → 1568px.
+ */
+export const RESIZE_MAX_EDGE = 1568;
+/**
+ * JPEG quality — 0.92 preserves the fine print on small Moulkia text far
+ * better than the 0.85 we shipped first. Files stay well under 1 MB at
+ * this size which is fine for our 4 MB server-action limit.
+ */
+export const RESIZE_JPEG_QUALITY = 0.92;
 /**
  * Hard cap on time spent resizing. Past this we give up and submit the
  * original file — same fail-open philosophy as isProbablyBlurry.

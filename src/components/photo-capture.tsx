@@ -160,68 +160,77 @@ export function PhotoCapture({
     />
   );
 
-  // Preview state (only reachable in mode="preview")
-  if (preview || (filename && mode === "preview")) {
-    return (
-      <div className="flex flex-col gap-2">
-        {fileInput}
-        {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={preview}
-            alt=""
-            className="max-h-64 rounded-lg border border-black/10 dark:border-white/15"
-          />
-        ) : (
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">
-            {icon} {filename}
-          </p>
-        )}
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onRetake}
-            className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-          >
-            {icon} {retakeLabel}
-          </button>
-          <button
-            type="submit"
-            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            {continueLabel}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // ONE root wrapper for every state so the hidden <input> stays in the same
+  // tree position. React reconciles it as the same DOM node across idle →
+  // preview transitions, so the user's captured File is preserved instead
+  // of being wiped when the input is unmounted into a different parent.
+  // (That was the "Please select a file" bug on the check-in photo screen:
+  // the photo preview was visible but Safari's form-level required check
+  // saw an empty input because the DOM element had just been recreated.)
+  const inPreview = preview || (filename && mode === "preview");
 
-  // Idle state — one big tappable button
   return (
-    <div className="flex flex-col gap-1">
-      <label
-        htmlFor={inputId}
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-      >
-        {fileInput}
-        <span className="text-4xl" aria-hidden>
-          {icon}
-        </span>
-        <span className="text-base font-semibold">{buttonLabel}</span>
-      </label>
-      {optimizing && optimizingLabel ? (
-        <p
-          className="rounded-md bg-zinc-100 px-3 py-2 text-center text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-          aria-live="polite"
-        >
-          ⚙️ {optimizingLabel}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-          {error}
-        </p>
-      ) : null}
+    <div className="flex flex-col gap-2">
+      {fileInput}
+
+      {inPreview ? (
+        <>
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt=""
+              className="max-h-64 rounded-lg border border-black/10 dark:border-white/15"
+            />
+          ) : (
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              {icon} {filename}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onRetake}
+              className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              {icon} {retakeLabel}
+            </button>
+            <button
+              type="submit"
+              className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              {continueLabel}
+            </button>
+          </div>
+        </>
+      ) : (
+        // Idle state — one big tappable label. htmlFor delegates clicks to
+        // the input above, so we don't need to nest the input inside.
+        <>
+          <label
+            htmlFor={inputId}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            <span className="text-4xl" aria-hidden>
+              {icon}
+            </span>
+            <span className="text-base font-semibold">{buttonLabel}</span>
+          </label>
+          {optimizing && optimizingLabel ? (
+            <p
+              className="rounded-md bg-zinc-100 px-3 py-2 text-center text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              aria-live="polite"
+            >
+              ⚙️ {optimizingLabel}
+            </p>
+          ) : null}
+          {error ? (
+            <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

@@ -7,7 +7,6 @@ import { type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
 import {
   claimJobAction,
-  releaseJobAction,
   joinJobAction,
   sendForEstimateAction,
   sendForReestimateAction,
@@ -285,14 +284,9 @@ export default async function TechnicianHome({
                         </button>
                       </form>
                     ) : null}
-                    {amHelper(j) ? null : (
-                      <form action={releaseJobAction}>
-                        <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">
-                          {t("releaseCar")}
-                        </button>
-                      </form>
-                    )}
+                    {/* Release-claim button removed per workflow spec — the
+                        tech who claims a job sees it through. To unclaim a
+                        car they can release it via the job detail page. */}
                   </div>
                 </li>
               );

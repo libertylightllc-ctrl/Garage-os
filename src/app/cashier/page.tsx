@@ -48,14 +48,24 @@ export default async function CashierHome() {
     }),
   ]);
 
-  // Stage 8 — tech marked complete; cashier needs to generate + send the
-  // final invoice. Shown as its own section so it doesn't get lost among
-  // 'jobs to price' (those are Stage 4/5 still in the pricing window).
+  // Cashier dashboard buckets — each surfaces a different "what's mine to
+  // do now" question, with no pricing buttons appearing until the tech
+  // has actually handed the job off via Send-for-Estimate.
+  //
+  //   waitingForDiagnosis — tech is still working on it; cashier can SEE
+  //     the job exists but has no actions yet. No buttons rendered.
+  //   toPrice            — tech has sent it; cashier needs to set prices.
+  //                        Either no estimate yet (just-handed-off) or a
+  //                        DRAFT being assembled. Status MUST be ESTIMATE.
+  //   toReestimate       — tech flagged extra work mid-job.
+  //   toInvoice          — tech marked complete; awaiting final invoice.
+  const waitingForDiagnosis = jobs.filter(
+    (j) => j.status === "ARRIVED" || j.status === "INSPECTION",
+  );
   const toInvoice = jobs.filter((j) => j.status === "TECH_COMPLETE");
-  // Re-estimate cycle — tech flagged extra work mid-job. Cashier needs to
-  // price the extra + send a new estimate to the customer.
   const toReestimate = jobs.filter((j) => j.status === "EXTRA_WORK_AWAITING_APPROVAL");
   const toPrice = jobs.filter((j) => {
+    if (j.status !== "ESTIMATE") return false;
     const e = j.estimates[0];
     return !e || e.status === "DRAFT";
   });
@@ -269,6 +279,48 @@ export default async function CashierHome() {
           </ul>
         )}
       </div>
+
+      {/* Tech is still diagnosing — cashier sees the job exists so they can
+          anticipate workload, but no actions are available yet. Per spec,
+          NO pricing buttons render on these rows. */}
+      {waitingForDiagnosis.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("cashierWaitingDiagnosisTitle")}</h2>
+          <ul className="flex flex-col gap-1">
+            {waitingForDiagnosis.map((j) => (
+              <li
+                key={j.id}
+                className="flex flex-col gap-2 rounded-lg border border-black/10 bg-zinc-50 p-3 text-sm dark:border-white/15 dark:bg-zinc-900/40"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    <span className="font-medium">
+                      {j.vehicle.make} {j.vehicle.model}
+                    </span>
+                    <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                      {j.vehicle.plate} · {j.vehicle.customer.name}
+                    </span>
+                  </span>
+                  <FriendlyStatusBadge
+                    status={friendlyStatus({
+                      status: j.status as JobStatus,
+                      claimedById: j.claimedById,
+                    })}
+                    t={t}
+                    size="sm"
+                  />
+                </div>
+                {/* No JobTimings here yet — diagnosis is still running and
+                    we don't want to bury the 'no action needed' message
+                    under live timer noise. */}
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {t("cashierWaitingDiagnosisCaption")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div>
         <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>

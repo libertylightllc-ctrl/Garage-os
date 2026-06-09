@@ -50,6 +50,7 @@ enum JobStatus {
   ESTIMATE
   APPROVED
   REPAIR
+  TECH_COMPLETE   // tech tapped 'Mark complete'; awaiting cashier to finalise invoice
   INVOICED
   DELIVERED
   ON_HOLD
@@ -383,7 +384,9 @@ model JobCard {
   moulkiaConsentAt  DateTime?  // compliance: consent recorded at intake
   // ----- Repair stage (technician records actual work) -----
   workNotes         String?    // work-completed notes
-  workCompletedAt   DateTime?  // set when the technician marks the work complete
+  workCompletedAt   DateTime?  // alias for spec's `completedAt` — set when the tech taps 'Mark complete' (Stage 7→8)
+  // ----- Invoice send (Stage 8) -----
+  invoiceSentAt     DateTime?  // set when the cashier taps 'Send invoice to customer'
   // ----- Quality Control -----
   qcChecks          String[]   // checkbox values (REPAIR_COMPLETED, ROAD_TEST, ...)
   qcById            String?    // QC inspector

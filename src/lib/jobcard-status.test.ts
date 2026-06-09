@@ -129,15 +129,36 @@ describe("friendlyStatus — internal → customer-facing label", () => {
     ).toBe("ESTIMATE_UNDER_PROCESS");
   });
 
-  it("APPROVED / REPAIR / INVOICED → 'Approved work in progress'", () => {
-    for (const s of ["APPROVED", "REPAIR", "INVOICED"] as const) {
+  it("APPROVED / REPAIR → 'Approved work in progress'", () => {
+    for (const s of ["APPROVED", "REPAIR"] as const) {
       expect(friendlyStatus({ status: s, claimedById: "tech-1" })).toBe(
         "APPROVED_IN_PROGRESS",
       );
     }
   });
 
-  it("DELIVERED → 'Complete'", () => {
+  it("TECH_COMPLETE → 'Complete — awaiting invoice' (Stage 8)", () => {
+    expect(friendlyStatus({ status: "TECH_COMPLETE", claimedById: "tech-1" })).toBe(
+      "COMPLETE_AWAITING_INVOICE",
+    );
+  });
+
+  it("INVOICED not yet paid → 'Awaiting payment' (Stage 9)", () => {
+    expect(friendlyStatus({ status: "INVOICED", claimedById: "tech-1" })).toBe(
+      "AWAITING_PAYMENT",
+    );
+    expect(
+      friendlyStatus({ status: "INVOICED", claimedById: "tech-1", invoicePaidInFull: false }),
+    ).toBe("AWAITING_PAYMENT");
+  });
+
+  it("INVOICED + paid in full → 'Ready for pickup' (Stage 10)", () => {
+    expect(
+      friendlyStatus({ status: "INVOICED", claimedById: "tech-1", invoicePaidInFull: true }),
+    ).toBe("READY_FOR_PICKUP");
+  });
+
+  it("DELIVERED → 'Collected' (Stage 11)", () => {
     expect(friendlyStatus({ status: "DELIVERED", claimedById: "tech-1" })).toBe("COMPLETE");
   });
 
@@ -153,6 +174,9 @@ describe("friendlyStatus — internal → customer-facing label", () => {
       "ESTIMATE_UNDER_PROCESS",
       "AWAITING_CUSTOMER_APPROVAL",
       "APPROVED_IN_PROGRESS",
+      "COMPLETE_AWAITING_INVOICE",
+      "AWAITING_PAYMENT",
+      "READY_FOR_PICKUP",
       "COMPLETE",
       "ON_HOLD",
       "CANCELLED",

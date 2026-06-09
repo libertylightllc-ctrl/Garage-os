@@ -7,18 +7,21 @@ export type JobStatus =
   | "ESTIMATE"
   | "APPROVED"
   | "REPAIR"
+  | "TECH_COMPLETE" // tech tapped 'Mark complete', waiting on cashier to send invoice
   | "INVOICED"
   | "DELIVERED"
   | "ON_HOLD"
   | "CANCELLED";
 
-// The linear advisor timeline (one tap advances by one).
+// The linear advisor timeline (one tap advances by one). TECH_COMPLETE sits
+// between REPAIR and INVOICED so a normal forward tap walks through it.
 export const TIMELINE: JobStatus[] = [
   "ARRIVED",
   "INSPECTION",
   "ESTIMATE",
   "APPROVED",
   "REPAIR",
+  "TECH_COMPLETE",
   "INVOICED",
   "DELIVERED",
 ];
@@ -31,6 +34,7 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
   ESTIMATE: "Estimate",
   APPROVED: "Approved",
   REPAIR: "Repair",
+  TECH_COMPLETE: "Tech complete",
   INVOICED: "Invoiced",
   DELIVERED: "Delivered",
   ON_HOLD: "On hold",
@@ -51,6 +55,9 @@ export type FriendlyStatus =
   | "ESTIMATE_UNDER_PROCESS"
   | "AWAITING_CUSTOMER_APPROVAL"
   | "APPROVED_IN_PROGRESS"
+  | "COMPLETE_AWAITING_INVOICE"
+  | "AWAITING_PAYMENT"
+  | "READY_FOR_PICKUP"
   | "COMPLETE"
   | "ON_HOLD"
   | "CANCELLED";
@@ -61,23 +68,34 @@ export interface FriendlyStatusInput {
   claimedById: string | null;
   /** Status of the most recent estimate, if one exists. */
   latestEstimateStatus?: "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null;
+  /**
+   * Whether the latest invoice on this job has been paid in full.
+   * Drives the AWAITING_PAYMENT → READY_FOR_PICKUP transition for
+   * INVOICED-status jobs.
+   */
+  invoicePaidInFull?: boolean;
 }
 
 /**
- * Collapse the internal JobStatus + claim/estimate context into the six
- * customer-friendly labels (plus ON_HOLD / CANCELLED).
+ * Collapse the internal JobStatus + claim/estimate context into the
+ * customer-friendly labels (the 11 spec stages mapped onto fewer pills
+ * where stages share a status, plus ON_HOLD / CANCELLED).
  *
- *   internal               → friendly
- *   ─────────────────────── ──────────────────────────────
- *   ARRIVED, no claim      → WAITING_FOR_TECH
- *   ARRIVED, claimed       → TECH_DIAGNOSING   (claimed but pre-INSPECTION)
- *   INSPECTION             → TECH_DIAGNOSING
- *   ESTIMATE, no SENT yet  → ESTIMATE_UNDER_PROCESS
- *   ESTIMATE, latest=SENT  → AWAITING_CUSTOMER_APPROVAL
- *   APPROVED/REPAIR/INVOICED→ APPROVED_IN_PROGRESS
- *   DELIVERED              → COMPLETE
- *   ON_HOLD                → ON_HOLD
- *   CANCELLED              → CANCELLED
+ *   internal                 → friendly
+ *   ─────────────────────────── ──────────────────────────────
+ *   ARRIVED, no claim        → WAITING_FOR_TECH         (Stage 2)
+ *   ARRIVED, claimed         → TECH_DIAGNOSING          (Stage 3 — gap before INSPECTION)
+ *   INSPECTION               → TECH_DIAGNOSING          (Stage 3)
+ *   ESTIMATE, no SENT yet    → ESTIMATE_UNDER_PROCESS   (Stages 4+5)
+ *   ESTIMATE, latest=SENT    → AWAITING_CUSTOMER_APPROVAL (Stage 6)
+ *   APPROVED                 → APPROVED_IN_PROGRESS     (Stage 7 start)
+ *   REPAIR                   → APPROVED_IN_PROGRESS     (Stage 7 work)
+ *   TECH_COMPLETE            → COMPLETE_AWAITING_INVOICE (Stage 8)
+ *   INVOICED, not paid       → AWAITING_PAYMENT          (Stage 9)
+ *   INVOICED, paid in full   → READY_FOR_PICKUP          (Stage 10)
+ *   DELIVERED                → COMPLETE                  (Stage 11)
+ *   ON_HOLD                  → ON_HOLD                   (kept honest)
+ *   CANCELLED                → CANCELLED                 (kept honest)
  */
 export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
   switch (input.status) {
@@ -91,8 +109,11 @@ export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
         : "ESTIMATE_UNDER_PROCESS";
     case "APPROVED":
     case "REPAIR":
-    case "INVOICED":
       return "APPROVED_IN_PROGRESS";
+    case "TECH_COMPLETE":
+      return "COMPLETE_AWAITING_INVOICE";
+    case "INVOICED":
+      return input.invoicePaidInFull ? "READY_FOR_PICKUP" : "AWAITING_PAYMENT";
     case "DELIVERED":
       return "COMPLETE";
     case "ON_HOLD":
@@ -118,6 +139,12 @@ export const FRIENDLY_STATUS_TONE: Record<FriendlyStatus, string> = {
     "bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200",
   APPROVED_IN_PROGRESS:
     "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+  COMPLETE_AWAITING_INVOICE:
+    "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-200",
+  AWAITING_PAYMENT:
+    "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/60 dark:text-fuchsia-200",
+  READY_FOR_PICKUP:
+    "bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200",
   COMPLETE:
     "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   ON_HOLD:
@@ -171,7 +198,12 @@ export function availableActions(state: JobState): JobAction[] {
 export function skippableTargets(current: JobStatus): JobStatus[] {
   if (!isLinear(current)) return [];
   const i = TIMELINE.indexOf(current);
-  return TIMELINE.slice(i + 1).filter((s) => s !== "INVOICED" && s !== "DELIVERED");
+  // Exclude INVOICED + DELIVERED (those are reached via the real invoice
+  // flow / collection confirm, not a skip) AND TECH_COMPLETE (Stage 7→8
+  // is the tech's explicit Mark-complete tap; advisor must not bypass it).
+  return TIMELINE.slice(i + 1).filter(
+    (s) => s !== "INVOICED" && s !== "DELIVERED" && s !== "TECH_COMPLETE",
+  );
 }
 
 export function skipTo(state: JobState, target: JobStatus): JobState {

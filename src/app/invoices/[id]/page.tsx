@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { recordPaymentAction } from "@/app/actions/billing";
+import { recordPaymentAction, sendInvoiceToCustomerAction } from "@/app/actions/billing";
 import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 
@@ -105,6 +105,28 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {/* Stage 8 — explicit 'Send invoice to customer' tap (spec). When
+          the cashier has reviewed items and wants to notify the customer.
+          Hidden once the invoice has already been sent (job.invoiceSentAt
+          is set). Mocks the WhatsApp send in this build per build decision. */}
+      {["CASHIER", "OWNER"].includes(session.user.role) &&
+      !inv.jobCard.invoiceSentAt ? (
+        <form action={sendInvoiceToCustomerAction} className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 dark:bg-fuchsia-950/40">
+          <input type="hidden" name="invoiceId" value={inv.id} />
+          <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
+            {t("invoiceSentMockNote")}
+          </p>
+          <button className="mt-3 rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500">
+            {t("sendInvoiceToCustomer")}
+          </button>
+        </form>
+      ) : inv.jobCard.invoiceSentAt ? (
+        <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{" "}
+          {inv.jobCard.invoiceSentAt.toISOString().slice(0, 16).replace("T", " ")}
+        </p>
+      ) : null}
 
       {/* Mark as paid — record-only (garage uses its own POS / cash drawer) */}
       {["CASHIER", "OWNER"].includes(session.user.role) && state !== "PAID" ? (

@@ -10,6 +10,7 @@ import {
   releaseJobAction,
   joinJobAction,
   sendForEstimateAction,
+  markCompleteAction,
 } from "@/app/actions/jobs";
 import { friendlyStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
@@ -151,12 +152,16 @@ export default async function TechnicianHome({
           <ul className="flex flex-col gap-2">
             {inProgress.map((j) => {
               // 'Send for Estimate' is only meaningful while the tech is
-              // still diagnosing — after ESTIMATE/APPROVED/REPAIR/INVOICED
-              // the job has moved on. Helpers (not the primary tech)
-              // shouldn't see it either; only the claimer can send.
+              // still diagnosing — after ESTIMATE/APPROVED/REPAIR the job
+              // has moved on. Helpers can't send; only the claimer.
               const canSendForEstimate =
                 !amHelper(j) &&
                 (j.status === "ARRIVED" || j.status === "INSPECTION");
+              // 'Mark complete' replaces it once the customer has approved
+              // and work is happening (Stage 7). Helpers can also tap
+              // (sometimes they finish the car while the primary's on lunch).
+              const canMarkComplete =
+                j.status === "APPROVED" || j.status === "REPAIR";
               return (
                 <li
                   key={j.id}
@@ -202,6 +207,14 @@ export default async function TechnicianHome({
                         <input type="hidden" name="jobId" value={j.id} />
                         <button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500">
                           {t("sendForEstimate")}
+                        </button>
+                      </form>
+                    ) : null}
+                    {canMarkComplete ? (
+                      <form action={markCompleteAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500">
+                          {t("markCompleteAndSend")}
                         </button>
                       </form>
                     ) : null}

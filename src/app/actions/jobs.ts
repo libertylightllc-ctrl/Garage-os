@@ -133,6 +133,54 @@ export async function claimJobAction(formData: FormData) {
 }
 
 /**
+ * Stage 7→8 — Tech taps 'Mark complete' after the approved work is done.
+ * Stamps completedAt (workCompletedAt in the schema) and flips status to
+ * TECH_COMPLETE, putting the job on the cashier's queue to finalise the
+ * invoice. Only the claimer (or a helper joined on the job) can mark
+ * complete; status must be APPROVED or REPAIR (the work-in-progress
+ * window), otherwise we redirect with a soft error.
+ */
+export async function markCompleteAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: {
+      id: true,
+      status: true,
+      claimedById: true,
+      helpers: { where: { techId: user.id }, select: { techId: true } },
+    },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  const isPrimary = job.claimedById === user.id;
+  const isHelper = job.helpers.length > 0;
+  if (!isPrimary && !isHelper) {
+    redirect(`/technician/jobs/${jobId}?error=notyours`);
+  }
+  // Stage 7 covers APPROVED (work just started) and REPAIR (actively
+  // working). Anywhere else Mark-complete makes no sense.
+  if (job.status !== "APPROVED" && job.status !== "REPAIR") {
+    redirect(`/technician/jobs/${jobId}?error=cannotcomplete`);
+  }
+  await prisma.jobCard.update({
+    where: { id: jobId },
+    data: {
+      status: "TECH_COMPLETE",
+      workCompletedAt: new Date(),
+      heldFrom: null,
+      holdReason: null,
+      holdNote: null,
+    },
+  });
+  revalidatePath("/technician");
+  revalidatePath("/cashier");
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  redirect(`/technician/jobs/${jobId}/marked-complete`);
+}
+
+/**
  * Tech taps 'Send for Estimate' on a job they're working on. Moves the
  * job to ESTIMATE status so it appears in the cashier's pricing queue,
  * and shows a confirmation screen so the tech knows the handoff happened.

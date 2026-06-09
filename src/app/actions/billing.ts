@@ -361,19 +361,52 @@ export async function generateInvoiceAction(formData: FormData) {
     return inv.id;
   });
 
-  // Send the customer the WhatsApp invoice/pay link (mock if no Meta token).
-  const customer = await customerForJob(est.jobCardId);
-  if (customer) {
-    await sendWhatsApp({
-      garageId: user.garageId,
-      customerId: customer.id,
-      waId: customer.waId ?? customer.phone,
-      template: "invoice",
-      body: `Your invoice is ready. View it here: ${appUrl()}/c/invoice/${signId("invoice", invoiceId)}`,
-    });
-  }
+  // NOTE: Per spec Stage 8, the customer-facing WhatsApp send now happens
+  // in a SEPARATE explicit step (sendInvoiceToCustomerAction below) — the
+  // cashier reviews the invoice items first, then taps 'Send invoice to
+  // customer'. generateInvoiceAction just creates the invoice row.
 
   redirect(`/invoices/${invoiceId}`);
+}
+
+/**
+ * Stage 8 — Cashier taps 'Send invoice to customer' after reviewing items.
+ * Stamps the JobCard.invoiceSentAt timestamp + records a 'would-send'
+ * WhatsApp log entry (mock per build decision; real Meta send is a
+ * separate task). Redirects to a confirmation screen so the cashier
+ * knows the handoff happened.
+ */
+export async function sendInvoiceToCustomerAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, garageId: user.garageId },
+    select: { id: true, jobCardId: true, number: true, issuedAt: true },
+  });
+  if (!inv) throw new Error("Invoice not found in this garage");
+
+  const customer = await customerForJob(inv.jobCardId);
+  if (!customer) throw new Error("Customer not found for this invoice");
+
+  // Stamp the send + flip the job to its invoice-sent state. We don't
+  // change job.status (it's already INVOICED from generateInvoiceAction);
+  // the friendly badge picks up AWAITING_PAYMENT from invoicePaidInFull.
+  await prisma.jobCard.update({
+    where: { id: inv.jobCardId },
+    data: { invoiceSentAt: new Date() },
+  });
+
+  // MOCK send — log what we would have sent over WhatsApp. Real Meta wiring
+  // happens in a follow-up task per the user's build decision.
+  console.log(
+    `[mock-whatsapp] would send invoice ${inv.number} to ${customer.waId ?? customer.phone} — ${appUrl()}/c/invoice/${signId("invoice", inv.id)}`,
+  );
+
+  revalidatePath("/cashier");
+  revalidatePath("/advisor");
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath(`/advisor/jobs/${inv.jobCardId}`);
+  redirect(`/invoices/${invoiceId}/sent`);
 }
 
 export async function recordPaymentAction(formData: FormData) {

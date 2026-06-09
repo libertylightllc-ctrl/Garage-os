@@ -37,7 +37,14 @@ export default async function TechnicianHome({
         status: { notIn: ["DELIVERED", "CANCELLED"] },
         OR: [{ assignedToId: null }, { assignedToId: me }],
       },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        // waiting-pool jobs are typically ARRIVED so an estimate is rare,
+        // but keep the field available so the FriendlyStatusBadge call
+        // below renders correctly in the edge case where a tech released
+        // a job that already had an estimate.
+        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+      },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
     }),
     // Mine = jobs I claimed (primary) OR jobs I'm helping on.
@@ -49,8 +56,14 @@ export default async function TechnicianHome({
       },
       include: {
         vehicle: true,
-        // For the per-row timing captions (Diagnosis + Pricing).
-        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { sentAt: true } },
+        // For the per-row timing captions (Diagnosis + Pricing) AND for
+        // the friendly badge — status drives ESTIMATE_UNDER_PROCESS vs.
+        // AWAITING_CUSTOMER_APPROVAL on Stage 6 jobs.
+        estimates: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { status: true, sentAt: true },
+        },
       },
       orderBy: { updatedAt: "desc" },
     }),
@@ -124,6 +137,8 @@ export default async function TechnicianHome({
                       status={friendlyStatus({
                         status: j.status as JobStatus,
                         claimedById: j.claimedById,
+                        latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
+                          | "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null,
                       })}
                       t={t}
                       size="sm"
@@ -183,6 +198,8 @@ export default async function TechnicianHome({
                       status={friendlyStatus({
                         status: j.status as JobStatus,
                         claimedById: j.claimedById,
+                        latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
+                          | "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null,
                       })}
                       t={t}
                       size="sm"

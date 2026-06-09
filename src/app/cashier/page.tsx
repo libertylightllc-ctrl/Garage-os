@@ -48,6 +48,10 @@ export default async function CashierHome() {
     }),
   ]);
 
+  // Stage 8 — tech marked complete; cashier needs to generate + send the
+  // final invoice. Shown as its own section so it doesn't get lost among
+  // 'jobs to price' (those are Stage 4/5 still in the pricing window).
+  const toInvoice = jobs.filter((j) => j.status === "TECH_COMPLETE");
   const toPrice = jobs.filter((j) => {
     const e = j.estimates[0];
     return !e || e.status === "DRAFT";
@@ -87,6 +91,60 @@ export default async function CashierHome() {
           </div>
         ))}
       </div>
+
+      {/* Stage 8 — tech marked complete, awaiting invoice send by cashier.
+          Bubbles above 'Jobs to price' because it's blocking the customer's
+          payment (downstream of all the pricing work). */}
+      {toInvoice.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("cashierToInvoiceTitle")}</h2>
+          <ul className="flex flex-col gap-1">
+            {toInvoice.map((j) => {
+              const est = j.estimates[0];
+              const existingInvoice = null; // we don't query invoices here; the estimate page is the entry point
+              const hasInvoice = existingInvoice !== null; // placeholder for future expansion
+              const href = est?.id ? `/estimates/${est.id}` : "/cashier";
+              return (
+                <li
+                  key={j.id}
+                  className="flex flex-col gap-2 rounded-lg border border-teal-500/40 bg-teal-50 p-3 text-sm dark:border-teal-700/40 dark:bg-teal-950/30"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">
+                        {j.vehicle.make} {j.vehicle.model}
+                      </span>
+                      <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                        {j.vehicle.plate} · {j.vehicle.customer.name}
+                      </span>
+                    </span>
+                    <FriendlyStatusBadge
+                      status="COMPLETE_AWAITING_INVOICE"
+                      t={t}
+                      size="sm"
+                    />
+                  </div>
+                  <JobTimings
+                    claimedAt={j.claimedAt}
+                    sentForEstimateAt={j.sentForEstimateAt}
+                    estimateSentAt={est?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
+                  <div className="flex justify-end">
+                    <Link
+                      href={href}
+                      className="rounded-md bg-teal-600 px-3 py-1 font-medium text-white hover:bg-teal-500"
+                    >
+                      {hasInvoice ? t("cashierGoToInvoice") : t("cashierGenerateInvoice")}
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Jobs to price — the technician → cashier handoff. The cashier sets the price. */}
       <div>

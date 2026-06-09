@@ -10,7 +10,6 @@ import {
   joinJobAction,
   sendForEstimateAction,
   sendForReestimateAction,
-  markCompleteAction,
 } from "@/app/actions/jobs";
 import { friendlyStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
@@ -282,14 +281,14 @@ export default async function TechnicianHome({
                         </button>
                       </form>
                     ) : null}
-                    {canMarkComplete ? (
-                      <form action={markCompleteAction}>
-                        <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500">
-                          {t("markCompleteAndSend")}
-                        </button>
-                      </form>
-                    ) : null}
+                    {/* 'Finish' / 'Mark Complete' button removed from the
+                        dashboard per spec — APPROVED / REPAIR rows now
+                        only show the Open button. The actual workflow-
+                        completing action (markCompleteAction → status
+                        TECH_COMPLETE) lives on the job detail page now,
+                        so the tech opens the job, reviews the work, and
+                        taps Mark Complete from inside. Dashboard stays
+                        clean: every approved row has exactly one button. */}
                     {/* Release-claim button removed per workflow spec — the
                         tech who claims a job sees it through. To unclaim a
                         car they can release it via the job detail page. */}

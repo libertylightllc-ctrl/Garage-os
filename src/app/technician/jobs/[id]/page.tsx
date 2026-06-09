@@ -15,6 +15,12 @@ import {
   // be the claimer + the job to be in a pre-estimate stage; no
   // findings text required.
   sendForEstimateAction,
+  // markCompleteAction is the workflow-completing action: flips
+  // status to TECH_COMPLETE, sets workCompletedAt, and revalidates
+  // the cashier dashboard so the job hops over to 'Awaiting final
+  // invoice'. Per spec the dashboard no longer has a Finish button —
+  // the tech taps Mark Complete on this page instead.
+  markCompleteAction,
 } from "@/app/actions/jobs";
 import {
   saveFindingsAction,
@@ -23,7 +29,6 @@ import {
   saveWorkNotesAction,
   addUsedPartAction,
   removeUsedPartAction,
-  markWorkCompleteAction,
   signOffQcAction,
 } from "@/app/actions/techfindings";
 import { repairUnlocked } from "@/lib/jobfindings";
@@ -480,7 +485,15 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 </button>
               </form>
 
-              <form action={markWorkCompleteAction}>
+              {/* 'Mark Complete' — moved from the tech home page per
+                  spec. Fires markCompleteAction which flips status to
+                  TECH_COMPLETE, stamps workCompletedAt, revalidates
+                  the cashier dashboard, and redirects to the
+                  /marked-complete confirmation page. The job
+                  disappears from the technician dashboard immediately
+                  (mine query excludes TECH_COMPLETE) and shows up on
+                  the cashier dashboard under 'Awaiting final invoice'. */}
+              <form action={markCompleteAction}>
                 <input type="hidden" name="jobId" value={job.id} />
                 <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
                   {t("markComplete")}

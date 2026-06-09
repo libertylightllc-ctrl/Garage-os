@@ -3,10 +3,16 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
-import { statusKey } from "@/i18n/config";
 import { type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
-import { claimJobAction, releaseJobAction, joinJobAction } from "@/app/actions/jobs";
+import {
+  claimJobAction,
+  releaseJobAction,
+  joinJobAction,
+  sendForEstimateAction,
+} from "@/app/actions/jobs";
+import { friendlyStatus } from "@/lib/jobcard-status";
+import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -106,8 +112,15 @@ export default async function TechnicianHome({
                   <span className="block text-lg font-medium">
                     {priorityMeta(j.priority).badge} {carLine(j)}
                   </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {t(statusKey(j.status as JobStatus))}
+                  <span className="mt-1 inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <FriendlyStatusBadge
+                      status={friendlyStatus({
+                        status: j.status as JobStatus,
+                        claimedById: j.claimedById,
+                      })}
+                      t={t}
+                      size="sm"
+                    />
                     {j.assignedToId === me ? ` · ${t("forYou")}` : ""}
                   </span>
                 </span>
@@ -130,35 +143,67 @@ export default async function TechnicianHome({
           <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {inProgress.map((j) => (
-              <li
-                key={j.id}
-                className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
-              >
-                <Link href={`/technician/jobs/${j.id}`} className="text-lg font-medium hover:underline">
-                  {priorityMeta(j.priority).badge} {carLine(j)}
-                  {amHelper(j) ? (
-                    <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">· {t("helpingTag")}</span>
-                  ) : null}
-                </Link>
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/technician/jobs/${j.id}`}
-                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
-                  >
-                    {t("open")}
-                  </Link>
-                  {amHelper(j) ? null : (
-                    <form action={releaseJobAction}>
-                      <input type="hidden" name="jobId" value={j.id} />
-                      <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">
-                        {t("releaseCar")}
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </li>
-            ))}
+            {inProgress.map((j) => {
+              // 'Send for Estimate' is only meaningful while the tech is
+              // still diagnosing — after ESTIMATE/APPROVED/REPAIR/INVOICED
+              // the job has moved on. Helpers (not the primary tech)
+              // shouldn't see it either; only the claimer can send.
+              const canSendForEstimate =
+                !amHelper(j) &&
+                (j.status === "ARRIVED" || j.status === "INSPECTION");
+              return (
+                <li
+                  key={j.id}
+                  className="flex flex-col gap-2 rounded-xl border border-black/10 p-4 dark:border-white/15"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      href={`/technician/jobs/${j.id}`}
+                      className="text-lg font-medium hover:underline"
+                    >
+                      {priorityMeta(j.priority).badge} {carLine(j)}
+                      {amHelper(j) ? (
+                        <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">
+                          · {t("helpingTag")}
+                        </span>
+                      ) : null}
+                    </Link>
+                    <FriendlyStatusBadge
+                      status={friendlyStatus({
+                        status: j.status as JobStatus,
+                        claimedById: j.claimedById,
+                      })}
+                      t={t}
+                      size="sm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/technician/jobs/${j.id}`}
+                      className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
+                    >
+                      {t("open")}
+                    </Link>
+                    {canSendForEstimate ? (
+                      <form action={sendForEstimateAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500">
+                          {t("sendForEstimate")}
+                        </button>
+                      </form>
+                    ) : null}
+                    {amHelper(j) ? null : (
+                      <form action={releaseJobAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">
+                          {t("releaseCar")}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

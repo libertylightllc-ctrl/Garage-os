@@ -2,10 +2,10 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { type JobStatus } from "@/lib/jobcard-status";
+import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
 import { getT } from "@/i18n/server";
-import { statusKey } from "@/i18n/config";
+import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,12 @@ export default async function AdvisorHome() {
         garageId: session.user.garageId,
         status: { notIn: ["DELIVERED", "CANCELLED"] },
       },
-      include: { vehicle: { include: { customer: true } } },
+      include: {
+        vehicle: { include: { customer: true } },
+        // Latest estimate so the friendly badge can distinguish
+        // 'Estimate under process' from 'Awaiting customer approval'.
+        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+      },
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     }),
     prisma.booking.count({ where: { garageId: session.user.garageId, status: "PROPOSED" } }),
@@ -93,17 +98,29 @@ export default async function AdvisorHome() {
                         : ""}
                   </span>
                 </span>
-                <span
-                  className={
-                    "rounded-full px-3 py-1 text-xs font-medium " +
-                    (job.status === "ON_HOLD"
-                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300"
-                      : "bg-zinc-100 dark:bg-zinc-800")
-                  }
-                >
-                  {job.status === "ON_HOLD"
-                    ? `🟡 ${reasonLabel(job.holdReason)}`
-                    : t(statusKey(job.status as JobStatus))}
+                {/* Friendly status badge — same component on every dashboard
+                    so the advisor, tech, and cashier see the same wording.
+                    On hold gets the hold reason as a small caption below. */}
+                <span className="flex flex-col items-end gap-1">
+                  <FriendlyStatusBadge
+                    status={friendlyStatus({
+                      status: job.status as JobStatus,
+                      claimedById: job.claimedById,
+                      latestEstimateStatus: (job.estimates[0]?.status ?? null) as
+                        | "DRAFT"
+                        | "SENT"
+                        | "APPROVED"
+                        | "REJECTED"
+                        | null,
+                    })}
+                    t={t}
+                    size="sm"
+                  />
+                  {job.status === "ON_HOLD" ? (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {reasonLabel(job.holdReason)}
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             </li>

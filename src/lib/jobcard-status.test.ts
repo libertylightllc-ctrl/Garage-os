@@ -8,6 +8,8 @@ import {
   transition,
   skippableTargets,
   skipTo,
+  friendlyStatus,
+  FRIENDLY_STATUS_TONE,
   type JobState,
 } from "./jobcard-status";
 
@@ -72,5 +74,91 @@ describe("jobcard state machine", () => {
   it("cannot hold or resume from invalid states", () => {
     expect(() => transition(s("ON_HOLD", "REPAIR"), "HOLD")).toThrow();
     expect(() => transition(s("ARRIVED"), "RESUME")).toThrow();
+  });
+});
+
+describe("friendlyStatus — internal → customer-facing label", () => {
+  it("ARRIVED unclaimed → 'Waiting for technician'", () => {
+    expect(friendlyStatus({ status: "ARRIVED", claimedById: null })).toBe(
+      "WAITING_FOR_TECH",
+    );
+  });
+
+  it("ARRIVED but already claimed → 'Technician diagnosing' (caught the gap before status flips)", () => {
+    expect(friendlyStatus({ status: "ARRIVED", claimedById: "tech-1" })).toBe(
+      "TECH_DIAGNOSING",
+    );
+  });
+
+  it("INSPECTION → 'Technician diagnosing'", () => {
+    expect(friendlyStatus({ status: "INSPECTION", claimedById: "tech-1" })).toBe(
+      "TECH_DIAGNOSING",
+    );
+  });
+
+  it("ESTIMATE with no SENT yet → 'Estimate under process' (cashier working on it)", () => {
+    expect(
+      friendlyStatus({
+        status: "ESTIMATE",
+        claimedById: "tech-1",
+        latestEstimateStatus: "DRAFT",
+      }),
+    ).toBe("ESTIMATE_UNDER_PROCESS");
+    expect(
+      friendlyStatus({ status: "ESTIMATE", claimedById: "tech-1", latestEstimateStatus: null }),
+    ).toBe("ESTIMATE_UNDER_PROCESS");
+  });
+
+  it("ESTIMATE with latest=SENT → 'Awaiting customer approval'", () => {
+    expect(
+      friendlyStatus({
+        status: "ESTIMATE",
+        claimedById: "tech-1",
+        latestEstimateStatus: "SENT",
+      }),
+    ).toBe("AWAITING_CUSTOMER_APPROVAL");
+  });
+
+  it("ESTIMATE with latest=REJECTED → back to 'Estimate under process' (cashier reworking)", () => {
+    expect(
+      friendlyStatus({
+        status: "ESTIMATE",
+        claimedById: "tech-1",
+        latestEstimateStatus: "REJECTED",
+      }),
+    ).toBe("ESTIMATE_UNDER_PROCESS");
+  });
+
+  it("APPROVED / REPAIR / INVOICED → 'Approved work in progress'", () => {
+    for (const s of ["APPROVED", "REPAIR", "INVOICED"] as const) {
+      expect(friendlyStatus({ status: s, claimedById: "tech-1" })).toBe(
+        "APPROVED_IN_PROGRESS",
+      );
+    }
+  });
+
+  it("DELIVERED → 'Complete'", () => {
+    expect(friendlyStatus({ status: "DELIVERED", claimedById: "tech-1" })).toBe("COMPLETE");
+  });
+
+  it("ON_HOLD and CANCELLED stay as their own labels (don't lie to the user)", () => {
+    expect(friendlyStatus({ status: "ON_HOLD", claimedById: null })).toBe("ON_HOLD");
+    expect(friendlyStatus({ status: "CANCELLED", claimedById: null })).toBe("CANCELLED");
+  });
+
+  it("every friendly status has a Tailwind tone (so the badge never renders unstyled)", () => {
+    const allFriendly = [
+      "WAITING_FOR_TECH",
+      "TECH_DIAGNOSING",
+      "ESTIMATE_UNDER_PROCESS",
+      "AWAITING_CUSTOMER_APPROVAL",
+      "APPROVED_IN_PROGRESS",
+      "COMPLETE",
+      "ON_HOLD",
+      "CANCELLED",
+    ] as const;
+    for (const k of allFriendly) {
+      expect(FRIENDLY_STATUS_TONE[k]).toMatch(/bg-\w+/);
+    }
   });
 });

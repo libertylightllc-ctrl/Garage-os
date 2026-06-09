@@ -106,6 +106,11 @@ export async function jobActionAction(formData: FormData) {
 export async function claimJobAction(formData: FormData) {
   const user = await requireTech();
   const jobId = String(formData.get("jobId") ?? "");
+  // Two-step: claim atomically, then if the claim landed and the job was
+  // still at ARRIVED, promote it to INSPECTION so the friendly status
+  // changes from 'Waiting for technician' to 'Technician diagnosing' the
+  // moment the tech tap-claims it. updateMany with status guard means we
+  // never overwrite a hand-set ON_HOLD / ESTIMATE / etc.
   const res = await prisma.jobCard.updateMany({
     where: {
       id: jobId,
@@ -116,8 +121,54 @@ export async function claimJobAction(formData: FormData) {
     },
     data: { claimedById: user.id, claimedAt: new Date() },
   });
+  if (res.count > 0) {
+    await prisma.jobCard.updateMany({
+      where: { id: jobId, garageId: user.garageId, status: "ARRIVED" },
+      data: { status: "INSPECTION" },
+    });
+  }
   revalidatePath("/technician");
+  revalidatePath("/advisor");
   if (res.count === 0) redirect("/technician?taken=1"); // already taken / not eligible
+}
+
+/**
+ * Tech taps 'Send for Estimate' on a job they're working on. Moves the
+ * job to ESTIMATE status so it appears in the cashier's pricing queue,
+ * and shows a confirmation screen so the tech knows the handoff happened.
+ * The tech keeps the claim — it stays 'their' job, just now the cashier
+ * has to set the price before any further work can happen.
+ */
+export async function sendForEstimateAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: { id: true, status: true, claimedById: true },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  // Only the tech who claimed it (or a helper) can send to cashier — we
+  // check claimedById here; helpers are handled in the UI gate.
+  if (job.claimedById !== user.id) {
+    // Helper / unclaimed → reject by redirect, keep server-side simple.
+    redirect(`/technician/jobs/${jobId}?error=notyours`);
+  }
+  // Only meaningful to send when we're in a pre-estimate stage. From
+  // ESTIMATE / APPROVED / REPAIR / INVOICED / DELIVERED / CANCELLED a
+  // resend would skip steps; force-redirect with a soft error.
+  const sendable: string[] = ["ARRIVED", "INSPECTION", "ON_HOLD"];
+  if (!sendable.includes(job.status)) {
+    redirect(`/technician/jobs/${jobId}?error=alreadysent`);
+  }
+  await prisma.jobCard.update({
+    where: { id: jobId },
+    data: { status: "ESTIMATE", heldFrom: null, holdReason: null, holdNote: null },
+  });
+  revalidatePath("/technician");
+  revalidatePath("/cashier");
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  redirect(`/technician/jobs/${jobId}/sent-to-cashier`);
 }
 
 // Tier 2 #4 — a second technician joins a claimed car as a helper.

@@ -37,6 +37,95 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
+// ---- Customer/staff-friendly status ----------------------------------------
+//
+// The internal JobStatus is a state-machine token; everyone reading a job
+// (advisor, tech, cashier, owner) needs a single human-readable phrase
+// describing the current handoff stage. friendlyStatus() collapses the
+// internal model into the six labels the workflow spec asks for, plus the
+// honest 'on hold' and 'cancelled' edge states.
+
+export type FriendlyStatus =
+  | "WAITING_FOR_TECH"
+  | "TECH_DIAGNOSING"
+  | "ESTIMATE_UNDER_PROCESS"
+  | "AWAITING_CUSTOMER_APPROVAL"
+  | "APPROVED_IN_PROGRESS"
+  | "COMPLETE"
+  | "ON_HOLD"
+  | "CANCELLED";
+
+/** What we need from the job to compute its friendly status. */
+export interface FriendlyStatusInput {
+  status: JobStatus;
+  claimedById: string | null;
+  /** Status of the most recent estimate, if one exists. */
+  latestEstimateStatus?: "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null;
+}
+
+/**
+ * Collapse the internal JobStatus + claim/estimate context into the six
+ * customer-friendly labels (plus ON_HOLD / CANCELLED).
+ *
+ *   internal               → friendly
+ *   ─────────────────────── ──────────────────────────────
+ *   ARRIVED, no claim      → WAITING_FOR_TECH
+ *   ARRIVED, claimed       → TECH_DIAGNOSING   (claimed but pre-INSPECTION)
+ *   INSPECTION             → TECH_DIAGNOSING
+ *   ESTIMATE, no SENT yet  → ESTIMATE_UNDER_PROCESS
+ *   ESTIMATE, latest=SENT  → AWAITING_CUSTOMER_APPROVAL
+ *   APPROVED/REPAIR/INVOICED→ APPROVED_IN_PROGRESS
+ *   DELIVERED              → COMPLETE
+ *   ON_HOLD                → ON_HOLD
+ *   CANCELLED              → CANCELLED
+ */
+export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
+  switch (input.status) {
+    case "ARRIVED":
+      return input.claimedById ? "TECH_DIAGNOSING" : "WAITING_FOR_TECH";
+    case "INSPECTION":
+      return "TECH_DIAGNOSING";
+    case "ESTIMATE":
+      return input.latestEstimateStatus === "SENT"
+        ? "AWAITING_CUSTOMER_APPROVAL"
+        : "ESTIMATE_UNDER_PROCESS";
+    case "APPROVED":
+    case "REPAIR":
+    case "INVOICED":
+      return "APPROVED_IN_PROGRESS";
+    case "DELIVERED":
+      return "COMPLETE";
+    case "ON_HOLD":
+      return "ON_HOLD";
+    case "CANCELLED":
+      return "CANCELLED";
+  }
+}
+
+/**
+ * Tailwind tone for the friendly status badge. Kept as a small data table
+ * so colours stay consistent everywhere the badge renders.
+ *   bg / text classes for both light and dark mode.
+ */
+export const FRIENDLY_STATUS_TONE: Record<FriendlyStatus, string> = {
+  WAITING_FOR_TECH:
+    "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
+  TECH_DIAGNOSING:
+    "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200",
+  ESTIMATE_UNDER_PROCESS:
+    "bg-violet-100 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200",
+  AWAITING_CUSTOMER_APPROVAL:
+    "bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200",
+  APPROVED_IN_PROGRESS:
+    "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+  COMPLETE:
+    "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  ON_HOLD:
+    "bg-yellow-100 text-yellow-900 dark:bg-yellow-950/60 dark:text-yellow-200",
+  CANCELLED:
+    "bg-red-100 text-red-900 dark:bg-red-950/60 dark:text-red-200",
+};
+
 export function isLinear(s: JobStatus): boolean {
   return TIMELINE.includes(s);
 }

@@ -6,6 +6,8 @@ import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
 import { createEstimateAction } from "@/app/actions/billing";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
+import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +30,16 @@ export default async function CashierHome() {
       where: { garageId, status: { notIn: ["DELIVERED", "CANCELLED", "INVOICED"] } },
       include: {
         vehicle: { include: { customer: true } },
+        // Latest estimate drives the friendly status (SENT → 'Awaiting customer
+        // approval', else 'Estimate under process').
         estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [
+        // Cars freshly handed off (status=ESTIMATE) bubble to the top so
+        // the cashier sees them first.
+        { status: "asc" },
+        { createdAt: "desc" },
+      ],
     }),
   ]);
 
@@ -81,34 +90,49 @@ export default async function CashierHome() {
           <ul className="flex flex-col gap-1">
             {toPrice.map((j) => {
               const draft = j.estimates[0];
+              const fs = friendlyStatus({
+                status: j.status as JobStatus,
+                claimedById: null, // cashier doesn't care about claim — display only
+                latestEstimateStatus: (draft?.status ?? null) as
+                  | "DRAFT"
+                  | "SENT"
+                  | "APPROVED"
+                  | "REJECTED"
+                  | null,
+              });
               return (
                 <li
                   key={j.id}
-                  className="flex items-center justify-between rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                  className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
                 >
-                  <span>
-                    <span className="font-medium">
-                      {j.vehicle.make} {j.vehicle.model}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">
+                        {j.vehicle.make} {j.vehicle.model}
+                      </span>
+                      <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                        {j.vehicle.plate} · {j.vehicle.customer.name}
+                      </span>
                     </span>
-                    <span className="ms-2 text-zinc-500 dark:text-zinc-400">
-                      {j.vehicle.plate} · {j.vehicle.customer.name}
-                    </span>
-                  </span>
-                  {draft ? (
-                    <Link
-                      href={`/estimates/${draft.id}`}
-                      className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                    >
-                      {t("continuePricing")}
-                    </Link>
-                  ) : (
-                    <form action={createEstimateAction}>
-                      <input type="hidden" name="jobId" value={j.id} />
-                      <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
-                        {t("setPrice")}
-                      </button>
-                    </form>
-                  )}
+                    <FriendlyStatusBadge status={fs} t={t} size="sm" />
+                  </div>
+                  <div className="flex justify-end">
+                    {draft ? (
+                      <Link
+                        href={`/estimates/${draft.id}`}
+                        className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                      >
+                        {t("continuePricing")}
+                      </Link>
+                    ) : (
+                      <form action={createEstimateAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
+                          {t("setPrice")}
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 </li>
               );
             })}

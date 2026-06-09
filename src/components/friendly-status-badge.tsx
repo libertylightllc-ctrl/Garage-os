@@ -1,0 +1,29 @@
+import type { MessageKey } from "@/i18n/config";
+import { FRIENDLY_STATUS_TONE, type FriendlyStatus } from "@/lib/jobcard-status";
+
+interface Props {
+  status: FriendlyStatus;
+  /** i18n getter — passed in because this is a server component used from
+   *  pages that already have one. Keeps the badge dependency-free. */
+  t: (k: MessageKey) => string;
+  /** Optional size variant for compact lists vs. job-detail headers. */
+  size?: "sm" | "md";
+}
+
+/**
+ * Colour-coded pill for the friendly job status. The colour mapping lives
+ * in jobcard-status.ts so badges everywhere stay consistent. Used on
+ * advisor / technician / cashier / owner dashboards and on every job
+ * detail page so anyone looking at a job sees the same stage.
+ */
+export function FriendlyStatusBadge({ status, t, size = "md" }: Props) {
+  const tone = FRIENDLY_STATUS_TONE[status];
+  const pad = size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
+  return (
+    <span
+      className={`inline-block whitespace-nowrap rounded-full ${pad} font-medium ${tone}`}
+    >
+      {t(`fs_${status}` as MessageKey)}
+    </span>
+  );
+}

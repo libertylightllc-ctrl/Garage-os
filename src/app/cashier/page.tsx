@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
-import { createEstimateAction } from "@/app/actions/billing";
+import { createEstimateAction, sendInvoiceToCustomerAction } from "@/app/actions/billing";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
@@ -26,9 +26,13 @@ export default async function CashierHome() {
       orderBy: { issuedAt: "desc" },
     }),
     prisma.ledgerEntry.findMany({ where: { garageId } }),
-    // Active jobs the cashier still needs to price: no estimate yet, or only a DRAFT.
+    // Active jobs that need cashier attention at some point in the
+    // lifecycle. We INCLUDE the INVOICED status now — once the invoice
+    // is created the cashier still has to tap 'Send Invoice to Customer'
+    // from the dashboard, so unsent invoices need to surface here. We
+    // drop INVOICED+sent jobs in JS (they live in Receivables only).
     prisma.jobCard.findMany({
-      where: { garageId, status: { notIn: ["DELIVERED", "CANCELLED", "INVOICED"] } },
+      where: { garageId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
       include: {
         vehicle: { include: { customer: true } },
         // Latest estimate drives the friendly status (SENT → 'Awaiting customer
@@ -37,6 +41,13 @@ export default async function CashierHome() {
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { id: true, status: true, sentAt: true },
+        },
+        // Latest invoice id — needed to target sendInvoiceToCustomerAction
+        // from the dashboard's 'Send Invoice to Customer' button.
+        invoices: {
+          orderBy: { issuedAt: "desc" },
+          take: 1,
+          select: { id: true, number: true, total: true },
         },
       },
       orderBy: [
@@ -58,11 +69,30 @@ export default async function CashierHome() {
   //                        Either no estimate yet (just-handed-off) or a
   //                        DRAFT being assembled. Status MUST be ESTIMATE.
   //   toReestimate       — tech flagged extra work mid-job.
-  //   toInvoice          — tech marked complete; awaiting final invoice.
+  //   workInProgress    — customer approved estimate; tech is doing the
+  //                       work. Cashier has NO actions here — explicitly
+  //                       NO 'Send Invoice' or 'Prepare Invoice' buttons
+  //                       are rendered. Just a passive 'work in progress'
+  //                       caption so the cashier knows what's happening.
+  //   toInvoice         — tech marked complete; cashier needs to PREPARE
+  //                       the invoice (edit lines + finalize). Button
+  //                       takes them to the estimate review page.
+  //   toSendInvoice     — invoice has been prepared (status=INVOICED) but
+  //                       hasn't been sent yet (invoiceSentAt is null).
+  //                       'Send Invoice to Customer' button fires
+  //                       sendInvoiceToCustomerAction directly from the
+  //                       dashboard so the cashier doesn't need to dive
+  //                       into the invoice page.
   const waitingForDiagnosis = jobs.filter(
     (j) => j.status === "ARRIVED" || j.status === "INSPECTION",
   );
+  const workInProgress = jobs.filter(
+    (j) => j.status === "APPROVED" || j.status === "REPAIR",
+  );
   const toInvoice = jobs.filter((j) => j.status === "TECH_COMPLETE");
+  const toSendInvoice = jobs.filter(
+    (j) => j.status === "INVOICED" && j.invoiceSentAt === null,
+  );
   const toReestimate = jobs.filter((j) => j.status === "EXTRA_WORK_AWAITING_APPROVAL");
   const toPrice = jobs.filter((j) => {
     if (j.status !== "ESTIMATE") return false;
@@ -152,6 +182,75 @@ export default async function CashierHome() {
                     >
                       {t("cashierPriceExtraWork")}
                     </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Invoice prepared but not yet sent — one-tap 'Send Invoice to
+          Customer' lives right on the dashboard so the cashier doesn't
+          have to dive into /invoices/[id] just to push the WhatsApp send.
+          Bubbles to the very top of the action sections because it's the
+          most-finished thing — only one button between here and the
+          customer paying. */}
+      {toSendInvoice.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("cashierToSendInvoiceTitle")}</h2>
+          <ul className="flex flex-col gap-1">
+            {toSendInvoice.map((j) => {
+              const inv = j.invoices[0];
+              const est = j.estimates[0];
+              return (
+                <li
+                  key={j.id}
+                  className="flex flex-col gap-2 rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-3 text-sm dark:border-fuchsia-700/40 dark:bg-fuchsia-950/30"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">
+                        {j.vehicle.make} {j.vehicle.model}
+                      </span>
+                      <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                        {j.vehicle.plate} · {j.vehicle.customer.name}
+                      </span>
+                    </span>
+                    <FriendlyStatusBadge
+                      status={friendlyStatus({
+                        status: j.status as JobStatus,
+                        claimedById: null,
+                        // We deliberately don't pass invoicePaidInFull
+                        // here — the toSendInvoice bucket is, by
+                        // definition, an invoice that exists but hasn't
+                        // been sent yet, so payment can't have happened.
+                        // AWAITING_PAYMENT is the right pill to surface
+                        // the urgency ('this is the last step').
+                      })}
+                      t={t}
+                      size="sm"
+                    />
+                  </div>
+                  <JobTimings
+                    claimedAt={j.claimedAt}
+                    sentForEstimateAt={j.sentForEstimateAt}
+                    estimateSentAt={est?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
+                  <div className="flex justify-end">
+                    {inv ? (
+                      <form action={sendInvoiceToCustomerAction}>
+                        <input type="hidden" name="invoiceId" value={inv.id} />
+                        <button
+                          type="submit"
+                          className="rounded-md bg-fuchsia-600 px-3 py-1 font-medium text-white hover:bg-fuchsia-500"
+                        >
+                          {t("cashierSendInvoiceToCustomer")}
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 </li>
               );
@@ -279,6 +378,51 @@ export default async function CashierHome() {
           </ul>
         )}
       </div>
+
+      {/* Customer approved the estimate; tech is now doing the actual work.
+          Per spec, the cashier MUST NOT see 'Send Invoice' or 'Prepare
+          Invoice' here — the technician hasn't finished yet. Render the
+          row read-only with just a caption so the cashier knows the job
+          is alive and where it sits. */}
+      {workInProgress.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("cashierWorkInProgressTitle")}</h2>
+          <ul className="flex flex-col gap-1">
+            {workInProgress.map((j) => (
+              <li
+                key={j.id}
+                className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-50 p-3 text-sm dark:border-emerald-700/40 dark:bg-emerald-950/30"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    <span className="font-medium">
+                      {j.vehicle.make} {j.vehicle.model}
+                    </span>
+                    <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                      {j.vehicle.plate} · {j.vehicle.customer.name}
+                    </span>
+                  </span>
+                  <FriendlyStatusBadge
+                    status={friendlyStatus({
+                      status: j.status as JobStatus,
+                      claimedById: j.claimedById,
+                    })}
+                    t={t}
+                    size="sm"
+                  />
+                </div>
+                {/* No JobTimings here either — the action surface that
+                    matters for the cashier (Prepare Invoice) doesn't open
+                    until the tech taps Finish, so live durations would
+                    only add noise. */}
+                <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                  {t("cashierWorkInProgressCaption")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Tech is still diagnosing — cashier sees the job exists so they can
           anticipate workload, but no actions are available yet. Per spec,

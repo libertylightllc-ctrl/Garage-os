@@ -169,6 +169,7 @@ enum FuelLevel {
 enum JobPartKind {
   REQUIRED
   USED
+  EXTRA   // tech added mid-job after the original estimate was already approved; rolled into a new estimate when 'Send for Approval' is tapped
 }
 
 // ---------- Tenancy ----------

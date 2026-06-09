@@ -4,7 +4,12 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { requestPartAction } from "@/app/actions/parts";
-import { leaveHelperAction } from "@/app/actions/jobs";
+import {
+  leaveHelperAction,
+  addExtraJobPartAction,
+  removeExtraJobPartAction,
+  sendForReestimateAction,
+} from "@/app/actions/jobs";
 import {
   saveFindingsAction,
   addRequiredPartAction,
@@ -66,6 +71,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const submitted = Boolean(job.finding?.submittedAt);
   const requiredParts = job.jobParts.filter((p) => p.kind === "REQUIRED");
   const usedParts = job.jobParts.filter((p) => p.kind === "USED");
+  const extraParts = job.jobParts.filter((p) => p.kind === "EXTRA");
+  // Tech can add/manage EXTRA items only during the work-in-progress
+  // window. After Send-for-Approval flips the status, items are owned by
+  // the cashier (as estimate lines) and no longer editable here.
+  const canManageExtras = job.status === "APPROVED" || job.status === "REPAIR";
   const hasApprovedEstimate = job.estimates.length > 0;
   const repairOpen = repairUnlocked(hasApprovedEstimate, job.workCompletedAt);
 
@@ -256,6 +266,95 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </form>
         ) : null}
       </div>
+
+      {/* Extras — tech adds parts/issues found mid-job while doing the
+          approved work. Each item lives as a JobPart(kind=EXTRA) until
+          'Send for Approval' rolls them into a new draft Estimate. Only
+          shown while status is APPROVED / REPAIR (active work window). */}
+      {canManageExtras ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-rose-500/40 bg-rose-50 p-3 dark:border-rose-700/40 dark:bg-rose-950/30">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">{t("extrasPanelTitle")}</h2>
+            {extraParts.length > 0 ? (
+              <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-medium text-white">
+                {extraParts.length}
+              </span>
+            ) : null}
+          </div>
+
+          {extraParts.length === 0 ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              {t("extrasPanelEmpty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {extraParts.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between rounded-md border border-rose-300/60 bg-white p-2 dark:border-rose-700/40 dark:bg-zinc-950"
+                >
+                  <span>
+                    {p.partNo ? (
+                      <span className="text-zinc-400">{p.partNo} </span>
+                    ) : null}
+                    {p.description}{" "}
+                    <span className="text-zinc-500 dark:text-zinc-400">×{p.qty}</span>
+                  </span>
+                  <form action={removeExtraJobPartAction}>
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="jobPartId" value={p.id} />
+                    <button className="text-red-600" aria-label={t("extrasRemove")}>
+                      ✕
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Add an extra item — description required, qty default 1.
+              Cashier owns pricing, tech just specifies the what. */}
+          <form action={addExtraJobPartAction} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="jobId" value={job.id} />
+            <input
+              name="partNo"
+              placeholder={t("partNoLabel")}
+              className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <DictateInput
+              locale={locale}
+              labels={dictLabels}
+              name="description"
+              placeholder={t("extrasDescriptionPlaceholder")}
+              required
+              className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <input
+              name="qty"
+              type="number"
+              min="1"
+              defaultValue="1"
+              aria-label={t("colQty")}
+              className="w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <button className="rounded-md border border-rose-500 px-3 py-1 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-400 dark:text-rose-200 dark:hover:bg-rose-900/50">
+              {t("extrasAdd")}
+            </button>
+          </form>
+
+          {/* The Send-for-Approval button lives down here as well as on
+              the dashboard — handy for the tech who's already on the
+              detail page reviewing what they added. */}
+          {extraParts.length > 0 ? (
+            <form action={sendForReestimateAction} className="self-start">
+              <input type="hidden" name="jobId" value={job.id} />
+              <button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">
+                {t("extrasSendForApproval").replace("{count}", String(extraParts.length))}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Repair — work completed & parts used (after Approval #1) */}
       {hasApprovedEstimate ? (

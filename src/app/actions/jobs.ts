@@ -133,15 +133,103 @@ export async function claimJobAction(formData: FormData) {
 }
 
 /**
- * Mid-Stage-7 — Tech taps 'Send for Re-estimate' after finding extra
- * problems while doing the approved work. Flips status to
- * EXTRA_WORK_AWAITING_APPROVAL so the job appears on the cashier queue
- * for a new estimate. After the customer approves the new estimate, the
- * existing setEstimateStatusAction flow sets status back to APPROVED and
- * the tech can carry on (and tap 'Mark complete' when done with everything).
+ * Tech adds a single extra part / issue they found mid-job. Lives as a
+ * JobPart with kind=EXTRA until the tech taps 'Send for Approval' on the
+ * dashboard, at which point all pending EXTRA parts roll into a new
+ * draft Estimate for the cashier to price.
  *
- * Gates: must be the claimer or a helper, status must be APPROVED or
- * REPAIR. Other statuses redirect with a soft error.
+ * Quantity is freeform but must be > 0. Price is NOT set by the tech —
+ * the cashier owns pricing.
+ */
+export async function addExtraJobPartAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const description = String(formData.get("description") ?? "").trim();
+  const partNoRaw = String(formData.get("partNo") ?? "").trim();
+  const partNo = partNoRaw || null;
+  const qtyRaw = Number(formData.get("qty") ?? 1);
+  const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.floor(qtyRaw) : 1;
+
+  if (!description) {
+    redirect(`/technician/jobs/${jobId}?error=extraDescriptionRequired`);
+  }
+
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: {
+      status: true,
+      claimedById: true,
+      helpers: { where: { techId: user.id }, select: { techId: true } },
+    },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  const allowed = job.claimedById === user.id || job.helpers.length > 0;
+  if (!allowed) {
+    redirect(`/technician/jobs/${jobId}?error=notyours`);
+  }
+  // Tech can only ADD extras while the originally-approved work is in
+  // progress. After Send-for-Approval, status flips to
+  // EXTRA_WORK_AWAITING_APPROVAL and they have to wait.
+  if (job.status !== "APPROVED" && job.status !== "REPAIR") {
+    redirect(`/technician/jobs/${jobId}?error=cannotAddExtra`);
+  }
+
+  await prisma.jobPart.create({
+    data: {
+      jobCardId: jobId,
+      kind: "EXTRA",
+      partNo,
+      description,
+      qty,
+      createdById: user.id,
+    },
+  });
+  revalidatePath("/technician");
+  revalidatePath(`/technician/jobs/${jobId}`);
+  redirect(`/technician/jobs/${jobId}`);
+}
+
+/**
+ * Tech removes a pending extra JobPart they added by mistake. Only
+ * EXTRA-kind parts are removable here, and only while the job is still in
+ * the work-in-progress window (after Send-for-Approval they're rolled
+ * into the estimate and become the cashier's).
+ */
+export async function removeExtraJobPartAction(formData: FormData) {
+  const user = await requireTech();
+  const jobPartId = String(formData.get("jobPartId") ?? "");
+  const jobId = String(formData.get("jobId") ?? "");
+  const allowed = await prisma.jobPart.findFirst({
+    where: {
+      id: jobPartId,
+      kind: "EXTRA",
+      jobCard: {
+        garageId: user.garageId,
+        status: { in: ["APPROVED", "REPAIR"] },
+        OR: [{ claimedById: user.id }, { helpers: { some: { techId: user.id } } }],
+      },
+    },
+    select: { id: true },
+  });
+  if (allowed) await prisma.jobPart.delete({ where: { id: allowed.id } });
+  revalidatePath(`/technician/jobs/${jobId}`);
+  redirect(`/technician/jobs/${jobId}`);
+}
+
+/**
+ * Mid-Stage-7 — Tech taps 'Send for Approval' after adding extra
+ * parts/issues they found while doing the approved work. The action
+ * (a) rolls all pending EXTRA JobParts into a new draft Estimate so the
+ * cashier can price each line, (b) deletes the JobParts since they're
+ * now lines on the estimate, and (c) flips job status to
+ * EXTRA_WORK_AWAITING_APPROVAL. After the customer approves the new
+ * estimate, the existing setEstimateStatusAction flow sets status back
+ * to APPROVED and the tech can carry on (and tap 'Mark complete' when
+ * done with everything).
+ *
+ * Gates: must be claimer or helper, status must be APPROVED or REPAIR,
+ * AND there must be at least one pending EXTRA JobPart. Other states
+ * redirect with a soft error.
  */
 export async function sendForReestimateAction(formData: FormData) {
   const user = await requireTech();
@@ -153,6 +241,10 @@ export async function sendForReestimateAction(formData: FormData) {
       status: true,
       claimedById: true,
       helpers: { where: { techId: user.id }, select: { techId: true } },
+      jobParts: {
+        where: { kind: "EXTRA" },
+        select: { id: true, partNo: true, description: true, qty: true },
+      },
     },
   });
   if (!job) throw new Error("Job not found in this garage");
@@ -164,15 +256,44 @@ export async function sendForReestimateAction(formData: FormData) {
   if (job.status !== "APPROVED" && job.status !== "REPAIR") {
     redirect(`/technician/jobs/${jobId}?error=cannotreestimate`);
   }
-  await prisma.jobCard.update({
-    where: { id: jobId },
-    data: {
-      status: "EXTRA_WORK_AWAITING_APPROVAL",
-      sentForReestimateAt: new Date(),
-      heldFrom: null,
-      holdReason: null,
-      holdNote: null,
-    },
+  if (job.jobParts.length === 0) {
+    redirect(`/technician/jobs/${jobId}?error=noExtras`);
+  }
+  // Roll the pending EXTRA parts into a fresh draft Estimate inside a
+  // transaction so the JobParts and the Estimate move atomically.
+  await prisma.$transaction(async (tx) => {
+    await tx.estimate.create({
+      data: {
+        jobCardId: jobId,
+        subtotal: 0,
+        vatAmount: 0,
+        total: 0,
+        status: "DRAFT",
+        lines: {
+          create: job.jobParts.map((p) => ({
+            // The cashier sets unitPrice; the tech only specifies what.
+            kind: "PART",
+            description: p.partNo ? `${p.partNo} — ${p.description}` : p.description,
+            qty: p.qty,
+            unitPrice: 0,
+            lineTotal: 0,
+          })),
+        },
+      },
+    });
+    await tx.jobPart.deleteMany({
+      where: { id: { in: job.jobParts.map((p) => p.id) } },
+    });
+    await tx.jobCard.update({
+      where: { id: jobId },
+      data: {
+        status: "EXTRA_WORK_AWAITING_APPROVAL",
+        sentForReestimateAt: new Date(),
+        heldFrom: null,
+        holdReason: null,
+        holdNote: null,
+      },
+    });
   });
   revalidatePath("/technician");
   revalidatePath("/cashier");

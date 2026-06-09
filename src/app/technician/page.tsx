@@ -57,16 +57,11 @@ export default async function TechnicianHome({
       },
       include: {
         vehicle: true,
-        // For the per-row timing captions (Diagnosis + Pricing) AND for
-        // the friendly badge — status drives ESTIMATE_UNDER_PROCESS vs.
-        // AWAITING_CUSTOMER_APPROVAL on Stage 6 jobs.
         estimates: {
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { status: true, sentAt: true },
         },
-        // Latest invoice + payments so 'Awaiting payment' flips to
-        // 'Ready for pickup' once paid in full (Stage 9 → 10).
         invoices: {
           orderBy: { issuedAt: "desc" },
           take: 1,
@@ -74,6 +69,13 @@ export default async function TechnicianHome({
             total: true,
             payments: { select: { amount: true } },
           },
+        },
+        // Pending EXTRA parts drive the Send-for-Approval button visibility.
+        // Only counted if status is in the work window — past that they're
+        // already in an estimate.
+        jobParts: {
+          where: { kind: "EXTRA" },
+          select: { id: true },
         },
       },
       orderBy: { updatedAt: "desc" },
@@ -188,11 +190,13 @@ export default async function TechnicianHome({
               // (sometimes they finish the car while the primary's on lunch).
               const canMarkComplete =
                 j.status === "APPROVED" || j.status === "REPAIR";
-              // 'Send for Re-estimate' shows alongside Mark complete while
-              // the tech is actually working — they tap this one if they
-              // found extra problems mid-job, Mark complete if everything
-              // is done. Same gating window: APPROVED / REPAIR.
-              const canSendForReestimate = canMarkComplete && !amHelper(j);
+              // 'Send for Approval' replaces the simpler 'Send for
+              // Re-estimate' button — now it only appears when the tech
+              // has actually itemised the extra work (via the Extras panel
+              // on the job detail page). No extras → no button.
+              const extraCount = j.jobParts?.length ?? 0;
+              const canSendForReestimate =
+                canMarkComplete && !amHelper(j) && extraCount > 0;
               return (
                 <li
                   key={j.id}
@@ -255,7 +259,10 @@ export default async function TechnicianHome({
                       <form action={sendForReestimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
                         <button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500">
-                          {t("sendForReestimate")}
+                          {t("extrasSendForApproval").replace(
+                            "{count}",
+                            String(extraCount),
+                          )}
                         </button>
                       </form>
                     ) : null}

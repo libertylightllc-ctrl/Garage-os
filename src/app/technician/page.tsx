@@ -71,12 +71,9 @@ export default async function TechnicianHome({
           },
         },
         // Pending EXTRA parts drive the Send-for-Approval button visibility.
-        // Only counted if status is in the work window — past that they're
-        // already in an estimate.
-        jobParts: {
-          where: { kind: "EXTRA" },
-          select: { id: true },
-        },
+        // REQUIRED parts drive the Open ↔ Send-for-Estimate switch during
+        // the diagnosis stage. Both are counted from the same row.
+        jobParts: { select: { id: true, kind: true } },
       },
       orderBy: { updatedAt: "desc" },
     }),
@@ -179,22 +176,34 @@ export default async function TechnicianHome({
         ) : (
           <ul className="flex flex-col gap-2">
             {inProgress.map((j) => {
-              // 'Send for Estimate' is only meaningful while the tech is
-              // still diagnosing — after ESTIMATE/APPROVED/REPAIR the job
-              // has moved on. Helpers can't send; only the claimer.
+              // Diagnosis-stage button gating: spec says only ONE button
+              // visible at a time — never Open + Send-for-Estimate together.
+              //   no REQUIRED parts → show Open only (prompts the tech to
+              //     visit the detail page and add what's needed)
+              //   ≥1 REQUIRED part → show Send-for-Estimate only (the tech
+              //     has itemised what they found; ship it to the cashier)
+              // The job-title link in the card already navigates to the
+              // detail page, so hiding Open doesn't strand the tech.
+              const isDiagnosing =
+                j.status === "ARRIVED" || j.status === "INSPECTION";
+              const requiredCount =
+                j.jobParts?.filter((p) => p.kind === "REQUIRED").length ?? 0;
               const canSendForEstimate =
-                !amHelper(j) &&
-                (j.status === "ARRIVED" || j.status === "INSPECTION");
+                !amHelper(j) && isDiagnosing && requiredCount > 0;
+              // Open button shows for any in-progress non-helper job EXCEPT
+              // when we're at the diagnosis stage AND the tech has already
+              // added parts (in which case Send-for-Estimate replaces it).
+              const showOpenButton = !(isDiagnosing && requiredCount > 0);
               // 'Mark complete' replaces it once the customer has approved
               // and work is happening (Stage 7). Helpers can also tap
               // (sometimes they finish the car while the primary's on lunch).
               const canMarkComplete =
                 j.status === "APPROVED" || j.status === "REPAIR";
-              // 'Send for Approval' replaces the simpler 'Send for
-              // Re-estimate' button — now it only appears when the tech
-              // has actually itemised the extra work (via the Extras panel
-              // on the job detail page). No extras → no button.
-              const extraCount = j.jobParts?.length ?? 0;
+              // 'Send for Approval' (extras loop) — only appears when the
+              // tech has itemised extra work via the Extras panel on the
+              // job detail page. No extras → no button.
+              const extraCount =
+                j.jobParts?.filter((p) => p.kind === "EXTRA").length ?? 0;
               const canSendForReestimate =
                 canMarkComplete && !amHelper(j) && extraCount > 0;
               return (
@@ -241,12 +250,14 @@ export default async function TechnicianHome({
                     t={t}
                   />
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/technician/jobs/${j.id}`}
-                      className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
-                    >
-                      {t("open")}
-                    </Link>
+                    {showOpenButton ? (
+                      <Link
+                        href={`/technician/jobs/${j.id}`}
+                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
+                      >
+                        {t("open")}
+                      </Link>
+                    ) : null}
                     {canSendForEstimate ? (
                       <form action={sendForEstimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />

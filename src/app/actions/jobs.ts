@@ -133,6 +133,55 @@ export async function claimJobAction(formData: FormData) {
 }
 
 /**
+ * Mid-Stage-7 — Tech taps 'Send for Re-estimate' after finding extra
+ * problems while doing the approved work. Flips status to
+ * EXTRA_WORK_AWAITING_APPROVAL so the job appears on the cashier queue
+ * for a new estimate. After the customer approves the new estimate, the
+ * existing setEstimateStatusAction flow sets status back to APPROVED and
+ * the tech can carry on (and tap 'Mark complete' when done with everything).
+ *
+ * Gates: must be the claimer or a helper, status must be APPROVED or
+ * REPAIR. Other statuses redirect with a soft error.
+ */
+export async function sendForReestimateAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: {
+      id: true,
+      status: true,
+      claimedById: true,
+      helpers: { where: { techId: user.id }, select: { techId: true } },
+    },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  const isPrimary = job.claimedById === user.id;
+  const isHelper = job.helpers.length > 0;
+  if (!isPrimary && !isHelper) {
+    redirect(`/technician/jobs/${jobId}?error=notyours`);
+  }
+  if (job.status !== "APPROVED" && job.status !== "REPAIR") {
+    redirect(`/technician/jobs/${jobId}?error=cannotreestimate`);
+  }
+  await prisma.jobCard.update({
+    where: { id: jobId },
+    data: {
+      status: "EXTRA_WORK_AWAITING_APPROVAL",
+      sentForReestimateAt: new Date(),
+      heldFrom: null,
+      holdReason: null,
+      holdNote: null,
+    },
+  });
+  revalidatePath("/technician");
+  revalidatePath("/cashier");
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
+  redirect(`/technician/jobs/${jobId}/sent-for-reestimate`);
+}
+
+/**
  * Stage 7→8 — Tech taps 'Mark complete' after the approved work is done.
  * Stamps completedAt (workCompletedAt in the schema) and flips status to
  * TECH_COMPLETE, putting the job on the cashier's queue to finalise the

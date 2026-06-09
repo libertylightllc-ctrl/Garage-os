@@ -10,6 +10,7 @@ import {
   releaseJobAction,
   joinJobAction,
   sendForEstimateAction,
+  sendForReestimateAction,
   markCompleteAction,
 } from "@/app/actions/jobs";
 import { friendlyStatus } from "@/lib/jobcard-status";
@@ -187,6 +188,11 @@ export default async function TechnicianHome({
               // (sometimes they finish the car while the primary's on lunch).
               const canMarkComplete =
                 j.status === "APPROVED" || j.status === "REPAIR";
+              // 'Send for Re-estimate' shows alongside Mark complete while
+              // the tech is actually working — they tap this one if they
+              // found extra problems mid-job, Mark complete if everything
+              // is done. Same gating window: APPROVED / REPAIR.
+              const canSendForReestimate = canMarkComplete && !amHelper(j);
               return (
                 <li
                   key={j.id}
@@ -242,6 +248,14 @@ export default async function TechnicianHome({
                         <input type="hidden" name="jobId" value={j.id} />
                         <button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500">
                           {t("sendForEstimate")}
+                        </button>
+                      </form>
+                    ) : null}
+                    {canSendForReestimate ? (
+                      <form action={sendForReestimateAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500">
+                          {t("sendForReestimate")}
                         </button>
                       </form>
                     ) : null}

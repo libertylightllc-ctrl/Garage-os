@@ -50,7 +50,8 @@ enum JobStatus {
   ESTIMATE
   APPROVED
   REPAIR
-  TECH_COMPLETE   // tech tapped 'Mark complete'; awaiting cashier to finalise invoice
+  EXTRA_WORK_AWAITING_APPROVAL  // tech tapped 'Send for Re-estimate'; awaiting cashier+customer to bless the extra
+  TECH_COMPLETE                 // tech tapped 'Mark complete'; awaiting cashier to finalise invoice
   INVOICED
   DELIVERED
   ON_HOLD
@@ -365,6 +366,7 @@ model JobCard {
   claimedById  String?   // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
   claimedAt    DateTime? // start of the diagnosis-duration window
   sentForEstimateAt DateTime? // when the tech tapped 'Send for Estimate' — end of diagnosis window, start of pricing window
+  sentForReestimateAt DateTime? // when the tech tapped 'Send for Re-estimate' (extra work found mid-job)
   priority     Int       @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
   bayId        String?   // physical bay/ramp this car occupies (Tier 2 #7)
   bay          Bay?      @relation(fields: [bayId], references: [id])

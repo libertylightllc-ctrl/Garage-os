@@ -7,6 +7,7 @@ export type JobStatus =
   | "ESTIMATE"
   | "APPROVED"
   | "REPAIR"
+  | "EXTRA_WORK_AWAITING_APPROVAL" // tech tapped 'Send for Re-estimate'; awaiting cashier+customer
   | "TECH_COMPLETE" // tech tapped 'Mark complete', waiting on cashier to send invoice
   | "INVOICED"
   | "DELIVERED"
@@ -34,6 +35,7 @@ export const STATUS_LABEL: Record<JobStatus, string> = {
   ESTIMATE: "Estimate",
   APPROVED: "Approved",
   REPAIR: "Repair",
+  EXTRA_WORK_AWAITING_APPROVAL: "Extra work — awaiting approval",
   TECH_COMPLETE: "Tech complete",
   INVOICED: "Invoiced",
   DELIVERED: "Delivered",
@@ -55,6 +57,7 @@ export type FriendlyStatus =
   | "ESTIMATE_UNDER_PROCESS"
   | "AWAITING_CUSTOMER_APPROVAL"
   | "APPROVED_IN_PROGRESS"
+  | "EXTRA_WORK_AWAITING_APPROVAL" // tech found extra problems mid-job; new estimate cycle is running
   | "COMPLETE_AWAITING_INVOICE"
   | "AWAITING_PAYMENT"
   | "READY_FOR_PICKUP"
@@ -110,6 +113,8 @@ export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
     case "APPROVED":
     case "REPAIR":
       return "APPROVED_IN_PROGRESS";
+    case "EXTRA_WORK_AWAITING_APPROVAL":
+      return "EXTRA_WORK_AWAITING_APPROVAL";
     case "TECH_COMPLETE":
       return "COMPLETE_AWAITING_INVOICE";
     case "INVOICED":
@@ -139,6 +144,8 @@ export const FRIENDLY_STATUS_TONE: Record<FriendlyStatus, string> = {
     "bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200",
   APPROVED_IN_PROGRESS:
     "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+  EXTRA_WORK_AWAITING_APPROVAL:
+    "bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200",
   COMPLETE_AWAITING_INVOICE:
     "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-200",
   AWAITING_PAYMENT:

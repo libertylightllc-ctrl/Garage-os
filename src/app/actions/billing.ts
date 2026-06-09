@@ -236,7 +236,20 @@ export async function setEstimateStatusAction(formData: FormData) {
     });
   } else if (status === "REJECTED") {
     await prisma.estimate.update({ where: { id: est.id }, data: { status } });
-    await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "ESTIMATE" } });
+    // Re-estimate cycle: if the job was at EXTRA_WORK_AWAITING_APPROVAL and
+    // the customer rejected the new estimate, fall back to APPROVED so the
+    // tech keeps doing the originally approved work. For first-time
+    // rejection (status=ESTIMATE), the existing 'back to ESTIMATE' loop
+    // lets the cashier re-price.
+    const job = await prisma.jobCard.findUnique({
+      where: { id: est.jobCardId },
+      select: { status: true },
+    });
+    const nextStatus = job?.status === "EXTRA_WORK_AWAITING_APPROVAL" ? "APPROVED" : "ESTIMATE";
+    await prisma.jobCard.update({
+      where: { id: est.jobCardId },
+      data: { status: nextStatus },
+    });
   } else if (status === "SENT") {
     await prisma.estimate.update({
       where: { id: est.id },

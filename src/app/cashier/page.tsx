@@ -52,6 +52,9 @@ export default async function CashierHome() {
   // final invoice. Shown as its own section so it doesn't get lost among
   // 'jobs to price' (those are Stage 4/5 still in the pricing window).
   const toInvoice = jobs.filter((j) => j.status === "TECH_COMPLETE");
+  // Re-estimate cycle — tech flagged extra work mid-job. Cashier needs to
+  // price the extra + send a new estimate to the customer.
+  const toReestimate = jobs.filter((j) => j.status === "EXTRA_WORK_AWAITING_APPROVAL");
   const toPrice = jobs.filter((j) => {
     const e = j.estimates[0];
     return !e || e.status === "DRAFT";
@@ -91,6 +94,61 @@ export default async function CashierHome() {
           </div>
         ))}
       </div>
+
+      {/* Re-estimate cycle — tech found extra work mid-job. Bubbles to the
+          top because the existing approved work is paused until the customer
+          says yes (or no) to the extra. */}
+      {toReestimate.length > 0 ? (
+        <div>
+          <h2 className="mb-2 text-sm font-medium">{t("cashierReestimateTitle")}</h2>
+          <ul className="flex flex-col gap-1">
+            {toReestimate.map((j) => {
+              // Latest estimate may be the originally approved one; the cashier
+              // needs to add a NEW estimate for the extra work. We deep-link
+              // into the existing-estimate page so they pick up the context.
+              const lastEst = j.estimates[0];
+              const href = lastEst?.id ? `/estimates/${lastEst.id}` : "/cashier";
+              return (
+                <li
+                  key={j.id}
+                  className="flex flex-col gap-2 rounded-lg border border-rose-500/40 bg-rose-50 p-3 text-sm dark:border-rose-700/40 dark:bg-rose-950/30"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">
+                        {j.vehicle.make} {j.vehicle.model}
+                      </span>
+                      <span className="ms-2 text-zinc-500 dark:text-zinc-400">
+                        {j.vehicle.plate} · {j.vehicle.customer.name}
+                      </span>
+                    </span>
+                    <FriendlyStatusBadge
+                      status="EXTRA_WORK_AWAITING_APPROVAL"
+                      t={t}
+                      size="sm"
+                    />
+                  </div>
+                  <JobTimings
+                    claimedAt={j.claimedAt}
+                    sentForEstimateAt={j.sentForEstimateAt}
+                    estimateSentAt={lastEst?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
+                  <div className="flex justify-end">
+                    <Link
+                      href={href}
+                      className="rounded-md bg-rose-600 px-3 py-1 font-medium text-white hover:bg-rose-500"
+                    >
+                      {t("cashierPriceExtraWork")}
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Stage 8 — tech marked complete, awaiting invoice send by cashier.
           Bubbles above 'Jobs to price' because it's blocking the customer's

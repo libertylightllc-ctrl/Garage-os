@@ -143,6 +143,30 @@ describe("friendlyStatus — internal → customer-facing label", () => {
     );
   });
 
+  it("EXTRA_WORK_AWAITING_APPROVAL → 'Extra work — awaiting approval' (re-estimate cycle)", () => {
+    // Tech tapped 'Send for Re-estimate'; cashier+customer are blessing the
+    // extra work. We don't care about the latest estimate sub-status here —
+    // the label stays the same throughout the cycle until the customer
+    // approves (job flips back to APPROVED) or rejects (also back to APPROVED).
+    expect(
+      friendlyStatus({ status: "EXTRA_WORK_AWAITING_APPROVAL", claimedById: "tech-1" }),
+    ).toBe("EXTRA_WORK_AWAITING_APPROVAL");
+    expect(
+      friendlyStatus({
+        status: "EXTRA_WORK_AWAITING_APPROVAL",
+        claimedById: "tech-1",
+        latestEstimateStatus: "DRAFT",
+      }),
+    ).toBe("EXTRA_WORK_AWAITING_APPROVAL");
+    expect(
+      friendlyStatus({
+        status: "EXTRA_WORK_AWAITING_APPROVAL",
+        claimedById: "tech-1",
+        latestEstimateStatus: "SENT",
+      }),
+    ).toBe("EXTRA_WORK_AWAITING_APPROVAL");
+  });
+
   it("INVOICED not yet paid → 'Awaiting payment' (Stage 9)", () => {
     expect(friendlyStatus({ status: "INVOICED", claimedById: "tech-1" })).toBe(
       "AWAITING_PAYMENT",
@@ -174,6 +198,7 @@ describe("friendlyStatus — internal → customer-facing label", () => {
       "ESTIMATE_UNDER_PROCESS",
       "AWAITING_CUSTOMER_APPROVAL",
       "APPROVED_IN_PROGRESS",
+      "EXTRA_WORK_AWAITING_APPROVAL",
       "COMPLETE_AWAITING_INVOICE",
       "AWAITING_PAYMENT",
       "READY_FOR_PICKUP",

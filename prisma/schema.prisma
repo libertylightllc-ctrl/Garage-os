@@ -362,7 +362,8 @@ model JobCard {
   holdNote   String?
   assignedToId String?   // advisor pre-assignment to a specific tech (optional)
   claimedById  String?   // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
-  claimedAt    DateTime?
+  claimedAt    DateTime? // start of the diagnosis-duration window
+  sentForEstimateAt DateTime? // when the tech tapped 'Send for Estimate' — end of diagnosis window, start of pricing window
   priority     Int       @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
   bayId        String?   // physical bay/ramp this car occupies (Tier 2 #7)
   bay          Bay?      @relation(fields: [bayId], references: [id])
@@ -474,6 +475,7 @@ model Estimate {
   vatAmount Decimal        @db.Decimal(12, 2)
   total     Decimal        @db.Decimal(12, 2)
   status    EstimateStatus @default(DRAFT)
+  sentAt         DateTime? // when the cashier flipped status to SENT (pricing-duration end)
   approvedAt     DateTime? // audit: when the customer approved (dispute shield)
   approvedAmount Decimal?  @db.Decimal(12, 2)
 

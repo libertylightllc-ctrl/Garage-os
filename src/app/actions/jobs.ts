@@ -162,7 +162,15 @@ export async function sendForEstimateAction(formData: FormData) {
   }
   await prisma.jobCard.update({
     where: { id: jobId },
-    data: { status: "ESTIMATE", heldFrom: null, holdReason: null, holdNote: null },
+    data: {
+      status: "ESTIMATE",
+      // Time-tracking: end of the diagnosis window, start of the pricing
+      // window. Read on all three dashboards to show 'Diagnosis: 12m'.
+      sentForEstimateAt: new Date(),
+      heldFrom: null,
+      holdReason: null,
+      holdNote: null,
+    },
   });
   revalidatePath("/technician");
   revalidatePath("/cashier");

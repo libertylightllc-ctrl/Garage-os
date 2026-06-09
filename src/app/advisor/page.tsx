@@ -6,6 +6,7 @@ import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
 import { getT } from "@/i18n/server";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
+import { JobTimings } from "@/components/job-timings";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,13 @@ export default async function AdvisorHome() {
       include: {
         vehicle: { include: { customer: true } },
         // Latest estimate so the friendly badge can distinguish
-        // 'Estimate under process' from 'Awaiting customer approval'.
-        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+        // 'Estimate under process' from 'Awaiting customer approval',
+        // plus sentAt for the pricing-duration display.
+        estimates: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { status: true, sentAt: true, createdAt: true },
+        },
       },
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     }),
@@ -34,6 +40,9 @@ export default async function AdvisorHome() {
     }),
   ]);
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
+  // Server-side 'now' for the in-progress duration captions (no client clock
+  // — every row reads from the same wall time on render).
+  const now = new Date();
   const reasonLabel = (r: string | null) =>
     (
       {
@@ -97,6 +106,13 @@ export default async function AdvisorHome() {
                         ? ` · → ${techName(job.assignedToId)}`
                         : ""}
                   </span>
+                  <JobTimings
+                    claimedAt={job.claimedAt}
+                    sentForEstimateAt={job.sentForEstimateAt}
+                    estimateSentAt={job.estimates[0]?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
                 </span>
                 {/* Friendly status badge — same component on every dashboard
                     so the advisor, tech, and cashier see the same wording.

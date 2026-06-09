@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/jobs";
 import { friendlyStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
+import { JobTimings } from "@/components/job-timings";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,11 @@ export default async function TechnicianHome({
         status: { notIn: ["DELIVERED", "CANCELLED"] },
         OR: [{ claimedById: me }, { helpers: { some: { techId: me } } }],
       },
-      include: { vehicle: true },
+      include: {
+        vehicle: true,
+        // For the per-row timing captions (Diagnosis + Pricing).
+        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { sentAt: true } },
+      },
       orderBy: { updatedAt: "desc" },
     }),
     // Other techs' in-progress cars I could join as a helper (Tier 2 #4).
@@ -69,6 +74,7 @@ export default async function TechnicianHome({
 
   const inProgress = mine.filter((j) => j.status !== "ON_HOLD");
   const paused = mine.filter((j) => j.status === "ON_HOLD");
+  const now = new Date();
   const amHelper = (j: { claimedById: string | null }) => j.claimedById !== me;
   const reasonLabel = (r: string | null) =>
     (
@@ -177,6 +183,13 @@ export default async function TechnicianHome({
                       size="sm"
                     />
                   </div>
+                  <JobTimings
+                    claimedAt={j.claimedAt}
+                    sentForEstimateAt={j.sentForEstimateAt}
+                    estimateSentAt={j.estimates?.[0]?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={`/technician/jobs/${j.id}`}

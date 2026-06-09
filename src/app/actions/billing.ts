@@ -238,7 +238,15 @@ export async function setEstimateStatusAction(formData: FormData) {
     await prisma.estimate.update({ where: { id: est.id }, data: { status } });
     await prisma.jobCard.update({ where: { id: est.jobCardId }, data: { status: "ESTIMATE" } });
   } else if (status === "SENT") {
-    await prisma.estimate.update({ where: { id: est.id }, data: { status } });
+    await prisma.estimate.update({
+      where: { id: est.id },
+      data: {
+        status,
+        // Time-tracking: end of the pricing window (used to render
+        // 'Pricing: 12m' on every dashboard).
+        sentAt: new Date(),
+      },
+    });
     // Send the customer the WhatsApp approval link (mock if no Meta token).
     const customer = await customerForJob(est.jobCardId);
     if (customer) {

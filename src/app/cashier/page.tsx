@@ -8,6 +8,7 @@ import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
+import { JobTimings } from "@/components/job-timings";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,11 @@ export default async function CashierHome() {
         vehicle: { include: { customer: true } },
         // Latest estimate drives the friendly status (SENT → 'Awaiting customer
         // approval', else 'Estimate under process').
-        estimates: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, status: true } },
+        estimates: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, status: true, sentAt: true },
+        },
       },
       orderBy: [
         // Cars freshly handed off (status=ESTIMATE) bubble to the top so
@@ -59,6 +64,8 @@ export default async function CashierHome() {
   const arOutstanding = byAccount.get(ACCOUNTS.AR) ?? 0; // debit-normal
 
   const now = new Date();
+  // (the local 'now' above already serves the durations — passed into
+  //  <JobTimings> below so every per-row caption reads the same wall clock.)
 
   const metrics: { key: MessageKey; value: number }[] = [
     { key: "mRevenue", value: revenue },
@@ -116,6 +123,13 @@ export default async function CashierHome() {
                     </span>
                     <FriendlyStatusBadge status={fs} t={t} size="sm" />
                   </div>
+                  <JobTimings
+                    claimedAt={j.claimedAt}
+                    sentForEstimateAt={j.sentForEstimateAt}
+                    estimateSentAt={draft?.sentAt ?? null}
+                    now={now}
+                    t={t}
+                  />
                   <div className="flex justify-end">
                     {draft ? (
                       <Link

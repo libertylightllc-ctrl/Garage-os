@@ -30,6 +30,17 @@ export default async function AdvisorHome() {
           take: 1,
           select: { status: true, sentAt: true, createdAt: true },
         },
+        // Latest invoice + its payments so the badge can swing from
+        // 'Awaiting payment' to 'Ready for pickup' once the customer
+        // has paid in full (Stage 9 → 10).
+        invoices: {
+          orderBy: { issuedAt: "desc" },
+          take: 1,
+          select: {
+            total: true,
+            payments: { select: { amount: true } },
+          },
+        },
       },
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     }),
@@ -118,20 +129,26 @@ export default async function AdvisorHome() {
                     so the advisor, tech, and cashier see the same wording.
                     On hold gets the hold reason as a small caption below. */}
                 <span className="flex flex-col items-end gap-1">
-                  <FriendlyStatusBadge
-                    status={friendlyStatus({
-                      status: job.status as JobStatus,
-                      claimedById: job.claimedById,
-                      latestEstimateStatus: (job.estimates[0]?.status ?? null) as
-                        | "DRAFT"
-                        | "SENT"
-                        | "APPROVED"
-                        | "REJECTED"
-                        | null,
-                    })}
-                    t={t}
-                    size="sm"
-                  />
+                  {(() => {
+                    const inv = job.invoices[0];
+                    const paidTotal = inv
+                      ? inv.payments.reduce((s, p) => s + Number(p.amount), 0)
+                      : 0;
+                    const invoicePaidInFull = inv ? paidTotal >= Number(inv.total) : false;
+                    return (
+                      <FriendlyStatusBadge
+                        status={friendlyStatus({
+                          status: job.status as JobStatus,
+                          claimedById: job.claimedById,
+                          latestEstimateStatus: (job.estimates[0]?.status ?? null) as
+                            | "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null,
+                          invoicePaidInFull,
+                        })}
+                        t={t}
+                        size="sm"
+                      />
+                    );
+                  })()}
                   {job.status === "ON_HOLD" ? (
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
                       {reasonLabel(job.holdReason)}

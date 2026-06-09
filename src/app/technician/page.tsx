@@ -64,6 +64,16 @@ export default async function TechnicianHome({
           take: 1,
           select: { status: true, sentAt: true },
         },
+        // Latest invoice + payments so 'Awaiting payment' flips to
+        // 'Ready for pickup' once paid in full (Stage 9 → 10).
+        invoices: {
+          orderBy: { issuedAt: "desc" },
+          take: 1,
+          select: {
+            total: true,
+            payments: { select: { amount: true } },
+          },
+        },
       },
       orderBy: { updatedAt: "desc" },
     }),
@@ -194,16 +204,24 @@ export default async function TechnicianHome({
                         </span>
                       ) : null}
                     </Link>
-                    <FriendlyStatusBadge
-                      status={friendlyStatus({
-                        status: j.status as JobStatus,
-                        claimedById: j.claimedById,
-                        latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
-                          | "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null,
-                      })}
-                      t={t}
-                      size="sm"
-                    />
+                    {(() => {
+                      const inv = j.invoices?.[0];
+                      const paidTotal = inv ? inv.payments.reduce((s, p) => s + Number(p.amount), 0) : 0;
+                      const invoicePaidInFull = inv ? paidTotal >= Number(inv.total) : false;
+                      return (
+                        <FriendlyStatusBadge
+                          status={friendlyStatus({
+                            status: j.status as JobStatus,
+                            claimedById: j.claimedById,
+                            latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
+                              | "DRAFT" | "SENT" | "APPROVED" | "REJECTED" | null,
+                            invoicePaidInFull,
+                          })}
+                          t={t}
+                          size="sm"
+                        />
+                      );
+                    })()}
                   </div>
                   <JobTimings
                     claimedAt={j.claimedAt}

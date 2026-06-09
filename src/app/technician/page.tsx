@@ -51,7 +51,11 @@ export default async function TechnicianHome({
     prisma.jobCard.findMany({
       where: {
         garageId,
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        // Per spec: once the tech taps 'Finish' (status → TECH_COMPLETE),
+        // the job leaves their dashboard — it's the cashier's now. Same
+        // applies once the invoice is out (INVOICED). DELIVERED/CANCELLED
+        // were already excluded.
+        status: { notIn: ["TECH_COMPLETE", "INVOICED", "DELIVERED", "CANCELLED"] },
         OR: [{ claimedById: me }, { helpers: { some: { techId: me } } }],
       },
       include: {
@@ -80,7 +84,9 @@ export default async function TechnicianHome({
     prisma.jobCard.findMany({
       where: {
         garageId,
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        // Same exclusions as 'mine' — once a job hits TECH_COMPLETE the
+        // shop's tech population has nothing left to do with it.
+        status: { notIn: ["TECH_COMPLETE", "INVOICED", "DELIVERED", "CANCELLED"] },
         claimedById: { not: null, notIn: [me] },
         helpers: { none: { techId: me } },
       },

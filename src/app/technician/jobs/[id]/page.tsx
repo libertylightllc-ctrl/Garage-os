@@ -580,14 +580,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </div>
         </form>
 
-        <form action={addStepAction} className="contents">
-          <input type="hidden" name="jobId" value={job.id} />
-          <input type="hidden" name="type" value="FINISH" />
-          <button type="submit" className={bigBtn}>
-            <span className="text-3xl">✅</span>
-            {t("finish")}
-          </button>
-        </form>
+        {/* Legacy 'Finish' big-button removed — it only logged a tech-step,
+            it didn't change job status. The real workflow-completing
+            'Finish' button now lives on the tech home (and is also
+            mirrored in the workflow section below) and fires
+            markCompleteAction so the job actually flips to
+            TECH_COMPLETE. */}
       </div>
 
       {/* Part requests + live status */}

@@ -210,7 +210,7 @@ const en = {
   errCannotAddExtra: "Can only add extras while the approved work is in progress.",
   errNoExtras: "Add at least one extra item before sending for approval.",
   // Tech 'Mark complete' button + confirmation screen (Stage 7→8)
-  markCompleteAndSend: "Mark complete →",
+  markCompleteAndSend: "Finish →",
   markedCompleteTitle: "Marked complete — sent to cashier",
   markedCompleteSubtitle: "The cashier will finalise the invoice and send it to the customer.",
   markedCompleteCompletedAt: "Completed at",
@@ -817,7 +817,7 @@ const ar: typeof en = {
   errExtraDescriptionRequired: "أضف وصفًا للقطعة أو المشكلة الإضافية.",
   errCannotAddExtra: "يمكن إضافة الإضافات فقط أثناء تنفيذ العمل المعتمد.",
   errNoExtras: "أضف عنصرًا إضافيًا واحدًا على الأقل قبل الإرسال للموافقة.",
-  markCompleteAndSend: "تحديد كمكتملة ←",
+  markCompleteAndSend: "إنهاء ←",
   markedCompleteTitle: "تم تحديدها كمكتملة — أُرسلت إلى أمين الصندوق",
   markedCompleteSubtitle: "سيقوم أمين الصندوق بإعداد الفاتورة وإرسالها للعميل.",
   markedCompleteCompletedAt: "اكتملت في",

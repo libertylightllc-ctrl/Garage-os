@@ -9,19 +9,24 @@ import {
   addExtraJobPartAction,
   removeExtraJobPartAction,
   sendForReestimateAction,
+  // sendForEstimateAction is the same action that drives the home-page
+  // 'Send for Estimate' button — wiring it here too keeps the detail
+  // page and home page on a single path. It only requires the tech to
+  // be the claimer + the job to be in a pre-estimate stage; no
+  // findings text required.
+  sendForEstimateAction,
 } from "@/app/actions/jobs";
 import {
   saveFindingsAction,
   addRequiredPartAction,
   removeJobPartAction,
-  submitFindingsAction,
   saveWorkNotesAction,
   addUsedPartAction,
   removeUsedPartAction,
   markWorkCompleteAction,
   signOffQcAction,
 } from "@/app/actions/techfindings";
-import { canSubmitFindings, repairUnlocked } from "@/lib/jobfindings";
+import { repairUnlocked } from "@/lib/jobfindings";
 import { QC_CHECKS, qcSignedOff } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
@@ -214,7 +219,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </ul>
         )}
 
-        {!submitted ? (
+        {/* Add Parts form — only available during the diagnosis stage so
+            the tech can build up the required-parts list before sending
+            for estimate. Once sendForEstimateAction flips the status to
+            ESTIMATE, the form disappears (further changes need to go
+            through the Extras / re-estimate flow instead). */}
+        {job.status === "ARRIVED" || job.status === "INSPECTION" ? (
           <form action={addRequiredPartAction} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="jobId" value={job.id} />
             <select
@@ -257,8 +267,19 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
         <p className="text-xs text-zinc-400">📷 {t("photographDamaged")}</p>
 
-        {!submitted && canSubmitFindings(job.finding) ? (
-          <form action={submitFindingsAction}>
+        {/* 'Send to Cashier for Estimate' button — Per spec, this appears
+            once the tech has at least one Required part listed. The button
+            fires sendForEstimateAction (NOT submitFindingsAction): no
+            findings text is required, status flips ARRIVED/INSPECTION →
+            ESTIMATE, sentForEstimateAt is stamped, and the tech is
+            redirected to the /sent-to-cashier confirmation page so they
+            see "Job sent to cashier for estimate" before going back to
+            the workshop list. Hidden once the job has already left the
+            diagnosis stage, and for helpers (only the claimer can send). */}
+        {requiredParts.length > 0 &&
+        !amHelper &&
+        (job.status === "ARRIVED" || job.status === "INSPECTION") ? (
+          <form action={sendForEstimateAction}>
             <input type="hidden" name="jobId" value={job.id} />
             <button className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black">
               {t("submitToCashier")}

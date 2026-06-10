@@ -1,13 +1,16 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   recordPaymentAction,
-  sendInvoiceToCustomerAction,
   addInvoiceLineAction,
   updateInvoiceLineAction,
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
+  // sendInvoiceToCustomerAction is no longer imported here — it now
+  // only fires from /invoices/[id]/preview so the cashier must
+  // review the customer-facing layout before the WhatsApp send.
 } from "@/app/actions/billing";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is "use server" and can only export async functions — exporting a
@@ -397,21 +400,25 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Stage 8 — explicit 'Send invoice to customer' tap (spec). When
-          the cashier has reviewed items and wants to notify the customer.
-          Hidden once the invoice has already been sent (job.invoiceSentAt
-          is set). Mocks the WhatsApp send in this build per build decision. */}
+      {/* Preview gate — replaces the direct Send-to-customer button per
+          spec. The cashier must review the customer-facing render
+          before the WhatsApp send goes out. The actual sendInvoice
+          ToCustomerAction now only fires from /invoices/[id]/preview,
+          which means typo'd line items can't reach the customer in
+          one accidental click. */}
       {["CASHIER", "OWNER"].includes(session.user.role) &&
       !inv.jobCard.invoiceSentAt ? (
-        <form action={sendInvoiceToCustomerAction} className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 dark:bg-fuchsia-950/40">
-          <input type="hidden" name="invoiceId" value={inv.id} />
+        <Link
+          href={`/invoices/${inv.id}/preview`}
+          className="block rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 text-center dark:bg-fuchsia-950/40"
+        >
           <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
-            {t("invoiceSentMockNote")}
+            {t("invoicePreviewNote")}
           </p>
-          <button className="mt-3 rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500">
-            {t("sendInvoiceToCustomer")}
-          </button>
-        </form>
+          <span className="mt-3 inline-block rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500">
+            {t("invoicePreviewButton")}
+          </span>
+        </Link>
       ) : inv.jobCard.invoiceSentAt ? (
         <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
           📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{" "}

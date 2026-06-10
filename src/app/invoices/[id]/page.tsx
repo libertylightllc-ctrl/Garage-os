@@ -355,18 +355,33 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           </div>
           <span className="mt-1 text-[10px] text-zinc-400">{t("qrPlaceholder")}</span>
         </div>
+        {/* Totals — per spec the order is strict:
+              with discount:
+                Subtotal (before discount)
+                Discount       (single negative line, no % suffix)
+                Subtotal (after discount)
+                VAT (5%)       (calculated on subtotal AFTER discount)
+                Total
+              without discount:
+                Subtotal
+                VAT (5%)
+                Total
+            VAT correctness: invoice.vatAmount is computed by
+            recomputeInvoice as 5% of invoice.subtotal, which already
+            includes the negative discount line — so it matches 'VAT
+            on subtotal AFTER discount' automatically. */}
         <div className="text-right text-sm">
-          <div>{t("subtotal")}: {money(grossSubtotal)}</div>
           {discountLine ? (
             <>
+              <div>{t("subtotalBeforeDiscount")}: {money(grossSubtotal)}</div>
               <div className="text-rose-700 dark:text-rose-400">
-                {discountLabelKey?.mode === "PERCENT"
-                  ? `${t("discountRowPercent").replace("{pct}", String(discountLabelKey.value))}: −${money(discountAmount)}`
-                  : `${t("discountRowFixed")}: −${money(discountAmount)}`}
+                {t("discountRow")}: −{money(discountAmount)}
               </div>
-              <div>{t("netSubtotal")}: {money(Number(inv.subtotal))}</div>
+              <div>{t("subtotalAfterDiscount")}: {money(Number(inv.subtotal))}</div>
             </>
-          ) : null}
+          ) : (
+            <div>{t("subtotal")}: {money(grossSubtotal)}</div>
+          )}
           <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
           <div className="text-base font-semibold">{t("total")}: {money(total)}</div>
           <div className="mt-1">{t("paid")}: {money(paid)}</div>

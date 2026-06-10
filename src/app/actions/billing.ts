@@ -609,6 +609,91 @@ export async function removeInvoiceLineAction(formData: FormData) {
   revalidatePath("/cashier");
 }
 
+// ────────────────────────────────────────────────────────────────
+// Invoice-level discount — applied BEFORE VAT, per spec.
+//
+// We don't add new schema columns for this. A discount is stored as
+// a single FEE line with a negative amount and a marker description
+// of the form 'Discount (<n>%)' or 'Discount (fixed)'. That way the
+// existing recomputeInvoice() math 'just works':
+//   invoice.subtotal = sum(all lines incl. negative discount)
+//   invoice.vatAmount = invoice.subtotal × 0.05
+//   invoice.total    = invoice.subtotal + invoice.vatAmount
+// which is exactly the spec's order (subtotal → discount → VAT →
+// total).
+//
+// The marker description distinguishes the discount line from a
+// random FEE line a cashier might add by hand. The UI shows the
+// discount in the totals area, NOT in the line table.
+// ────────────────────────────────────────────────────────────────
+
+export const DISCOUNT_DESCRIPTION_MARKER = /^Discount \(/;
+
+export async function setInvoiceDiscountAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  await ownedEditableInvoice(invoiceId, user.garageId);
+
+  // 'mode' is the cashier's choice: PERCENT, AMOUNT, or NONE (remove).
+  // We accept the value as a number; for PERCENT it's a percentage
+  // (e.g. 2 means 2%), for AMOUNT it's an AED amount (e.g. 200).
+  const mode = String(formData.get("mode") ?? "NONE").toUpperCase();
+  const rawValue = Math.abs(Number(formData.get("value") ?? 0));
+  const isPercent = mode === "PERCENT";
+  const isAmount = mode === "AMOUNT";
+
+  // Always wipe any existing discount line(s) first so applying a new
+  // discount fully replaces the previous one, no stacking. We also
+  // delete BEFORE computing the gross subtotal so the gross figure
+  // matches 'subtotal of real work', not the post-prior-discount one.
+  const allLines = await prisma.invoiceLine.findMany({ where: { invoiceId } });
+  const discountLineIds = allLines
+    .filter((l) => DISCOUNT_DESCRIPTION_MARKER.test(l.description))
+    .map((l) => l.id);
+  if (discountLineIds.length > 0) {
+    await prisma.invoiceLine.deleteMany({ where: { id: { in: discountLineIds } } });
+  }
+
+  if (isPercent || isAmount) {
+    // Gross subtotal = sum of all non-discount lines (the parts +
+    // labour the customer is being billed for, before any discount).
+    const grossSubtotal = allLines
+      .filter((l) => !DISCOUNT_DESCRIPTION_MARKER.test(l.description))
+      .reduce((s, l) => s + Number(l.lineTotal), 0);
+
+    let discountAmount = 0;
+    let description = "Discount";
+    if (isPercent) {
+      const pct = Math.min(100, rawValue); // can't discount more than 100%
+      discountAmount = Math.round(grossSubtotal * (pct / 100) * 100) / 100;
+      description = `Discount (${pct}%)`;
+    } else {
+      // Fixed amount — cap at gross so we don't end up with a negative
+      // subtotal (and a refund situation no one asked for).
+      discountAmount = Math.min(rawValue, grossSubtotal);
+      description = `Discount (fixed)`;
+    }
+
+    if (discountAmount > 0) {
+      const unitPrice = -discountAmount;
+      await prisma.invoiceLine.create({
+        data: {
+          invoiceId,
+          kind: "FEE",
+          description,
+          qty: 1,
+          unitPrice,
+          lineTotal: lineTotal(1, unitPrice),
+        },
+      });
+    }
+  }
+
+  await recomputeInvoice(invoiceId, user.garageId);
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/cashier");
+}
+
 /**
  * Stage 8 — Cashier taps 'Send invoice to customer' after reviewing items.
  * Stamps the JobCard.invoiceSentAt timestamp + records a 'would-send'

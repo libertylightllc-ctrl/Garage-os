@@ -7,6 +7,8 @@ import {
   addInvoiceLineAction,
   updateInvoiceLineAction,
   removeInvoiceLineAction,
+  setInvoiceDiscountAction,
+  DISCOUNT_DESCRIPTION_MARKER,
 } from "@/app/actions/billing";
 import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
@@ -44,6 +46,33 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
   // side ownedEditableInvoice helper enforces).
   const canEditLines =
     ["CASHIER", "OWNER"].includes(session.user.role) && !inv.jobCard.invoiceSentAt;
+
+  // Pull the discount line out of the main line array so the table
+  // shows only real work + the totals area shows the discount as a
+  // distinct row. There's at most one discount line — setInvoice
+  // DiscountAction guarantees this by wiping any old discount line
+  // before adding the new one. Marker pattern: 'Discount (...)' on
+  // the description, stored as a FEE line with a negative amount.
+  const discountLine = inv.lines.find((l) =>
+    DISCOUNT_DESCRIPTION_MARKER.test(l.description),
+  );
+  const workLines = inv.lines.filter(
+    (l) => !DISCOUNT_DESCRIPTION_MARKER.test(l.description),
+  );
+  // 'gross' = subtotal BEFORE discount (parts + labour only). Stored
+  // invoice.subtotal already has the discount baked in — recompute
+  // gross from the work-only lines so the totals area can show the
+  // breakdown the user asked for.
+  const grossSubtotal = workLines.reduce((s, l) => s + Number(l.lineTotal), 0);
+  const discountAmount = discountLine ? Math.abs(Number(discountLine.lineTotal)) : 0;
+  // Parse 'Discount (2%)' / 'Discount (fixed)' to render a small badge
+  // showing which path the cashier used.
+  const discountLabelKey = (() => {
+    if (!discountLine) return null;
+    const m = discountLine.description.match(/^Discount \((\d+(?:\.\d+)?)%\)/);
+    if (m) return { mode: "PERCENT" as const, value: Number(m[1]) };
+    return { mode: "AMOUNT" as const, value: discountAmount };
+  })();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -89,7 +118,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           </tr>
         </thead>
         <tbody>
-          {inv.lines.map((l) =>
+          {workLines.map((l) =>
             canEditLines ? (
               // Inline edit: one form per row. qty + unit price + description
               // all editable. Recompute happens server-side via
@@ -217,6 +246,107 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         </form>
       ) : null}
 
+      {/* Discount section — two side-by-side forms, one for % and one
+          for a fixed AED amount. Whichever the cashier submits replaces
+          the existing discount (setInvoiceDiscountAction wipes the prior
+          discount line before writing the new one, so there's never
+          stacking). A third 'Remove' form shows when a discount is
+          already applied. Discount applies BEFORE VAT — handled in
+          recomputeInvoice via the negative FEE line. */}
+      {canEditLines ? (
+        <div className="rounded-lg border border-black/10 p-3 dark:border-white/15">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">{t("discountSectionTitle")}</span>
+            {discountLabelKey ? (
+              <span className="text-xs text-rose-700 dark:text-rose-400">
+                {discountLabelKey.mode === "PERCENT"
+                  ? t("discountCurrentPercent").replace(
+                      "{pct}",
+                      String(discountLabelKey.value),
+                    )
+                  : t("discountCurrentFixed").replace(
+                      "{amount}",
+                      money(discountLabelKey.value),
+                    )}{" "}
+                · −{money(discountAmount)}
+              </span>
+            ) : (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {t("discountNone")}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <form
+              action={setInvoiceDiscountAction}
+              className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
+            >
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="PERCENT" />
+              <label className="text-xs text-zinc-600 dark:text-zinc-300">
+                {t("discountPercentLabel")}
+              </label>
+              <input
+                name="value"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="2"
+                aria-label={t("discountPercentLabel")}
+                className="w-20 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+              />
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">%</span>
+              <button
+                type="submit"
+                className="ms-auto rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+              >
+                {t("discountApply")}
+              </button>
+            </form>
+            <form
+              action={setInvoiceDiscountAction}
+              className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
+            >
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="AMOUNT" />
+              <label className="text-xs text-zinc-600 dark:text-zinc-300">
+                {t("discountAmountLabel")}
+              </label>
+              <input
+                name="value"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="200"
+                aria-label={t("discountAmountLabel")}
+                className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+              />
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">AED</span>
+              <button
+                type="submit"
+                className="ms-auto rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+              >
+                {t("discountApply")}
+              </button>
+            </form>
+          </div>
+          {discountLine ? (
+            <form action={setInvoiceDiscountAction} className="mt-2 flex justify-end">
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="NONE" />
+              <input type="hidden" name="value" value="0" />
+              <button
+                type="submit"
+                className="text-xs text-red-600 hover:underline"
+              >
+                ✕ {t("discountRemove")}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex items-end justify-between">
         {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}
         <div className="flex flex-col items-center">
@@ -226,7 +356,17 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           <span className="mt-1 text-[10px] text-zinc-400">{t("qrPlaceholder")}</span>
         </div>
         <div className="text-right text-sm">
-          <div>{t("subtotal")}: {money(Number(inv.subtotal))}</div>
+          <div>{t("subtotal")}: {money(grossSubtotal)}</div>
+          {discountLine ? (
+            <>
+              <div className="text-rose-700 dark:text-rose-400">
+                {discountLabelKey?.mode === "PERCENT"
+                  ? `${t("discountRowPercent").replace("{pct}", String(discountLabelKey.value))}: −${money(discountAmount)}`
+                  : `${t("discountRowFixed")}: −${money(discountAmount)}`}
+              </div>
+              <div>{t("netSubtotal")}: {money(Number(inv.subtotal))}</div>
+            </>
+          ) : null}
           <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
           <div className="text-base font-semibold">{t("total")}: {money(total)}</div>
           <div className="mt-1">{t("paid")}: {money(paid)}</div>

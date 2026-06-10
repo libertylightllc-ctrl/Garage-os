@@ -306,24 +306,21 @@ export async function generateInvoiceAction(formData: FormData) {
   // include ALL work in ONE invoice.'
   const clicked = await prisma.estimate.findFirst({
     where: { id: estimateId, jobCard: { garageId: user.garageId } },
-    select: { id: true, status: true, jobCardId: true, invoice: { select: { id: true } } },
+    select: { id: true, status: true, jobCardId: true },
   });
   if (!clicked) throw new Error("Estimate not found");
   if (clicked.status !== "APPROVED") throw new Error("Estimate must be approved first");
-  if (clicked.invoice) redirect(`/invoices/${clicked.invoice.id}`);
 
   // Pull all approved estimates for this job, oldest first. The earliest
-  // one becomes the 'primary' for the unique Invoice.estimateId link.
-  // We also double-check none of these already has an invoice — that
-  // catches the rare case where someone hit Generate Invoice on the
-  // 'extras' estimate first, then taps the original.
+  // one becomes the 'primary' for the unique Invoice.estimateId link
+  // when we create the invoice. If ANY of these already has an invoice
+  // attached (Invoice.estimateId @unique), there's already an invoice
+  // row for the job — we either top it up (below) or redirect.
   const approvedEstimates = await prisma.estimate.findMany({
     where: { jobCardId: clicked.jobCardId, status: "APPROVED" },
     include: { lines: true, invoice: { select: { id: true } } },
     orderBy: { createdAt: "asc" },
   });
-  const alreadyInvoiced = approvedEstimates.find((e) => e.invoice);
-  if (alreadyInvoiced) redirect(`/invoices/${alreadyInvoiced.invoice!.id}`);
   if (approvedEstimates.length === 0) {
     throw new Error("No approved estimates to bill");
   }
@@ -334,6 +331,60 @@ export async function generateInvoiceAction(formData: FormData) {
   const mergedLines = approvedEstimates.flatMap((e) =>
     e.lines.filter((l) => !l.declined),
   );
+
+  // ── Top-up path ───────────────────────────────────────────────────
+  // If an invoice already exists for this job — typically because the
+  // OLD pre-merge code generated one with only the clicked estimate's
+  // lines — and it hasn't been sent yet, ADD any missing approved-
+  // estimate lines to it rather than just redirecting. 'Missing' is
+  // determined by a stable signature (description + qty + unitPrice)
+  // so we don't re-add lines the cashier already kept and don't trip
+  // on a description rename if everything else matches.
+  // If the invoice was already sent (lines are locked) we still
+  // redirect — mutating a sent invoice would break the audit trail
+  // and the customer's existing copy.
+  const existingInvoiceEstimate = approvedEstimates.find((e) => e.invoice);
+  if (existingInvoiceEstimate) {
+    const existingInvoiceId = existingInvoiceEstimate.invoice!.id;
+    const existingInvoice = await prisma.invoice.findFirst({
+      where: { id: existingInvoiceId },
+      include: {
+        lines: true,
+        jobCard: { select: { invoiceSentAt: true } },
+      },
+    });
+    if (existingInvoice) {
+      // Sent → don't touch.
+      if (existingInvoice.jobCard.invoiceSentAt) {
+        redirect(`/invoices/${existingInvoiceId}`);
+      }
+      const sig = (l: { description: string; qty: unknown; unitPrice: unknown }) =>
+        `${l.description.trim().toLowerCase()}|${Number(l.qty)}|${Number(l.unitPrice)}`;
+      const haveSigs = new Set(existingInvoice.lines.map(sig));
+      const missing = mergedLines.filter((l) => !haveSigs.has(sig(l)));
+      if (missing.length === 0) {
+        // Invoice already complete vs. the approved estimates — nothing to do.
+        redirect(`/invoices/${existingInvoiceId}`);
+      }
+      // Add the missing lines + recompute totals + replace ledger rows.
+      await prisma.invoiceLine.createMany({
+        data: missing.map((l) => ({
+          invoiceId: existingInvoiceId,
+          kind: l.kind,
+          description: l.description,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+          lineTotal: l.lineTotal,
+          vatRate: l.vatRate,
+        })),
+      });
+      await recomputeInvoice(existingInvoiceId, user.garageId);
+      revalidatePath(`/invoices/${existingInvoiceId}`);
+      revalidatePath("/cashier");
+      redirect(`/invoices/${existingInvoiceId}`);
+    }
+  }
+  // ── End top-up path ──────────────────────────────────────────────
 
   // Compute totals from the merged set (don't sum precomputed estimate
   // totals — those may include declined lines or drift if anyone touched

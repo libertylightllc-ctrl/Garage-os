@@ -8,8 +8,14 @@ import {
   updateInvoiceLineAction,
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
-  DISCOUNT_DESCRIPTION_MARKER,
 } from "@/app/actions/billing";
+// DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
+// is "use server" and can only export async functions — exporting a
+// regexp from there broke the whole module under Turbopack on Vercel
+// (every action came back as 'export not found'). Now imported from a
+// plain module that both this page and billing.ts can share without
+// triggering the server-action export check.
+import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 

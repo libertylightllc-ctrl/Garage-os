@@ -627,7 +627,12 @@ export async function removeInvoiceLineAction(formData: FormData) {
 // discount in the totals area, NOT in the line table.
 // ────────────────────────────────────────────────────────────────
 
-export const DISCOUNT_DESCRIPTION_MARKER = /^Discount \(/;
+// Marker is kept as a local non-exported const in this file. Next.js
+// "use server" modules can ONLY export async functions — exporting a
+// regexp const from here breaks the entire module (Turbopack: 'The
+// export X was not found in module …'). Callers that need the same
+// pattern should import it from src/lib/invoice-discount.ts instead.
+const DISCOUNT_DESCRIPTION_MARKER = /^Discount \(/;
 
 export async function setInvoiceDiscountAction(formData: FormData) {
   const user = await requireAnyRole(PRICING_ROLES);

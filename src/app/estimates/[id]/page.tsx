@@ -62,6 +62,10 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     include: {
       lines: { orderBy: { createdAt: "asc" } },
       jobCard: {
+        // jobCard.status is what gates 'Generate Invoice' per spec —
+        // the cashier must NOT be able to invoice while the technician
+        // is still doing the work. Only TECH_COMPLETE (or beyond,
+        // when an invoice already exists) unlocks the action.
         include: {
           vehicle: true,
           finding: true,
@@ -72,6 +76,10 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     },
   });
   if (!est) notFound();
+  // Pull the job-card status out for readability — it drives the
+  // Generate-Invoice gate below.
+  const jobStatus = est.jobCard.status;
+  const workNotComplete = jobStatus === "APPROVED" || jobStatus === "REPAIR";
   const t = await getT();
   const locale = await getLocale();
   const dictLabels = {
@@ -226,7 +234,14 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <StatusButton estimateId={est.id} status="REJECTED" label={t("markRejected")} />
           </>
         ) : null}
-        {canPrice && est.status === "APPROVED" && !est.invoice ? (
+        {/* Generate Invoice — gated on jobCard.status === TECH_COMPLETE per
+            spec, NOT on estimate.status === APPROVED alone. While the
+            tech is still doing the work (job at APPROVED / REPAIR) the
+            button is suppressed and a caption explains why. Once the
+            tech taps Mark Complete the job flips to TECH_COMPLETE and
+            the button reappears here AND in the cashier dashboard's
+            'Awaiting final invoice' bucket. */}
+        {canPrice && est.status === "APPROVED" && !est.invoice && jobStatus === "TECH_COMPLETE" ? (
           <form action={generateInvoiceAction}>
             <input type="hidden" name="estimateId" value={est.id} />
             <button className="rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white hover:bg-green-500">
@@ -240,6 +255,15 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           </Link>
         ) : null}
       </div>
+      {/* Status caption visible WHILE the tech still has the car. Replaces
+          the Generate-Invoice button per spec so the cashier sees an
+          explicit 'why is there no button right now' message instead of
+          guessing. */}
+      {est.status === "APPROVED" && !est.invoice && workNotComplete ? (
+        <p className="rounded-lg border border-emerald-500/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+          {t("estimateApprovedSentToTech")}
+        </p>
+      ) : null}
       <p className="text-xs text-zinc-400">
         (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>

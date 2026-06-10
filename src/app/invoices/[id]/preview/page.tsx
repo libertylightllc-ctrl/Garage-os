@@ -220,7 +220,14 @@ export default async function InvoicePreview({
         )}
       </div>
 
-      <p className="text-xs text-zinc-400">{t("invoicePreviewMockNote")}</p>
+      {/* Mock-note footer — only relevant pre-send. After invoiceSentAt
+          is stamped, the note reads as if Send to Customer is still a
+          live action ('logs the message that would have gone out'), so
+          hide it then. The 'Invoice already sent' notice above replaces
+          it. */}
+      {!alreadySent ? (
+        <p className="text-xs text-zinc-400">{t("invoicePreviewMockNote")}</p>
+      ) : null}
     </main>
   );
 }

@@ -298,17 +298,61 @@ export async function setEstimateStatusAction(formData: FormData) {
 export async function generateInvoiceAction(formData: FormData) {
   const user = await requireAnyRole(PRICING_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
-  const est = await prisma.estimate.findFirst({
+  // Locate the clicked estimate just for jobCardId + invoice-exists check;
+  // we then fan out and pull EVERY approved estimate for the same job so
+  // the invoice merges original work + extras into a single document.
+  // Re-estimate cycles create a second Estimate row at extras time, and
+  // until now we only billed one of them. Spec: 'final invoice must
+  // include ALL work in ONE invoice.'
+  const clicked = await prisma.estimate.findFirst({
     where: { id: estimateId, jobCard: { garageId: user.garageId } },
-    include: { lines: true, invoice: true },
+    select: { id: true, status: true, jobCardId: true, invoice: { select: { id: true } } },
   });
-  if (!est) throw new Error("Estimate not found");
-  if (est.status !== "APPROVED") throw new Error("Estimate must be approved first");
-  if (est.invoice) redirect(`/invoices/${est.invoice.id}`);
+  if (!clicked) throw new Error("Estimate not found");
+  if (clicked.status !== "APPROVED") throw new Error("Estimate must be approved first");
+  if (clicked.invoice) redirect(`/invoices/${clicked.invoice.id}`);
+
+  // Pull all approved estimates for this job, oldest first. The earliest
+  // one becomes the 'primary' for the unique Invoice.estimateId link.
+  // We also double-check none of these already has an invoice — that
+  // catches the rare case where someone hit Generate Invoice on the
+  // 'extras' estimate first, then taps the original.
+  const approvedEstimates = await prisma.estimate.findMany({
+    where: { jobCardId: clicked.jobCardId, status: "APPROVED" },
+    include: { lines: true, invoice: { select: { id: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const alreadyInvoiced = approvedEstimates.find((e) => e.invoice);
+  if (alreadyInvoiced) redirect(`/invoices/${alreadyInvoiced.invoice!.id}`);
+  if (approvedEstimates.length === 0) {
+    throw new Error("No approved estimates to bill");
+  }
+
+  // Merge all non-declined lines across estimates. Order: original
+  // estimate's lines first, then each subsequent re-estimate's lines
+  // appended — preserves the natural reading order on the invoice.
+  const mergedLines = approvedEstimates.flatMap((e) =>
+    e.lines.filter((l) => !l.declined),
+  );
+
+  // Compute totals from the merged set (don't sum precomputed estimate
+  // totals — those may include declined lines or drift if anyone touched
+  // a line between approval and invoicing).
+  const draftLines: DraftLine[] = mergedLines.map((l) => ({
+    kind: l.kind as LineKind,
+    description: l.description,
+    qty: Number(l.qty),
+    unitPrice: Number(l.unitPrice),
+  }));
+  const t = totalsFor(draftLines);
+  const subtotal = t.subtotal;
+  const vatAmount = t.vatAmount;
+  const total = t.total;
 
   const strategy = vatStrategyFor("UAE");
   const now = new Date();
   const dueDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const primaryEstimateId = approvedEstimates[0].id;
 
   const invoiceId = await prisma.$transaction(async (tx) => {
     const g = await tx.garage.update({
@@ -318,15 +362,15 @@ export async function generateInvoiceAction(formData: FormData) {
     });
     const seq = g.invoiceSeq;
 
-    const subtotal = Number(est.subtotal);
-    const vatAmount = Number(est.vatAmount);
-    const total = Number(est.total);
-
     const inv = await tx.invoice.create({
       data: {
         garageId: user.garageId,
-        jobCardId: est.jobCardId,
-        estimateId: est.id,
+        jobCardId: clicked.jobCardId,
+        // Single Invoice.estimateId stays @unique in the schema; we link
+        // to the OLDEST approved estimate as the canonical primary.
+        // Subsequent estimates' lines are still represented — they're
+        // just inlined in invoice.lines rather than linked by FK.
+        estimateId: primaryEstimateId,
         number: seq,
         issuedAt: now,
         dueDate,
@@ -343,16 +387,14 @@ export async function generateInvoiceAction(formData: FormData) {
           isoDate: now.toISOString(),
         }),
         lines: {
-          create: est.lines
-            .filter((l) => !l.declined)
-            .map((l) => ({
-              kind: l.kind,
-              description: l.description,
-              qty: l.qty,
-              unitPrice: l.unitPrice,
-              lineTotal: l.lineTotal,
-              vatRate: l.vatRate,
-            })),
+          create: mergedLines.map((l) => ({
+            kind: l.kind,
+            description: l.description,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+            vatRate: l.vatRate,
+          })),
         },
       },
       select: { id: true },
@@ -370,16 +412,150 @@ export async function generateInvoiceAction(formData: FormData) {
       })),
     });
 
-    await tx.jobCard.update({ where: { id: est.jobCardId }, data: { status: "INVOICED" } });
+    await tx.jobCard.update({ where: { id: clicked.jobCardId }, data: { status: "INVOICED" } });
     return inv.id;
   });
 
   // NOTE: Per spec Stage 8, the customer-facing WhatsApp send now happens
   // in a SEPARATE explicit step (sendInvoiceToCustomerAction below) — the
-  // cashier reviews the invoice items first, then taps 'Send invoice to
-  // customer'. generateInvoiceAction just creates the invoice row.
+  // cashier reviews the merged invoice items + edits anything that needs
+  // adjustment, then taps 'Send invoice to customer'.
+  // generateInvoiceAction just creates the invoice row with all lines
+  // pre-populated from every approved estimate.
 
   redirect(`/invoices/${invoiceId}`);
+}
+
+// ────────────────────────────────────────────────────────────────
+// Invoice line edits — let the cashier add/edit/remove items on
+// the merged draft invoice BEFORE the WhatsApp send goes out.
+// Per spec: 'Cashier must be able to edit the entire invoice…full
+// control.'  All three actions share two invariants:
+//   1. The invoice must belong to the caller's garage.
+//   2. The invoice must NOT have been sent yet (jobCard.invoiceSentAt
+//      is null). After send, line edits would silently rewrite a
+//      document the customer already has — and break ZATCA / audit
+//      trail rules. UI hides controls past that point; this is the
+//      server-side enforcement.
+// After every mutation we recompute totals + replace the ledger
+// rows for this invoice so accounting stays balanced.
+// ────────────────────────────────────────────────────────────────
+
+async function ownedEditableInvoice(invoiceId: string, garageId: string) {
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, garageId },
+    include: { jobCard: { select: { invoiceSentAt: true } } },
+  });
+  if (!inv) throw new Error("Invoice not found in this garage");
+  if (inv.jobCard.invoiceSentAt) {
+    throw new Error("Invoice already sent to customer — lines are locked");
+  }
+  return inv;
+}
+
+async function recomputeInvoice(invoiceId: string, garageId: string) {
+  const lines = await prisma.invoiceLine.findMany({ where: { invoiceId } });
+  const draft: DraftLine[] = lines.map((l) => ({
+    kind: l.kind as LineKind,
+    description: l.description,
+    qty: Number(l.qty),
+    unitPrice: Number(l.unitPrice),
+  }));
+  const t = totalsFor(draft);
+  await prisma.$transaction(async (tx) => {
+    await tx.invoice.update({
+      where: { id: invoiceId },
+      data: { subtotal: t.subtotal, vatAmount: t.vatAmount, total: t.total },
+    });
+    // Replace the auto-posted ledger rows so the books still tie out
+    // to the new total. Payments use sourceType='PAYMENT' so they're
+    // not touched. (Edits are only legal before send → before any
+    // payment → no risk of trashing payment trails.)
+    await tx.ledgerEntry.deleteMany({
+      where: { sourceType: "INVOICE", sourceId: invoiceId },
+    });
+    await tx.ledgerEntry.createMany({
+      data: invoiceLedger(t.subtotal, t.vatAmount, t.total).map((e) => ({
+        garageId,
+        account: e.account,
+        debit: e.debit,
+        credit: e.credit,
+        sourceType: "INVOICE",
+        sourceId: invoiceId,
+      })),
+    });
+  });
+}
+
+export async function addInvoiceLineAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  await ownedEditableInvoice(invoiceId, user.garageId);
+
+  // Same DISCOUNT convention as addEstimateLineAction — sugar for a
+  // FEE line with a negative amount, keeps the cashier flow
+  // consistent across estimate-edit and invoice-edit screens.
+  const rawKind = String(formData.get("kind") ?? "LABOR");
+  const isDiscount = rawKind === "DISCOUNT";
+  const kind = (isDiscount ? "FEE" : rawKind) as LineKind;
+  const description =
+    String(formData.get("description") ?? "").trim() || (isDiscount ? "Discount" : "Item");
+  const qty = Math.max(0, Number(formData.get("qty") ?? 1));
+  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
+  const unitPrice = isDiscount ? -priceAbs : priceAbs;
+
+  await prisma.invoiceLine.create({
+    data: {
+      invoiceId,
+      kind,
+      description,
+      qty,
+      unitPrice,
+      lineTotal: lineTotal(qty, unitPrice),
+    },
+  });
+  await recomputeInvoice(invoiceId, user.garageId);
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/cashier");
+}
+
+export async function updateInvoiceLineAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const lineId = String(formData.get("lineId") ?? "");
+  await ownedEditableInvoice(invoiceId, user.garageId);
+
+  const line = await prisma.invoiceLine.findFirst({ where: { id: lineId, invoiceId } });
+  if (!line) throw new Error("Line not found on this invoice");
+
+  const parsed = parseLineEditInput({
+    kind: formData.get("kind"),
+    description: formData.get("description"),
+    qty: formData.get("qty"),
+    unitPrice: formData.get("unitPrice"),
+  });
+  if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
+  const { kind, description, qty, unitPrice } = parsed;
+
+  await prisma.invoiceLine.update({
+    where: { id: lineId },
+    data: { kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
+  });
+  await recomputeInvoice(invoiceId, user.garageId);
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/cashier");
+}
+
+export async function removeInvoiceLineAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const lineId = String(formData.get("lineId") ?? "");
+  await ownedEditableInvoice(invoiceId, user.garageId);
+
+  await prisma.invoiceLine.deleteMany({ where: { id: lineId, invoiceId } });
+  await recomputeInvoice(invoiceId, user.garageId);
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/cashier");
 }
 
 /**

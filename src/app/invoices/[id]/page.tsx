@@ -1,7 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { recordPaymentAction, sendInvoiceToCustomerAction } from "@/app/actions/billing";
+import {
+  recordPaymentAction,
+  sendInvoiceToCustomerAction,
+  addInvoiceLineAction,
+  updateInvoiceLineAction,
+  removeInvoiceLineAction,
+} from "@/app/actions/billing";
 import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 
@@ -31,6 +37,13 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
   const balance = Math.max(0, total - paid);
   const state = arState(total, paid, inv.dueDate, new Date());
   const customer = inv.jobCard.vehicle.customer;
+  // Line edits are unlocked for cashier/owner only while the invoice
+  // is still 'pre-send'. Once sendInvoiceToCustomerAction stamps
+  // jobCard.invoiceSentAt the inputs disappear and the table falls
+  // back to the existing read-only render (matches what the server-
+  // side ownedEditableInvoice helper enforces).
+  const canEditLines =
+    ["CASHIER", "OWNER"].includes(session.user.role) && !inv.jobCard.invoiceSentAt;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -72,20 +85,137 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
             <th className="py-1 text-right">{t("colQty")}</th>
             <th className="py-1 text-right">{t("colUnit")}</th>
             <th className="py-1 text-right">{t("colAmount")}</th>
+            {canEditLines ? <th className="py-1" /> : null}
           </tr>
         </thead>
         <tbody>
-          {inv.lines.map((l) => (
-            <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
-              <td className="py-1">{l.description}</td>
-              <td className="py-1 text-right">{Number(l.qty)}</td>
-              <td className="py-1 text-right">{Number(l.unitPrice).toFixed(2)}</td>
-              <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
-            </tr>
-          ))}
+          {inv.lines.map((l) =>
+            canEditLines ? (
+              // Inline edit: one form per row. qty + unit price + description
+              // all editable. Recompute happens server-side via
+              // updateInvoiceLineAction → recomputeInvoice; totals refresh
+              // on revalidatePath.
+              <tr key={l.id} className="border-b border-black/5 align-top dark:border-white/10">
+                <td className="py-1 pr-2" colSpan={4}>
+                  <form
+                    action={updateInvoiceLineAction}
+                    className="grid grid-cols-[1fr_5rem_6rem_6rem_auto_auto] items-center gap-2"
+                  >
+                    <input type="hidden" name="invoiceId" value={inv.id} />
+                    <input type="hidden" name="lineId" value={l.id} />
+                    <input type="hidden" name="kind" value={l.kind} />
+                    <input
+                      name="description"
+                      defaultValue={l.description}
+                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                    />
+                    <input
+                      name="qty"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={Number(l.qty)}
+                      aria-label={t("colQty")}
+                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                    />
+                    <input
+                      name="unitPrice"
+                      type="number"
+                      step="0.01"
+                      defaultValue={Number(l.unitPrice).toFixed(2)}
+                      aria-label={t("colUnit")}
+                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                    />
+                    <span className="tabular-nums text-end text-sm">
+                      {Number(l.lineTotal).toFixed(2)}
+                    </span>
+                    <button
+                      type="submit"
+                      className="rounded-md border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                    >
+                      {t("saveDraft")}
+                    </button>
+                  </form>
+                  <form action={removeInvoiceLineAction} className="mt-1 flex justify-end">
+                    <input type="hidden" name="invoiceId" value={inv.id} />
+                    <input type="hidden" name="lineId" value={l.id} />
+                    <button
+                      type="submit"
+                      className="text-xs text-red-600 hover:underline"
+                      aria-label={t("removeLine")}
+                    >
+                      ✕ {t("removeLine")}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            ) : (
+              <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
+                <td className="py-1">{l.description}</td>
+                <td className="py-1 text-right">{Number(l.qty)}</td>
+                <td className="py-1 text-right">{Number(l.unitPrice).toFixed(2)}</td>
+                <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
       </div>
+
+      {canEditLines ? (
+        // Add a new line — labor / part / fee selectable. Mirrors the
+        // estimate-line add form so the cashier sees the same controls
+        // they used while pricing the estimate. DISCOUNT short-circuits
+        // to a negative FEE per the existing convention.
+        <form
+          action={addInvoiceLineAction}
+          className="rounded-lg border border-black/10 p-3 dark:border-white/15"
+        >
+          <input type="hidden" name="invoiceId" value={inv.id} />
+          <div className="mb-2 text-sm font-medium">{t("addLineTitle")}</div>
+          <div className="grid grid-cols-[6rem_1fr_4.5rem_6rem_auto] items-center gap-2">
+            <select
+              name="kind"
+              defaultValue="LABOR"
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              aria-label={t("colKind")}
+            >
+              <option value="LABOR">{t("kindLabor")}</option>
+              <option value="PART">{t("kindPart")}</option>
+              <option value="FEE">{t("kindFee")}</option>
+              <option value="DISCOUNT">{t("kindDiscount")}</option>
+            </select>
+            <input
+              name="description"
+              placeholder={t("colDescription")}
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            />
+            <input
+              name="qty"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue="1"
+              aria-label={t("colQty")}
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+            />
+            <input
+              name="unitPrice"
+              type="number"
+              step="0.01"
+              defaultValue="0"
+              aria-label={t("colUnit")}
+              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+            />
+            <button
+              type="submit"
+              className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+            >
+              {t("addLineButton")}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <div className="flex items-end justify-between">
         {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}

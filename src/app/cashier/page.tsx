@@ -3,7 +3,11 @@ import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
-import { createEstimateAction, sendInvoiceToCustomerAction } from "@/app/actions/billing";
+import {
+  createEstimateAction,
+  sendInvoiceToCustomerAction,
+  recordPaymentAction,
+} from "@/app/actions/billing";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
@@ -503,27 +507,76 @@ export default async function CashierHome() {
           }
           return (
             <ul className="flex flex-col gap-1">
-              {unpaid.map(({ inv, total, state }) => (
-                <li key={inv.id}>
-                  <Link
-                    href={`/invoices/${inv.id}`}
-                    className="flex items-center justify-between rounded-lg border border-black/10 p-3 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+              {unpaid.map(({ inv, total, paid, state }) => {
+                const balance = Math.max(0, total - paid);
+                return (
+                  <li
+                    key={inv.id}
+                    className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
                   >
-                    <span>
-                      <span className="font-medium">{AR_EMOJI[state]} {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}</span>
-                      <span className="ml-2 text-zinc-500 dark:text-zinc-400">
-                        {inv.jobCard.vehicle.customer.name}
+                    <Link
+                      href={`/invoices/${inv.id}`}
+                      className="flex items-center justify-between hover:underline"
+                    >
+                      <span>
+                        <span className="font-medium">{AR_EMOJI[state]} {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}</span>
+                        <span className="ml-2 text-zinc-500 dark:text-zinc-400">
+                          {inv.jobCard.vehicle.customer.name}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-right">
-                      <span className="block">{money(total)}</span>
-                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                        {`${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
+                      <span className="text-right">
+                        <span className="block">{money(total)}</span>
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                          {`${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
+                        </span>
                       </span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+                    {/* Mark as Paid — inline on the Receivables row per spec.
+                        This is THE place the cashier records that the
+                        customer paid (Cash or Card-POS — we don't process
+                        the money, we just journal it). Defaults to the
+                        outstanding balance + Cash so the common case is
+                        one tap; the cashier can adjust the amount for a
+                        partial payment or switch the method as needed.
+                        Removed from /invoices/[id] so a typo on the edit
+                        page can't accidentally mark-paid before the
+                        customer has actually transferred. */}
+                    <form
+                      action={recordPaymentAction}
+                      className="flex flex-wrap items-center justify-end gap-2 border-t border-black/5 pt-2 dark:border-white/10"
+                    >
+                      <input type="hidden" name="invoiceId" value={inv.id} />
+                      <label className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        {t("amount")}
+                        <input
+                          name="amount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={balance.toFixed(2)}
+                          aria-label={t("amount")}
+                          className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                        />
+                      </label>
+                      <select
+                        name="method"
+                        defaultValue="CASH"
+                        aria-label={t("colMethod")}
+                        className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
+                      >
+                        <option value="CASH">{t("methodCash")}</option>
+                        <option value="CARD_POS">{t("methodCardPos")}</option>
+                      </select>
+                      <button
+                        type="submit"
+                        className="rounded-md bg-green-600 px-3 py-1 text-sm font-semibold text-white hover:bg-green-500"
+                      >
+                        {t("markAsPaid")}
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
             </ul>
           );
         })()}

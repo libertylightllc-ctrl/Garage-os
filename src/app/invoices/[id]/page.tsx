@@ -3,14 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  recordPaymentAction,
   addInvoiceLineAction,
   updateInvoiceLineAction,
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
-  // sendInvoiceToCustomerAction is no longer imported here — it now
-  // only fires from /invoices/[id]/preview so the cashier must
-  // review the customer-facing layout before the WhatsApp send.
+  // sendInvoiceToCustomerAction → /invoices/[id]/preview only.
+  // recordPaymentAction → /cashier Receivables row only.
+  // Both moved out so the edit page can only edit; mutations that
+  // affect the customer (WhatsApp send) or the books (payment) live
+  // on their own contextual surfaces.
 } from "@/app/actions/billing";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is "use server" and can only export async functions — exporting a
@@ -426,31 +427,14 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         </p>
       ) : null}
 
-      {/* Mark as paid — record-only (garage uses its own POS / cash drawer) */}
-      {["CASHIER", "OWNER"].includes(session.user.role) && state !== "PAID" ? (
-        <form action={recordPaymentAction} className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
-          <div className="w-full text-sm font-medium">{t("markAsPaid")}</div>
-          <input type="hidden" name="invoiceId" value={inv.id} />
-          <label className="text-sm">
-            {t("amount")}
-            <input
-              name="amount"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={balance.toFixed(2)}
-              className="mt-1 block w-32 rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
-            />
-          </label>
-          <select name="method" defaultValue="CASH" className="rounded-md border border-black/15 bg-transparent px-2 py-2 text-sm dark:border-white/20">
-            <option value="CASH">{t("methodCash")}</option>
-            <option value="CARD_POS">{t("methodCardPos")}</option>
-          </select>
-          <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
-            {t("markAsPaid")}
-          </button>
-        </form>
-      ) : null}
+      {/* Mark as Paid removed from this page per spec. Recording an
+          actual customer payment now happens ONLY from the cashier's
+          Receivables row on /cashier, so the cashier can't
+          accidentally mark-paid while still editing line items here.
+          The Receivables row has the same form (amount + method +
+          Mark as Paid button) but lives next to the customer name +
+          balance, which is the real context for a payment-record
+          decision. */}
     </main>
   );
 }

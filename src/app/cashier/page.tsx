@@ -124,7 +124,19 @@ export default async function CashierHome() {
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="CASHIER" active="accounts" />
-      <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
+        {/* Tab to the archive of fully-paid invoices — keeps the main
+            dashboard focused on active / unpaid work, while the cashier
+            (or owner) can still drill into the paid pile when they need
+            to reconcile or look up a past job. */}
+        <Link
+          href="/cashier/paid"
+          className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          {t("paidInvoicesTab")}
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {metrics.map((m) => (
@@ -466,17 +478,32 @@ export default async function CashierHome() {
         </div>
       ) : null}
 
+      {/* Receivables — UNPAID invoices only. Per spec, once an invoice is
+          fully paid (arState === 'PAID') it leaves this section and lives
+          on /cashier/paid instead, so the main dashboard stays focused on
+          active work. We pre-compute the (total, paid, state) triple here
+          to drive both the filter and the row render. */}
       <div>
         <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>
-        {invoices.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noInvoices")}</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {invoices.map((inv) => {
+        {(() => {
+          const unpaid = invoices
+            .map((inv) => {
               const total = Number(inv.total);
               const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
               const state = arState(total, paid, inv.dueDate, now);
-              return (
+              return { inv, total, paid, state };
+            })
+            .filter((r) => r.state !== "PAID");
+          if (unpaid.length === 0) {
+            return (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {invoices.length === 0 ? t("noInvoices") : t("noUnpaidInvoices")}
+              </p>
+            );
+          }
+          return (
+            <ul className="flex flex-col gap-1">
+              {unpaid.map(({ inv, total, state }) => (
                 <li key={inv.id}>
                   <Link
                     href={`/invoices/${inv.id}`}
@@ -491,15 +518,15 @@ export default async function CashierHome() {
                     <span className="text-right">
                       <span className="block">{money(total)}</span>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                        {state === "PAID" ? t("paidLower") : `${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
+                        {`${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
                       </span>
                     </span>
                   </Link>
                 </li>
-              );
-            })}
-          </ul>
-        )}
+              ))}
+            </ul>
+          );
+        })()}
       </div>
 
       <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>

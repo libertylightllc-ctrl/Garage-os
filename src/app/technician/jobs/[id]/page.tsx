@@ -123,6 +123,68 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         ) : null}
       </div>
 
+      {/* Status banner — reads LIVE job.status and tells the technician
+          where the job is in the workflow at this moment, with the
+          appropriate next-step CTA. Per spec the banner must update
+          when the cashier/customer move the job forward, so the tech
+          isn't left looking at a stale 'sent for estimate' message
+          after the customer has already approved.
+
+          Three states get a dedicated banner; everything else (ARRIVED,
+          INSPECTION, EXTRA_WORK_AWAITING_APPROVAL, INVOICED…) falls
+          through to the existing sections below, which already explain
+          themselves contextually. */}
+      {job.status === "ESTIMATE" ? (
+        // Tech sent for estimate; cashier owns the next step.
+        <section className="rounded-2xl border border-violet-500/40 bg-violet-50 p-6 text-center dark:bg-violet-950/40">
+          <div className="text-4xl">💸</div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">
+            {t("sentToCashierTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+            {t("sentToCashierSubtitle")}
+          </p>
+        </section>
+      ) : job.status === "APPROVED" || job.status === "REPAIR" ? (
+        // Customer approved → tech does the actual work. CTA: Mark
+        // Complete. Same action as the existing Repair-section button;
+        // promoted up here so it's the first thing the tech sees when
+        // they reopen the job after the cashier flipped it to APPROVED.
+        <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
+          <div className="text-4xl">🔧</div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">
+            {t("jobApprovedStartWorkTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+            {t("jobApprovedStartWorkSubtitle")}
+          </p>
+          {!amHelper ? (
+            <form action={markCompleteAction} className="mt-4">
+              <input type="hidden" name="jobId" value={job.id} />
+              <button
+                type="submit"
+                className="rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white hover:bg-green-500"
+              >
+                {t("markComplete")}
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : job.status === "TECH_COMPLETE" ? (
+        // Tech tapped Mark Complete; cashier owns the next step
+        // (invoice prep + send). No actions here — read-only banner so
+        // the tech can confirm the handoff went through.
+        <section className="rounded-2xl border border-teal-500/40 bg-teal-50 p-6 text-center dark:bg-teal-950/40">
+          <div className="text-4xl">🧾</div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">
+            {t("sentToCashierForInvoiceTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+            {t("sentToCashierForInvoiceSubtitle")}
+          </p>
+        </section>
+      ) : null}
+
       {job.status === "ON_HOLD" && job.holdReason ? (
         <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
           🟡 {t("onHold")}:{" "}

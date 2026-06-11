@@ -225,8 +225,19 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Lifecycle actions */}
       <div className="flex flex-wrap gap-2">
-        {est.status === "DRAFT" && est.lines.length > 0 ? (
-          <StatusButton estimateId={est.id} status="SENT" label={t("sendToCustomer")} primary />
+        {/* Preview gate — same pattern as the invoice flow. The cashier
+            must review the customer-facing layout BEFORE the WhatsApp
+            send (setEstimateStatusAction(SENT) here) goes out. The
+            send action itself now only fires from
+            /estimates/[id]/preview, so a typo noticed mid-edit can't
+            slip into a one-tap send. */}
+        {canPrice && est.status === "DRAFT" && est.lines.length > 0 ? (
+          <Link
+            href={`/estimates/${est.id}/preview`}
+            className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-semibold text-white dark:bg-white dark:text-black"
+          >
+            {t("estimatePreviewButton")}
+          </Link>
         ) : null}
         {est.status === "SENT" ? (
           <>

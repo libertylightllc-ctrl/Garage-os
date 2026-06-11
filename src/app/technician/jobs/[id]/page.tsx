@@ -70,7 +70,16 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       helpers: { include: { tech: { select: { id: true, name: true } } } },
       finding: true,
       jobParts: { orderBy: { createdAt: "asc" } },
-      estimates: { where: { status: "APPROVED" }, select: { id: true }, take: 1 },
+      estimates: {
+        where: { status: "APPROVED" },
+        // approvedAt is the cutoff for 'work proof' — any photo, voice
+        // note, or finding edit AFTER that timestamp counts as evidence
+        // that the tech has actually started the repair, vs. just
+        // landing on the page right after the customer approved.
+        select: { id: true, approvedAt: true },
+        orderBy: { approvedAt: "desc" },
+        take: 1,
+      },
       qcBy: { select: { name: true } },
       // Need invoice id so the terminal 'Job complete' banner can offer
       // a View invoice → link. One invoice per job in the current model
@@ -93,6 +102,33 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const canManageExtras = job.status === "APPROVED" || job.status === "REPAIR";
   const hasApprovedEstimate = job.estimates.length > 0;
   const repairOpen = repairUnlocked(hasApprovedEstimate, job.workCompletedAt);
+
+  // Mark Complete gate per spec: the button only appears after the
+  // technician has actually done something on the car post-approval.
+  // 'Something' = at least one new PHOTO step, VOICE step, or finding
+  // edit after the customer-approval cutoff. Until then we render a
+  // 'Begin your work' caption instead of the green CTA, so a tap-
+  // before-touch is impossible.
+  //
+  // approvedAt is the cutoff. If no estimate has been approved yet
+  // (shouldn't happen at APPROVED/REPAIR status, but defending), we
+  // treat work proof as absent → no button.
+  const approvedAt = job.estimates[0]?.approvedAt ?? null;
+  const photoOrVoiceAfterApproval = approvedAt
+    ? job.steps.some(
+        (s) =>
+          (s.type === "PHOTO" || s.type === "VOICE") &&
+          s.createdAt > approvedAt,
+      )
+    : false;
+  const findingTouchedAfterApproval = Boolean(
+    approvedAt &&
+      job.finding &&
+      job.finding.updatedAt > approvedAt &&
+      (job.finding.findings?.trim().length ?? 0) > 0,
+  );
+  const hasWorkProof =
+    photoOrVoiceAfterApproval || findingTouchedAfterApproval;
 
   const parts = await prisma.part.findMany({
     where: { garageId: session.user.garageId },
@@ -152,9 +188,18 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         </section>
       ) : job.status === "APPROVED" || job.status === "REPAIR" ? (
         // Customer approved → tech does the actual work. CTA: Mark
-        // Complete. Same action as the existing Repair-section button;
-        // promoted up here so it's the first thing the tech sees when
-        // they reopen the job after the cashier flipped it to APPROVED.
+        // Complete, BUT only after the tech has actually started
+        // working — at least one photo, voice note, or finding edit
+        // logged after the estimate-approval cutoff. Before that, we
+        // show a 'Begin your work' caption so the button can't be
+        // tapped before the car has been touched.
+        //
+        // The same action stays wired further down in the Repair
+        // section (gated on repairOpen) for cases where the tech has
+        // scrolled past the banner — that gate already requires
+        // hasApprovedEstimate, so it ALSO won't show prematurely, but
+        // we additionally gate it on hasWorkProof below to keep both
+        // surfaces in sync.
         <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
           <div className="text-4xl">🔧</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
@@ -163,7 +208,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
             {t("jobApprovedStartWorkSubtitle")}
           </p>
-          {!amHelper ? (
+          {!amHelper && hasWorkProof ? (
             <form action={markCompleteAction} className="mt-4">
               <input type="hidden" name="jobId" value={job.id} />
               <button
@@ -173,6 +218,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 {t("markComplete")}
               </button>
             </form>
+          ) : !amHelper ? (
+            // Pre-work-proof state. Surfaces clearly what counts as
+            // 'work has started' so the tech knows what to do next
+            // (snap a photo, hit Save on findings, etc.) and doesn't
+            // think the page is broken because the button is missing.
+            <p className="mt-3 inline-block rounded-md bg-emerald-100 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
+              ⏳ {t("beginYourWorkHint")}
+            </p>
           ) : null}
         </section>
       ) : job.status === "TECH_COMPLETE" ? (
@@ -594,13 +647,22 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   /marked-complete confirmation page. The job
                   disappears from the technician dashboard immediately
                   (mine query excludes TECH_COMPLETE) and shows up on
-                  the cashier dashboard under 'Awaiting final invoice'. */}
-              <form action={markCompleteAction}>
-                <input type="hidden" name="jobId" value={job.id} />
-                <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
-                  {t("markComplete")}
-                </button>
-              </form>
+                  the cashier dashboard under 'Awaiting final invoice'.
+                  Gated on hasWorkProof so it can't be tapped before
+                  the tech has actually started working — same gate as
+                  the banner CTA above, keeps both surfaces consistent. */}
+              {hasWorkProof ? (
+                <form action={markCompleteAction}>
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+                    {t("markComplete")}
+                  </button>
+                </form>
+              ) : (
+                <p className="rounded-md bg-emerald-100 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
+                  ⏳ {t("beginYourWorkHint")}
+                </p>
+              )}
             </>
           ) : null}
         </div>

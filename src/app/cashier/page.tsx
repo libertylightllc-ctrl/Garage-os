@@ -98,10 +98,21 @@ export default async function CashierHome() {
     (j) => j.status === "INVOICED" && j.invoiceSentAt === null,
   );
   const toReestimate = jobs.filter((j) => j.status === "EXTRA_WORK_AWAITING_APPROVAL");
+  // Jobs to price now accepts three estimate-state shapes:
+  //   - null/missing  (fresh handoff from the tech, no estimate yet)
+  //   - DRAFT         (cashier is mid-pricing)
+  //   - REJECTED      (customer turned down the prior quote; setEstimate
+  //                    StatusAction sends the JobCard back to ESTIMATE
+  //                    status for re-pricing, but the rejected estimate
+  //                    row stays attached as audit history — the cashier
+  //                    needs to be able to re-price by creating a fresh
+  //                    DRAFT, and previously this row was silently
+  //                    excluded from every bucket. See the row render
+  //                    below for the differentiated 're-price' UI.)
   const toPrice = jobs.filter((j) => {
     if (j.status !== "ESTIMATE") return false;
     const e = j.estimates[0];
-    return !e || e.status === "DRAFT";
+    return !e || e.status === "DRAFT" || e.status === "REJECTED";
   });
 
   // Zero-entry ledger rollup (auto-generated rows; nothing entered by hand).
@@ -337,11 +348,26 @@ export default async function CashierHome() {
         ) : (
           <ul className="flex flex-col gap-1">
             {toPrice.map((j) => {
-              const draft = j.estimates[0];
+              // 'latest' replaces the old 'draft' name because under the
+              // widened filter it may be a REJECTED estimate (not just a
+              // DRAFT). Three render branches result from its status:
+              //   DRAFT     → 'Continue pricing' Link to the DRAFT row
+              //               (cashier keeps editing what they started).
+              //   REJECTED  → 'Re-price' button that fires
+              //               createEstimateAction → creates a FRESH
+              //               DRAFT estimate. The REJECTED row stays
+              //               untouched (audit trail preserved). On the
+              //               next dashboard render, estimates[0] will
+              //               be the new DRAFT and the row reverts to
+              //               the DRAFT branch above.
+              //   null      → 'Set price' button, same flow as REJECTED
+              //               but without the rejection caption.
+              const latest = j.estimates[0];
+              const wasRejected = latest?.status === "REJECTED";
               const fs = friendlyStatus({
                 status: j.status as JobStatus,
                 claimedById: null, // cashier doesn't care about claim — display only
-                latestEstimateStatus: (draft?.status ?? null) as
+                latestEstimateStatus: (latest?.status ?? null) as
                   | "DRAFT"
                   | "SENT"
                   | "APPROVED"
@@ -351,7 +377,12 @@ export default async function CashierHome() {
               return (
                 <li
                   key={j.id}
-                  className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                  className={
+                    "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
+                    (wasRejected
+                      ? "border-rose-500/40 bg-rose-50 dark:border-rose-700/40 dark:bg-rose-950/30"
+                      : "border-black/10 dark:border-white/15")
+                  }
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -364,26 +395,43 @@ export default async function CashierHome() {
                     </span>
                     <FriendlyStatusBadge status={fs} t={t} size="sm" />
                   </div>
+                  {wasRejected ? (
+                    <p className="text-xs font-medium text-rose-700 dark:text-rose-400">
+                      ⚠️ {t("estimateRejectedRePriceNeeded")}
+                    </p>
+                  ) : null}
                   <JobTimings
                     claimedAt={j.claimedAt}
                     sentForEstimateAt={j.sentForEstimateAt}
-                    estimateSentAt={draft?.sentAt ?? null}
+                    estimateSentAt={latest?.sentAt ?? null}
                     now={now}
                     t={t}
                   />
                   <div className="flex justify-end">
-                    {draft ? (
+                    {latest && latest.status === "DRAFT" ? (
                       <Link
-                        href={`/estimates/${draft.id}`}
+                        href={`/estimates/${latest.id}`}
                         className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
                       >
                         {t("continuePricing")}
                       </Link>
                     ) : (
+                      // null OR REJECTED — both create a fresh DRAFT.
+                      // createEstimateAction does prisma.estimate.create
+                      // so the prior REJECTED row is NEVER touched (no
+                      // delete, no update) — full audit history is
+                      // preserved.
                       <form action={createEstimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
-                          {t("setPrice")}
+                        <button
+                          className={
+                            "rounded-md px-3 py-1 font-medium text-white " +
+                            (wasRejected
+                              ? "bg-rose-600 hover:bg-rose-500"
+                              : "bg-zinc-900 dark:bg-white dark:text-black")
+                          }
+                        >
+                          {wasRejected ? t("rePrice") : t("setPrice")}
                         </button>
                       </form>
                     )}

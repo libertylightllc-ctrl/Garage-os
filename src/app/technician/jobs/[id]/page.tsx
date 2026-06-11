@@ -72,6 +72,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       jobParts: { orderBy: { createdAt: "asc" } },
       estimates: { where: { status: "APPROVED" }, select: { id: true }, take: 1 },
       qcBy: { select: { name: true } },
+      // Need invoice id so the terminal 'Job complete' banner can offer
+      // a View invoice → link. One invoice per job in the current model
+      // (Invoice.estimateId is @unique and we set it on the canonical
+      // primary estimate), so take: 1 is safe.
+      invoices: { orderBy: { issuedAt: "desc" }, take: 1, select: { id: true } },
     },
   });
   if (!job) notFound();
@@ -182,6 +187,41 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
             {t("sentToCashierForInvoiceSubtitle")}
           </p>
+        </section>
+      ) : job.status === "INVOICED" || job.status === "DELIVERED" ? (
+        // Terminal-state banner — closes the UX gap the user flagged.
+        // Before this branch existed, a job past TECH_COMPLETE rendered
+        // ZERO banner and zero workflow buttons (because every action
+        // gate evaluates false for INVOICED/DELIVERED), which read as
+        // 'the page is broken' even though the workflow had just
+        // genuinely run to completion. Now the tech sees an explicit
+        // 'nothing more to do here' message + a read-only link to the
+        // invoice so they can confirm what the car was billed for.
+        <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
+          <div className="text-4xl">✅</div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">
+            {t("jobCompleteNoActionTitle")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+            {t("jobCompleteNoActionSubtitle")}
+          </p>
+          {job.invoices[0] ? (
+            <Link
+              href={`/invoices/${job.invoices[0].id}`}
+              className="mt-4 inline-block rounded-lg border border-emerald-700/30 px-4 py-2 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+            >
+              {t("viewInvoice")}
+            </Link>
+          ) : null}
+        </section>
+      ) : job.status === "CANCELLED" ? (
+        // Terminal cancel state — read-only, neutral colour. No invoice
+        // link (a cancelled job may or may not have one).
+        <section className="rounded-2xl border border-zinc-400/40 bg-zinc-100 p-6 text-center dark:border-zinc-700/60 dark:bg-zinc-900/40">
+          <div className="text-4xl">🛑</div>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight">
+            {t("jobCancelledTitle")}
+          </h2>
         </section>
       ) : null}
 

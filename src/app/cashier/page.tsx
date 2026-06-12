@@ -14,6 +14,7 @@ import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
 import { CashierFilterBar } from "@/components/cashier-filter-bar";
+import { CashierTabs } from "@/components/cashier-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +86,30 @@ function invoiceDateIso(inv: InvoiceRowLike): string {
   return inv.issuedAt.toISOString().slice(0, 10);
 }
 
-export default async function CashierHome() {
+// Permitted tab values; anything else falls back to 'estimates'.
+const VALID_TABS = new Set<string>([
+  "estimates",
+  "invoices",
+  "payments",
+  "customers",
+  "reports",
+]);
+
+export default async function CashierHome({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await requireRole("CASHIER");
   const t = await getT();
   const garageId = session.user.garageId;
+
+  // URL-driven tabs. Default = 'estimates' so refreshing the canonical
+  // /cashier URL always lands on the working tab.
+  const { tab: rawTab } = await searchParams;
+  const currentTab = (
+    rawTab && VALID_TABS.has(rawTab) ? rawTab : "estimates"
+  ) as "estimates" | "invoices" | "payments" | "customers" | "reports";
 
   const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
@@ -203,23 +224,51 @@ export default async function CashierHome() {
     { key: "mArOutstanding", value: arOutstanding },
   ];
 
+  // Pre-compute the Payments tab's rows from the existing invoices list
+  // (same data is already fetched for Receivables; just filter to PAID
+  // and sort newest-payment-first). No extra Prisma round trip.
+  const paidRows = invoices
+    .map((inv) => {
+      const total = Number(inv.total);
+      const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+      const state = arState(total, paid, inv.dueDate, now);
+      const sortedPayments = [...inv.payments].sort(
+        (a, b) => b.paidAt.getTime() - a.paidAt.getTime(),
+      );
+      const latestPayment = sortedPayments[0];
+      return {
+        inv,
+        total,
+        vat: Number(inv.vatAmount),
+        state,
+        paidAt: latestPayment?.paidAt ?? null,
+        method: latestPayment?.method ?? null,
+      };
+    })
+    .filter((r) => r.state === "PAID")
+    .sort((a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0));
+
+  const tabLabels = {
+    estimates: t("cashierTabEstimates"),
+    invoices: t("cashierTabInvoices"),
+    payments: t("cashierTabPayments"),
+    customers: t("cashierTabCustomers"),
+    reports: t("cashierTabReports"),
+  };
+
+  const methodLabel = (m: string | null) => {
+    if (m === "CASH") return t("methodCash");
+    if (m === "CARD_POS") return t("methodCardPos");
+    return m ?? "—";
+  };
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="CASHIER" active="accounts" />
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
-        {/* Tab to the archive of fully-paid invoices — keeps the main
-            dashboard focused on active / unpaid work, while the cashier
-            (or owner) can still drill into the paid pile when they need
-            to reconcile or look up a past job. */}
-        <Link
-          href="/cashier/paid"
-          className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          {t("paidInvoicesTab")}
-        </Link>
-      </div>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 
+      {/* Metrics stay above the tabs — all-time aggregates, relevant
+          regardless of which tab the cashier is on. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {metrics.map((m) => (
           <div key={m.key} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
@@ -229,24 +278,30 @@ export default async function CashierHome() {
         ))}
       </div>
 
-      {/* Real-time search & date filter — applies to every bucket below
-          (jobs to price / awaiting invoice / invoice ready / receivables
-          / extras-re-estimate / work-in-progress / waiting-diagnosis).
-          Metrics row above is excluded by design — those are all-time
-          aggregates regardless of the visible row set. */}
-      <CashierFilterBar
-        labels={{
-          searchPlaceholder: t("cashierSearchPlaceholder"),
-          fromLabel: t("cashierFilterFrom"),
-          toLabel: t("cashierFilterTo"),
-          clearLabel: t("cashierFilterClear"),
-        }}
-      />
+      {/* Tab nav — URL-driven, ?tab=… searchParam. Estimates is the
+          default and renders at the canonical /cashier URL. */}
+      <CashierTabs currentTab={currentTab} labels={tabLabels} />
 
+      {/* Filter bar — only shown on tabs that actually have row data.
+          Customers and Reports placeholders don't need it. */}
+      {currentTab === "estimates" ||
+      currentTab === "invoices" ||
+      currentTab === "payments" ? (
+        <CashierFilterBar
+          labels={{
+            searchPlaceholder: t("cashierSearchPlaceholder"),
+            fromLabel: t("cashierFilterFrom"),
+            toLabel: t("cashierFilterTo"),
+            clearLabel: t("cashierFilterClear"),
+          }}
+        />
+      ) : null}
+
+      {/* ─── ESTIMATES TAB ──────────────────────────────────────── */}
       {/* Re-estimate cycle — tech found extra work mid-job. Bubbles to the
           top because the existing approved work is paused until the customer
           says yes (or no) to the extra. */}
-      {toReestimate.length > 0 ? (
+      {currentTab === "estimates" && toReestimate.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierReestimateTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -301,13 +356,14 @@ export default async function CashierHome() {
         </div>
       ) : null}
 
+      {/* ─── INVOICES TAB ────────────────────────────────────────── */}
       {/* Invoice prepared but not yet sent — one-tap 'Send Invoice to
           Customer' lives right on the dashboard so the cashier doesn't
           have to dive into /invoices/[id] just to push the WhatsApp send.
           Bubbles to the very top of the action sections because it's the
           most-finished thing — only one button between here and the
           customer paying. */}
-      {toSendInvoice.length > 0 ? (
+      {currentTab === "invoices" && toSendInvoice.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToSendInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -374,9 +430,8 @@ export default async function CashierHome() {
       ) : null}
 
       {/* Stage 8 — tech marked complete, awaiting invoice send by cashier.
-          Bubbles above 'Jobs to price' because it's blocking the customer's
-          payment (downstream of all the pricing work). */}
-      {toInvoice.length > 0 ? (
+          Lives under the Invoices tab. */}
+      {currentTab === "invoices" && toInvoice.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -431,6 +486,7 @@ export default async function CashierHome() {
       ) : null}
 
       {/* Jobs to price — the technician → cashier handoff. The cashier sets the price. */}
+      {currentTab === "estimates" ? (
       <div data-filter-section>
         <h2 className="mb-2 text-sm font-medium">{t("jobsToPrice")}</h2>
         {toPrice.length === 0 ? (
@@ -535,13 +591,15 @@ export default async function CashierHome() {
           </ul>
         )}
       </div>
+      ) : null}
 
       {/* Customer approved the estimate; tech is now doing the actual work.
           Per spec, the cashier MUST NOT see 'Send Invoice' or 'Prepare
           Invoice' here — the technician hasn't finished yet. Render the
           row read-only with just a caption so the cashier knows the job
-          is alive and where it sits. */}
-      {workInProgress.length > 0 ? (
+          is alive and where it sits.
+          Lives under the Estimates tab. */}
+      {currentTab === "estimates" && workInProgress.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierWorkInProgressTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -586,8 +644,9 @@ export default async function CashierHome() {
 
       {/* Tech is still diagnosing — cashier sees the job exists so they can
           anticipate workload, but no actions are available yet. Per spec,
-          NO pricing buttons render on these rows. */}
-      {waitingForDiagnosis.length > 0 ? (
+          NO pricing buttons render on these rows.
+          Lives under the Estimates tab. */}
+      {currentTab === "estimates" && waitingForDiagnosis.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierWaitingDiagnosisTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -629,11 +688,10 @@ export default async function CashierHome() {
         </div>
       ) : null}
 
-      {/* Receivables — UNPAID invoices only. Per spec, once an invoice is
-          fully paid (arState === 'PAID') it leaves this section and lives
-          on /cashier/paid instead, so the main dashboard stays focused on
-          active work. We pre-compute the (total, paid, state) triple here
-          to drive both the filter and the row render. */}
+      {/* Receivables — UNPAID invoices only. Lives under the Invoices tab.
+          Once an invoice is fully paid (arState === 'PAID') it leaves this
+          section and lives under the Payments tab instead. */}
+      {currentTab === "invoices" ? (
       <div data-filter-section>
         <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>
         {(() => {
@@ -731,6 +789,137 @@ export default async function CashierHome() {
           );
         })()}
       </div>
+      ) : null}
+
+      {/* ─── PAYMENTS TAB ────────────────────────────────────────── */}
+      {/* Paid invoices archive. Same data and same columns as the
+          standalone /cashier/paid route — pulled into a tab here so
+          the cashier has a single dashboard with everything. The
+          /cashier/paid URL still resolves for any existing bookmarks. */}
+      {currentTab === "payments" ? (
+        <div data-filter-section>
+          {paidRows.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {t("paidInvoicesEmpty")}
+            </p>
+          ) : (
+            <>
+              {/* Phone fallback: stacked card list. */}
+              <ul className="flex flex-col gap-2 sm:hidden">
+                {paidRows.map(({ inv, total, vat, paidAt, method }) => (
+                  <li
+                    key={inv.id}
+                    data-filter-row
+                    data-search={invoiceSearchTokens(inv)}
+                    data-date={(paidAt ?? inv.issuedAt).toISOString().slice(0, 10)}
+                    className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                  >
+                    <Link href={`/invoices/${inv.id}`} className="block hover:underline">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-medium">
+                          {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())} ·{" "}
+                          {inv.jobCard.vehicle.customer.name}
+                        </span>
+                        <span className="tabular-nums font-semibold">{money(total)}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} ·{" "}
+                        {inv.jobCard.vehicle.plate}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-600 dark:text-zinc-300">
+                        <span>{t("colVat")} {money(vat)}</span>
+                        <span>
+                          {t("colDatePaid")}{" "}
+                          {paidAt ? paidAt.toISOString().slice(0, 10) : "—"}
+                        </span>
+                        <span>
+                          {t("colMethod")}: {methodLabel(method)}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: full six-column table. */}
+              <div className="hidden overflow-x-auto rounded-lg border border-black/10 sm:block dark:border-white/15">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-50 text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-300">
+                    <tr className="text-start">
+                      <th className="p-2 text-start font-medium">{t("colCustomer")}</th>
+                      <th className="p-2 text-start font-medium">{t("colVehicle")}</th>
+                      <th className="p-2 text-end font-medium">{t("colAmount")}</th>
+                      <th className="p-2 text-end font-medium">{t("colVat")}</th>
+                      <th className="p-2 text-start font-medium">{t("colDatePaid")}</th>
+                      <th className="p-2 text-start font-medium">{t("colMethod")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paidRows.map(({ inv, total, vat, paidAt, method }) => (
+                      <tr
+                        key={inv.id}
+                        data-filter-row
+                        data-search={invoiceSearchTokens(inv)}
+                        data-date={(paidAt ?? inv.issuedAt).toISOString().slice(0, 10)}
+                        className="border-t border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                      >
+                        <td className="p-2">
+                          <Link href={`/invoices/${inv.id}`} className="hover:underline">
+                            <div className="font-medium">
+                              {inv.jobCard.vehicle.customer.name}
+                            </div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="p-2">
+                          <div>
+                            {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model}
+                          </div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {inv.jobCard.vehicle.plate}
+                          </div>
+                        </td>
+                        <td className="p-2 text-end tabular-nums">{money(total)}</td>
+                        <td className="p-2 text-end tabular-nums">{money(vat)}</td>
+                        <td className="p-2 tabular-nums">
+                          {paidAt ? paidAt.toISOString().slice(0, 10) : "—"}
+                        </td>
+                        <td className="p-2">{methodLabel(method)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {/* ─── CUSTOMERS TAB ──────────────────────────────────────── */}
+      {currentTab === "customers" ? (
+        <div className="rounded-lg border border-dashed border-black/15 p-10 text-center dark:border-white/20">
+          <h2 className="text-lg font-semibold tracking-tight">
+            {t("cashierTabCustomersHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {t("cashierTabComingSoon")}
+          </p>
+        </div>
+      ) : null}
+
+      {/* ─── REPORTS TAB ────────────────────────────────────────── */}
+      {currentTab === "reports" ? (
+        <div className="rounded-lg border border-dashed border-black/15 p-10 text-center dark:border-white/20">
+          <h2 className="text-lg font-semibold tracking-tight">
+            {t("cashierTabReportsHeading")}
+          </h2>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {t("cashierTabComingSoon")}
+          </p>
+        </div>
+      ) : null}
 
       <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>
     </main>

@@ -118,25 +118,36 @@ export default async function InvoicePreview({
 
         {/* Line items — work-only (parts/labour/fees). Discount lives
             in the totals area, not as a row, per spec. */}
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[20rem] text-sm">
+        {/* Same column-alignment fix as /invoices/[id]: colgroup for
+            fixed numeric column widths, px-2 padding so numbers never
+            touch, tabular-nums for decimal alignment. Preview is what
+            the cashier reviews before sending — and it's printable
+            too (Ctrl+P works anywhere) so it must hold up on paper. */}
+        <div className="mt-6 overflow-x-auto print:overflow-visible">
+          <table className="w-full text-sm tabular-nums">
+            <colgroup>
+              <col />
+              <col className="w-16" />
+              <col className="w-24" />
+              <col className="w-28" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-black/10 text-left text-zinc-500">
-                <th className="py-1">{t("colDescription")}</th>
-                <th className="py-1 text-right">{t("colQty")}</th>
-                <th className="py-1 text-right">{t("colUnit")}</th>
-                <th className="py-1 text-right">{t("colAmount")}</th>
+              <tr className="border-b border-black/10 text-zinc-500">
+                <th className="px-2 py-1 text-start font-medium">{t("colDescription")}</th>
+                <th className="px-2 py-1 text-end font-medium">{t("colQty")}</th>
+                <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
+                <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
               {workLines.map((l) => (
                 <tr key={l.id} className="border-b border-black/5">
-                  <td className="py-1">{l.description}</td>
-                  <td className="py-1 text-right">{Number(l.qty)}</td>
-                  <td className="py-1 text-right">
+                  <td className="px-2 py-1">{l.description}</td>
+                  <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
+                  <td className="px-2 py-1 text-end">
                     {Number(l.unitPrice).toFixed(2)}
                   </td>
-                  <td className="py-1 text-right">
+                  <td className="px-2 py-1 text-end">
                     {Number(l.lineTotal).toFixed(2)}
                   </td>
                 </tr>
@@ -160,31 +171,35 @@ export default async function InvoicePreview({
               {t("qrPlaceholder")}
             </span>
           </div>
-          <div className="text-right text-sm">
+          <dl className="grid grid-cols-[max-content_max-content] gap-x-6 gap-y-1 text-sm tabular-nums">
             {discountLine ? (
               <>
-                <div>
-                  {t("subtotalBeforeDiscount")}: {money(grossSubtotal)}
-                </div>
-                <div className="text-rose-700">
-                  {t("discountRow")}: −{money(discountAmount)}
-                </div>
-                <div>
-                  {t("subtotalAfterDiscount")}: {money(Number(inv.subtotal))}
-                </div>
+                <dt className="text-start text-zinc-600">
+                  {t("subtotalBeforeDiscount")}
+                </dt>
+                <dd className="text-end">{money(grossSubtotal)}</dd>
+                <dt className="text-start text-rose-700">
+                  {t("discountRow")}
+                </dt>
+                <dd className="text-end text-rose-700">
+                  −{money(discountAmount)}
+                </dd>
+                <dt className="text-start text-zinc-600">
+                  {t("subtotalAfterDiscount")}
+                </dt>
+                <dd className="text-end">{money(Number(inv.subtotal))}</dd>
               </>
             ) : (
-              <div>
-                {t("subtotal")}: {money(grossSubtotal)}
-              </div>
+              <>
+                <dt className="text-start text-zinc-600">{t("subtotal")}</dt>
+                <dd className="text-end">{money(grossSubtotal)}</dd>
+              </>
             )}
-            <div>
-              {t("vat5")}: {money(Number(inv.vatAmount))}
-            </div>
-            <div className="text-base font-semibold">
-              {t("total")}: {money(total)}
-            </div>
-          </div>
+            <dt className="text-start text-zinc-600">{t("vat5")}</dt>
+            <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
+            <dt className="text-start text-base font-semibold">{t("total")}</dt>
+            <dd className="text-end text-base font-semibold">{money(total)}</dd>
+          </dl>
         </div>
       </div>
 

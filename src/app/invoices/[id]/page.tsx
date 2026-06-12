@@ -210,15 +210,31 @@ export default async function InvoiceView({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-      <table className="w-full min-w-[20rem] text-sm">
+      {/* overflow-x-auto allows narrow phones to scroll horizontally
+          on screen; print:overflow-visible drops that wrapper on
+          print so the entire table lands cleanly on A4 / letter
+          paper. tabular-nums on the table itself locks every digit
+          to the same width so decimals line up down the page even
+          when adjacent rows have different qty/price values. */}
+      <div className="overflow-x-auto print:overflow-visible">
+      <table className="w-full text-sm tabular-nums">
+        {/* Fixed column widths for the three numeric columns —
+            qty narrow, unit/amount wider — keep alignment stable
+            regardless of how long the description is or how many
+            digits a row needs. Description column has no fixed
+            width and absorbs the remaining space. */}
+        <colgroup>
+          <col />
+          <col className="w-16" />
+          <col className="w-24" />
+          <col className="w-28" />
+        </colgroup>
         <thead>
-          <tr className="border-b border-black/10 text-left text-zinc-500 dark:border-white/15">
-            <th className="py-1">{t("colDescription")}</th>
-            <th className="py-1 text-right">{t("colQty")}</th>
-            <th className="py-1 text-right">{t("colUnit")}</th>
-            <th className="py-1 text-right">{t("colAmount")}</th>
-            {canEditLines ? <th className="py-1" /> : null}
+          <tr className="border-b border-black/10 text-zinc-500 dark:border-white/15">
+            <th className="px-2 py-1 text-start font-medium">{t("colDescription")}</th>
+            <th className="px-2 py-1 text-end font-medium">{t("colQty")}</th>
+            <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
+            <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
           </tr>
         </thead>
         <tbody>
@@ -284,10 +300,10 @@ export default async function InvoiceView({
               </tr>
             ) : (
               <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
-                <td className="py-1">{l.description}</td>
-                <td className="py-1 text-right">{Number(l.qty)}</td>
-                <td className="py-1 text-right">{Number(l.unitPrice).toFixed(2)}</td>
-                <td className="py-1 text-right">{Number(l.lineTotal).toFixed(2)}</td>
+                <td className="px-2 py-1">{l.description}</td>
+                <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
+                <td className="px-2 py-1 text-end">{Number(l.unitPrice).toFixed(2)}</td>
+                <td className="px-2 py-1 text-end">{Number(l.lineTotal).toFixed(2)}</td>
               </tr>
             ),
           )}
@@ -474,25 +490,56 @@ export default async function InvoiceView({
             recomputeInvoice as 5% of invoice.subtotal, which already
             includes the negative discount line — so it matches 'VAT
             on subtotal AFTER discount' automatically. */}
-        <div className="text-right text-sm">
+        {/* Totals — definition list + CSS Grid for proper two-column
+            alignment. Labels sit in column 1 (text-start), values in
+            column 2 (text-end), so numbers right-align down the page
+            and never collide with their labels. tabular-nums locks
+            decimal positions so currency amounts of different lengths
+            (e.g. 7.50 vs 1,890.00) still line up cleanly. */}
+        <dl className="ml-auto grid grid-cols-[max-content_max-content] gap-x-6 gap-y-1 text-sm tabular-nums">
           {discountLine ? (
             <>
-              <div>{t("subtotalBeforeDiscount")}: {money(grossSubtotal)}</div>
-              <div className="text-rose-700 dark:text-rose-400">
-                {t("discountRow")}: −{money(discountAmount)}
-              </div>
-              <div>{t("subtotalAfterDiscount")}: {money(Number(inv.subtotal))}</div>
+              <dt className="text-start text-zinc-600 dark:text-zinc-300">
+                {t("subtotalBeforeDiscount")}
+              </dt>
+              <dd className="text-end">{money(grossSubtotal)}</dd>
+              <dt className="text-start text-rose-700 dark:text-rose-400">
+                {t("discountRow")}
+              </dt>
+              <dd className="text-end text-rose-700 dark:text-rose-400">
+                −{money(discountAmount)}
+              </dd>
+              <dt className="text-start text-zinc-600 dark:text-zinc-300">
+                {t("subtotalAfterDiscount")}
+              </dt>
+              <dd className="text-end">{money(Number(inv.subtotal))}</dd>
             </>
           ) : (
-            <div>{t("subtotal")}: {money(grossSubtotal)}</div>
+            <>
+              <dt className="text-start text-zinc-600 dark:text-zinc-300">
+                {t("subtotal")}
+              </dt>
+              <dd className="text-end">{money(grossSubtotal)}</dd>
+            </>
           )}
-          <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
-          <div className="text-base font-semibold">{t("total")}: {money(total)}</div>
-          <div className="mt-1">{t("paid")}: {money(paid)}</div>
-          <div className="font-medium">
-            {AR_EMOJI[state]} {state === "PAID" ? t("paid") : `${t("balance")} ${money(balance)}`}
-          </div>
-        </div>
+          <dt className="text-start text-zinc-600 dark:text-zinc-300">
+            {t("vat5")}
+          </dt>
+          <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
+          <dt className="text-start text-base font-semibold">{t("total")}</dt>
+          <dd className="text-end text-base font-semibold">{money(total)}</dd>
+          <dt className="text-start text-zinc-600 dark:text-zinc-300">
+            {t("paid")}
+          </dt>
+          <dd className="text-end">{money(paid)}</dd>
+          <dt className="text-start font-medium">
+            {AR_EMOJI[state]}{" "}
+            {state === "PAID" ? t("paid") : t("balance")}
+          </dt>
+          <dd className="text-end font-medium">
+            {state === "PAID" ? "" : money(balance)}
+          </dd>
+        </dl>
       </div>
 
       {/* Preview gate — replaces the direct Send-to-customer button per

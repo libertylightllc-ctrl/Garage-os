@@ -739,6 +739,45 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   redirect(`/invoices/${invoiceId}/sent`);
 }
 
+/**
+ * Mock 'Email Invoice' — mirrors the WhatsApp mock pattern. Logs the
+ * message that would have gone out and redirects back to the invoice
+ * page with ?emailed=1 so the cashier sees a green confirmation
+ * banner. No persistence change (no JobCard column for emailedAt
+ * yet), no real SMTP — that's a separate slice. Per spec:
+ *
+ *   - If the customer has no email on file the form is disabled at
+ *     the UI level, but defending here too: throw so the action
+ *     can't silently no-op if someone POSTs around the UI gate.
+ *   - Keep the WhatsApp action untouched.
+ */
+export async function emailInvoiceAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, garageId: user.garageId },
+    select: { id: true, jobCardId: true, number: true, issuedAt: true },
+  });
+  if (!inv) throw new Error("Invoice not found in this garage");
+
+  const customer = await customerForJob(inv.jobCardId);
+  if (!customer) throw new Error("Customer not found for this invoice");
+  if (!customer.email) {
+    throw new Error("Customer has no email on file");
+  }
+
+  // Mock send.
+  console.log(
+    `[mock-email] would send invoice ${inv.number} to ${customer.email} — ${appUrl()}/c/invoice/${signId("invoice", inv.id)}`,
+  );
+
+  revalidatePath(`/invoices/${invoiceId}`);
+  // Same URL with a flag so the page renders the green confirmation
+  // banner. Avoids a separate /emailed confirmation route — the
+  // cashier is already on the invoice page and stays there.
+  redirect(`/invoices/${invoiceId}?emailed=1`);
+}
+
 export async function recordPaymentAction(formData: FormData) {
   // Cashier or owner records payment (record-only: cash / card-POS).
   const user = await requireAnyRole(PRICING_ROLES);

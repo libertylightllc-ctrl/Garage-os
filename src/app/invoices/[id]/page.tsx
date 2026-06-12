@@ -7,12 +7,14 @@ import {
   updateInvoiceLineAction,
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
+  emailInvoiceAction,
   // sendInvoiceToCustomerAction → /invoices/[id]/preview only.
   // recordPaymentAction → /cashier Receivables row only.
   // Both moved out so the edit page can only edit; mutations that
   // affect the customer (WhatsApp send) or the books (payment) live
   // on their own contextual surfaces.
 } from "@/app/actions/billing";
+import { PrintButton } from "@/components/print-button";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is "use server" and can only export async functions — exporting a
 // regexp from there broke the whole module under Turbopack on Vercel
@@ -27,8 +29,18 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
-export default async function InvoiceView({ params }: { params: Promise<{ id: string }> }) {
+export default async function InvoiceView({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  // ?emailed=1 lights up the green 'Invoice emailed to customer'
+  // confirmation banner after emailInvoiceAction redirects back.
+  searchParams: Promise<{ emailed?: string }>;
+}) {
   const { id } = await params;
+  const { emailed } = await searchParams;
+  const justEmailed = emailed === "1";
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -85,7 +97,59 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
   })();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
+      {/* '?emailed=1' confirmation banner — green strip across the
+          top, click-through to dismiss (just navigate without the
+          searchParam). Hidden on print so it doesn't end up on the
+          customer's PDF. */}
+      {justEmailed ? (
+        <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 print:hidden dark:bg-green-950 dark:text-green-200">
+          📧 {t("invoiceEmailedConfirmation")}
+        </div>
+      ) : null}
+
+      {/* Action bar — Print Invoice / Print Receipt (when paid) /
+          Email Invoice. All three hidden from the print output so
+          the document the customer sees is just the invoice itself.
+          The WhatsApp send button on /invoices/[id]/preview stays
+          where it was — per spec, this slice doesn't touch it. */}
+      <div className="flex flex-wrap gap-2 print:hidden">
+        <PrintButton className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+          🖨️ {t("invoicePrintInvoice")}
+        </PrintButton>
+        {state === "PAID" ? (
+          <Link
+            href={`/invoices/${inv.id}/receipt`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            🧾 {t("invoicePrintReceipt")}
+          </Link>
+        ) : null}
+        {["CASHIER", "OWNER"].includes(session.user.role) ? (
+          customer.email ? (
+            <form action={emailInvoiceAction} className="contents">
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                📧 {t("invoiceEmailInvoice")}
+              </button>
+            </form>
+          ) : (
+            <span
+              aria-disabled="true"
+              title={t("invoiceEmailNoEmailOnFile")}
+              className="cursor-not-allowed rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium text-zinc-400 dark:border-white/10 dark:text-zinc-600"
+            >
+              📧 {t("invoiceEmailNoEmailOnFile")}
+            </span>
+          )
+        ) : null}
+      </div>
+
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
@@ -208,7 +272,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
         // to a negative FEE per the existing convention.
         <form
           action={addInvoiceLineAction}
-          className="rounded-lg border border-black/10 p-3 dark:border-white/15"
+          className="rounded-lg border border-black/10 p-3 print:hidden dark:border-white/15"
         >
           <input type="hidden" name="invoiceId" value={inv.id} />
           <div className="mb-2 text-sm font-medium">{t("addLineTitle")}</div>
@@ -264,7 +328,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           already applied. Discount applies BEFORE VAT — handled in
           recomputeInvoice via the negative FEE line. */}
       {canEditLines ? (
-        <div className="rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <div className="rounded-lg border border-black/10 p-3 print:hidden dark:border-white/15">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{t("discountSectionTitle")}</span>
             {discountLabelKey ? (
@@ -411,7 +475,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
       !inv.jobCard.invoiceSentAt ? (
         <Link
           href={`/invoices/${inv.id}/preview`}
-          className="block rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 text-center dark:bg-fuchsia-950/40"
+          className="block rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 text-center print:hidden dark:bg-fuchsia-950/40"
         >
           <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
             {t("invoicePreviewNote")}
@@ -421,7 +485,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           </span>
         </Link>
       ) : inv.jobCard.invoiceSentAt ? (
-        <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+        <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 print:hidden dark:bg-zinc-900 dark:text-zinc-300">
           📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{" "}
           {inv.jobCard.invoiceSentAt.toISOString().slice(0, 16).replace("T", " ")}
         </p>

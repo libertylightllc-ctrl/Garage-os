@@ -4,10 +4,51 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { arState, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
+import { CashierFilterBar } from "@/components/cashier-filter-bar";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+
+// Same row-tagging helpers as the main /cashier page — duplicated
+// here to avoid pulling cashier/page.tsx (server component with role
+// guard for CASHIER) as a dependency. Tiny code; clearer than a
+// shared module just for two functions.
+interface InvoiceRowLike {
+  number: number;
+  issuedAt: Date;
+  jobCard: {
+    number: number | null;
+    vehicle: {
+      plate: string;
+      make: string;
+      model: string;
+      customer: { name: string };
+    };
+  };
+}
+function invoiceSearchTokens(inv: InvoiceRowLike): string {
+  return [
+    formatInvoiceNo(inv.number, inv.issuedAt.getFullYear()),
+    inv.jobCard.vehicle.plate,
+    inv.jobCard.vehicle.customer.name,
+    inv.jobCard.vehicle.make,
+    inv.jobCard.vehicle.model,
+    `#${inv.jobCard.number ?? ""}`,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+// On the paid page the most meaningful date is when the invoice was
+// PAID, not issued — so use the latest payment's paidAt, falling
+// back to issuedAt if somehow there's no payment row (shouldn't
+// happen since this page filters to state === 'PAID').
+function paidDateIso(
+  inv: InvoiceRowLike,
+  paidAt: Date | null,
+): string {
+  return (paidAt ?? inv.issuedAt).toISOString().slice(0, 10);
+}
 
 /**
  * Cashier → Paid Invoices archive.
@@ -82,6 +123,15 @@ export default async function PaidInvoices() {
         </Link>
       </div>
 
+      <CashierFilterBar
+        labels={{
+          searchPlaceholder: t("cashierSearchPlaceholder"),
+          fromLabel: t("cashierFilterFrom"),
+          toLabel: t("cashierFilterTo"),
+          clearLabel: t("cashierFilterClear"),
+        }}
+      />
+
       {paidRows.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("paidInvoicesEmpty")}</p>
       ) : (
@@ -89,10 +139,13 @@ export default async function PaidInvoices() {
         // small phones so the cashier can still scan paid jobs without
         // horizontal scrolling. Headers are i18n + RTL-friendly.
         <>
-          <ul className="flex flex-col gap-2 sm:hidden">
+          <ul data-filter-section className="flex flex-col gap-2 sm:hidden">
             {paidRows.map(({ inv, total, vat, paidAt, method }) => (
               <li
                 key={inv.id}
+                data-filter-row
+                data-search={invoiceSearchTokens(inv)}
+                data-date={paidDateIso(inv, paidAt)}
                 className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
               >
                 <Link href={`/invoices/${inv.id}`} className="block hover:underline">
@@ -122,7 +175,10 @@ export default async function PaidInvoices() {
             ))}
           </ul>
 
-          <div className="hidden overflow-x-auto rounded-lg border border-black/10 sm:block dark:border-white/15">
+          <div
+            data-filter-section
+            className="hidden overflow-x-auto rounded-lg border border-black/10 sm:block dark:border-white/15"
+          >
             <table className="w-full text-sm">
               <thead className="bg-zinc-50 text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-300">
                 <tr className="text-start">
@@ -138,6 +194,9 @@ export default async function PaidInvoices() {
                 {paidRows.map(({ inv, total, vat, paidAt, method }) => (
                   <tr
                     key={inv.id}
+                    data-filter-row
+                    data-search={invoiceSearchTokens(inv)}
+                    data-date={paidDateIso(inv, paidAt)}
                     className="border-t border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
                   >
                     <td className="p-2">

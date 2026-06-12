@@ -13,10 +13,77 @@ import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
+import { CashierFilterBar } from "@/components/cashier-filter-bar";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+
+// ── Filter-row attribute helpers ─────────────────────────────────
+// Each row on the cashier dashboard renders with data-search +
+// data-date so the CashierFilterBar (client component) can hide
+// non-matching rows entirely in the DOM. Per spec the search
+// should match invoice no., job no., plate, customer name — so
+// concatenate all of those, lowercased, into one search string.
+// Single source of truth for both /cashier and /cashier/paid.
+
+interface JobRowLike {
+  number: number | null;
+  createdAt: Date;
+  vehicle: {
+    plate: string;
+    make: string;
+    model: string;
+    customer: { name: string };
+  };
+}
+
+function jobSearchTokens(j: JobRowLike): string {
+  return [
+    j.vehicle.plate,
+    j.vehicle.customer.name,
+    j.vehicle.make,
+    j.vehicle.model,
+    `#${j.number ?? ""}`,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function jobDateIso(j: JobRowLike): string {
+  return j.createdAt.toISOString().slice(0, 10);
+}
+
+interface InvoiceRowLike {
+  number: number;
+  issuedAt: Date;
+  jobCard: {
+    number: number | null;
+    vehicle: {
+      plate: string;
+      make: string;
+      model: string;
+      customer: { name: string };
+    };
+  };
+}
+
+function invoiceSearchTokens(inv: InvoiceRowLike): string {
+  return [
+    formatInvoiceNo(inv.number, inv.issuedAt.getFullYear()),
+    inv.jobCard.vehicle.plate,
+    inv.jobCard.vehicle.customer.name,
+    inv.jobCard.vehicle.make,
+    inv.jobCard.vehicle.model,
+    `#${inv.jobCard.number ?? ""}`,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function invoiceDateIso(inv: InvoiceRowLike): string {
+  return inv.issuedAt.toISOString().slice(0, 10);
+}
 
 export default async function CashierHome() {
   const session = await requireRole("CASHIER");
@@ -162,11 +229,25 @@ export default async function CashierHome() {
         ))}
       </div>
 
+      {/* Real-time search & date filter — applies to every bucket below
+          (jobs to price / awaiting invoice / invoice ready / receivables
+          / extras-re-estimate / work-in-progress / waiting-diagnosis).
+          Metrics row above is excluded by design — those are all-time
+          aggregates regardless of the visible row set. */}
+      <CashierFilterBar
+        labels={{
+          searchPlaceholder: t("cashierSearchPlaceholder"),
+          fromLabel: t("cashierFilterFrom"),
+          toLabel: t("cashierFilterTo"),
+          clearLabel: t("cashierFilterClear"),
+        }}
+      />
+
       {/* Re-estimate cycle — tech found extra work mid-job. Bubbles to the
           top because the existing approved work is paused until the customer
           says yes (or no) to the extra. */}
       {toReestimate.length > 0 ? (
-        <div>
+        <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierReestimateTitle")}</h2>
           <ul className="flex flex-col gap-1">
             {toReestimate.map((j) => {
@@ -178,6 +259,9 @@ export default async function CashierHome() {
               return (
                 <li
                   key={j.id}
+                  data-filter-row
+                  data-search={jobSearchTokens(j)}
+                  data-date={jobDateIso(j)}
                   className="flex flex-col gap-2 rounded-lg border border-rose-500/40 bg-rose-50 p-3 text-sm dark:border-rose-700/40 dark:bg-rose-950/30"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -224,7 +308,7 @@ export default async function CashierHome() {
           most-finished thing — only one button between here and the
           customer paying. */}
       {toSendInvoice.length > 0 ? (
-        <div>
+        <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToSendInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
             {toSendInvoice.map((j) => {
@@ -233,6 +317,9 @@ export default async function CashierHome() {
               return (
                 <li
                   key={j.id}
+                  data-filter-row
+                  data-search={jobSearchTokens(j)}
+                  data-date={jobDateIso(j)}
                   className="flex flex-col gap-2 rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-3 text-sm dark:border-fuchsia-700/40 dark:bg-fuchsia-950/30"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -290,7 +377,7 @@ export default async function CashierHome() {
           Bubbles above 'Jobs to price' because it's blocking the customer's
           payment (downstream of all the pricing work). */}
       {toInvoice.length > 0 ? (
-        <div>
+        <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
             {toInvoice.map((j) => {
@@ -301,6 +388,9 @@ export default async function CashierHome() {
               return (
                 <li
                   key={j.id}
+                  data-filter-row
+                  data-search={jobSearchTokens(j)}
+                  data-date={jobDateIso(j)}
                   className="flex flex-col gap-2 rounded-lg border border-teal-500/40 bg-teal-50 p-3 text-sm dark:border-teal-700/40 dark:bg-teal-950/30"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -341,7 +431,7 @@ export default async function CashierHome() {
       ) : null}
 
       {/* Jobs to price — the technician → cashier handoff. The cashier sets the price. */}
-      <div>
+      <div data-filter-section>
         <h2 className="mb-2 text-sm font-medium">{t("jobsToPrice")}</h2>
         {toPrice.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noJobsToPrice")}</p>
@@ -377,6 +467,9 @@ export default async function CashierHome() {
               return (
                 <li
                   key={j.id}
+                  data-filter-row
+                  data-search={jobSearchTokens(j)}
+                  data-date={jobDateIso(j)}
                   className={
                     "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
                     (wasRejected
@@ -449,12 +542,15 @@ export default async function CashierHome() {
           row read-only with just a caption so the cashier knows the job
           is alive and where it sits. */}
       {workInProgress.length > 0 ? (
-        <div>
+        <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierWorkInProgressTitle")}</h2>
           <ul className="flex flex-col gap-1">
             {workInProgress.map((j) => (
               <li
                 key={j.id}
+                data-filter-row
+                data-search={jobSearchTokens(j)}
+                data-date={jobDateIso(j)}
                 className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-50 p-3 text-sm dark:border-emerald-700/40 dark:bg-emerald-950/30"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -492,12 +588,15 @@ export default async function CashierHome() {
           anticipate workload, but no actions are available yet. Per spec,
           NO pricing buttons render on these rows. */}
       {waitingForDiagnosis.length > 0 ? (
-        <div>
+        <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierWaitingDiagnosisTitle")}</h2>
           <ul className="flex flex-col gap-1">
             {waitingForDiagnosis.map((j) => (
               <li
                 key={j.id}
+                data-filter-row
+                data-search={jobSearchTokens(j)}
+                data-date={jobDateIso(j)}
                 className="flex flex-col gap-2 rounded-lg border border-black/10 bg-zinc-50 p-3 text-sm dark:border-white/15 dark:bg-zinc-900/40"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -535,7 +634,7 @@ export default async function CashierHome() {
           on /cashier/paid instead, so the main dashboard stays focused on
           active work. We pre-compute the (total, paid, state) triple here
           to drive both the filter and the row render. */}
-      <div>
+      <div data-filter-section>
         <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>
         {(() => {
           const unpaid = invoices
@@ -560,6 +659,9 @@ export default async function CashierHome() {
                 return (
                   <li
                     key={inv.id}
+                    data-filter-row
+                    data-search={invoiceSearchTokens(inv)}
+                    data-date={invoiceDateIso(inv)}
                     className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
                   >
                     <Link

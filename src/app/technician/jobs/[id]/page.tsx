@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
@@ -81,14 +81,26 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         take: 1,
       },
       qcBy: { select: { name: true } },
-      // Need invoice id so the terminal 'Job complete' banner can offer
-      // a View invoice → link. One invoice per job in the current model
-      // (Invoice.estimateId is @unique and we set it on the canonical
-      // primary estimate), so take: 1 is safe.
-      invoices: { orderBy: { issuedAt: "desc" }, take: 1, select: { id: true } },
+      // invoices include removed — the terminal-state banner that
+      // referenced it was deleted per spec. Terminal-state jobs now
+      // redirect off this route entirely.
     },
   });
   if (!job) notFound();
+
+  // Per spec: finished jobs are not the technician's concern. If the
+  // job has moved past TECH_COMPLETE — INVOICED, DELIVERED, or
+  // CANCELLED — kick the tech back to the workshop list rather than
+  // rendering a 'job complete' read-only view. This complements the
+  // dashboard query exclusions (same four statuses) so a stale link
+  // or browser back-button can't surface a finished car here either.
+  if (
+    job.status === "INVOICED" ||
+    job.status === "DELIVERED" ||
+    job.status === "CANCELLED"
+  ) {
+    redirect("/technician");
+  }
 
   const me = session.user.id;
   const amHelper = job.claimedById !== null && job.claimedById !== me && job.helpers.some((h) => h.techId === me);
@@ -241,42 +253,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {t("sentToCashierForInvoiceSubtitle")}
           </p>
         </section>
-      ) : job.status === "INVOICED" || job.status === "DELIVERED" ? (
-        // Terminal-state banner — closes the UX gap the user flagged.
-        // Before this branch existed, a job past TECH_COMPLETE rendered
-        // ZERO banner and zero workflow buttons (because every action
-        // gate evaluates false for INVOICED/DELIVERED), which read as
-        // 'the page is broken' even though the workflow had just
-        // genuinely run to completion. Now the tech sees an explicit
-        // 'nothing more to do here' message + a read-only link to the
-        // invoice so they can confirm what the car was billed for.
-        <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
-          <div className="text-4xl">✅</div>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">
-            {t("jobCompleteNoActionTitle")}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
-            {t("jobCompleteNoActionSubtitle")}
-          </p>
-          {job.invoices[0] ? (
-            <Link
-              href={`/invoices/${job.invoices[0].id}`}
-              className="mt-4 inline-block rounded-lg border border-emerald-700/30 px-4 py-2 text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
-            >
-              {t("viewInvoice")}
-            </Link>
-          ) : null}
-        </section>
-      ) : job.status === "CANCELLED" ? (
-        // Terminal cancel state — read-only, neutral colour. No invoice
-        // link (a cancelled job may or may not have one).
-        <section className="rounded-2xl border border-zinc-400/40 bg-zinc-100 p-6 text-center dark:border-zinc-700/60 dark:bg-zinc-900/40">
-          <div className="text-4xl">🛑</div>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">
-            {t("jobCancelledTitle")}
-          </h2>
-        </section>
       ) : null}
+      {/* Terminal-state banners (INVOICED / DELIVERED / CANCELLED)
+          removed per spec — the redirect at the top of this page now
+          sends a tech off the route entirely if the job is past
+          TECH_COMPLETE, so 'Job complete — no further action needed'
+          and 'This job was cancelled' are no longer reachable here. */}
 
       {job.status === "ON_HOLD" && job.holdReason ? (
         <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">

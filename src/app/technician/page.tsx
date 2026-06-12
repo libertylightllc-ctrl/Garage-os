@@ -33,7 +33,15 @@ export default async function TechnicianHome({
       where: {
         garageId,
         claimedById: null,
-        status: { notIn: ["DELIVERED", "CANCELLED"] },
+        // Same terminal exclusions as the other two queries so a job
+        // can never reappear in the waiting pool via some backwards
+        // status flip on a completed car. Per spec: 'Once a job reaches
+        // INVOICED or later, remove it from every technician list.'
+        // TECH_COMPLETE is also excluded here for symmetry — once the
+        // tech has marked complete, no further claim is meaningful.
+        status: {
+          notIn: ["TECH_COMPLETE", "INVOICED", "DELIVERED", "CANCELLED"],
+        },
         OR: [{ assignedToId: null }, { assignedToId: me }],
       },
       include: {

@@ -88,16 +88,16 @@ export default async function InvoiceSent({
         </dl>
       </section>
 
+      {/* Single back action — trimmed from two ('Back to invoice' +
+          'Back to accounts') down to one per audit. The cashier just
+          hit Send; the natural next move is back to the dashboard's
+          Invoices tab to pick up the next car, not back to the same
+          invoice. They can still drill into the invoice from there
+          via the Receivables row. */}
       <div className="flex flex-col gap-2">
         <Link
-          href={`/invoices/${inv.id}`}
+          href="/cashier?tab=invoices"
           className="rounded-lg bg-zinc-900 px-5 py-3 text-center text-base font-semibold text-white dark:bg-white dark:text-black"
-        >
-          {t("invoiceBackToInvoice")}
-        </Link>
-        <Link
-          href="/cashier"
-          className="rounded-lg border border-black/15 px-5 py-3 text-center text-base font-medium dark:border-white/20"
         >
           {t("invoiceBackToCashier")}
         </Link>

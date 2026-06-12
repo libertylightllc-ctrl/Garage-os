@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -60,6 +61,17 @@ export default async function InvoiceReceipt({
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 bg-white p-8 text-zinc-900">
       <AutoPrint />
+
+      {/* Back to invoice — visible on screen only. print:hidden so it
+          doesn't appear on the customer's receipt PDF. Lets the
+          cashier escape if they cancel the print dialog or land here
+          via a direct URL. */}
+      <Link
+        href={`/invoices/${inv.id}`}
+        className="inline-block text-sm text-zinc-500 hover:underline print:hidden"
+      >
+        {t("invoiceBackToInvoice")}
+      </Link>
 
       {/* Header: garage identity + RECEIPT label so the customer
           immediately knows what this paper is. */}

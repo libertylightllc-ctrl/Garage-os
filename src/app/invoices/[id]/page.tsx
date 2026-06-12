@@ -98,6 +98,24 @@ export default async function InvoiceView({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
+      {/* Role-aware Back link — mirrors the /estimates/[id] pattern.
+          Cashier (and owner) goes back to the Invoices tab of the
+          dashboard; advisor goes back to the parent job. Tech doesn't
+          normally land here. print:hidden so the customer's PDF
+          doesn't carry a stray nav element. */}
+      <Link
+        href={
+          session.user.role === "ADVISOR"
+            ? `/advisor/jobs/${inv.jobCardId}`
+            : "/cashier?tab=invoices"
+        }
+        className="inline-block py-2 text-sm text-zinc-500 hover:underline print:hidden dark:text-zinc-400"
+      >
+        {session.user.role === "ADVISOR"
+          ? t("backJob")
+          : t("invoiceBackToCashier")}
+      </Link>
+
       {/* '?emailed=1' confirmation banner — green strip across the
           top, click-through to dismiss (just navigate without the
           searchParam). Hidden on print so it doesn't end up on the

@@ -111,7 +111,7 @@ export default async function CashierHome({
     rawTab && VALID_TABS.has(rawTab) ? rawTab : "estimates"
   ) as "estimates" | "invoices" | "payments" | "customers" | "reports";
 
-  const [invoices, ledger, jobs] = await Promise.all([
+  const [invoices, ledger, jobs, estimateStatusCounts] = await Promise.all([
     prisma.invoice.findMany({
       where: { garageId },
       include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
@@ -148,6 +148,15 @@ export default async function CashierHome({
         { status: "asc" },
         { createdAt: "desc" },
       ],
+    }),
+    // One cheap groupBy for the dashboard counter badges (Pending
+    // Approval / Approved / Rejected). Returns at most 4 rows (DRAFT,
+    // SENT, APPROVED, REJECTED) — single round trip alongside the
+    // existing queries.
+    prisma.estimate.groupBy({
+      by: ["status"],
+      where: { jobCard: { garageId } },
+      _count: { _all: true },
     }),
   ]);
 
@@ -248,6 +257,29 @@ export default async function CashierHome({
     .filter((r) => r.state === "PAID")
     .sort((a, b) => (b.paidAt?.getTime() ?? 0) - (a.paidAt?.getTime() ?? 0));
 
+  // ── Dashboard counters ────────────────────────────────────────
+  // All six values derived from data already fetched:
+  //   - Pending Estimates  ← toPrice bucket length (matches the
+  //                          'Jobs to price' count shown under the
+  //                          Estimates tab, per spec).
+  //   - Pending Approval / Approved / Rejected ← estimateStatusCounts
+  //     groupBy on the same Prisma round-trip Promise.all.
+  //   - Unpaid Invoices    ← invoices.length minus paidRows.length
+  //                          (paid/unpaid already computed for the
+  //                          Receivables + Payments tabs).
+  //   - Paid Invoices      ← paidRows.length.
+  // No new mutations, no new workflow surfaces — read-only summary.
+  const estimateCountFor = (status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED") =>
+    estimateStatusCounts.find((r) => r.status === status)?._count._all ?? 0;
+  const counters = {
+    pendingEstimates: toPrice.length,
+    pendingApproval: estimateCountFor("SENT"),
+    approvedEstimates: estimateCountFor("APPROVED"),
+    rejectedEstimates: estimateCountFor("REJECTED"),
+    unpaidInvoices: invoices.length - paidRows.length,
+    paidInvoices: paidRows.length,
+  };
+
   const tabLabels = {
     estimates: t("cashierTabEstimates"),
     invoices: t("cashierTabInvoices"),
@@ -266,6 +298,56 @@ export default async function CashierHome({
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="CASHIER" active="accounts" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
+
+      {/* Counter badges — at-a-glance totals derived from data already
+          fetched above. Read-only; tapping a badge jumps to the tab
+          that lists those records. Skipped per spec: 'Partially Paid'
+          (no partial-payments feature yet) and 'Today/Monthly
+          Collection' (no date-based payment totals yet). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/cashier"
+          className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+        >
+          {t("counterPendingEstimates")}{" "}
+          <span className="tabular-nums font-semibold">{counters.pendingEstimates}</span>
+        </Link>
+        <Link
+          href="/cashier"
+          className="rounded-full border border-orange-500/40 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-900 hover:bg-orange-100 dark:border-orange-700/40 dark:bg-orange-950/40 dark:text-orange-200 dark:hover:bg-orange-900/40"
+        >
+          {t("counterPendingApproval")}{" "}
+          <span className="tabular-nums font-semibold">{counters.pendingApproval}</span>
+        </Link>
+        <Link
+          href="/cashier"
+          className="rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700/40 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+        >
+          {t("counterApprovedEstimates")}{" "}
+          <span className="tabular-nums font-semibold">{counters.approvedEstimates}</span>
+        </Link>
+        <Link
+          href="/cashier"
+          className="rounded-full border border-rose-500/40 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-900 hover:bg-rose-100 dark:border-rose-700/40 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-900/40"
+        >
+          {t("counterRejectedEstimates")}{" "}
+          <span className="tabular-nums font-semibold">{counters.rejectedEstimates}</span>
+        </Link>
+        <Link
+          href="/cashier?tab=invoices"
+          className="rounded-full border border-fuchsia-500/40 bg-fuchsia-50 px-3 py-1 text-xs font-medium text-fuchsia-900 hover:bg-fuchsia-100 dark:border-fuchsia-700/40 dark:bg-fuchsia-950/40 dark:text-fuchsia-200 dark:hover:bg-fuchsia-900/40"
+        >
+          {t("counterUnpaidInvoices")}{" "}
+          <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
+        </Link>
+        <Link
+          href="/cashier?tab=payments"
+          className="rounded-full border border-teal-500/40 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-900 hover:bg-teal-100 dark:border-teal-700/40 dark:bg-teal-950/40 dark:text-teal-200 dark:hover:bg-teal-900/40"
+        >
+          {t("counterPaidInvoices")}{" "}
+          <span className="tabular-nums font-semibold">{counters.paidInvoices}</span>
+        </Link>
+      </div>
 
       {/* Tab nav — URL-driven, ?tab=… searchParam. Estimates is the
           default and renders at the canonical /cashier URL.

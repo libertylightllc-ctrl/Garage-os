@@ -267,19 +267,10 @@ export default async function CashierHome({
       <AppNav role="CASHIER" active="accounts" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 
-      {/* Metrics stay above the tabs — all-time aggregates, relevant
-          regardless of which tab the cashier is on. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {metrics.map((m) => (
-          <div key={m.key} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">{t(m.key)}</div>
-            <div className="text-lg font-semibold">{money(m.value)}</div>
-          </div>
-        ))}
-      </div>
-
       {/* Tab nav — URL-driven, ?tab=… searchParam. Estimates is the
-          default and renders at the canonical /cashier URL. */}
+          default and renders at the canonical /cashier URL.
+          The Accounts-summary metrics that used to sit above the tabs
+          have moved into the Reports tab — see below. */}
       <CashierTabs currentTab={currentTab} labels={tabLabels} />
 
       {/* Filter bar — only shown on tabs that actually have row data.
@@ -910,18 +901,32 @@ export default async function CashierHome({
       ) : null}
 
       {/* ─── REPORTS TAB ────────────────────────────────────────── */}
+      {/* The Accounts summary metrics live here now (relocated from the
+          page header). All-time aggregates — same numbers and same
+          ledger-derived math as before, just rendered in a different
+          place. The search/date filter bar above is intentionally NOT
+          applied to these cards because they're all-time, not row-set.
+          The ledgerNote caption that used to sit at the very bottom of
+          the page travels with the metrics — it explains where the
+          numbers come from, so it belongs next to them. */}
       {currentTab === "reports" ? (
-        <div className="rounded-lg border border-dashed border-black/15 p-10 text-center dark:border-white/20">
-          <h2 className="text-lg font-semibold tracking-tight">
-            {t("cashierTabReportsHeading")}
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {t("cashierTabComingSoon")}
-          </p>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {metrics.map((m) => (
+              <div
+                key={m.key}
+                className="rounded-lg border border-black/10 p-3 dark:border-white/15"
+              >
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {t(m.key)}
+                </div>
+                <div className="text-lg font-semibold">{money(m.value)}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>
         </div>
       ) : null}
-
-      <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>
     </main>
   );
 }

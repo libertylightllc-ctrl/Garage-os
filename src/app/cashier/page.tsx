@@ -291,6 +291,12 @@ export default async function CashierHome({
     pendingApproval: estimateCountFor("SENT"),
     approvedEstimates: estimateCountFor("APPROVED"),
     rejectedEstimates: estimateCountFor("REJECTED"),
+    // 'Ready for Invoice' is the tech-marked-complete bucket — jobs
+    // waiting for the cashier to generate the final invoice. Same
+    // value as toInvoice.length, surfaced as a counter so the
+    // cashier sees the work item count at the top instead of
+    // hunting through tabs.
+    readyForInvoice: toInvoice.length,
     unpaidInvoices: invoices.length - paidRows.length,
     overdueInvoices: overdueCount,
     paidInvoices: paidRows.length,
@@ -348,6 +354,19 @@ export default async function CashierHome({
         >
           {t("counterRejectedEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.rejectedEstimates}</span>
+        </Link>
+        {/* Ready for Invoice — tech-marked-complete jobs awaiting the
+            cashier to generate the final invoice. Bridges the Estimates
+            counters (left) and the Invoices counters (right) at the
+            natural workflow handoff point. Yellow tones distinguish it
+            from amber (Pending Estimates) and orange (Pending Approval)
+            while still reading as an 'action item' colour. */}
+        <Link
+          href="/cashier?tab=invoices"
+          className="rounded-full border border-yellow-500/40 bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-900 hover:bg-yellow-100 dark:border-yellow-700/40 dark:bg-yellow-950/40 dark:text-yellow-200 dark:hover:bg-yellow-900/40"
+        >
+          {t("counterReadyForInvoice")}{" "}
+          <span className="tabular-nums font-semibold">{counters.readyForInvoice}</span>
         </Link>
         <Link
           href="/cashier?tab=invoices"
@@ -556,6 +575,12 @@ export default async function CashierHome({
                       </span>
                       <span className="ms-2 text-zinc-500 dark:text-zinc-400">
                         {j.vehicle.plate} · {j.vehicle.customer.name}
+                        {j.number != null ? (
+                          <>
+                            {" "}
+                            · <span className="tabular-nums">#{j.number}</span>
+                          </>
+                        ) : null}
                       </span>
                     </span>
                     <FriendlyStatusBadge

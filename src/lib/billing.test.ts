@@ -62,6 +62,19 @@ describe("AR status", () => {
   it("overdue when unpaid and past due date", () => {
     expect(arState(100, 40, due, new Date("2026-06-20T00:00:00Z"))).toBe("OVERDUE");
   });
+  // Regression test for the Overdue slice — without this, the existing
+  // 'paid when fully paid' test only checks the (now < due) branch and
+  // the spec line 'a paid invoice (even past due date) does NOT show
+  // Overdue' was unprotected.
+  it("paid past due date is still PAID, not OVERDUE", () => {
+    expect(arState(100, 100, due, new Date("2026-06-20T00:00:00Z"))).toBe("PAID");
+  });
+  // Boundary check — exactly equal to dueDate is NOT overdue. The
+  // helper uses strict > comparison so the dueDate moment itself
+  // counts as the grace deadline.
+  it("now exactly at dueDate is DUE, not OVERDUE", () => {
+    expect(arState(100, 0, due, new Date("2026-06-10T00:00:00Z"))).toBe("DUE");
+  });
 });
 
 describe("payment methods", () => {

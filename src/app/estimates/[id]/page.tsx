@@ -12,7 +12,9 @@ import {
   addLineFromPartAction,
   setEstimateStatusAction,
   generateInvoiceAction,
+  recordAdvancePaymentAction,
 } from "@/app/actions/billing";
+import { balanceDue } from "@/lib/billing";
 import { EstimateLineRow } from "@/components/estimate-line-row";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +72,17 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           vehicle: true,
           finding: true,
           jobParts: { orderBy: { createdAt: "asc" } },
+          // Slice 6b — show advances received against this job in the
+          // UI block below. Ordered oldest-first so the audit list reads
+          // naturally top-to-bottom.
+          advancePayments: { orderBy: { receivedAt: "asc" } },
+          // Also pull sibling approved estimates so the SUM-based
+          // approved-total ceiling matches what the server action uses
+          // for its overpayment block. Same query, no round trip.
+          estimates: {
+            where: { status: "APPROVED" },
+            select: { id: true, total: true },
+          },
         },
       },
       invoice: { select: { id: true } },
@@ -221,6 +234,116 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             </button>
           </div>
         </form>
+      ) : null}
+
+      {/* ─── Slice 6b: Advance payments ───────────────────────────
+          Visible to cashier/owner once the estimate is APPROVED and
+          before the invoice exists. Shows running totals against the
+          SUM of all approved-estimate totals (so a re-estimate that
+          raised the price doesn't suddenly make a prior advance look
+          like an overpayment) and the audit list of advances. The
+          form is hidden once the balance reaches 0 — no further
+          advances can be taken once the approved total is covered. */}
+      {canPrice && est.status === "APPROVED" && !est.invoice ? (
+        (() => {
+          const approvedTotal = est.jobCard.estimates.reduce(
+            (s, e) => s + Number(e.total),
+            0,
+          );
+          const advancePaid = est.jobCard.advancePayments.reduce(
+            (s, a) => s + Number(a.amount),
+            0,
+          );
+          const advanceBalance = balanceDue(approvedTotal, advancePaid);
+          return (
+            <section className="rounded-xl border border-amber-500/40 bg-amber-50 p-4 dark:border-amber-700/40 dark:bg-amber-950/30">
+              <header className="flex items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">
+                  {t("advancePaymentsTitle")}
+                </h2>
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  {t("advancePaymentsCeiling")}: {money(approvedTotal)}
+                </p>
+              </header>
+              {/* Running totals — same math as the invoice screen so
+                  the cashier reads identical numbers across both
+                  surfaces. balanceDue() guarantees
+                  advancePaid + advanceBalance === approvedTotal. */}
+              <dl className="mt-3 grid grid-cols-[max-content_max-content] gap-x-6 gap-y-1 text-sm tabular-nums">
+                <dt className="text-zinc-700 dark:text-zinc-200">
+                  {t("invoiceAdvancePaid")}
+                </dt>
+                <dd className="text-end">{money(advancePaid)}</dd>
+                <dt className="font-semibold">{t("invoiceBalanceDue")}</dt>
+                <dd className="text-end font-semibold">{money(advanceBalance)}</dd>
+              </dl>
+              {/* Audit list — each advance recorded individually, with
+                  date and method, per spec 'full audit trail'. */}
+              {est.jobCard.advancePayments.length > 0 ? (
+                <ul className="mt-3 space-y-1 text-sm tabular-nums">
+                  {est.jobCard.advancePayments.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex justify-between gap-3 text-amber-900 dark:text-amber-200"
+                    >
+                      <span>
+                        {a.receivedAt.toISOString().slice(0, 10)} ·{" "}
+                        {a.method === "CASH" ? t("methodCash") : t("methodCardPos")}
+                      </span>
+                      <span>{money(Number(a.amount))}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {/* Receive Advance Payment form — hidden once balance
+                  is zero (no overpayment possible from the UI either,
+                  the action still re-checks at the server). */}
+              {advanceBalance > 0 ? (
+                <form
+                  action={recordAdvancePaymentAction}
+                  className="mt-4 flex flex-wrap items-end gap-2"
+                >
+                  <input
+                    type="hidden"
+                    name="jobCardId"
+                    value={est.jobCard.id}
+                  />
+                  <label className="flex flex-col text-xs text-amber-900 dark:text-amber-200">
+                    {t("amount")}
+                    <input
+                      name="amount"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={advanceBalance.toFixed(2)}
+                      defaultValue={advanceBalance.toFixed(2)}
+                      required
+                      className="w-32 rounded-md border border-amber-500/50 bg-white px-3 py-2 text-right text-base text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                    />
+                  </label>
+                  <label className="flex flex-col text-xs text-amber-900 dark:text-amber-200">
+                    {t("method")}
+                    <select
+                      name="method"
+                      defaultValue="CASH"
+                      className="rounded-md border border-amber-500/50 bg-white px-3 py-2 text-base text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                    >
+                      <option value="CASH">{t("methodCash")}</option>
+                      <option value="CARD_POS">{t("methodCardPos")}</option>
+                    </select>
+                  </label>
+                  <button className="rounded-lg bg-amber-600 px-4 py-2 text-base font-semibold text-white hover:bg-amber-500">
+                    {t("receiveAdvancePayment")}
+                  </button>
+                </form>
+              ) : (
+                <p className="mt-3 text-sm text-amber-900 dark:text-amber-200">
+                  ✓ {t("advancePaymentsFullyCovered")}
+                </p>
+              )}
+            </section>
+          );
+        })()
       ) : null}
 
       {/* Lifecycle actions */}

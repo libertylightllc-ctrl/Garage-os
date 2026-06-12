@@ -196,6 +196,7 @@ model Garage {
   reminders    Reminder[]
   bays         Bay[]
   ledgerEntries LedgerEntry[]
+  advancePayments AdvancePayment[]
   aiEvents     AiEvent[]
   subscription Subscription?
   whatsAppAccount WhatsAppAccount?
@@ -411,6 +412,7 @@ model JobCard {
   helpers       JobHelper[]
   finding       JobFinding?
   jobParts      JobPart[]
+  advancePayments AdvancePayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -573,6 +575,39 @@ model Payment {
   updatedAt DateTime @updatedAt
 
   @@index([invoiceId])
+}
+
+// Advance payments — slice 6b. Stored on the JOB so the customer can pay
+// before the invoice exists (after estimate approval but before TECH_COMPLETE).
+// At invoice-generation time, generateInvoiceAction migrates each unmigrated
+// row into a Payment attached to the new Invoice and stamps migratedAt /
+// paymentId for audit. paymentId is not a Prisma relation — just a recorded
+// id — to keep this model self-contained and avoid coupling Payment to a
+// schema concept that only exists for advances.
+//
+// Accounting (zero-entry, see billing.ts):
+//  - At advance time:   DR Cash / CR Customer Deposits   (advanceLedger)
+//  - At migration time: DR Customer Deposits / CR AR     (advanceMigrationLedger)
+// Cash is recognized ONCE (at advance time); migration is a balance-sheet
+// reclassification, not a second cash event.
+model AdvancePayment {
+  id        String   @id @default(cuid())
+  garageId  String
+  garage    Garage   @relation(fields: [garageId], references: [id])
+  jobCardId String
+  jobCard   JobCard  @relation(fields: [jobCardId], references: [id])
+  amount    Decimal  @db.Decimal(12, 2)
+  method    String   // "CASH" | "CARD_POS"
+  receivedAt DateTime @default(now())
+
+  migratedAt DateTime? // null = still on job, set = transferred to an Invoice
+  paymentId  String?   // id of the Payment row created at migration (audit)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobCardId])
+  @@index([garageId])
 }
 
 // ---------- Inventory ----------

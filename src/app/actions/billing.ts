@@ -9,6 +9,8 @@ import {
   lineTotal,
   invoiceLedger,
   paymentLedger,
+  advanceLedger,
+  advanceMigrationLedger,
   vatStrategyFor,
   qrPlaceholder,
   isRecordableMethod,
@@ -463,6 +465,55 @@ export async function generateInvoiceAction(formData: FormData) {
       })),
     });
 
+    // ── Slice 6b: migrate advance payments onto the new invoice ──
+    // Any AdvancePayment rows recorded against this job (after estimate
+    // approval, before TECH_COMPLETE) get pulled in now. For each:
+    //   1. Create a Payment row tied to the new invoice (the amount is
+    //      what counts on the invoice ledger — method/receivedAt are
+    //      preserved as the audit record on the AdvancePayment side).
+    //   2. Write advanceMigrationLedger (DR Customer Deposits / CR AR).
+    //      Cash was already DR'd at advance time — we don't double-count.
+    //   3. Stamp migratedAt + paymentId on the AdvancePayment so the
+    //      same row can never be migrated twice.
+    // If sum of migrated advances >= total, flip the invoice to PAID
+    // right away (status === PAID is what drives the receipt UI; the
+    // ledger entries make this a real settled-AR position, not a flag).
+    const advances = await tx.advancePayment.findMany({
+      where: { jobCardId: clicked.jobCardId, migratedAt: null },
+      orderBy: { receivedAt: "asc" },
+    });
+    let migratedSum = 0;
+    for (const a of advances) {
+      const amt = Number(a.amount);
+      const payment = await tx.payment.create({
+        data: {
+          invoiceId: inv.id,
+          amount: amt,
+          method: a.method,
+          paidAt: a.receivedAt,
+        },
+        select: { id: true },
+      });
+      await tx.ledgerEntry.createMany({
+        data: advanceMigrationLedger(amt).map((e) => ({
+          garageId: user.garageId,
+          account: e.account,
+          debit: e.debit,
+          credit: e.credit,
+          sourceType: "ADVANCE_MIGRATION",
+          sourceId: a.id,
+        })),
+      });
+      await tx.advancePayment.update({
+        where: { id: a.id },
+        data: { migratedAt: new Date(), paymentId: payment.id },
+      });
+      migratedSum += amt;
+    }
+    if (migratedSum >= total) {
+      await tx.invoice.update({ where: { id: inv.id }, data: { status: "PAID" } });
+    }
+
     await tx.jobCard.update({ where: { id: clicked.jobCardId }, data: { status: "INVOICED" } });
     return inv.id;
   });
@@ -830,5 +881,114 @@ export async function recordPaymentAction(formData: FormData) {
   });
 
   revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath("/cashier");
+}
+
+// ────────────────────────────────────────────────────────────────
+// Slice 6b — recordAdvancePaymentAction.
+// Records an advance against a JOB CARD whose estimate has been
+// approved but whose invoice has not yet been generated. Stores an
+// AdvancePayment row, writes DR Cash / CR Customer Deposits, and
+// blocks overpayment vs. the sum of all approved estimates' totals.
+//
+// At TECH_COMPLETE → Generate Invoice, generateInvoiceAction (above)
+// migrates every unmigrated AdvancePayment for the job onto the new
+// invoice as a Payment + DR Customer Deposits / CR AR reclassification,
+// so the freshly-issued invoice opens already showing the advance and
+// the right Balance Due / Partially Paid state.
+//
+// Why a separate model rather than 'just create a draft invoice early':
+// invoice numbering is gapless per-garage (VAT requirement). Issuing
+// an invoice before work is done would burn a number even if the work
+// were later cancelled. Advances need to be recordable without
+// committing to an invoice number, hence AdvancePayment on the job.
+// ────────────────────────────────────────────────────────────────
+export async function recordAdvancePaymentAction(formData: FormData) {
+  const user = await requireAnyRole(PRICING_ROLES);
+  const jobCardId = String(formData.get("jobCardId") ?? "");
+  const amount = Math.max(0, Number(formData.get("amount") ?? 0));
+  const method = String(formData.get("method") ?? "CASH");
+  if (!isRecordableMethod(method)) {
+    throw new Error("Online payment links aren't available yet — use Cash or Card (POS).");
+  }
+  if (amount <= 0) throw new Error("Amount must be positive");
+
+  // Load the job + tenancy-scoped approved-estimate totals + existing
+  // advances + any invoice that may already exist. Single query, no
+  // round trips, so the overpayment math is computed against a
+  // consistent snapshot.
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobCardId, garageId: user.garageId },
+    include: {
+      estimates: {
+        where: { status: "APPROVED" },
+        select: { id: true, total: true },
+      },
+      advancePayments: { select: { amount: true } },
+      invoices: { select: { id: true } },
+    },
+  });
+  if (!job) throw new Error("Job not found");
+
+  // Already invoiced? The cashier should use the invoice payment form,
+  // not the advance form. Throwing here makes a stale tab fail loudly
+  // instead of silently double-recording money against the same job.
+  if (job.invoices.length > 0) {
+    throw new Error(
+      "Invoice already generated — record payment on the invoice instead.",
+    );
+  }
+
+  if (job.estimates.length === 0) {
+    throw new Error("No approved estimate yet — can't take an advance.");
+  }
+
+  // Use the SUM of approved-estimate totals as the ceiling. Mirrors
+  // generateInvoiceAction's merge behaviour: if a re-estimate adds
+  // extras after first approval, the total ceiling grows with it.
+  const approvedTotal = job.estimates.reduce(
+    (s, e) => s + Number(e.total),
+    0,
+  );
+  const advancesSoFar = job.advancePayments.reduce(
+    (s, a) => s + Number(a.amount),
+    0,
+  );
+  // 0.01 epsilon: matches recordPaymentAction. A final advance equal
+  // to the approved total to the cent must clear.
+  if (advancesSoFar + amount > approvedTotal + 0.01) {
+    const remaining = Math.max(0, approvedTotal - advancesSoFar);
+    throw new Error(
+      `Advance exceeds approved estimate total. Remaining: AED ${remaining.toFixed(2)}.`,
+    );
+  }
+
+  // Primary approved estimate id — used to revalidate the surface the
+  // cashier most likely came from.
+  const primaryEstimateId = job.estimates[0].id;
+
+  await prisma.$transaction(async (tx) => {
+    const advance = await tx.advancePayment.create({
+      data: {
+        garageId: user.garageId,
+        jobCardId: job.id,
+        amount,
+        method,
+      },
+      select: { id: true },
+    });
+    await tx.ledgerEntry.createMany({
+      data: advanceLedger(amount).map((e) => ({
+        garageId: user.garageId,
+        account: e.account,
+        debit: e.debit,
+        credit: e.credit,
+        sourceType: "ADVANCE",
+        sourceId: advance.id,
+      })),
+    });
+  });
+
+  revalidatePath(`/estimates/${primaryEstimateId}`);
   revalidatePath("/cashier");
 }

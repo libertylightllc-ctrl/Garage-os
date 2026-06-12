@@ -103,6 +103,11 @@ export const ACCOUNTS = {
   SALES: "Sales Revenue",
   VAT_PAYABLE: "VAT Payable",
   CASH: "Cash/Bank",
+  // Customer Deposits — liability account holding advances received
+  // BEFORE an invoice exists. Reclassified to AR (at the advance amount)
+  // when the invoice is generated. See advanceLedger() /
+  // advanceMigrationLedger() below — slice 6b.
+  DEPOSITS: "Customer Deposits",
 } as const;
 
 /** Issuing an invoice: DR AR (total) / CR Sales (subtotal) + CR VAT Payable (vat). */
@@ -118,6 +123,39 @@ export function invoiceLedger(subtotal: number, vatAmount: number, total: number
 export function paymentLedger(amount: number): LedgerLine[] {
   return [
     { account: ACCOUNTS.CASH, debit: round2(amount), credit: 0 },
+    { account: ACCOUNTS.AR, debit: 0, credit: round2(amount) },
+  ];
+}
+
+/**
+ * Receiving an advance BEFORE the invoice exists: DR Cash / CR Customer
+ * Deposits. The cash hits the books now; the matching credit sits as a
+ * liability (we owe the customer the work, not the cash) until the
+ * invoice is generated and the deposit is reclassified to AR via
+ * advanceMigrationLedger(). Slice 6b.
+ */
+export function advanceLedger(amount: number): LedgerLine[] {
+  return [
+    { account: ACCOUNTS.CASH, debit: round2(amount), credit: 0 },
+    { account: ACCOUNTS.DEPOSITS, debit: 0, credit: round2(amount) },
+  ];
+}
+
+/**
+ * Migrating an advance onto a new invoice: DR Customer Deposits / CR AR.
+ * Cash is NOT touched (it was recognized at advance time). This is a
+ * balance-sheet reclassification: the deposit liability disappears, the
+ * AR balance the new invoice just opened up shrinks by the same amount.
+ * Net effect across the two events:
+ *   Cash:       DR (one-time)
+ *   AR:         DR (invoice)  + CR (migration)  = total − sum(advances)
+ *   Sales/VAT:  CR (invoice)
+ *   Deposits:   CR (advance)  + DR (migration)  = 0
+ * Slice 6b.
+ */
+export function advanceMigrationLedger(amount: number): LedgerLine[] {
+  return [
+    { account: ACCOUNTS.DEPOSITS, debit: round2(amount), credit: 0 },
     { account: ACCOUNTS.AR, debit: 0, credit: round2(amount) },
   ];
 }

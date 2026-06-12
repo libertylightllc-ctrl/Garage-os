@@ -4,6 +4,8 @@ import {
   lineTotal,
   invoiceLedger,
   paymentLedger,
+  advanceLedger,
+  advanceMigrationLedger,
   isBalanced,
   arState,
   balanceDue,
@@ -13,7 +15,9 @@ import {
   isQuoteIncrease,
   jobPartLineDescription,
   parseLineEditInput,
+  ACCOUNTS,
   type DraftLine,
+  type LedgerLine,
 } from "./billing";
 
 const lines: DraftLine[] = [
@@ -309,5 +313,124 @@ describe("partial-payment math (slice 6)", () => {
     expect(isBalanced(paymentLedger(300))).toBe(true);
     expect(isBalanced(paymentLedger(200))).toBe(true);
     expect(isBalanced(paymentLedger(482.54))).toBe(true);
+  });
+});
+
+// --- Slice 6b: advance-payment ledger + migration math -----------------
+// Two-event lifecycle: an advance recorded BEFORE the invoice exists
+// (advanceLedger: DR Cash / CR Customer Deposits), then reclassified
+// at invoice generation (advanceMigrationLedger: DR Customer Deposits /
+// CR AR). The combined accounting must look identical to a single
+// post-invoice payment (paymentLedger) from a net-position standpoint —
+// that's the property that proves cash isn't double-counted.
+describe("advance-payment ledger (slice 6b)", () => {
+  function sumByAccount(rows: LedgerLine[]) {
+    const m: Record<string, number> = {};
+    for (const r of rows) {
+      m[r.account] = (m[r.account] ?? 0) + r.debit - r.credit;
+    }
+    return m;
+  }
+
+  it("advanceLedger is a balanced DR Cash / CR Deposits pair", () => {
+    const rows = advanceLedger(300);
+    expect(isBalanced(rows)).toBe(true);
+    expect(rows).toEqual([
+      { account: ACCOUNTS.CASH, debit: 300, credit: 0 },
+      { account: ACCOUNTS.DEPOSITS, debit: 0, credit: 300 },
+    ]);
+  });
+
+  it("advanceMigrationLedger is a balanced DR Deposits / CR AR pair", () => {
+    const rows = advanceMigrationLedger(300);
+    expect(isBalanced(rows)).toBe(true);
+    expect(rows).toEqual([
+      { account: ACCOUNTS.DEPOSITS, debit: 300, credit: 0 },
+      { account: ACCOUNTS.AR, debit: 0, credit: 300 },
+    ]);
+  });
+
+  it("advance + migration nets to the same balance-sheet shape as a post-invoice payment", () => {
+    // What the books should look like for a 300 advance later applied
+    // to an invoice — net Cash +300, net AR −300, Deposits +0.
+    const combined = sumByAccount([
+      ...advanceLedger(300),
+      ...advanceMigrationLedger(300),
+    ]);
+    const direct = sumByAccount(paymentLedger(300));
+    // Cash: both routes recognize 300 of cash ONCE.
+    expect(combined[ACCOUNTS.CASH]).toBe(300);
+    expect(direct[ACCOUNTS.CASH]).toBe(300);
+    // AR: both routes settle 300 of receivable.
+    expect(combined[ACCOUNTS.AR]).toBe(-300);
+    expect(direct[ACCOUNTS.AR]).toBe(-300);
+    // Deposits is a transient bucket via the advance route; net 0.
+    expect(combined[ACCOUNTS.DEPOSITS] ?? 0).toBe(0);
+  });
+
+  it("full Slice-6b invoice-lifecycle ledger is balanced and consistent", () => {
+    // Scenario: estimate approved at 982.54, advance 300 taken before
+    // work, then invoice generated (cash leg already done), then
+    // balance 682.54 paid via the normal invoice route.
+    const subtotal = 935.75;
+    const vat = 46.79;
+    const total = 982.54;
+    const all = [
+      ...advanceLedger(300), // before invoice
+      ...invoiceLedger(subtotal, vat, total), // generateInvoice
+      ...advanceMigrationLedger(300), // migration in same tx
+      ...paymentLedger(682.54), // final balance payment
+    ];
+    expect(isBalanced(all)).toBe(true);
+    const net = sumByAccount(all);
+    // Cash: 300 (advance) + 682.54 (final) === 982.54 — total received.
+    expect(net[ACCOUNTS.CASH]).toBeCloseTo(982.54, 2);
+    // AR: +982.54 (invoice) − 300 (migration) − 682.54 (payment) === 0.
+    expect(net[ACCOUNTS.AR]).toBeCloseTo(0, 2);
+    // Deposits: +300 (advance) − 300 (migration) === 0.
+    expect(net[ACCOUNTS.DEPOSITS] ?? 0).toBeCloseTo(0, 2);
+    // Sales: 935.75 credited.
+    expect(net[ACCOUNTS.SALES]).toBeCloseTo(-935.75, 2);
+    // VAT Payable: 46.79 credited.
+    expect(net[ACCOUNTS.VAT_PAYABLE]).toBeCloseTo(-46.79, 2);
+  });
+
+  it("invariant holds across the migration boundary", () => {
+    // Before invoice: advance 300 on approved 982.54 → remaining 682.54.
+    const approved = 982.54;
+    let advancePaid = 300;
+    expect(advancePaid + balanceDue(approved, advancePaid)).toBeCloseTo(
+      approved,
+      2,
+    );
+
+    // Invoice generated for 982.54 with the 300 migrated as Payment.
+    // From the invoice's perspective, paid===300, balance===682.54.
+    const invoiceTotal = approved; // VAT/subtotal don't change
+    const invoicePaidAtIssue = advancePaid;
+    expect(
+      invoicePaidAtIssue + balanceDue(invoiceTotal, invoicePaidAtIssue),
+    ).toBeCloseTo(invoiceTotal, 2);
+    expect(
+      arState(invoiceTotal, invoicePaidAtIssue, new Date("2030-01-01"), new Date("2026-06-13")),
+    ).toBe("PARTIAL");
+
+    // Final 682.54 payment → fully paid.
+    advancePaid = 300 + 682.54;
+    expect(balanceDue(invoiceTotal, advancePaid)).toBe(0);
+    expect(
+      arState(invoiceTotal, advancePaid, new Date("2030-01-01"), new Date("2026-06-13")),
+    ).toBe("PAID");
+  });
+
+  it("advance fully covers approved estimate → invoice flips to PAID at issue", () => {
+    // Edge case: customer pre-pays the entire job. Invoice opens at
+    // PAID status (handled in generateInvoiceAction: migratedSum >= total).
+    const total = 982.54;
+    const advancePaid = 982.54;
+    expect(balanceDue(total, advancePaid)).toBe(0);
+    expect(
+      arState(total, advancePaid, new Date("2030-01-01"), new Date("2026-06-13")),
+    ).toBe("PAID");
   });
 });

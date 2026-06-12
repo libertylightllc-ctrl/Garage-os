@@ -271,12 +271,28 @@ export default async function CashierHome({
   // No new mutations, no new workflow surfaces — read-only summary.
   const estimateCountFor = (status: "DRAFT" | "SENT" | "APPROVED" | "REJECTED") =>
     estimateStatusCounts.find((r) => r.status === status)?._count._all ?? 0;
+  // Overdue = arState(...) === "OVERDUE" for each invoice, which the
+  // existing helper computes from (total, paid, dueDate, now). No new
+  // round trip; just a filter over data already fetched. Recomputed
+  // every render so a paid-now or a passed-due-date both flip the
+  // count instantly — never a stored stale flag.
+  const overdueCount = invoices.filter(
+    (inv) =>
+      arState(
+        Number(inv.total),
+        inv.payments.reduce((s, p) => s + Number(p.amount), 0),
+        inv.dueDate,
+        now,
+      ) === "OVERDUE",
+  ).length;
+
   const counters = {
     pendingEstimates: toPrice.length,
     pendingApproval: estimateCountFor("SENT"),
     approvedEstimates: estimateCountFor("APPROVED"),
     rejectedEstimates: estimateCountFor("REJECTED"),
     unpaidInvoices: invoices.length - paidRows.length,
+    overdueInvoices: overdueCount,
     paidInvoices: paidRows.length,
   };
 
@@ -339,6 +355,18 @@ export default async function CashierHome({
         >
           {t("counterUnpaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
+        </Link>
+        {/* Overdue counter — subset of Unpaid (today > dueDate AND
+            balance > 0). Sits next to Unpaid so the cashier reads
+            them as related, with red styling matching the row badge
+            below. Always rendered, even when 0, so its position is
+            stable for muscle memory. */}
+        <Link
+          href="/cashier?tab=invoices"
+          className="rounded-full border border-red-500/40 bg-red-50 px-3 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700/40 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/40"
+        >
+          {t("counterOverdueInvoices")}{" "}
+          <span className="tabular-nums font-semibold">{counters.overdueInvoices}</span>
         </Link>
         <Link
           href="/cashier?tab=payments"
@@ -801,6 +829,17 @@ export default async function CashierHome({
                     >
                       <span>
                         <span className="font-medium">{AR_EMOJI[state]} {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}</span>
+                        {/* Red Overdue pill alongside the invoice number when
+                            today > dueDate AND balance > 0. The state value
+                            already drives the 🔴 emoji prefix above; the
+                            pill makes the at-a-glance signal explicit at
+                            small sizes where the emoji can read as a
+                            decoration. */}
+                        {state === "OVERDUE" ? (
+                          <span className="ms-2 inline-block whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                            {t("invoiceBadgeOverdue")}
+                          </span>
+                        ) : null}
                         <span className="ml-2 text-zinc-500 dark:text-zinc-400">
                           {inv.jobCard.vehicle.customer.name}
                         </span>

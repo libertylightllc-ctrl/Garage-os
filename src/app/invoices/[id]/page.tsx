@@ -170,7 +170,19 @@ export default async function InvoiceView({
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
+            {/* Overdue pill — matches the row badge on /cashier?tab=
+                invoices. arState already returns 'OVERDUE' when today
+                is past dueDate AND balance > 0; a fully-paid invoice
+                returns 'PAID' so this branch is naturally false for
+                paid invoices. */}
+            {state === "OVERDUE" ? (
+              <span className="inline-block whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                {t("invoiceBadgeOverdue")}
+              </span>
+            ) : null}
+          </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           </p>

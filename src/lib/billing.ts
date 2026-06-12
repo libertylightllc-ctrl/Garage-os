@@ -128,14 +128,51 @@ export function isBalanced(rows: LedgerLine[]): boolean {
   return d === c;
 }
 
-// ---------- Accounts receivable status (🟢🟡🔴) ----------
-export type ArState = "PAID" | "DUE" | "OVERDUE";
+// ---------- Accounts receivable status (🟢🟠🟡🔴) ----------
+// PAID    — paid >= total (fully settled)
+// OVERDUE — paid < total AND now > dueDate (the more urgent date
+//           signal wins over partial when both apply)
+// PARTIAL — 0 < paid < total AND now <= dueDate (advance / partial)
+// DUE     — paid === 0 AND now <= dueDate (nothing paid yet)
+//
+// Precedence chosen so OVERDUE captures any underpaid invoice past
+// its due date — that's the case the cashier needs to chase. PARTIAL
+// is the at-a-glance signal for non-overdue advance-paid invoices.
+export type ArState = "PAID" | "PARTIAL" | "DUE" | "OVERDUE";
 
-export const AR_EMOJI: Record<ArState, string> = { PAID: "🟢", DUE: "🟡", OVERDUE: "🔴" };
+export const AR_EMOJI: Record<ArState, string> = {
+  PAID: "🟢",
+  PARTIAL: "🟠",
+  DUE: "🟡",
+  OVERDUE: "🔴",
+};
 
 export function arState(total: number, paid: number, dueDate: Date, now: Date): ArState {
-  if (round2(paid) >= round2(total)) return "PAID";
-  return now.getTime() > dueDate.getTime() ? "OVERDUE" : "DUE";
+  const paidR = round2(paid);
+  const totalR = round2(total);
+  if (paidR >= totalR) return "PAID";
+  // Underpaid + past due → OVERDUE wins (whether 0 or partial-paid).
+  if (now.getTime() > dueDate.getTime()) return "OVERDUE";
+  // Underpaid + on/before due. Any non-zero payment → PARTIAL; nothing → DUE.
+  return paidR > 0 ? "PARTIAL" : "DUE";
+}
+
+// Pure 'is the invoice partially paid' check — independent of due date.
+// Used by the dashboard 'Partially Paid' counter, which wants to count
+// both PARTIAL (not yet due) AND partially-paid-but-OVERDUE invoices.
+export function isPartiallyPaid(total: number, paid: number): boolean {
+  const paidR = round2(paid);
+  const totalR = round2(total);
+  return paidR > 0 && paidR < totalR;
+}
+
+// Balance-due math used everywhere. Keeps the invariant
+//   round2(paid) + balanceDue(total, paid) == round2(total)
+// true regardless of floating-point noise in the inputs. Always >= 0;
+// overpayment is blocked at the action layer so callers never need to
+// guard for negative balance here.
+export function balanceDue(total: number, paid: number): number {
+  return Math.max(0, round2(round2(total) - round2(paid)));
 }
 
 // ---------- Payment methods ----------

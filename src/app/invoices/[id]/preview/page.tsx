@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendInvoiceToCustomerAction } from "@/app/actions/billing";
-import { formatInvoiceNo } from "@/lib/billing";
+import { balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 
@@ -43,6 +43,7 @@ export default async function InvoicePreview({
     where: { id, garageId: session.user.garageId },
     include: {
       lines: { orderBy: { createdAt: "asc" } },
+      payments: true,
       garage: true,
       jobCard: { include: { vehicle: { include: { customer: true } } } },
     },
@@ -64,6 +65,12 @@ export default async function InvoicePreview({
     ? Math.abs(Number(discountLine.lineTotal))
     : 0;
   const total = Number(inv.total);
+  // Slice 6 — mirror /invoices/[id]: if advance payments have been
+  // recorded already, the preview the cashier is about to send must
+  // also show them, otherwise the customer sees 'Total: 982.54' with
+  // no acknowledgement of the 300 they paid yesterday.
+  const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+  const balance = balanceDue(total, paid);
   const customer = inv.jobCard.vehicle.customer;
   const alreadySent = Boolean(inv.jobCard.invoiceSentAt);
 
@@ -199,6 +206,23 @@ export default async function InvoicePreview({
             <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
             <dt className="text-start text-base font-semibold">{t("total")}</dt>
             <dd className="text-end text-base font-semibold">{money(total)}</dd>
+            {/* Advance/Paid + Balance Due — slice 6. Only render when
+                payments have already been recorded; an unsent invoice
+                with no prior advance shows the clean Total row alone. */}
+            {paid > 0 ? (
+              <>
+                <dt className="text-start text-zinc-600">
+                  {paid >= total ? t("paid") : t("invoiceAdvancePaid")}
+                </dt>
+                <dd className="text-end text-zinc-600">−{money(paid)}</dd>
+                <dt className="text-start text-base font-semibold">
+                  {t("invoiceBalanceDue")}
+                </dt>
+                <dd className="text-end text-base font-semibold">
+                  {money(balance)}
+                </dd>
+              </>
+            ) : null}
           </dl>
         </div>
       </div>

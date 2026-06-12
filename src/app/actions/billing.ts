@@ -797,6 +797,20 @@ export async function recordPaymentAction(formData: FormData) {
   if (!inv) throw new Error("Invoice not found");
   if (amount <= 0) throw new Error("Amount must be positive");
 
+  // Overpayment block — slice 6 spec rule: 'a payment can never
+  // exceed the balance due'. Enforce here so a hand-crafted POST or
+  // a stale browser tab can't sneak past the UI gate. 0.01 epsilon
+  // covers floating-point round-off so a payment that equals the
+  // balance to the cent still goes through.
+  const paidBefore = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+  const total = Number(inv.total);
+  if (paidBefore + amount > total + 0.01) {
+    const balanceLeft = Math.max(0, total - paidBefore);
+    throw new Error(
+      `Payment exceeds balance due. Outstanding: AED ${balanceLeft.toFixed(2)}.`,
+    );
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.payment.create({ data: { invoiceId: inv.id, amount, method } });
     await tx.ledgerEntry.createMany({
@@ -809,8 +823,8 @@ export async function recordPaymentAction(formData: FormData) {
         sourceId: inv.id,
       })),
     });
-    const paidSoFar = inv.payments.reduce((s, p) => s + Number(p.amount), 0) + amount;
-    if (paidSoFar >= Number(inv.total)) {
+    const paidSoFar = paidBefore + amount;
+    if (paidSoFar >= total) {
       await tx.invoice.update({ where: { id: inv.id }, data: { status: "PAID" } });
     }
   });

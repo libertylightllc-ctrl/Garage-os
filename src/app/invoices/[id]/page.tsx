@@ -22,7 +22,7 @@ import { PrintButton } from "@/components/print-button";
 // plain module that both this page and billing.ts can share without
 // triggering the server-action export check.
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
-import { arState, AR_EMOJI, formatInvoiceNo } from "@/lib/billing";
+import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +58,10 @@ export default async function InvoiceView({
 
   const total = Number(inv.total);
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
-  const balance = Math.max(0, total - paid);
+  // Use the shared balanceDue helper so the invariant
+  //   paid + balance == total
+  // is preserved against floating-point noise the same way everywhere.
+  const balance = balanceDue(total, paid);
   const state = arState(total, paid, inv.dueDate, new Date());
   const customer = inv.jobCard.vehicle.customer;
   // Line edits are unlocked for cashier/owner only while the invoice
@@ -180,6 +183,20 @@ export default async function InvoiceView({
             {state === "OVERDUE" ? (
               <span className="inline-block whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/60 dark:text-red-200">
                 {t("invoiceBadgeOverdue")}
+              </span>
+            ) : null}
+            {/* Partially Paid pill — slice 6. Mutually exclusive with
+                the Overdue pill above by arState's precedence rules
+                (an overdue invoice that's also partial returns OVERDUE,
+                not PARTIAL — the date signal wins). */}
+            {state === "PARTIAL" ? (
+              <span className="inline-block whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+                {t("invoiceBadgePartial")}
+              </span>
+            ) : null}
+            {state === "PAID" ? (
+              <span className="inline-block whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                {t("invoiceBadgePaid")}
               </span>
             ) : null}
           </div>
@@ -528,17 +545,29 @@ export default async function InvoiceView({
           <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
           <dt className="text-start text-base font-semibold">{t("total")}</dt>
           <dd className="text-end text-base font-semibold">{money(total)}</dd>
-          <dt className="text-start text-zinc-600 dark:text-zinc-300">
-            {t("paid")}
+          {/* Advance/Paid — slice 6. Hidden when paid==0 so a fresh
+              invoice doesn't show a noisy '−AED 0.00' line. Negative
+              sign communicates 'subtracted from total to get balance';
+              the math invariant displayed is:
+                Total − Advance/Paid == Balance Due
+              which is the same invariant we test in billing.test.ts. */}
+          {paid > 0 ? (
+            <>
+              <dt className="text-start text-zinc-600 dark:text-zinc-300">
+                {state === "PAID" ? t("paid") : t("invoiceAdvancePaid")}
+              </dt>
+              <dd className="text-end text-zinc-600 dark:text-zinc-300">
+                −{money(paid)}
+              </dd>
+            </>
+          ) : null}
+          {/* Balance Due — always shown, even at 0.00 when fully paid,
+              so the printed/PDF render reads complete (cashier should
+              see at-a-glance 'balance is zero, this is settled'). */}
+          <dt className="text-start text-base font-semibold">
+            {AR_EMOJI[state]} {t("invoiceBalanceDue")}
           </dt>
-          <dd className="text-end">{money(paid)}</dd>
-          <dt className="text-start font-medium">
-            {AR_EMOJI[state]}{" "}
-            {state === "PAID" ? t("paid") : t("balance")}
-          </dt>
-          <dd className="text-end font-medium">
-            {state === "PAID" ? "" : money(balance)}
-          </dd>
+          <dd className="text-end text-base font-semibold">{money(balance)}</dd>
         </dl>
       </div>
 

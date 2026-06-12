@@ -2,7 +2,13 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { arState, AR_EMOJI, formatInvoiceNo, ACCOUNTS } from "@/lib/billing";
+import {
+  arState,
+  AR_EMOJI,
+  formatInvoiceNo,
+  isPartiallyPaid,
+  ACCOUNTS,
+} from "@/lib/billing";
 import {
   createEstimateAction,
   sendInvoiceToCustomerAction,
@@ -285,6 +291,18 @@ export default async function CashierHome({
         now,
       ) === "OVERDUE",
   ).length;
+  // Slice 6 — 'Partially Paid Invoices' counter. Definition is
+  // date-independent: any invoice with 0 < paid < total qualifies,
+  // whether it's PARTIAL (not yet overdue) or OVERDUE with some money
+  // already received. That matches the invoice-status sense of
+  // 'partially paid' the cashier expects ('I've taken money on this,
+  // but not all of it'). Recomputed every render; no stored flag.
+  const partiallyPaidCount = invoices.filter((inv) =>
+    isPartiallyPaid(
+      Number(inv.total),
+      inv.payments.reduce((s, p) => s + Number(p.amount), 0),
+    ),
+  ).length;
 
   const counters = {
     pendingEstimates: toPrice.length,
@@ -298,6 +316,7 @@ export default async function CashierHome({
     // hunting through tabs.
     readyForInvoice: toInvoice.length,
     unpaidInvoices: invoices.length - paidRows.length,
+    partiallyPaidInvoices: partiallyPaidCount,
     overdueInvoices: overdueCount,
     paidInvoices: paidRows.length,
   };
@@ -374,6 +393,21 @@ export default async function CashierHome({
         >
           {t("counterUnpaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
+        </Link>
+        {/* Partially Paid counter — slice 6. Subset of Unpaid where
+            0 < paid < total (advance / partial payment recorded but
+            balance still owed). Amber styling matches the PARTIAL pill
+            on the invoice page; sits between Unpaid and Overdue
+            because partial-unpaid is a 'follow-up' signal, not the
+            urgent chase that Overdue is. */}
+        <Link
+          href="/cashier?tab=invoices"
+          className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
+        >
+          {t("counterPartiallyPaidInvoices")}{" "}
+          <span className="tabular-nums font-semibold">
+            {counters.partiallyPaidInvoices}
+          </span>
         </Link>
         {/* Overdue counter — subset of Unpaid (today > dueDate AND
             balance > 0). Sits next to Unpaid so the cashier reads

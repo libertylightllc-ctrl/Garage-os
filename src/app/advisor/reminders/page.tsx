@@ -156,29 +156,35 @@ export default async function RemindersQueue({
     (r) => r.dueAt >= selStart && r.dueAt <= selEnd,
   );
 
-  // Group reminders in the selected month by dueAt-day (YYYY-MM-DD).
-  // Map preserves insertion order; rows are already sorted by dueAt
-  // asc in the DB query, so the first occurrence of each date dictates
-  // the order — earliest day at the top.
-  const byDay = new Map<string, ReminderRow[]>();
-  for (const r of inMonth) {
-    const k = day(r.dueAt);
-    const list = byDay.get(k);
-    if (list) list.push(r);
-    else byDay.set(k, [r]);
-  }
+  // Selected month — vehicle-first rollup. Drop the per-date subgroup
+  // (user feedback: cars are the unit, not dates). Inside each vehicle
+  // card the reminders still show their dueDate so the advisor knows
+  // when each one fires. groupByVehicle already sorts alphabetically;
+  // within a vehicle the reminders preserve the DB's dueAt-asc order.
+  const monthVehicles = groupByVehicle(inMonth);
 
-  // Other months with at least one (filtered) reminder, EXCLUDING the
-  // selected one. Used to render collapsible 'jump here' rows under
-  // the main view so the advisor sees pipeline without leaving the page.
-  const otherMonths = new Map<string, number>();
+  // Other months — same vehicle-rollup shape as the selected month so
+  // the advisor reads identical structure top-to-bottom. For each
+  // month with ≥1 (filtered) reminder, accumulate per-vehicle counts.
+  const otherMonths = new Map<
+    string,
+    { total: number; byVehicle: Map<string, { vehicle: ReminderRow["vehicle"]; count: number }> }
+  >();
   for (const r of filtered) {
     const k = monthKey(r.dueAt);
     if (k === selKey) continue;
-    otherMonths.set(k, (otherMonths.get(k) ?? 0) + 1);
+    let entry = otherMonths.get(k);
+    if (!entry) {
+      entry = { total: 0, byVehicle: new Map() };
+      otherMonths.set(k, entry);
+    }
+    entry.total += 1;
+    const v = entry.byVehicle.get(r.vehicle.id);
+    if (v) v.count += 1;
+    else entry.byVehicle.set(r.vehicle.id, { vehicle: r.vehicle, count: 1 });
   }
   const otherMonthList = Array.from(otherMonths.entries())
-    .map(([key, count]) => {
+    .map(([key, { total, byVehicle }]) => {
       const [yStr, moStr] = key.split("-");
       const y = Number(yStr);
       const mo = Number(moStr);
@@ -187,7 +193,15 @@ export default async function RemindersQueue({
         year: "numeric",
         timeZone: "UTC",
       });
-      return { key, year: y, month: mo, label, count };
+      // Sort vehicles inside the month by count desc, then make/model
+      // asc — busy vehicles bubble to the top of each bullet list.
+      const vehicleBullets = Array.from(byVehicle.values()).sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return `${a.vehicle.make} ${a.vehicle.model}`.localeCompare(
+          `${b.vehicle.make} ${b.vehicle.model}`,
+        );
+      });
+      return { key, year: y, month: mo, label, total, vehicleBullets };
     })
     .sort((a, b) => a.key.localeCompare(b.key));
 
@@ -291,12 +305,13 @@ export default async function RemindersQueue({
         </p>
       ) : null}
 
-      {/* Selected-month view — for each due date in chronological
-          order, render the reminders grouped by vehicle. Past-due
-          dates within the selected month get a red 'overdue' chip so
-          the advisor still sees urgency inside the month picker. */}
+      {/* Selected-month view — vehicle-first rollup. One card per
+          vehicle, count of items on the right, individual reminders
+          listed inside with their due date + Send/Cancel actions.
+          No per-date subgrouping (cars are the unit; the date is
+          still visible per row inside each card). */}
       {inMonth.length > 0 ? (
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-3">
           {hasOverdueInMonth ? (
             <div className="flex justify-end">
               <form action={sendDueRemindersAction}>
@@ -306,116 +321,136 @@ export default async function RemindersQueue({
               </form>
             </div>
           ) : null}
-          {Array.from(byDay.entries()).map(([d, list]) => {
-            const dateObj = new Date(`${d}T00:00:00Z`);
-            const overdue = dateObj <= now;
-            const groups = groupByVehicle(list);
-            return (
-              <div key={d} className="flex flex-col gap-2">
-                <h2 className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                  <span className="text-zinc-700 dark:text-zinc-200">
-                    {t("dueOn")} {d}
-                  </span>
-                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                    {list.length}
-                  </span>
-                  {overdue ? (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950/60 dark:text-red-200">
-                      {t("remindersBucketOverdue")}
+          <ul className="flex flex-col gap-2">
+            {monthVehicles.map((g) => {
+              const earliestDue = g.rs.reduce(
+                (min, r) => (r.dueAt < min ? r.dueAt : min),
+                g.rs[0].dueAt,
+              );
+              const overdue = earliestDue <= now;
+              return (
+                <li
+                  key={g.vehicle.id}
+                  className={
+                    "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
+                    (overdue
+                      ? "border-red-500/40 bg-red-50 dark:border-red-700/40 dark:bg-red-950/30"
+                      : "border-black/10 dark:border-white/15")
+                  }
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <span className="font-semibold">
+                        {g.vehicle.make} {g.vehicle.model}
+                      </span>
+                      <span className="ms-2 text-zinc-600 dark:text-zinc-300">
+                        {g.vehicle.plate} · {g.vehicle.customer.name}
+                      </span>
                     </span>
-                  ) : null}
-                </h2>
-                <ul className="flex flex-col gap-2">
-                  {groups.map((g) => (
-                    <li
-                      key={g.vehicle.id}
-                      className={
-                        "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
-                        (overdue
-                          ? "border-red-500/40 bg-red-50 dark:border-red-700/40 dark:bg-red-950/30"
-                          : "border-black/10 dark:border-white/15")
-                      }
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      {overdue ? (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                          {t("remindersBucketOverdue")}
+                        </span>
+                      ) : null}
+                      <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                        {g.rs.length}{" "}
+                        {g.rs.length === 1
+                          ? t("remindersReminderSingular")
+                          : t("remindersReminderPlural")}
+                      </span>
+                    </span>
+                  </div>
+                  <ul className="flex flex-col gap-1 ps-2">
+                    {g.rs.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/10 dark:bg-zinc-900/40"
+                      >
                         <span>
-                          <span className="font-semibold">
-                            {g.vehicle.make} {g.vehicle.model}
+                          <span className="font-medium">
+                            🔧 {t(reminderTypeKey(r.type))}
                           </span>
-                          <span className="ms-2 text-zinc-600 dark:text-zinc-300">
-                            {g.vehicle.plate} · {g.vehicle.customer.name}
+                          <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">
+                            {t("dueOn")} {day(r.dueAt)}
                           </span>
                         </span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {g.rs.length}{" "}
-                          {g.rs.length === 1
-                            ? t("remindersReminderSingular")
-                            : t("remindersReminderPlural")}
+                        <span className="flex shrink-0 gap-2">
+                          <form action={sendReminderAction}>
+                            <input type="hidden" name="reminderId" value={r.id} />
+                            <button className={BTN_PRIMARY}>
+                              {t("remindersSendToCustomer")}
+                            </button>
+                          </form>
+                          <form action={cancelReminderAction}>
+                            <input type="hidden" name="reminderId" value={r.id} />
+                            <button className={BTN}>
+                              {t("cancelReminderBtn")}
+                            </button>
+                          </form>
                         </span>
-                      </div>
-                      <ul className="flex flex-col gap-1 ps-2">
-                        {g.rs.map((r) => (
-                          <li
-                            key={r.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/10 dark:bg-zinc-900/40"
-                          >
-                            <span className="font-medium">
-                              🔧 {t(reminderTypeKey(r.type))}
-                            </span>
-                            <span className="flex shrink-0 gap-2">
-                              <form action={sendReminderAction}>
-                                <input
-                                  type="hidden"
-                                  name="reminderId"
-                                  value={r.id}
-                                />
-                                <button className={BTN_PRIMARY}>
-                                  {t("remindersSendToCustomer")}
-                                </button>
-                              </form>
-                              <form action={cancelReminderAction}>
-                                <input
-                                  type="hidden"
-                                  name="reminderId"
-                                  value={r.id}
-                                />
-                                <button className={BTN}>
-                                  {t("cancelReminderBtn")}
-                                </button>
-                              </form>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       ) : null}
 
-      {/* Other months with reminders — collapsible 'jump here' rows
-          using native <details>/<summary> (no JS). Each summary line
-          is a Link rather than a button so the advisor can SHIFT-click
-          to open in a new tab. */}
+      {/* Other months with reminders — preview rollup. Each card
+          shows the month name + total count, then a bulleted list of
+          per-vehicle counts (busiest vehicle first). The header is a
+          Link to jump to that month for actions. No per-reminder Send
+          buttons here — the cashier picks a month first, then acts. */}
       {otherMonthList.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
             {t("remindersOtherMonths")}
           </h2>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-2">
             {otherMonthList.map((m) => (
-              <li key={m.key}>
-                <Link
-                  href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className="flex items-center justify-between gap-2 rounded-md border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
-                >
-                  <span className="font-medium">{m.label}</span>
-                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
-                    {m.count}
+              <li
+                key={m.key}
+                className="flex flex-col gap-1 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Link
+                    href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                    className="text-base font-semibold hover:underline"
+                  >
+                    {m.label}
+                  </Link>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">
+                      {m.total}
+                    </span>{" "}
+                    {m.total === 1
+                      ? t("remindersReminderSingular")
+                      : t("remindersReminderPlural")}
                   </span>
-                </Link>
+                </div>
+                <ul className="flex flex-col gap-0.5 ps-2 text-sm text-zinc-700 dark:text-zinc-300">
+                  {m.vehicleBullets.map((vb) => (
+                    <li key={vb.vehicle.id} className="tabular-nums">
+                      <span className="text-zinc-500 dark:text-zinc-400">• </span>
+                      <span className="font-medium">
+                        {vb.vehicle.make} {vb.vehicle.model}
+                      </span>
+                      <span className="ms-1 text-zinc-500 dark:text-zinc-400">
+                        ({vb.vehicle.plate})
+                      </span>
+                      :{" "}
+                      <span className="font-semibold">{vb.count}</span>{" "}
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {vb.count === 1
+                          ? t("remindersReminderSingular")
+                          : t("remindersReminderPlural")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

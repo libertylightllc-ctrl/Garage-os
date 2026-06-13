@@ -276,14 +276,27 @@ export default async function RemindersQueue({
         </form>
       </div>
 
-      {/* Summary line — 'N reminders due in August 2026'. Reflects
-          the FILTERED count (i.e. respects ?q=), not the raw DB total. */}
+      {/* Summary line — 'N reminders · M cars due in August 2026'.
+          Reflects the FILTERED count (i.e. respects ?q=), not the raw
+          DB total. The '· M cars' clause is hidden when the month is
+          empty so '0 reminders due in Nov 2026' still reads cleanly. */}
       <p className="text-sm text-zinc-600 dark:text-zinc-300">
         <span className="font-semibold tabular-nums">{inMonth.length}</span>{" "}
         {inMonth.length === 1
-          ? t("remindersSummarySingular")
-          : t("remindersSummaryPlural")}{" "}
-        {monthLabel}
+          ? t("remindersReminderSingular")
+          : t("remindersReminderPlural")}
+        {monthVehicles.length > 0 ? (
+          <>
+            {" · "}
+            <span className="font-semibold tabular-nums">
+              {monthVehicles.length}
+            </span>{" "}
+            {monthVehicles.length === 1
+              ? t("remindersCarSingular")
+              : t("remindersCarPlural")}
+          </>
+        ) : null}{" "}
+        {t("remindersSummaryDueIn")} {monthLabel}
       </p>
 
       {/* Empty states — distinguishes 'no data at all' from 'no data
@@ -429,6 +442,13 @@ export default async function RemindersQueue({
                     {m.total === 1
                       ? t("remindersReminderSingular")
                       : t("remindersReminderPlural")}
+                    {" · "}
+                    <span className="tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">
+                      {m.vehicleBullets.length}
+                    </span>{" "}
+                    {m.vehicleBullets.length === 1
+                      ? t("remindersCarSingular")
+                      : t("remindersCarPlural")}
                   </span>
                 </div>
                 <ul className="flex flex-col gap-0.5 ps-2 text-sm text-zinc-700 dark:text-zinc-300">

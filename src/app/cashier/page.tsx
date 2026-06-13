@@ -101,10 +101,28 @@ const VALID_TABS = new Set<string>([
   "reports",
 ]);
 
+// Permitted Estimates-tab filter values. The cashier dashboard counters
+// hand off via /cashier?tab=estimates&filter=<one of these>, which the
+// page narrows to just the matching section. Anything not in this set
+// is treated as 'no filter' (silently — never throw on a bad URL).
+type EstimateFilter =
+  | "pending_estimates"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "revised";
+const VALID_ESTIMATE_FILTERS = new Set<EstimateFilter>([
+  "pending_estimates",
+  "pending_approval",
+  "approved",
+  "rejected",
+  "revised",
+]);
+
 export default async function CashierHome({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; filter?: string }>;
 }) {
   const session = await requireRole("CASHIER");
   const t = await getT();
@@ -112,10 +130,24 @@ export default async function CashierHome({
 
   // URL-driven tabs. Default = 'estimates' so refreshing the canonical
   // /cashier URL always lands on the working tab.
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, filter: rawFilter } = await searchParams;
   const currentTab = (
     rawTab && VALID_TABS.has(rawTab) ? rawTab : "estimates"
   ) as "estimates" | "invoices" | "payments" | "customers" | "reports";
+  // Estimate-section filter — narrows the Estimates tab to a single
+  // section so a counter tap actually feels like a drill-down. Only
+  // honoured when currentTab === 'estimates'; on other tabs the value
+  // is read but ignored.
+  const estimateFilter: EstimateFilter | null =
+    rawFilter && VALID_ESTIMATE_FILTERS.has(rawFilter as EstimateFilter)
+      ? (rawFilter as EstimateFilter)
+      : null;
+  // Predicate the JSX uses per-section. With no filter, every section
+  // renders (as before). With a filter, only the matching section
+  // passes — others return null. Centralising it here means the row of
+  // <section> blocks below stays declarative.
+  const showSection = (f: EstimateFilter): boolean =>
+    estimateFilter === null || estimateFilter === f;
 
   const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
@@ -360,35 +392,35 @@ export default async function CashierHome({
           (no partial-payments feature yet) and 'Today/Monthly
           Collection' (no date-based payment totals yet). */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Counter→section links: each href targets the Estimates tab
-            AND a #anchor so the browser scrolls the matching section
-            into view. The sections set scroll-mt so they don't hide
-            under the page header, plus a `target:` Tailwind variant
-            ring so the cashier visually confirms which section the
-            counter pointed at. */}
+        {/* Counter→section links: each href hands off a `filter=` query
+            param. The Estimates tab reads it via searchParams and hides
+            the non-matching sections, so the counter feels like a true
+            drill-down ('Pending Approval: 1' → ONLY the Awaiting
+            customer approval section, not all four). A 'Clear filter'
+            banner at the top of the filtered tab restores the full view. */}
         <Link
-          href="/cashier?tab=estimates#pending-estimates"
+          href="/cashier?tab=estimates&filter=pending_estimates"
           className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
         >
           {t("counterPendingEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.pendingEstimates}</span>
         </Link>
         <Link
-          href="/cashier?tab=estimates#awaiting-approval"
+          href="/cashier?tab=estimates&filter=pending_approval"
           className="rounded-full border border-orange-500/40 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-900 hover:bg-orange-100 dark:border-orange-700/40 dark:bg-orange-950/40 dark:text-orange-200 dark:hover:bg-orange-900/40"
         >
           {t("counterPendingApproval")}{" "}
           <span className="tabular-nums font-semibold">{counters.pendingApproval}</span>
         </Link>
         <Link
-          href="/cashier?tab=estimates#approved-estimates"
+          href="/cashier?tab=estimates&filter=approved"
           className="rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700/40 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
         >
           {t("counterApprovedEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.approvedEstimates}</span>
         </Link>
         <Link
-          href="/cashier?tab=estimates#rejected-estimates"
+          href="/cashier?tab=estimates&filter=rejected"
           className="rounded-full border border-rose-500/40 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-900 hover:bg-rose-100 dark:border-rose-700/40 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-900/40"
         >
           {t("counterRejectedEstimates")}{" "}
@@ -472,11 +504,41 @@ export default async function CashierHome({
       ) : null}
 
       {/* ─── ESTIMATES TAB ──────────────────────────────────────── */}
+      {/* Filtered-view banner — appears when ?filter= is set, naming
+          the active filter and offering a one-tap return to the full
+          view. Sits above the section list so the cashier sees 'this
+          is a drilldown, not the whole estimates tab' at a glance. */}
+      {currentTab === "estimates" && estimateFilter !== null ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-500/40 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-700/40 dark:bg-sky-950/40 dark:text-sky-200">
+          <span>
+            {t("cashierFilterActive")}:{" "}
+            <span className="font-semibold">
+              {t(
+                (
+                  {
+                    pending_estimates: "jobsToPrice",
+                    pending_approval: "cashierAwaitingApprovalTitle",
+                    approved: "cashierApprovedEstimatesTitle",
+                    rejected: "cashierRejectedEstimatesTitle",
+                    revised: "cashierRevisedEstimatesTitle",
+                  } as const
+                )[estimateFilter],
+              )}
+            </span>
+          </span>
+          <Link
+            href="/cashier?tab=estimates"
+            className="rounded-md border border-sky-500/40 bg-white px-3 py-1 text-xs font-semibold text-sky-900 hover:bg-sky-100 dark:bg-sky-900/50 dark:text-sky-100 dark:hover:bg-sky-900/80"
+          >
+            {t("cashierClearFilter")}
+          </Link>
+        </div>
+      ) : null}
+
       {/* Revised estimates — tech found extra work mid-job. Bubbles to the
           top because the existing approved work is paused until the customer
-          says yes (or no) to the extra. `id` + scroll-mt position the
-          section just below the tab nav when the user taps a counter. */}
-      {currentTab === "estimates" && revisedEstimateJobs.length > 0 ? (
+          says yes (or no) to the extra. */}
+      {currentTab === "estimates" && showSection("revised") && revisedEstimateJobs.length > 0 ? (
         <div
           id="revised-estimates"
           data-filter-section
@@ -676,7 +738,7 @@ export default async function CashierHome({
           cashier is still assembling. REJECTED rows are NOT here — they
           moved to their own 'Rejected estimates' section below so the
           Rejected counter has a 1:1 landing place. */}
-      {currentTab === "estimates" ? (
+      {currentTab === "estimates" && showSection("pending_estimates") ? (
       <div
         id="pending-estimates"
         data-filter-section
@@ -760,7 +822,7 @@ export default async function CashierHome({
           'View estimate' (jump into the editor) and 'Resend' (which links
           to the preview where the existing send action lives — preserves
           the cashier-reviews-before-send guard from earlier slices). */}
-      {currentTab === "estimates" ? (
+      {currentTab === "estimates" && showSection("pending_approval") ? (
       <div
         id="awaiting-approval"
         data-filter-section
@@ -851,7 +913,7 @@ export default async function CashierHome({
                                 can act from the Estimates tab.
           (This section replaces the prior standalone 'Work in progress'
           section so the same job never appears twice.) */}
-      {currentTab === "estimates" ? (
+      {currentTab === "estimates" && showSection("approved") ? (
       <div
         id="approved-estimates"
         data-filter-section
@@ -935,7 +997,7 @@ export default async function CashierHome({
       {/* (4) Rejected estimates — customer turned it down. 'Revise
           estimate' fires createEstimateAction → creates a fresh DRAFT;
           the REJECTED row stays untouched as audit history. */}
-      {currentTab === "estimates" ? (
+      {currentTab === "estimates" && showSection("rejected") ? (
       <div
         id="rejected-estimates"
         data-filter-section
@@ -1012,7 +1074,10 @@ export default async function CashierHome({
           anticipate workload, but no actions are available yet. Per spec,
           NO pricing buttons render on these rows.
           Lives under the Estimates tab. */}
-      {currentTab === "estimates" && waitingForDiagnosis.length > 0 ? (
+      {/* Waiting for diagnosis hides under any filter — drill-downs
+          stay clean. The counter row has no badge for this section, so
+          it's only visible in the unfiltered overview anyway. */}
+      {currentTab === "estimates" && estimateFilter === null && waitingForDiagnosis.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierWaitingDiagnosisTitle")}</h2>
           <ul className="flex flex-col gap-1">

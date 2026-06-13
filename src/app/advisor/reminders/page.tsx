@@ -412,29 +412,25 @@ export default async function RemindersQueue({
         </section>
       ) : null}
 
-      {/* Other months with reminders — preview rollup. Each card
-          shows the month name + total count, then a bulleted list of
-          per-vehicle counts (busiest vehicle first). The header is a
-          Link to jump to that month for actions. No per-reminder Send
-          buttons here — the cashier picks a month first, then acts. */}
+      {/* Other months with reminders — one clean row per month.
+          Month name on the left, 'N reminders · M cars' on the right.
+          The whole row is a Link so the advisor jumps to that month
+          for actions; no per-vehicle expansion here (cars are visible
+          inside the per-month detail view, so showing them twice would
+          double the page length). */}
       {otherMonthList.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
             {t("remindersOtherMonths")}
           </h2>
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-1">
             {otherMonthList.map((m) => (
-              <li
-                key={m.key}
-                className="flex flex-col gap-1 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Link
-                    href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                    className="text-base font-semibold hover:underline"
-                  >
-                    {m.label}
-                  </Link>
+              <li key={m.key}>
+                <Link
+                  href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                >
+                  <span className="font-medium">{m.label}</span>
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">
                     <span className="tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">
                       {m.total}
@@ -450,27 +446,7 @@ export default async function RemindersQueue({
                       ? t("remindersCarSingular")
                       : t("remindersCarPlural")}
                   </span>
-                </div>
-                <ul className="flex flex-col gap-0.5 ps-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  {m.vehicleBullets.map((vb) => (
-                    <li key={vb.vehicle.id} className="tabular-nums">
-                      <span className="text-zinc-500 dark:text-zinc-400">• </span>
-                      <span className="font-medium">
-                        {vb.vehicle.make} {vb.vehicle.model}
-                      </span>
-                      <span className="ms-1 text-zinc-500 dark:text-zinc-400">
-                        ({vb.vehicle.plate})
-                      </span>
-                      :{" "}
-                      <span className="font-semibold">{vb.count}</span>{" "}
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {vb.count === 1
-                          ? t("remindersReminderSingular")
-                          : t("remindersReminderPlural")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                </Link>
               </li>
             ))}
           </ul>

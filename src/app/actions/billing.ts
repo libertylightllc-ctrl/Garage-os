@@ -48,10 +48,70 @@ export async function createEstimateAction(formData: FormData) {
   const user = await requireAnyRole(PRICING_ROLES);
   const jobId = String(formData.get("jobId") ?? "");
   await jobInGarage(jobId, user.garageId);
-  const est = await prisma.estimate.create({
-    data: { jobCardId: jobId, subtotal: 0, vatAmount: 0, total: 0, status: "DRAFT" },
-    select: { id: true },
+
+  // Revision branch — if the job's most recent estimate is REJECTED,
+  // clone its line items into the new DRAFT so the cashier opens onto
+  // the original prices to edit instead of a blank canvas with AED
+  // 0.00 totals. The REJECTED row is NEVER mutated; it stays in place
+  // as audit history. The cashier can edit / add / remove on the
+  // fresh DRAFT, which becomes the active estimate on the job
+  // (jobs.estimates orderBy createdAt desc puts the DRAFT first, so
+  // dashboard renders + the Estimate page both pick it up
+  // automatically).
+  //
+  // For a fresh job with no prior estimate, this branch is skipped
+  // and we land on the original blank-DRAFT behaviour.
+  const lastEstimate = await prisma.estimate.findFirst({
+    where: { jobCardId: jobId },
+    orderBy: { createdAt: "desc" },
+    include: { lines: { orderBy: { createdAt: "asc" } } },
   });
+  const clonedFromRejection = lastEstimate?.status === "REJECTED";
+
+  const est = await prisma.$transaction(async (tx) => {
+    const created = await tx.estimate.create({
+      data: {
+        jobCardId: jobId,
+        // Totals on the new DRAFT — copy from the rejected row when we
+        // have one, then recomputeEstimate later confirms the math.
+        // For a fresh estimate, start at 0 as before.
+        subtotal: clonedFromRejection ? lastEstimate!.subtotal : 0,
+        vatAmount: clonedFromRejection ? lastEstimate!.vatAmount : 0,
+        total: clonedFromRejection ? lastEstimate!.total : 0,
+        status: "DRAFT",
+        // Lines are cloned via nested-create so we never need a second
+        // round-trip per row. partId/declined preserved verbatim so the
+        // cashier sees the original mix (incl. customer-declined items
+        // which they can re-include or keep declined).
+        ...(clonedFromRejection
+          ? {
+              lines: {
+                create: lastEstimate!.lines.map((l) => ({
+                  kind: l.kind,
+                  partId: l.partId,
+                  description: l.description,
+                  qty: l.qty,
+                  unitPrice: l.unitPrice,
+                  lineTotal: l.lineTotal,
+                  vatRate: l.vatRate,
+                  declined: l.declined,
+                })),
+              },
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+    return created;
+  });
+
+  // Defensive recompute — covers the edge case where the cloned
+  // rejected row had drifted totals (e.g. a manual SQL edit). For a
+  // fresh estimate it's a no-op (no lines yet).
+  if (clonedFromRejection) {
+    await recomputeEstimate(est.id);
+  }
+
   revalidatePath("/cashier");
   revalidatePath(`/advisor/jobs/${jobId}`);
   redirect(`/estimates/${est.id}`);

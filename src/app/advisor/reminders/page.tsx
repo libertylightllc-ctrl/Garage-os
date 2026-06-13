@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
 import {
   sendReminderAction,
   sendDueRemindersAction,
@@ -22,60 +22,6 @@ const BTN_PRIMARY =
 
 type T = (k: MessageKey) => string;
 
-// ─── Urgency buckets ────────────────────────────────────────────
-// Driven by dueAt vs. now. Counts and section colours are derived
-// from this single shape — change the cutoffs here and every header
-// updates. No reminder-domain logic changes; this is pure UI math.
-type Bucket = "overdue" | "due_soon" | "due_month" | "upcoming";
-const BUCKET_META: Record<
-  Bucket,
-  { titleKey: MessageKey; chip: string; badge: string }
-> = {
-  overdue: {
-    titleKey: "remindersBucketOverdue",
-    chip:
-      "rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950/60 dark:text-red-200",
-    badge:
-      "border-red-500/40 bg-red-50 dark:border-red-700/40 dark:bg-red-950/30",
-  },
-  due_soon: {
-    titleKey: "remindersBucketDueSoon",
-    chip:
-      "rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-900 dark:bg-orange-950/60 dark:text-orange-200",
-    badge:
-      "border-orange-500/40 bg-orange-50 dark:border-orange-700/40 dark:bg-orange-950/30",
-  },
-  due_month: {
-    titleKey: "remindersBucketDueMonth",
-    chip:
-      "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
-    badge:
-      "border-amber-500/40 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-950/30",
-  },
-  upcoming: {
-    titleKey: "remindersBucketUpcoming",
-    chip:
-      "rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
-    badge:
-      "border-black/10 bg-zinc-50 dark:border-white/15 dark:bg-zinc-900/40",
-  },
-};
-const BUCKET_ORDER: Bucket[] = [
-  "overdue",
-  "due_soon",
-  "due_month",
-  "upcoming",
-];
-
-function classifyBucket(dueAt: Date, now: Date): Bucket {
-  const ms = dueAt.getTime() - now.getTime();
-  const days = ms / (1000 * 60 * 60 * 24);
-  if (days < 0) return "overdue";
-  if (days <= 7) return "due_soon";
-  if (days <= 30) return "due_month";
-  return "upcoming";
-}
-
 interface ReminderRow {
   id: string;
   type: string;
@@ -91,10 +37,46 @@ interface ReminderRow {
   };
 }
 
-// Group reminders within a bucket by vehicleId so the cashier sees
-// 'GMC Yukon — Oil + Battery + Brakes' as one card instead of three
-// scattered rows. Vehicle order = earliest dueAt within the group, so
-// the most urgent vehicle bubbles to the top of the bucket.
+// ─── Month helpers ──────────────────────────────────────────────
+// 'YYYY-MM' is the URL key so the param matches what <input
+// type="month"> emits (no JS conversion needed). All math here works
+// in UTC to keep dueAt comparisons consistent with what we store.
+function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+function parseMonth(raw: string | undefined, fallback: Date): { year: number; month: number } {
+  if (raw) {
+    const m = raw.match(/^(\d{4})-(\d{2})$/);
+    if (m) {
+      const y = Number(m[1]);
+      const mo = Number(m[2]);
+      if (y >= 1970 && y <= 9999 && mo >= 1 && mo <= 12) {
+        return { year: y, month: mo };
+      }
+    }
+  }
+  return { year: fallback.getUTCFullYear(), month: fallback.getUTCMonth() + 1 };
+}
+function monthStartUtc(year: number, month: number): Date {
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+function monthEndUtc(year: number, month: number): Date {
+  // First day of NEXT month, minus 1 ms — inclusive end-of-month bound
+  // used for the dueAt range filter.
+  return new Date(Date.UTC(year, month, 1) - 1);
+}
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const ms = monthStartUtc(year, month);
+  ms.setUTCMonth(ms.getUTCMonth() + delta);
+  return { year: ms.getUTCFullYear(), month: ms.getUTCMonth() + 1 };
+}
+function monthKeyFromYM(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+// Group reminders within a single day by vehicleId. Vehicle order =
+// stable alphabetical by 'Make Model · plate' so the same row appears
+// in the same place across renders.
 function groupByVehicle(rs: ReminderRow[]) {
   const map = new Map<string, { vehicle: ReminderRow["vehicle"]; rs: ReminderRow[] }>();
   for (const r of rs) {
@@ -103,15 +85,14 @@ function groupByVehicle(rs: ReminderRow[]) {
     else map.set(r.vehicle.id, { vehicle: r.vehicle, rs: [r] });
   }
   return Array.from(map.values()).sort((a, b) => {
-    const aMin = Math.min(...a.rs.map((r) => r.dueAt.getTime()));
-    const bMin = Math.min(...b.rs.map((r) => r.dueAt.getTime()));
-    return aMin - bMin;
+    const al = `${a.vehicle.make} ${a.vehicle.model} ${a.vehicle.plate}`;
+    const bl = `${b.vehicle.make} ${b.vehicle.model} ${b.vehicle.plate}`;
+    return al.localeCompare(bl);
   });
 }
 
-// Cheap server-side text filter: matches against service type
-// (translated), vehicle make/model/plate, and customer name. Empty
-// query passes everything through.
+// Cheap server-side text filter — runs once, up front, so monthly
+// counts in the headers reflect the filter rather than the DB total.
 function matchesFilter(r: ReminderRow, q: string, t: T): boolean {
   if (!q) return true;
   const needle = q.toLowerCase();
@@ -130,55 +111,101 @@ function matchesFilter(r: ReminderRow, q: string, t: T): boolean {
 export default async function RemindersQueue({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; month?: string }>;
 }) {
   const session = await requireRole("ADVISOR");
   const t = await getT();
+  const locale = await getLocale();
   const now = new Date();
-  const { q: rawQ } = await searchParams;
+  const { q: rawQ, month: rawMonth } = await searchParams;
   const q = (rawQ ?? "").trim();
 
-  // Pull every active reminder for the garage. SENT rows stay on the
-  // page (audit row at the bottom). CANCELLED rows are filtered out
-  // at the DB level so the page never gets noisy with dismissed ones.
+  // Selected month — defaults to the current calendar month so the
+  // first page render is always 'this is what's due THIS month'.
+  const { year, month } = parseMonth(rawMonth, now);
+  const selStart = monthStartUtc(year, month);
+  const selEnd = monthEndUtc(year, month);
+  const selKey = monthKeyFromYM(year, month);
+  // Long month name in the user's locale ('August 2026' / 'أغسطس 2026').
+  // Intl is fine in a server component; runs at request time.
+  const monthLabel = selStart.toLocaleDateString(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const prevYM = shiftMonth(year, month, -1);
+  const nextYM = shiftMonth(year, month, +1);
+
+  // Pull every active reminder for the garage in one shot. SENT rows
+  // are dropped here — the monthly view is about 'still to send'. The
+  // 'Sent' audit section that used to live at the bottom moved out
+  // because it didn't fit the per-month model cleanly.
   const all = await prisma.reminder.findMany({
     where: {
       garageId: session.user.garageId,
-      status: { in: ["SCHEDULED", "SENT"] },
+      status: "SCHEDULED",
     },
     include: { vehicle: { include: { customer: true } } },
     orderBy: { dueAt: "asc" },
   });
 
-  // Apply the text filter once, up front. Every bucket below works off
-  // the filtered set — the urgency counts shown in headers therefore
-  // reflect 'matching this filter', not 'total in DB'.
   const filtered = all.filter((r) => matchesFilter(r, q, t));
 
-  const scheduled = filtered.filter((r) => r.status === "SCHEDULED");
-  const sent = filtered.filter((r) => r.status === "SENT");
+  // Reminders that fall inside the selected month.
+  const inMonth = filtered.filter(
+    (r) => r.dueAt >= selStart && r.dueAt <= selEnd,
+  );
 
-  // Partition scheduled reminders into the 4 urgency buckets.
-  const buckets: Record<Bucket, ReminderRow[]> = {
-    overdue: [],
-    due_soon: [],
-    due_month: [],
-    upcoming: [],
-  };
-  for (const r of scheduled) {
-    buckets[classifyBucket(r.dueAt, now)].push(r);
+  // Group reminders in the selected month by dueAt-day (YYYY-MM-DD).
+  // Map preserves insertion order; rows are already sorted by dueAt
+  // asc in the DB query, so the first occurrence of each date dictates
+  // the order — earliest day at the top.
+  const byDay = new Map<string, ReminderRow[]>();
+  for (const r of inMonth) {
+    const k = day(r.dueAt);
+    const list = byDay.get(k);
+    if (list) list.push(r);
+    else byDay.set(k, [r]);
   }
+
+  // Other months with at least one (filtered) reminder, EXCLUDING the
+  // selected one. Used to render collapsible 'jump here' rows under
+  // the main view so the advisor sees pipeline without leaving the page.
+  const otherMonths = new Map<string, number>();
+  for (const r of filtered) {
+    const k = monthKey(r.dueAt);
+    if (k === selKey) continue;
+    otherMonths.set(k, (otherMonths.get(k) ?? 0) + 1);
+  }
+  const otherMonthList = Array.from(otherMonths.entries())
+    .map(([key, count]) => {
+      const [yStr, moStr] = key.split("-");
+      const y = Number(yStr);
+      const mo = Number(moStr);
+      const label = monthStartUtc(y, mo).toLocaleDateString(locale, {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+      return { key, year: y, month: mo, label, count };
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  // Whether any reminders in the selected month are due on or before
+  // today — drives the 'Send to all overdue this month →' bulk button.
+  const hasOverdueInMonth = inMonth.some((r) => r.dueAt <= now);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="reminders" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("remindersTitle")}</h1>
 
-      {/* Filter bar — server-side, URL-driven. Plain GET form so the
-          URL is bookmarkable / back-button friendly without JS. A
-          'Clear' link shows up when q is set so the user can wipe the
-          filter without manually editing the URL. */}
+      {/* Text filter — kept from prior slice. Useful when a single
+          month still has 20+ reminders ('show me only Oil'). Form
+          submits GET so URL stays bookmarkable; the selected month
+          carries over via the hidden input. */}
       <form method="get" className="flex flex-wrap gap-2">
+        <input type="hidden" name="month" value={selKey} />
         <input
           name="q"
           type="search"
@@ -188,153 +215,207 @@ export default async function RemindersQueue({
         />
         <button className={BTN}>{t("remindersFilterApply")}</button>
         {q ? (
-          <Link href="/advisor/reminders" className={BTN}>
+          <Link
+            href={`/advisor/reminders?month=${selKey}`}
+            className={BTN}
+          >
             {t("remindersFilterClear")}
           </Link>
         ) : null}
       </form>
 
+      {/* Month picker — three controls share the same line:
+            ‹ prev  |  big month label  |  next ›  |  native <input type=month>
+          Prev/next are plain Links → server re-renders with the new
+          month. The native picker uses a GET form so a date jump
+          works without JS too. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/advisor/reminders?month=${monthKeyFromYM(prevYM.year, prevYM.month)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+            className={BTN}
+            aria-label={t("remindersPrevMonth")}
+          >
+            ‹
+          </Link>
+          <span className="text-lg font-semibold tabular-nums">{monthLabel}</span>
+          <Link
+            href={`/advisor/reminders?month=${monthKeyFromYM(nextYM.year, nextYM.month)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+            className={BTN}
+            aria-label={t("remindersNextMonth")}
+          >
+            ›
+          </Link>
+        </div>
+        <form method="get" className="flex items-center gap-2">
+          {q ? <input type="hidden" name="q" value={q} /> : null}
+          <label className="text-xs text-zinc-500 dark:text-zinc-400">
+            {t("remindersJumpToMonth")}
+          </label>
+          <input
+            type="month"
+            name="month"
+            defaultValue={selKey}
+            className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+          />
+          <button className={BTN}>{t("remindersFilterApply")}</button>
+        </form>
+      </div>
+
+      {/* Summary line — 'N reminders due in August 2026'. Reflects
+          the FILTERED count (i.e. respects ?q=), not the raw DB total. */}
+      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+        <span className="font-semibold tabular-nums">{inMonth.length}</span>{" "}
+        {inMonth.length === 1
+          ? t("remindersSummarySingular")
+          : t("remindersSummaryPlural")}{" "}
+        {monthLabel}
+      </p>
+
+      {/* Empty states — distinguishes 'no data at all' from 'no data
+          for this month' so the advisor doesn't think the page is
+          broken when they navigate to an empty future month. */}
       {all.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noReminders")}</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          {t("noReminders")}
+        </p>
       ) : null}
       {all.length > 0 && filtered.length === 0 ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {t("remindersFilterNoMatch")}
         </p>
       ) : null}
+      {filtered.length > 0 && inMonth.length === 0 ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          {t("remindersMonthEmpty")}
+        </p>
+      ) : null}
 
-      {/* Urgency sections — render in fixed order so the cashier's eye
-          falls on Overdue first every time. Empty buckets collapse
-          (hidden) so the page stays compact when most reminders are
-          far out. */}
-      {BUCKET_ORDER.map((b) => {
-        const list = buckets[b];
-        if (list.length === 0) return null;
-        const meta = BUCKET_META[b];
-        const groups = groupByVehicle(list);
-        return (
-          <section key={b}>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-sm font-medium">
-                <span className={meta.chip}>{list.length}</span>
-                {t(meta.titleKey)}
-              </h2>
-              {/* Bulk action: only on Overdue — that's the bucket
-                  where 'send everyone right now' is actually
-                  actionable. sendDueRemindersAction already targets
-                  dueAt <= now, which is exactly the overdue + due-
-                  today set. */}
-              {b === "overdue" ? (
-                <form action={sendDueRemindersAction}>
-                  <button className={BTN_PRIMARY}>
-                    {t("remindersBulkSendOverdue")}
-                  </button>
-                </form>
-              ) : null}
+      {/* Selected-month view — for each due date in chronological
+          order, render the reminders grouped by vehicle. Past-due
+          dates within the selected month get a red 'overdue' chip so
+          the advisor still sees urgency inside the month picker. */}
+      {inMonth.length > 0 ? (
+        <section className="flex flex-col gap-4">
+          {hasOverdueInMonth ? (
+            <div className="flex justify-end">
+              <form action={sendDueRemindersAction}>
+                <button className={BTN_PRIMARY}>
+                  {t("remindersBulkSendOverdue")}
+                </button>
+              </form>
             </div>
-            <ul className={`flex flex-col gap-2`}>
-              {groups.map((g) => (
-                <li
-                  key={g.vehicle.id}
-                  className={`flex flex-col gap-2 rounded-lg border p-3 text-sm ${meta.badge}`}
-                >
-                  {/* Vehicle header — make + model + plate +
-                      customer + count of items in this bucket. The
-                      customer name is the routing key for the mock
-                      WhatsApp send, so showing it on the header
-                      tells the cashier 'this is who will hear from
-                      me if I tap Send'. */}
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      <span className="font-semibold">
-                        {g.vehicle.make} {g.vehicle.model}
-                      </span>
-                      <span className="ms-2 text-zinc-600 dark:text-zinc-300">
-                        {g.vehicle.plate} · {g.vehicle.customer.name}
-                      </span>
+          ) : null}
+          {Array.from(byDay.entries()).map(([d, list]) => {
+            const dateObj = new Date(`${d}T00:00:00Z`);
+            const overdue = dateObj <= now;
+            const groups = groupByVehicle(list);
+            return (
+              <div key={d} className="flex flex-col gap-2">
+                <h2 className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  <span className="text-zinc-700 dark:text-zinc-200">
+                    {t("dueOn")} {d}
+                  </span>
+                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    {list.length}
+                  </span>
+                  {overdue ? (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                      {t("remindersBucketOverdue")}
                     </span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {g.rs.length}{" "}
-                      {g.rs.length === 1
-                        ? t("remindersReminderSingular")
-                        : t("remindersReminderPlural")}
-                    </span>
-                  </div>
-                  <ul className="flex flex-col gap-1 ps-2">
-                    {g.rs.map((r) => (
-                      <li
-                        key={r.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/10 dark:bg-zinc-900/40"
-                      >
+                  ) : null}
+                </h2>
+                <ul className="flex flex-col gap-2">
+                  {groups.map((g) => (
+                    <li
+                      key={g.vehicle.id}
+                      className={
+                        "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
+                        (overdue
+                          ? "border-red-500/40 bg-red-50 dark:border-red-700/40 dark:bg-red-950/30"
+                          : "border-black/10 dark:border-white/15")
+                      }
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>
-                          <span className="font-medium">
-                            🔧 {t(reminderTypeKey(r.type))}
+                          <span className="font-semibold">
+                            {g.vehicle.make} {g.vehicle.model}
                           </span>
-                          <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">
-                            {t("dueOn")} {day(r.dueAt)}
+                          <span className="ms-2 text-zinc-600 dark:text-zinc-300">
+                            {g.vehicle.plate} · {g.vehicle.customer.name}
                           </span>
                         </span>
-                        <span className="flex shrink-0 gap-2">
-                          <form action={sendReminderAction}>
-                            <input
-                              type="hidden"
-                              name="reminderId"
-                              value={r.id}
-                            />
-                            <button className={BTN_PRIMARY}>
-                              {t("remindersSendToCustomer")}
-                            </button>
-                          </form>
-                          <form action={cancelReminderAction}>
-                            <input
-                              type="hidden"
-                              name="reminderId"
-                              value={r.id}
-                            />
-                            <button className={BTN}>
-                              {t("cancelReminderBtn")}
-                            </button>
-                          </form>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {g.rs.length}{" "}
+                          {g.rs.length === 1
+                            ? t("remindersReminderSingular")
+                            : t("remindersReminderPlural")}
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+                      </div>
+                      <ul className="flex flex-col gap-1 ps-2">
+                        {g.rs.map((r) => (
+                          <li
+                            key={r.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/10 dark:bg-zinc-900/40"
+                          >
+                            <span className="font-medium">
+                              🔧 {t(reminderTypeKey(r.type))}
+                            </span>
+                            <span className="flex shrink-0 gap-2">
+                              <form action={sendReminderAction}>
+                                <input
+                                  type="hidden"
+                                  name="reminderId"
+                                  value={r.id}
+                                />
+                                <button className={BTN_PRIMARY}>
+                                  {t("remindersSendToCustomer")}
+                                </button>
+                              </form>
+                              <form action={cancelReminderAction}>
+                                <input
+                                  type="hidden"
+                                  name="reminderId"
+                                  value={r.id}
+                                />
+                                <button className={BTN}>
+                                  {t("cancelReminderBtn")}
+                                </button>
+                              </form>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
 
-      {/* Sent — audit row at the bottom so the cashier can see
-          recently-sent reminders without them crowding the actionable
-          urgency buckets. No per-row actions (already sent). */}
-      {sent.length > 0 ? (
-        <section>
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-medium">
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
-              {sent.length}
-            </span>
-            {t("sentTab")}
+      {/* Other months with reminders — collapsible 'jump here' rows
+          using native <details>/<summary> (no JS). Each summary line
+          is a Link rather than a button so the advisor can SHIFT-click
+          to open in a new tab. */}
+      {otherMonthList.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+            {t("remindersOtherMonths")}
           </h2>
           <ul className="flex flex-col gap-1">
-            {sent.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
-              >
-                <span>
-                  <span className="font-medium">
-                    🔧 {t(reminderTypeKey(r.type))}
+            {otherMonthList.map((m) => (
+              <li key={m.key}>
+                <Link
+                  href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className="flex items-center justify-between gap-2 rounded-md border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                >
+                  <span className="font-medium">{m.label}</span>
+                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    {m.count}
                   </span>
-                  <span className="ms-2 text-zinc-500 dark:text-zinc-400">
-                    {r.vehicle.make} {r.vehicle.model} · {r.vehicle.plate} ·{" "}
-                    {r.vehicle.customer.name}
-                  </span>
-                  <span className="ms-2 text-xs text-zinc-400">
-                    {t("sentOn")} {r.sentAt ? day(r.sentAt) : ""}
-                  </span>
-                </span>
+                </Link>
               </li>
             ))}
           </ul>

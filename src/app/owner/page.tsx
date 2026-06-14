@@ -22,6 +22,19 @@ import {
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+
+// Human-friendly minute formatter for the productivity table.
+// 0–59  → "Xm"
+// 60+   → "Xh Ym"  (Y omitted when zero, e.g. "2h" not "2h 0m")
+// Negative inputs shouldn't happen (technicianWork clamps to 0) but
+// guard anyway so a bad row never renders "−5m" to the owner.
+function formatMin(mins: number): string {
+  const m = Math.max(0, Math.round(mins));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+}
 type T = (k: MessageKey) => string;
 
 function fill(tpl: string, vars: Record<string, string>): string {
@@ -195,7 +208,13 @@ export default async function OwnerHome({
         <p className="mt-2 text-xs text-zinc-400">{t("aiCostNote")}</p>
       </div>
 
-      {/* Per-technician productivity */}
+      {/* Per-technician productivity — slice #3 adds time math:
+            ⏱ avg = mean (workCompletedAt − claimedAt) across completed jobs
+            today⏱ = sum of durations for jobs completed today (UTC day)
+            today# = count of jobs completed today
+          Existing columns (jobs/steps/photos/voice/parts/finishes)
+          stay so the owner doesn't lose their existing read of the
+          table. */}
       <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
         <h2 className="mb-2 text-sm font-medium">{t("techActivity")}</h2>
         {techWork.length === 0 ? (
@@ -207,6 +226,9 @@ export default async function OwnerHome({
                 <tr className="text-left text-zinc-500 dark:text-zinc-400">
                   <th className="py-1 pe-3">{t("colTechnician")}</th>
                   <th className="py-1 px-2 text-right">{t("colJobs")}</th>
+                  <th className="py-1 px-2 text-right" title={t("colAvgTimeTitle")}>⏱ avg</th>
+                  <th className="py-1 px-2 text-right" title={t("colTodayTimeTitle")}>today ⏱</th>
+                  <th className="py-1 px-2 text-right" title={t("colTodayJobsTitle")}>today #</th>
                   <th className="py-1 px-2 text-right">{t("colSteps")}</th>
                   <th className="py-1 px-2 text-right">📷</th>
                   <th className="py-1 px-2 text-right">🎤</th>
@@ -218,12 +240,19 @@ export default async function OwnerHome({
                 {techWork.map((tw) => (
                   <tr key={tw.techId} className="border-t border-black/5 dark:border-white/10">
                     <td className="py-1 pe-3 font-medium">{tw.name}</td>
-                    <td className="py-1 px-2 text-right">{tw.jobs}</td>
-                    <td className="py-1 px-2 text-right">{tw.steps}</td>
-                    <td className="py-1 px-2 text-right">{tw.photos}</td>
-                    <td className="py-1 px-2 text-right">{tw.voice}</td>
-                    <td className="py-1 px-2 text-right">{tw.parts}</td>
-                    <td className="py-1 ps-2 text-right">{tw.finishes}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.jobs}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">
+                      {tw.avgTimePerJobMin === null ? "—" : formatMin(tw.avgTimePerJobMin)}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums">
+                      {tw.totalTimeTodayMin > 0 ? formatMin(tw.totalTimeTodayMin) : "—"}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.jobsToday}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.steps}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.photos}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.voice}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{tw.parts}</td>
+                    <td className="py-1 ps-2 text-right tabular-nums">{tw.finishes}</td>
                   </tr>
                 ))}
               </tbody>

@@ -141,31 +141,83 @@ export interface TechWork {
   voice: number;
   parts: number;
   finishes: number;
+  // Slice #3 — productivity time tracking. Derived from JobCard
+  // claimedAt + workCompletedAt timestamps that already exist on the
+  // model. avg is null when no completed jobs (don't display 0min).
+  avgTimePerJobMin: number | null;
+  totalTimeTodayMin: number;
+  jobsToday: number;
 }
 
-// How much each technician worked individually (job steps logged, jobs touched).
+// How much each technician worked individually (job steps logged,
+// jobs touched, time on the spanner). Time math reads JobCard
+// claimedAt → workCompletedAt; only completed jobs (both stamps set)
+// contribute. 'Today' is UTC calendar day on workCompletedAt; matches
+// the 'jobs completed today' reading on the owner dashboard.
 export async function technicianWork(garageId: Scope): Promise<TechWork[]> {
-  const steps = await prisma.jobStep.findMany({
-    where: { jobCard: { garageId: scopeWhere(garageId) }, techId: { not: null } },
-    select: { techId: true, type: true, jobCardId: true, tech: { select: { name: true } } },
-  });
-  const map = new Map<string, TechWork & { jobSet: Set<string> }>();
-  for (const s of steps) {
-    const k = s.techId as string;
-    if (!map.has(k)) {
-      map.set(k, {
-        techId: k,
-        name: s.tech?.name ?? "Technician",
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const [steps, completedJobs] = await Promise.all([
+    prisma.jobStep.findMany({
+      where: { jobCard: { garageId: scopeWhere(garageId) }, techId: { not: null } },
+      select: { techId: true, type: true, jobCardId: true, tech: { select: { name: true } } },
+    }),
+    // Jobs the tech was the claimer on AND that have both timestamps —
+    // these are the jobs we can confidently measure duration for. The
+    // claimedById column has no Prisma relation back to User on the
+    // JobCard model, so we resolve the name from the steps query's
+    // tech relation later (every tech that completes a job will have
+    // FINISH or other JobStep rows under their name).
+    prisma.jobCard.findMany({
+      where: {
+        garageId: scopeWhere(garageId),
+        claimedById: { not: null },
+        claimedAt: { not: null },
+        workCompletedAt: { not: null },
+      },
+      select: {
+        claimedById: true,
+        claimedAt: true,
+        workCompletedAt: true,
+      },
+    }),
+  ]);
+  const map = new Map<
+    string,
+    TechWork & {
+      jobSet: Set<string>;
+      // Running totals for the time-math; finalised after the loops.
+      sumDurMin: number;
+      sumCount: number;
+      todayDurMin: number;
+      todayCount: number;
+    }
+  >();
+  const ensure = (id: string, name: string) => {
+    if (!map.has(id)) {
+      map.set(id, {
+        techId: id,
+        name,
         steps: 0,
         jobs: 0,
         photos: 0,
         voice: 0,
         parts: 0,
         finishes: 0,
+        avgTimePerJobMin: null,
+        totalTimeTodayMin: 0,
+        jobsToday: 0,
         jobSet: new Set<string>(),
+        sumDurMin: 0,
+        sumCount: 0,
+        todayDurMin: 0,
+        todayCount: 0,
       });
     }
-    const e = map.get(k)!;
+    return map.get(id)!;
+  };
+  for (const s of steps) {
+    const e = ensure(s.techId as string, s.tech?.name ?? "Technician");
     e.steps++;
     e.jobSet.add(s.jobCardId);
     if (s.type === "PHOTO") e.photos++;
@@ -173,7 +225,33 @@ export async function technicianWork(garageId: Scope): Promise<TechWork[]> {
     else if (s.type === "PART_REQUEST") e.parts++;
     else if (s.type === "FINISH") e.finishes++;
   }
+  for (const j of completedJobs) {
+    // Guard: bad-data clock skew (workCompletedAt < claimedAt) would
+    // produce a negative duration; clamp to 0 rather than skew the avg.
+    const start = j.claimedAt!.getTime();
+    const end = j.workCompletedAt!.getTime();
+    const durMin = Math.max(0, (end - start) / 60000);
+    // Name resolution: prefer whatever the steps loop already mapped
+    // for this techId; fall back to a placeholder. A tech who has
+    // completed jobs but ZERO JobSteps is theoretically possible (no
+    // photos/voice/parts logged) — extreme edge case, won't happen in
+    // practice but won't crash if it does.
+    const existing = map.get(j.claimedById as string);
+    const e = ensure(j.claimedById as string, existing?.name ?? "Technician");
+    e.sumDurMin += durMin;
+    e.sumCount += 1;
+    if (j.workCompletedAt! >= todayStart) {
+      e.todayDurMin += durMin;
+      e.todayCount += 1;
+    }
+  }
   return [...map.values()]
-    .map(({ jobSet, ...rest }) => ({ ...rest, jobs: jobSet.size }))
+    .map(({ jobSet, sumDurMin, sumCount, todayDurMin, todayCount, ...rest }) => ({
+      ...rest,
+      jobs: jobSet.size,
+      avgTimePerJobMin: sumCount > 0 ? Math.round(sumDurMin / sumCount) : null,
+      totalTimeTodayMin: Math.round(todayDurMin),
+      jobsToday: todayCount,
+    }))
     .sort((a, b) => b.steps - a.steps);
 }

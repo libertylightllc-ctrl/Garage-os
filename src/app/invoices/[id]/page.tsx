@@ -23,7 +23,8 @@ import { PrintButton } from "@/components/print-button";
 // triggering the server-action export check.
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { translateLineDescription } from "@/lib/line-item-translations";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,11 @@ export default async function InvoiceView({
   });
   if (!inv) notFound();
   const t = await getT();
+  // locale drives the line-item dictionary swap below. Only the
+  // read-only display branch uses translation; the inline-edit form
+  // keeps the raw (English/canonical) description so the cashier
+  // doesn't accidentally save translated text back to the DB.
+  const locale = await getLocale();
 
   const total = Number(inv.total);
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -317,7 +323,7 @@ export default async function InvoiceView({
               </tr>
             ) : (
               <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
-                <td className="px-2 py-1">{l.description}</td>
+                <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
                 <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
                 <td className="px-2 py-1 text-end">{Number(l.unitPrice).toFixed(2)}</td>
                 <td className="px-2 py-1 text-end">{Number(l.lineTotal).toFixed(2)}</td>

@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { setEstimateStatusAction } from "@/app/actions/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { translateLineDescription } from "@/lib/line-item-translations";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function EstimatePreview({
   const { id } = await params;
   const session = await requireAnyRole(["CASHIER", "OWNER"]);
   const t = await getT();
+  const locale = await getLocale();
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -125,7 +127,7 @@ export default async function EstimatePreview({
             <tbody>
               {lines.map((l) => (
                 <tr key={l.id} className="border-b border-black/5">
-                  <td className="py-1">{l.description}</td>
+                  <td className="py-1">{translateLineDescription(l.description, locale)}</td>
                   <td className="py-1 text-right">{Number(l.qty)}</td>
                   <td className="py-1 text-right">
                     {Number(l.unitPrice).toFixed(2)}

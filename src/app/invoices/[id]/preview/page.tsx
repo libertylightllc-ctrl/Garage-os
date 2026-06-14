@@ -4,8 +4,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendInvoiceToCustomerAction } from "@/app/actions/billing";
 import { balanceDue, formatInvoiceNo } from "@/lib/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
+import { translateLineDescription } from "@/lib/line-item-translations";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,7 @@ export default async function InvoicePreview({
   });
   if (!inv) notFound();
   const t = await getT();
+  const locale = await getLocale();
 
   // Discount handling mirrors the edit page: pull the discount line
   // out of the table and show it as a single negative row in the
@@ -149,7 +151,7 @@ export default async function InvoicePreview({
             <tbody>
               {workLines.map((l) => (
                 <tr key={l.id} className="border-b border-black/5">
-                  <td className="px-2 py-1">{l.description}</td>
+                  <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
                   <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
                   <td className="px-2 py-1 text-end">
                     {Number(l.unitPrice).toFixed(2)}

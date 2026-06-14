@@ -15,6 +15,7 @@ import {
   recordAdvancePaymentAction,
 } from "@/app/actions/billing";
 import { balanceDue } from "@/lib/billing";
+import { translateLineDescription } from "@/lib/line-item-translations";
 import { EstimateLineRow } from "@/components/estimate-line-row";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +187,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
               lineTotal: Number(l.lineTotal),
               declined: l.declined,
             }}
+            displayDescription={translateLineDescription(l.description, locale)}
             labels={{
               edit: t("editLine"),
               delete: t("deleteLine"),

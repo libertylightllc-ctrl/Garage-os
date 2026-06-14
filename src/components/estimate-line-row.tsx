@@ -12,12 +12,20 @@ export interface LineProps {
   line: {
     id: string;
     kind: string;
+    /** Raw stored description (what the cashier typed). Used as the
+     *  edit-form defaultValue so saves round-trip without mutating
+     *  what's stored. */
     description: string;
     qty: number;
     unitPrice: number;
     lineTotal: number;
     declined: boolean;
   };
+  /** Optional display-only override for the description shown in
+   *  idle mode. Parents pass the locale-translated version here so
+   *  Arabic-locale renders see Arabic, while the edit form still
+   *  loads the canonical English (or whatever was typed) for editing. */
+  displayDescription?: string;
   estimateId: string;
   /** DRAFT + pricing role → Edit + Delete are visible. */
   editable: boolean;
@@ -64,7 +72,14 @@ const ACTION =
  * On render, a FEE line with negative price is detected and the dropdown
  * pre-selects DISCOUNT so the round-trip preserves intent.
  */
-export function EstimateLineRow({ line, estimateId, editable, canDecline, labels }: LineProps) {
+export function EstimateLineRow({
+  line,
+  displayDescription,
+  estimateId,
+  editable,
+  canDecline,
+  labels,
+}: LineProps) {
   const [editing, setEditing] = useState(false);
 
   // Display kind: surface DISCOUNT for negative FEE lines so the user
@@ -161,7 +176,9 @@ export function EstimateLineRow({ line, estimateId, editable, canDecline, labels
           <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
             {displayKind}
           </span>
-          <p className={`mt-1.5 text-base font-medium ${valueClass}`}>{line.description}</p>
+          <p className={`mt-1.5 text-base font-medium ${valueClass}`}>
+            {displayDescription ?? line.description}
+          </p>
         </div>
         {/* Big line total on the right — the cashier's eye lands here */}
         <div className="text-right">

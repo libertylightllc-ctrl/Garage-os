@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
 import { verifyToken } from "@/lib/tokens";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { translateLineDescription } from "@/lib/line-item-translations";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,10 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   });
   if (!inv) notFound();
   const t = await getT();
+  // Customer-facing locale — when Arabic, swap known service names to
+  // their Arabic equivalent via the dictionary (display only; stored
+  // descriptions stay as the cashier typed them).
+  const locale = await getLocale();
 
   const total = Number(inv.total);
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
@@ -43,7 +48,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
       <ul className="flex flex-col gap-1 text-sm">
         {inv.lines.map((l) => (
           <li key={l.id} className="flex justify-between">
-            <span>{l.description}</span>
+            <span>{translateLineDescription(l.description, locale)}</span>
             <span>{Number(l.lineTotal).toFixed(2)}</span>
           </li>
         ))}

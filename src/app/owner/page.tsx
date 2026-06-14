@@ -17,6 +17,7 @@ import {
   intakeAcceptance,
   avgConfirmMinutes,
   technicianWork,
+  advisorActivity,
 } from "@/lib/owner-metrics";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,7 @@ export default async function OwnerHome({
       avgConfirmMinutes(gids),
       technicianWork(gids),
     ]);
+  const advisorWork = await advisorActivity(gids);
 
   let answer: string | null = null;
   if (q && q.trim()) {
@@ -253,6 +255,65 @@ export default async function OwnerHome({
                     <td className="py-1 px-2 text-right tabular-nums">{tw.voice}</td>
                     <td className="py-1 px-2 text-right tabular-nums">{tw.parts}</td>
                     <td className="py-1 ps-2 text-right tabular-nums">{tw.finishes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Per-advisor activity — slice #4. Same shape as the tech
+          table so the owner reads them in parallel:
+            jobs     — JobCard rows the advisor created (intake handoff)
+            sent     — estimates with sentAt set (preview→send fired)
+            ✓ / ✗    — customer-decided counts (APPROVED / REJECTED)
+            rate     — approval % of decided estimates (— when none)
+            ⏱ avg    — mean time customer sat on a quote before
+                      deciding (sentAt → approvedAt). null=— rendered
+                      when the advisor has no approvals yet. */}
+      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+        <h2 className="mb-2 text-sm font-medium">{t("advisorActivity")}</h2>
+        {advisorWork.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {t("noAdvisorActivity")}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                  <th className="py-1 pe-3">{t("colAdvisor")}</th>
+                  <th className="py-1 px-2 text-right">{t("colJobs")}</th>
+                  <th className="py-1 px-2 text-right">{t("colEstimatesSent")}</th>
+                  <th className="py-1 px-2 text-right">✓</th>
+                  <th className="py-1 px-2 text-right">✗</th>
+                  <th className="py-1 px-2 text-right" title={t("colApprovalRateTitle")}>
+                    {t("colApprovalRate")}
+                  </th>
+                  <th className="py-1 ps-2 text-right" title={t("colApprovalTimeTitle")}>
+                    ⏱ {t("colApprovalTimeShort")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {advisorWork.map((a) => (
+                  <tr key={a.advisorId} className="border-t border-black/5 dark:border-white/10">
+                    <td className="py-1 pe-3 font-medium">{a.name}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{a.jobsCreated}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{a.estimatesSent}</td>
+                    <td className="py-1 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-300">
+                      {a.approvedCount}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums text-rose-700 dark:text-rose-300">
+                      {a.rejectedCount}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums">
+                      {a.approvalRate === null ? "—" : `${a.approvalRate}%`}
+                    </td>
+                    <td className="py-1 ps-2 text-right tabular-nums">
+                      {a.avgApprovalMin === null ? "—" : formatMin(a.avgApprovalMin)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

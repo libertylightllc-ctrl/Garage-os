@@ -132,6 +132,128 @@ export async function whoOwes(garageId: Scope, now = new Date()): Promise<OwesRo
     .filter((r) => r.balance > 0);
 }
 
+// ── Slice #4 — advisor activity ──────────────────────────────────
+// Mirror shape of TechWork: per-staff rollup the owner reads at a
+// glance on /owner. Advisor metrics differ from tech ones because the
+// advisor's job revolves around the customer-facing estimate cycle,
+// not the spanner. We count:
+//   jobsCreated     — JobCard rows where this advisor is the
+//                     advisorId (intake handoff).
+//   estimatesSent   — Estimate rows with sentAt set whose JobCard has
+//                     this advisorId. SENT is the advisor's surface
+//                     in slice 2's preview-then-send flow.
+//   approvedCount   — those estimates the customer approved.
+//   rejectedCount   — those the customer turned down.
+//   approvalRate    — approved / (approved + rejected). null when no
+//                     decisions yet (don't show '0%' on a fresh advisor).
+//   avgApprovalMin  — mean (approvedAt − sentAt) for approved-after-sent
+//                     estimates. Tells the owner how long the
+//                     customer typically sits on a quote before
+//                     deciding. null when no approvals yet.
+export interface AdvisorActivity {
+  advisorId: string;
+  name: string;
+  jobsCreated: number;
+  estimatesSent: number;
+  approvedCount: number;
+  rejectedCount: number;
+  approvalRate: number | null;
+  avgApprovalMin: number | null;
+}
+
+export async function advisorActivity(garageId: Scope): Promise<AdvisorActivity[]> {
+  const [jobs, estimates] = await Promise.all([
+    prisma.jobCard.findMany({
+      where: { garageId: scopeWhere(garageId), advisorId: { not: null } },
+      select: { advisorId: true, advisor: { select: { name: true } } },
+    }),
+    // All estimates the advisor sent. Filtered to sentAt non-null so a
+    // DRAFT the cashier is still pricing doesn't inflate the 'sent'
+    // count. status drives approved/rejected; approvedAt drives the
+    // duration math.
+    prisma.estimate.findMany({
+      where: {
+        jobCard: { garageId: scopeWhere(garageId), advisorId: { not: null } },
+        sentAt: { not: null },
+      },
+      select: {
+        status: true,
+        sentAt: true,
+        approvedAt: true,
+        jobCard: {
+          select: {
+            advisorId: true,
+            advisor: { select: { name: true } },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const map = new Map<
+    string,
+    AdvisorActivity & { sumApprovalMin: number; approvalCount: number }
+  >();
+  const ensure = (id: string, name: string) => {
+    if (!map.has(id)) {
+      map.set(id, {
+        advisorId: id,
+        name,
+        jobsCreated: 0,
+        estimatesSent: 0,
+        approvedCount: 0,
+        rejectedCount: 0,
+        approvalRate: null,
+        avgApprovalMin: null,
+        sumApprovalMin: 0,
+        approvalCount: 0,
+      });
+    }
+    return map.get(id)!;
+  };
+
+  for (const j of jobs) {
+    const e = ensure(j.advisorId as string, j.advisor?.name ?? "Advisor");
+    e.jobsCreated++;
+  }
+  for (const est of estimates) {
+    const advisorId = est.jobCard.advisorId as string;
+    const e = ensure(advisorId, est.jobCard.advisor?.name ?? "Advisor");
+    e.estimatesSent++;
+    if (est.status === "APPROVED") {
+      e.approvedCount++;
+      if (est.sentAt && est.approvedAt) {
+        // Clamp negative durations to 0 (defensive — clock skew).
+        const min = Math.max(
+          0,
+          (est.approvedAt.getTime() - est.sentAt.getTime()) / 60000,
+        );
+        e.sumApprovalMin += min;
+        e.approvalCount++;
+      }
+    } else if (est.status === "REJECTED") {
+      e.rejectedCount++;
+    }
+  }
+
+  return [...map.values()]
+    .map(({ sumApprovalMin, approvalCount, ...rest }) => {
+      const decisions = rest.approvedCount + rest.rejectedCount;
+      return {
+        ...rest,
+        approvalRate:
+          decisions > 0
+            ? Math.round((rest.approvedCount / decisions) * 100)
+            : null,
+        avgApprovalMin:
+          approvalCount > 0
+            ? Math.round(sumApprovalMin / approvalCount)
+            : null,
+      };
+    })
+    .sort((a, b) => b.estimatesSent - a.estimatesSent);
+}
+
 export interface TechWork {
   techId: string;
   name: string;

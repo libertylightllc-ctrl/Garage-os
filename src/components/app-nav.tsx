@@ -27,9 +27,13 @@ const NAV: Record<StaffRole, NavItem[]> = {
     { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
     { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
     { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
+    { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
   ],
   TECH: [{ href: "/technician", labelKey: "tabWorkshop", key: "workshop" }],
-  CASHIER: [{ href: "/cashier", labelKey: "tabAccounts", key: "accounts" }],
+  CASHIER: [
+    { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
+    { href: "/cashier/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+  ],
 };
 
 /** Consistent staff top bar: brand + role, section tabs, sign out. */

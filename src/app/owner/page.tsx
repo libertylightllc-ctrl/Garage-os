@@ -43,6 +43,8 @@ function fill(tpl: string, vars: Record<string, string>): string {
 }
 
 async function answerCopilot(t: T, garageId: string | string[], question: string, now: Date): Promise<string> {
+  const gidArr = Array.isArray(garageId) ? garageId : [garageId];
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   switch (classifyIntent(question)) {
     case "PROFIT_MONTH": {
       const p = await profitThisMonth(garageId, now);
@@ -66,6 +68,136 @@ async function answerCopilot(t: T, garageId: string | string[], question: string
         b: money(w.lastWeek),
         d: `${w.delta >= 0 ? "+" : ""}${money(w.delta)}`,
       });
+    }
+    // ── Slice #7 new intents ─────────────────────────────────────
+    case "INVOICES_SUMMARY": {
+      // This-month invoice rollup: count by status + total billed.
+      // Status enum DRAFT|SENT|PAID|VOID; SENT covers unpaid+partial
+      // (partial state is derived at render, not stored).
+      const invs = await prisma.invoice.findMany({
+        where: { garageId: { in: gidArr }, issuedAt: { gte: monthStart } },
+        select: { status: true, total: true },
+      });
+      const total = invs.reduce((s, i) => s + Number(i.total), 0);
+      const counts = { DRAFT: 0, SENT: 0, PAID: 0, VOID: 0 } as Record<string, number>;
+      for (const i of invs) counts[i.status] = (counts[i.status] ?? 0) + 1;
+      return fill(t("ansInvoiceSummary"), {
+        n: String(invs.length),
+        total: money(total),
+        paid: String(counts.PAID),
+        sent: String(counts.SENT),
+        draft: String(counts.DRAFT),
+        voided: String(counts.VOID),
+      });
+    }
+    case "VAT_MONTH": {
+      // VAT Payable is credit-normal in the ledger. Use the same
+      // sumAccount math via a direct query (no need to import the
+      // private helper) — month-to-date.
+      const agg = await prisma.ledgerEntry.aggregate({
+        where: {
+          garageId: { in: gidArr },
+          account: "VAT Payable",
+          createdAt: { gte: monthStart },
+        },
+        _sum: { credit: true, debit: true },
+      });
+      const vat = Number(agg._sum.credit ?? 0) - Number(agg._sum.debit ?? 0);
+      return fill(t("ansVatMonth"), { v: money(vat) });
+    }
+    case "ADVANCES_OUTSTANDING": {
+      // Advances received but not yet migrated to an invoice. These
+      // are 'we owe the work' liabilities and are useful for the
+      // owner to know at a glance.
+      const open = await prisma.advancePayment.findMany({
+        where: { garageId: { in: gidArr }, migratedAt: null },
+        select: {
+          amount: true,
+          jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
+        },
+      });
+      if (open.length === 0) return t("ansAdvancesNone");
+      const total = open.reduce((s, a) => s + Number(a.amount), 0);
+      // List by customer name, summed in case the same customer has
+      // multiple open advances on different jobs.
+      const byCustomer = new Map<string, number>();
+      for (const a of open) {
+        const n = a.jobCard.vehicle.customer.name;
+        byCustomer.set(n, (byCustomer.get(n) ?? 0) + Number(a.amount));
+      }
+      const list = Array.from(byCustomer.entries())
+        .map(([name, amt]) => `${name}: ${money(amt)}`)
+        .join("; ");
+      return fill(t("ansAdvancesOpen"), {
+        n: String(open.length),
+        total: money(total),
+        list,
+      });
+    }
+    case "TECH_RANKING": {
+      // Top tech by completed-job count (jobs field on TechWork).
+      // technicianWork sorts by steps desc; resort by jobs for this
+      // answer so 'top tech' aligns with what the owner actually
+      // means (most jobs completed, not most JobSteps logged).
+      const tw = await technicianWork(garageId);
+      if (tw.length === 0) return t("ansTechRankingNone");
+      const ranked = [...tw].sort((a, b) => b.jobs - a.jobs);
+      const top = ranked.slice(0, 3);
+      const list = top
+        .map((r, i) => {
+          const avg =
+            r.avgTimePerJobMin === null
+              ? "—"
+              : r.avgTimePerJobMin >= 60
+                ? `${Math.floor(r.avgTimePerJobMin / 60)}h${r.avgTimePerJobMin % 60 ? ` ${r.avgTimePerJobMin % 60}m` : ""}`
+                : `${r.avgTimePerJobMin}m`;
+          return `${i + 1}. ${r.name}: ${r.jobs} jobs, ⏱ avg ${avg}`;
+        })
+        .join("; ");
+      return fill(t("ansTechRanking"), { list });
+    }
+    case "ADVISOR_RANKING": {
+      // Top advisor by approval rate among advisors with at least 3
+      // decided estimates (so a 1-for-1 advisor doesn't dominate at
+      // 100% on a tiny sample). Falls back to most-jobs if no one
+      // qualifies.
+      const aw = await advisorActivity(garageId);
+      if (aw.length === 0) return t("ansAdvisorRankingNone");
+      const eligible = aw.filter(
+        (a) => a.approvalRate !== null && a.approvedCount + a.rejectedCount >= 3,
+      );
+      const ranked =
+        eligible.length > 0
+          ? [...eligible].sort((a, b) => (b.approvalRate ?? 0) - (a.approvalRate ?? 0))
+          : [...aw].sort((a, b) => b.jobsCreated - a.jobsCreated);
+      const top = ranked.slice(0, 3);
+      const list = top
+        .map((r, i) => {
+          const rate = r.approvalRate === null ? "—" : `${r.approvalRate}%`;
+          return `${i + 1}. ${r.name}: ${r.estimatesSent} sent, ${rate} approval`;
+        })
+        .join("; ");
+      return fill(t("ansAdvisorRanking"), { list });
+    }
+    case "LEDGER_BALANCE": {
+      // Current Cash and AR balances (debit-normal, so net debit > 0
+      // is a positive balance). Pull both in one query, partition by
+      // account in JS.
+      const entries = await prisma.ledgerEntry.findMany({
+        where: {
+          garageId: { in: gidArr },
+          account: { in: ["Cash/Bank", "Accounts Receivable"] },
+        },
+        select: { account: true, debit: true, credit: true },
+      });
+      let cash = 0;
+      let ar = 0;
+      for (const e of entries) {
+        const net = Number(e.debit) - Number(e.credit);
+        if (e.account === "Cash/Bank") cash += net;
+        else if (e.account === "Accounts Receivable") ar += net;
+      }
+      return fill(t("ansLedgerBalance"), { cash: money(cash), ar: money(ar) });
     }
     default:
       return t("copilotUnknown");

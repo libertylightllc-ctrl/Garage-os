@@ -12,7 +12,46 @@ describe("copilot intent classification", () => {
   it("detects week-trend questions", () => {
     expect(classifyIntent("Are we up or down this week?")).toBe("WEEK_TREND");
   });
+  // ── Slice #7 new intents ─────────────────────────────────────
+  it("detects invoice-summary questions", () => {
+    expect(classifyIntent("invoice summary")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("how many invoices this month?")).toBe(
+      "INVOICES_SUMMARY",
+    );
+    expect(classifyIntent("invoice total")).toBe("INVOICES_SUMMARY");
+  });
+  it("detects VAT questions", () => {
+    expect(classifyIntent("how much VAT this month?")).toBe("VAT_MONTH");
+    expect(classifyIntent("tax collected this month")).toBe("VAT_MONTH");
+  });
+  it("detects outstanding-advance questions", () => {
+    expect(classifyIntent("any unpaid advances?")).toBe(
+      "ADVANCES_OUTSTANDING",
+    );
+    expect(classifyIntent("deposits not yet applied")).toBe(
+      "ADVANCES_OUTSTANDING",
+    );
+  });
+  it("detects top-technician questions", () => {
+    expect(classifyIntent("who's the top technician?")).toBe("TECH_RANKING");
+    expect(classifyIntent("best mechanic this week")).toBe("TECH_RANKING");
+  });
+  it("detects top-advisor questions", () => {
+    expect(classifyIntent("best advisor by approval rate")).toBe(
+      "ADVISOR_RANKING",
+    );
+    expect(classifyIntent("top service writer")).toBe("ADVISOR_RANKING");
+  });
+  it("detects ledger-balance questions", () => {
+    expect(classifyIntent("cash and AR balance")).toBe("LEDGER_BALANCE");
+    expect(classifyIntent("what's our cash position?")).toBe("LEDGER_BALANCE");
+  });
   it("returns UNKNOWN for unsupported questions", () => {
     expect(classifyIntent("what is the meaning of life")).toBe("UNKNOWN");
+  });
+  it("'invoice' alone in a who-owes question still routes correctly", () => {
+    // Regression: 'show me outstanding invoices' must remain WHO_OWES,
+    // not get hijacked by the new INVOICES_SUMMARY pattern.
+    expect(classifyIntent("show me outstanding invoices")).toBe("WHO_OWES");
   });
 });

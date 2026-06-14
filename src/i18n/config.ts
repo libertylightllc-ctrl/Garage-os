@@ -804,11 +804,21 @@ const en = {
   ansNobodyOwes: "Nobody owes you money right now — all invoices are paid. 🟢",
   ansOwes: "{n} customer(s) owe {total} in total — {list}.",
   ansTrend: "You’re {dir} this week: {a} vs {b} last week ({d}).",
+  ansInvoiceSummary:
+    "This month: {n} invoices totalling {total} ({paid} paid, {sent} sent, {draft} draft, {voided} voided).",
+  ansVatMonth: "VAT collected this month: {v}.",
+  ansAdvancesNone: "No outstanding advances — every advance has been applied to an invoice.",
+  ansAdvancesOpen: "{n} advance(s) outstanding totalling {total} — {list}.",
+  ansTechRanking: "Top technicians: {list}.",
+  ansTechRankingNone: "No technician activity yet.",
+  ansAdvisorRanking: "Top advisors: {list}.",
+  ansAdvisorRankingNone: "No advisor activity yet.",
+  ansLedgerBalance: "Cash on hand: {cash} · Outstanding receivables (AR): {ar}.",
   dirUp: "up",
   dirDown: "down",
   dirFlat: "flat",
   copilotUnknown:
-    "I can answer about this month’s profit, who owes us money, or whether we’re up or down this week.",
+    "I can answer about profit, receivables, weekly trend, invoice summaries, VAT, outstanding advances, top technicians or advisors, and the cash/AR balance.",
 };
 
 const ar: typeof en = {
@@ -1583,6 +1593,16 @@ const ar: typeof en = {
   ansNobodyOwes: "لا أحد مدين لك حاليًا — كل الفواتير مدفوعة. 🟢",
   ansOwes: "لدى {n} عميل/عملاء مستحقات بإجمالي {total} — {list}.",
   ansTrend: "أنت {dir} هذا الأسبوع: {a} مقابل {b} الأسبوع الماضي ({d}).",
+  ansInvoiceSummary:
+    "هذا الشهر: {n} فاتورة بإجمالي {total} ({paid} مدفوعة، {sent} مرسلة، {draft} مسودة، {voided} ملغاة).",
+  ansVatMonth: "الضريبة المحصلة هذا الشهر: {v}.",
+  ansAdvancesNone: "لا توجد دفعات مقدمة معلقة — كل دفعة طُبقت على فاتورة.",
+  ansAdvancesOpen: "{n} دفعة مقدمة معلقة بإجمالي {total} — {list}.",
+  ansTechRanking: "أفضل الفنيين: {list}.",
+  ansTechRankingNone: "لا يوجد نشاط للفنيين بعد.",
+  ansAdvisorRanking: "أفضل المستشارين: {list}.",
+  ansAdvisorRankingNone: "لا يوجد نشاط للمستشارين بعد.",
+  ansLedgerBalance: "النقد المتوفر: {cash} · الذمم المدينة: {ar}.",
   dirUp: "في ارتفاع",
   dirDown: "في انخفاض",
   dirFlat: "ثابت",

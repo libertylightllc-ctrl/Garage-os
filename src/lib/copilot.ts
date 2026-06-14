@@ -2,18 +2,84 @@
 // single-garage intents. Pure + testable; the answer is always computed from
 // garage-scoped DB queries (owner-metrics), never invented by a model.
 
-export type CopilotIntent = "PROFIT_MONTH" | "WHO_OWES" | "WEEK_TREND" | "UNKNOWN";
+export type CopilotIntent =
+  | "PROFIT_MONTH"
+  | "WHO_OWES"
+  | "WEEK_TREND"
+  // Slice #7 — copilot upgrade. New intents for the owner's most
+  // common 'what's going on?' questions across invoices, ledger, VAT,
+  // advances, technicians, and advisors. Same garage-scoped metrics
+  // pattern — answers come from prisma queries, never model-invented.
+  | "INVOICES_SUMMARY"
+  | "VAT_MONTH"
+  | "ADVANCES_OUTSTANDING"
+  | "TECH_RANKING"
+  | "ADVISOR_RANKING"
+  | "LEDGER_BALANCE"
+  | "UNKNOWN";
 
 export const SAMPLE_QUESTIONS = [
   "Are we up or down this week?",
   "How much profit this month?",
   "Who owes us money?",
+  "Invoice summary",
+  "How much VAT this month?",
+  "Any unpaid advances?",
+  "Who's the top technician?",
+  "Best advisor by approval rate?",
+  "Cash and AR balance?",
 ];
 
+// Order matters: more specific patterns must come before general ones.
+// 'invoice summary' should hit INVOICES_SUMMARY, not WHO_OWES, even
+// though 'unpaid' could match both contextually.
 export function classifyIntent(question: string): CopilotIntent {
   const q = question.toLowerCase();
-  // English + Arabic keywords.
-  if (/(owe|owed|owes|outstanding|unpaid|receivable|who.*pay|مستحق|مدين|ديون|الذمم)/.test(q))
+
+  // INVOICES_SUMMARY — explicit 'invoice' mention with summary intent.
+  if (
+    /(invoice.*(summary|total|count|how many)|how many invoices|invoices today|invoices this month|الفواتير|عدد الفواتير)/.test(
+      q,
+    )
+  )
+    return "INVOICES_SUMMARY";
+
+  // VAT_MONTH
+  if (/(vat|tax.*collect|tax.*month|ضريبة|الضريبة|القيمة المضافة)/.test(q))
+    return "VAT_MONTH";
+
+  // ADVANCES_OUTSTANDING — pre-invoice deposits not yet migrated.
+  if (
+    /(advance|deposit|pre-?paid|دفعة مقدمة|دفعات مقدمة|عربون)/.test(q)
+  )
+    return "ADVANCES_OUTSTANDING";
+
+  // LEDGER_BALANCE — cash / AR position.
+  if (
+    /(cash position|cash and ar|ar balance|account balance|الرصيد|النقد|الذمم)/.test(
+      q,
+    )
+  )
+    return "LEDGER_BALANCE";
+
+  // TECH_RANKING — 'top technician', 'best tech', 'who completed most'.
+  if (
+    /(top|best|leading|most).{0,20}(tech|technician|mechanic|فني|الفنيين|الفني الأفضل)/.test(
+      q,
+    )
+  )
+    return "TECH_RANKING";
+
+  // ADVISOR_RANKING — 'top advisor', 'best advisor', 'highest approval'.
+  if (
+    /(top|best|leading).{0,20}(advisor|service writer|approval rate|مستشار|الاستشارة|نسبة الموافقة)/.test(
+      q,
+    )
+  )
+    return "ADVISOR_RANKING";
+
+  // English + Arabic keywords (existing intents).
+  if (/(owe|owed|owes|outstanding|unpaid|receivable|who.*pay|مستحق|مدين|ديون)/.test(q))
     return "WHO_OWES";
   if (/(profit|margin|earn|made|ربح|أرباح|الربح)/.test(q)) return "PROFIT_MONTH";
   if (/(up or down|this week|last week|trend|compared|better|worse|ارتفاع|انخفاض|الأسبوع|أفضل|أسوأ)/.test(q))
@@ -22,4 +88,4 @@ export function classifyIntent(question: string): CopilotIntent {
 }
 
 export const UNKNOWN_REPLY =
-  "I can answer about this month's profit, who owes us money, or whether we're up or down this week.";
+  "I can answer about profit, receivables, weekly trend, invoice summaries, VAT, outstanding advances, top technicians or advisors, and the cash/AR balance.";

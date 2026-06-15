@@ -233,105 +233,123 @@ export default async function InvoiceView({
         </div>
       </div>
 
-      {/* overflow-x-auto allows narrow phones to scroll horizontally
-          on screen; print:overflow-visible drops that wrapper on
-          print so the entire table lands cleanly on A4 / letter
-          paper. tabular-nums on the table itself locks every digit
-          to the same width so decimals line up down the page even
-          when adjacent rows have different qty/price values. */}
+      {/* Line-item editor — CSS subgrid layout.
+          The header row, every editable row, and every read-only row
+          all inherit ONE outer `gridTemplateColumns` definition via
+          `grid-cols-subgrid` on their sub-row wrappers. That makes
+          drift impossible: change a column width here and every row
+          updates in lock-step. (Previous <table> + colSpan + inner
+          flex grid drifted because the inner grid used different
+          template widths from the table's colgroup.)
+          overflow-x-auto on the outer wrapper preserves horizontal
+          scroll on narrow phones (the inner grid is wider than 380px
+          when all 5 cols are at their natural widths). On print,
+          overflow-visible drops the scroll wrapper so the document
+          lands clean on A4. */}
       <div className="overflow-x-auto print:overflow-visible">
-      <table className="w-full text-sm tabular-nums">
-        {/* Fixed column widths for the three numeric columns —
-            qty narrow, unit/amount wider — keep alignment stable
-            regardless of how long the description is or how many
-            digits a row needs. Description column has no fixed
-            width and absorbs the remaining space. */}
-        <colgroup>
-          <col />
-          <col className="w-16" />
-          <col className="w-24" />
-          <col className="w-28" />
-        </colgroup>
-        <thead>
-          <tr className="border-b border-black/10 text-zinc-500 dark:border-white/15">
-            <th className="px-2 py-1 text-start font-medium">{t("colDescription")}</th>
-            <th className="px-2 py-1 text-end font-medium">{t("colQty")}</th>
-            <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
-            <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
-          </tr>
-        </thead>
-        <tbody>
+        <div
+          className="grid min-w-[36rem] text-sm tabular-nums"
+          style={{
+            // description=fill, qty=5rem, unit=6rem, amount=6rem,
+            // action=auto. Header + editable + read-only rows all
+            // inherit this via grid-cols-subgrid below.
+            gridTemplateColumns:
+              "minmax(8rem,1fr) 5rem 6rem 6rem auto",
+          }}
+        >
+          {/* Header row */}
+          <div className="col-span-full grid grid-cols-subgrid items-center gap-x-2 border-b border-border py-1 text-text-mute">
+            <span className="px-2 text-start font-medium">{t("colDescription")}</span>
+            <span className="px-2 text-end font-medium">{t("colQty")}</span>
+            <span className="px-2 text-end font-medium">{t("colUnit")}</span>
+            <span className="px-2 text-end font-medium">{t("colAmount")}</span>
+            <span />
+          </div>
+
           {workLines.map((l) =>
             canEditLines ? (
-              // Inline edit: one form per row. qty + unit price + description
-              // all editable. Recompute happens server-side via
-              // updateInvoiceLineAction → recomputeInvoice; totals refresh
-              // on revalidatePath.
-              <tr key={l.id} className="border-b border-black/5 align-top dark:border-white/10">
-                <td className="py-1 pr-2" colSpan={4}>
-                  <form
-                    action={updateInvoiceLineAction}
-                    className="grid grid-cols-[1fr_5rem_6rem_6rem_auto_auto] items-center gap-2"
+              // Inline edit row. The <form> uses `contents` so its
+              // children (inputs + Save button) become DIRECT children
+              // of the subgrid — they sit in the correct columns by
+              // virtue of source order. Each input is 40px tall to
+              // match the Workshop md control size; 16px text prevents
+              // iOS Safari zoom on focus.
+              <div
+                key={l.id}
+                className="col-span-full grid grid-cols-subgrid items-center gap-x-2 gap-y-1 border-b border-border py-2"
+              >
+                <form action={updateInvoiceLineAction} className="contents">
+                  <input type="hidden" name="invoiceId" value={inv.id} />
+                  <input type="hidden" name="lineId" value={l.id} />
+                  <input type="hidden" name="kind" value={l.kind} />
+                  <input
+                    name="description"
+                    defaultValue={l.description}
+                    aria-label={t("colDescription")}
+                    className="h-10 rounded-lg border border-border bg-transparent px-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                  />
+                  <input
+                    name="qty"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    defaultValue={Number(l.qty)}
+                    aria-label={t("colQty")}
+                    className="h-10 rounded-lg border border-border bg-transparent px-2 text-end text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                  />
+                  <input
+                    name="unitPrice"
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    defaultValue={Number(l.unitPrice).toFixed(2)}
+                    aria-label={t("colUnit")}
+                    className="h-10 rounded-lg border border-border bg-transparent px-2 text-end text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                  />
+                  <span className="px-2 text-end tabular-nums">
+                    {Number(l.lineTotal).toFixed(2)}
+                  </span>
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                   >
-                    <input type="hidden" name="invoiceId" value={inv.id} />
-                    <input type="hidden" name="lineId" value={l.id} />
-                    <input type="hidden" name="kind" value={l.kind} />
-                    <input
-                      name="description"
-                      defaultValue={l.description}
-                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
-                    />
-                    <input
-                      name="qty"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={Number(l.qty)}
-                      aria-label={t("colQty")}
-                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
-                    />
-                    <input
-                      name="unitPrice"
-                      type="number"
-                      step="0.01"
-                      defaultValue={Number(l.unitPrice).toFixed(2)}
-                      aria-label={t("colUnit")}
-                      className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
-                    />
-                    <span className="tabular-nums text-end text-sm">
-                      {Number(l.lineTotal).toFixed(2)}
-                    </span>
-                    <button
-                      type="submit"
-                      className="rounded-md border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                    >
-                      {t("saveDraft")}
-                    </button>
-                  </form>
-                  <form action={removeInvoiceLineAction} className="mt-1 flex justify-end">
-                    <input type="hidden" name="invoiceId" value={inv.id} />
-                    <input type="hidden" name="lineId" value={l.id} />
-                    <button
-                      type="submit"
-                      className="text-xs text-red-600 hover:underline"
-                      aria-label={t("removeLine")}
-                    >
-                      ✕ {t("removeLine")}
-                    </button>
-                  </form>
-                </td>
-              </tr>
+                    {t("saveDraft")}
+                  </button>
+                </form>
+                {/* Remove ✕ — separate form on a sub-row below,
+                    right-aligned across all 5 columns so the action
+                    column reads cleanly as 'Save above, Remove below'
+                    without crowding either button. */}
+                <form
+                  action={removeInvoiceLineAction}
+                  className="col-span-full flex justify-end px-2"
+                >
+                  <input type="hidden" name="invoiceId" value={inv.id} />
+                  <input type="hidden" name="lineId" value={l.id} />
+                  <button
+                    type="submit"
+                    className="text-xs font-semibold text-danger-700 hover:underline dark:text-danger-500"
+                    aria-label={t("removeLine")}
+                  >
+                    ✕ {t("removeLine")}
+                  </button>
+                </form>
+              </div>
             ) : (
-              <tr key={l.id} className="border-b border-black/5 dark:border-white/10">
-                <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
-                <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
-                <td className="px-2 py-1 text-end">{Number(l.unitPrice).toFixed(2)}</td>
-                <td className="px-2 py-1 text-end">{Number(l.lineTotal).toFixed(2)}</td>
-              </tr>
+              <div
+                key={l.id}
+                className="col-span-full grid grid-cols-subgrid items-center gap-x-2 border-b border-border py-1"
+              >
+                <span className="px-2">{translateLineDescription(l.description, locale)}</span>
+                <span className="px-2 text-end">{Number(l.qty)}</span>
+                <span className="px-2 text-end">{Number(l.unitPrice).toFixed(2)}</span>
+                <span className="px-2 text-end">{Number(l.lineTotal).toFixed(2)}</span>
+                <span />
+              </div>
             ),
           )}
-        </tbody>
-      </table>
+        </div>
       </div>
 
       {canEditLines ? (

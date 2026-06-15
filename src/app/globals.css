@@ -1,22 +1,136 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────
+   GarageOS design tokens — the "Workshop" palette.
+   AR-approved 2026-06-15. See AGENTS.md / the design-system audit.
+
+   Brand        slate-900    deep, industrial, professional
+   Accent       amber-500    the ONE hero CTA color — Generate Invoice,
+                             Send to Customer, Receive Payment
+   Surface      white/zinc-950 in dark
+   Border       zinc-200/-800 — single tone, no /5 vs /10 drift
+
+   Status semantics — one color per meaning, no overlap:
+     success   emerald-600   Paid, Approved, Completed
+     warning   amber-500     Needs follow-up (Partial, Pending, Action)
+     info      sky-600       In progress, Filter active, Informational
+     danger    rose-600      Overdue, Rejected, Destructive
+     neutral   zinc-500      Draft, Not started
+
+   Variables are exposed both as :root CSS vars (for components that
+   need raw values) and as Tailwind theme keys via @theme inline (so
+   `bg-brand`, `text-accent`, `border-border` all resolve).
+   ─────────────────────────────────────────────────────────────── */
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
-}
+  --foreground: #09090b;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Brand + accent */
+  --color-brand-50: #f8fafc;
+  --color-brand-100: #f1f5f9;
+  --color-brand-500: #64748b;
+  --color-brand-700: #334155;
+  --color-brand-900: #0f172a;
+  --color-brand-950: #020617;
+
+  --color-accent-50: #fffbeb;
+  --color-accent-100: #fef3c7;
+  --color-accent-400: #fbbf24;
+  --color-accent-500: #f59e0b;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+
+  /* Surface + border (single tone) */
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --border: #e4e4e7;
+  --text: #09090b;
+  --text-mute: #71717a;
+
+  /* Status — emerald / amber / sky / rose / zinc */
+  --color-success-50: #ecfdf5;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+
+  --color-info-50: #f0f9ff;
+  --color-info-500: #0ea5e9;
+  --color-info-600: #0284c7;
+
+  --color-danger-50: #fff1f2;
+  --color-danger-500: #f43f5e;
+  --color-danger-600: #e11d48;
+  --color-danger-700: #be123c;
+
+  --color-neutral-100: #f4f4f5;
+  --color-neutral-500: #71717a;
+  --color-neutral-700: #3f3f46;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground: #fafafa;
+    --surface: #0a0a0a;
+    --surface-2: #18181b;
+    --border: #27272a;
+    --text: #fafafa;
+    --text-mute: #a1a1aa;
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-mute: var(--text-mute);
+
+  --color-brand-50: var(--color-brand-50);
+  --color-brand-100: var(--color-brand-100);
+  --color-brand-500: var(--color-brand-500);
+  --color-brand-700: var(--color-brand-700);
+  --color-brand-900: var(--color-brand-900);
+  --color-brand-950: var(--color-brand-950);
+
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+
+  --color-success-50: var(--color-success-50);
+  --color-success-500: var(--color-success-500);
+  --color-success-600: var(--color-success-600);
+  --color-success-700: var(--color-success-700);
+
+  --color-warning-50: var(--color-warning-50);
+  --color-warning-500: var(--color-warning-500);
+  --color-warning-600: var(--color-warning-600);
+
+  --color-info-50: var(--color-info-50);
+  --color-info-500: var(--color-info-500);
+  --color-info-600: var(--color-info-600);
+
+  --color-danger-50: var(--color-danger-50);
+  --color-danger-500: var(--color-danger-500);
+  --color-danger-600: var(--color-danger-600);
+  --color-danger-700: var(--color-danger-700);
+
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-500: var(--color-neutral-500);
+  --color-neutral-700: var(--color-neutral-700);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {

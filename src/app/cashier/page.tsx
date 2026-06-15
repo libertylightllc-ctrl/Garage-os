@@ -20,6 +20,7 @@ import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
 import { CashierFilterBar } from "@/components/cashier-filter-bar";
+import { BadgeLink } from "@/components/ui/badge";
 import { CashierTabs } from "@/components/cashier-tabs";
 
 export const dynamic = "force-dynamic";
@@ -386,100 +387,68 @@ export default async function CashierHome({
       <AppNav role="CASHIER" active="accounts" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 
-      {/* Counter badges — at-a-glance totals derived from data already
-          fetched above. Read-only; tapping a badge jumps to the tab
-          that lists those records. Skipped per spec: 'Partially Paid'
-          (no partial-payments feature yet) and 'Today/Monthly
-          Collection' (no date-based payment totals yet). */}
+      {/* Counter badges — at-a-glance totals from data already
+          fetched. Read-only; tapping a badge jumps to a filtered
+          view of those records.
+          Visual polish C1: each counter is now a <BadgeLink> with
+          a semantic tone (success=good, warning=needs follow-up,
+          info=in progress, danger=overdue/rejected). Previously each
+          counter picked its own color out of a 9-color rainbow —
+          now they group visually by meaning, not by author. */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Counter→section links: each href hands off a `filter=` query
-            param. The Estimates tab reads it via searchParams and hides
-            the non-matching sections, so the counter feels like a true
-            drill-down ('Pending Approval: 1' → ONLY the Awaiting
-            customer approval section, not all four). A 'Clear filter'
-            banner at the top of the filtered tab restores the full view. */}
-        <Link
+        <BadgeLink
+          tone="warning"
           href="/cashier?tab=estimates&filter=pending_estimates"
-          className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
         >
           {t("counterPendingEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.pendingEstimates}</span>
-        </Link>
-        <Link
+        </BadgeLink>
+        <BadgeLink
+          tone="warning"
           href="/cashier?tab=estimates&filter=pending_approval"
-          className="rounded-full border border-orange-500/40 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-900 hover:bg-orange-100 dark:border-orange-700/40 dark:bg-orange-950/40 dark:text-orange-200 dark:hover:bg-orange-900/40"
         >
           {t("counterPendingApproval")}{" "}
           <span className="tabular-nums font-semibold">{counters.pendingApproval}</span>
-        </Link>
-        <Link
+        </BadgeLink>
+        <BadgeLink
+          tone="success"
           href="/cashier?tab=estimates&filter=approved"
-          className="rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700/40 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
         >
           {t("counterApprovedEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.approvedEstimates}</span>
-        </Link>
-        <Link
+        </BadgeLink>
+        <BadgeLink
+          tone="danger"
           href="/cashier?tab=estimates&filter=rejected"
-          className="rounded-full border border-rose-500/40 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-900 hover:bg-rose-100 dark:border-rose-700/40 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-900/40"
         >
           {t("counterRejectedEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.rejectedEstimates}</span>
-        </Link>
+        </BadgeLink>
         {/* Ready for Invoice — tech-marked-complete jobs awaiting the
-            cashier to generate the final invoice. Bridges the Estimates
-            counters (left) and the Invoices counters (right) at the
-            natural workflow handoff point. Yellow tones distinguish it
-            from amber (Pending Estimates) and orange (Pending Approval)
-            while still reading as an 'action item' colour. */}
-        <Link
-          href="/cashier?tab=invoices"
-          className="rounded-full border border-yellow-500/40 bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-900 hover:bg-yellow-100 dark:border-yellow-700/40 dark:bg-yellow-950/40 dark:text-yellow-200 dark:hover:bg-yellow-900/40"
-        >
+            cashier. Info tone because it's an 'in progress / about to
+            happen' workflow signal, not a follow-up. */}
+        <BadgeLink tone="info" href="/cashier?tab=invoices">
           {t("counterReadyForInvoice")}{" "}
           <span className="tabular-nums font-semibold">{counters.readyForInvoice}</span>
-        </Link>
-        <Link
-          href="/cashier?tab=invoices"
-          className="rounded-full border border-fuchsia-500/40 bg-fuchsia-50 px-3 py-1 text-xs font-medium text-fuchsia-900 hover:bg-fuchsia-100 dark:border-fuchsia-700/40 dark:bg-fuchsia-950/40 dark:text-fuchsia-200 dark:hover:bg-fuchsia-900/40"
-        >
+        </BadgeLink>
+        <BadgeLink tone="warning" href="/cashier?tab=invoices">
           {t("counterUnpaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
-        </Link>
-        {/* Partially Paid counter — slice 6. Subset of Unpaid where
-            0 < paid < total (advance / partial payment recorded but
-            balance still owed). Amber styling matches the PARTIAL pill
-            on the invoice page; sits between Unpaid and Overdue
-            because partial-unpaid is a 'follow-up' signal, not the
-            urgent chase that Overdue is. */}
-        <Link
-          href="/cashier?tab=invoices"
-          className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40"
-        >
+        </BadgeLink>
+        <BadgeLink tone="warning" href="/cashier?tab=invoices">
           {t("counterPartiallyPaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">
             {counters.partiallyPaidInvoices}
           </span>
-        </Link>
-        {/* Overdue counter — subset of Unpaid (today > dueDate AND
-            balance > 0). Sits next to Unpaid so the cashier reads
-            them as related, with red styling matching the row badge
-            below. Always rendered, even when 0, so its position is
-            stable for muscle memory. */}
-        <Link
-          href="/cashier?tab=invoices"
-          className="rounded-full border border-red-500/40 bg-red-50 px-3 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700/40 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/40"
-        >
+        </BadgeLink>
+        <BadgeLink tone="danger" href="/cashier?tab=invoices">
           {t("counterOverdueInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.overdueInvoices}</span>
-        </Link>
-        <Link
-          href="/cashier?tab=payments"
-          className="rounded-full border border-teal-500/40 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-900 hover:bg-teal-100 dark:border-teal-700/40 dark:bg-teal-950/40 dark:text-teal-200 dark:hover:bg-teal-900/40"
-        >
+        </BadgeLink>
+        <BadgeLink tone="success" href="/cashier?tab=payments">
           {t("counterPaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.paidInvoices}</span>
-        </Link>
+        </BadgeLink>
       </div>
 
       {/* Tab nav — URL-driven, ?tab=… searchParam. Estimates is the

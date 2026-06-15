@@ -177,8 +177,8 @@ export default async function EstimatePreview({
           {t("estimatePreviewGoBack")}
         </Link>
         <form action={setEstimateStatusAction}>
-          <input type=" hidden" name="estimateId" value={est.id} />
-          <input type=" hidden" name="status" value="SENT"/>
+          <input type="hidden" name="estimateId" value={est.id} />
+          <input type="hidden" name="status" value="SENT"/>
           <button
             type="submit"
             className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"

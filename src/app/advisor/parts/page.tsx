@@ -81,13 +81,13 @@ export default async function PartsQueue() {
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {r.status ==="REQUESTED"&& available ? (
                     <form action={fulfillPartRequestAction}>
-                      <input type=" hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="requestId" value={r.id} />
                       <button className={btnPrimary}>{t("actFulfill")}</button>
                     </form>
                   ) : null}
                   {r.status ==="REQUESTED"? (
                     <form action={orderPartRequestAction} className="flex items-center gap-2">
-                      <input type=" hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="requestId" value={r.id} />
                       <input
                         name="note"
                         placeholder={t("supplierNote")}
@@ -98,24 +98,24 @@ export default async function PartsQueue() {
                   ) : null}
                   {r.status ==="ORDERED"? (
                     <form action={arrivePartRequestAction}>
-                      <input type=" hidden" name="requestId" value={r.id} />
+                      <input type="hidden" name="requestId" value={r.id} />
                       <button className={btnPrimary}>{t("actArrived")}</button>
                     </form>
                   ) : null}
                   {r.status ==="ARRIVED"? (
                     <>
                       <form action={fulfillPartRequestAction}>
-                        <input type=" hidden" name="requestId" value={r.id} />
+                        <input type="hidden" name="requestId" value={r.id} />
                         <button className={btnPrimary}>{t("actFulfill")}</button>
                       </form>
                       <form action={orderPartRequestAction}>
-                        <input type=" hidden" name="requestId" value={r.id} />
+                        <input type="hidden" name="requestId" value={r.id} />
                         <button className={btn}>{t("actReorder")}</button>
                       </form>
                     </>
                   ) : null}
                   <form action={cancelPartRequestAction}>
-                    <input type=" hidden" name="requestId" value={r.id} />
+                    <input type="hidden" name="requestId" value={r.id} />
                     <button className={btn}>{t("actCancelReq")}</button>
                   </form>
                 </div>

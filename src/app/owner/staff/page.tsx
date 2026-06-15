@@ -54,7 +54,7 @@ export default async function StaffPage({
             </span>
             {u.role !=="OWNER"? (
               <form action={removeStaffAction}>
-                <input type=" hidden" name="userId" value={u.id} />
+                <input type="hidden" name="userId" value={u.id} />
                 <button className="text-xs text-red-600 hover:underline">{t("remove")}</button>
               </form>
             ) : (

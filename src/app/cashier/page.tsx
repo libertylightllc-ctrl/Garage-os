@@ -634,7 +634,7 @@ export default async function CashierHome({
                   <div className="flex justify-end">
                     {inv ? (
                       <form action={sendInvoiceToCustomerAction}>
-                        <input type=" hidden" name="invoiceId" value={inv.id} />
+                        <input type="hidden" name="invoiceId" value={inv.id} />
                         <button
                           type="submit"
                           className={BTN_PRIMARY_MD}
@@ -781,7 +781,7 @@ export default async function CashierHome({
                       </Link>
                     ) : (
                       <form action={createEstimateAction}>
-                        <input type=" hidden" name="jobId" value={j.id} />
+                        <input type="hidden" name="jobId" value={j.id} />
                         <button className={BTN_PRIMARY_MD}>
                           {t("setPrice")}
                         </button>
@@ -1035,7 +1035,7 @@ export default async function CashierHome({
                       </Link>
                     ) : null}
                     <form action={createEstimateAction}>
-                      <input type=" hidden" name="jobId" value={j.id} />
+                      <input type="hidden" name="jobId" value={j.id} />
                       <button className={BTN_PRIMARY_MD}>
                         {t("cashierReviseEstimate")}
                       </button>
@@ -1174,7 +1174,7 @@ export default async function CashierHome({
                       action={recordPaymentAction}
                       className="flex flex-wrap items-center justify-end gap-2 border-t border-black/5 pt-2 dark:border-white/10"
                     >
-                      <input type=" hidden" name="invoiceId" value={inv.id} />
+                      <input type="hidden" name="invoiceId" value={inv.id} />
                       <label className="flex items-center gap-1 text-xs text-text-mute">
                         {t("amount")}
                         <input

@@ -168,7 +168,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         ) : null}
         {amHelper ? (
           <form action={leaveHelperAction} className="mt-1">
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <button className="text-xs text-text-mute underline hover:text-zinc-700 dark:text-text-mute">
               {t("leaveJob")}
             </button>
@@ -222,7 +222,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </p>
           {!amHelper && hasWorkProof ? (
             <form action={markCompleteAction} className="mt-4">
-              <input type=" hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="jobId" value={job.id} />
               <button
                 type="submit"
                 className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -309,7 +309,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </div>
         ) : (
           <form action={saveFindingsAction} className="flex flex-col gap-2">
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <DictateTextarea
               locale={locale}
               labels={dictLabels}
@@ -351,8 +351,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 </span>
                 {!submitted ? (
                   <form action={removeJobPartAction}>
-                    <input type=" hidden" name="jobId" value={job.id} />
-                    <input type=" hidden" name="partLineId" value={p.id} />
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="partLineId" value={p.id} />
                     <button className="text-red-600">✕</button>
                   </form>
                 ) : null}
@@ -368,7 +368,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             through the Extras / re-estimate flow instead). */}
         {job.status ==="ARRIVED"|| job.status ==="INSPECTION"? (
           <form action={addRequiredPartAction} className="flex flex-wrap items-center gap-2">
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <select
               name="partId"
               defaultValue=""
@@ -422,7 +422,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         !amHelper &&
         (job.status ==="ARRIVED"|| job.status ==="INSPECTION") ? (
           <form action={sendForEstimateAction}>
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("submitToCashier")}
             </button>
@@ -464,8 +464,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                     <span className="text-text-mute">×{p.qty}</span>
                   </span>
                   <form action={removeExtraJobPartAction}>
-                    <input type=" hidden" name="jobId" value={job.id} />
-                    <input type=" hidden" name="jobPartId" value={p.id} />
+                    <input type="hidden" name="jobId" value={job.id} />
+                    <input type="hidden" name="jobPartId" value={p.id} />
                     <button className="text-red-600" aria-label={t("extrasRemove")}>
                       ✕
                     </button>
@@ -478,7 +478,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {/* Add an extra item — description required, qty default 1.
               Cashier owns pricing, tech just specifies the what. */}
           <form action={addExtraJobPartAction} className="flex flex-wrap items-center gap-2">
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <input
               name="partNo"
               placeholder={t("partNoLabel")}
@@ -510,7 +510,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               detail page reviewing what they added. */}
           {extraParts.length > 0 ? (
             <form action={sendForReestimateAction} className="self-start">
-              <input type=" hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="jobId" value={job.id} />
               <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                 {t("extrasSendForApproval").replace("{count}", String(extraParts.length))}
               </button>
@@ -533,7 +533,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
           {repairOpen ? (
             <form action={saveWorkNotesAction} className="flex flex-col gap-2">
-              <input type=" hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="jobId" value={job.id} />
               <DictateTextarea
                 locale={locale}
                 labels={dictLabels}
@@ -571,8 +571,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   </span>
                   {repairOpen ? (
                     <form action={removeUsedPartAction}>
-                      <input type=" hidden" name="jobId" value={job.id} />
-                      <input type=" hidden" name="partLineId" value={p.id} />
+                      <input type="hidden" name="jobId" value={job.id} />
+                      <input type="hidden" name="partLineId" value={p.id} />
                       <button className="text-red-600">✕</button>
                     </form>
                   ) : null}
@@ -584,7 +584,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {repairOpen ? (
             <>
               <form action={addUsedPartAction} className="flex flex-wrap items-center gap-2">
-                <input type=" hidden" name="jobId" value={job.id} />
+                <input type="hidden" name="jobId" value={job.id} />
                 <select
                   name="partId"
                   defaultValue=""
@@ -635,7 +635,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   the banner CTA above, keeps both surfaces consistent. */}
               {hasWorkProof ? (
                 <form action={markCompleteAction}>
-                  <input type=" hidden" name="jobId" value={job.id} />
+                  <input type="hidden" name="jobId" value={job.id} />
                   <button className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("markComplete")}
                   </button>
@@ -671,7 +671,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             </ul>
           ) : (
             <form action={signOffQcAction} className="flex flex-col gap-2">
-              <input type=" hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="jobId" value={job.id} />
               <div className="grid grid-cols-2 gap-1">
                 {QC_CHECKS.map((c) => (
                   <label key={c} className="flex items-center gap-1 text-sm">
@@ -691,8 +691,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       {/* Big-button, no-typing actions */}
       <div className="grid grid-cols-2 gap-3">
         <form action={addStepAction} className="contents">
-          <input type=" hidden" name="jobId" value={job.id} />
-          <input type=" hidden" name="type" value="PHOTO"/>
+          <input type="hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="type" value="PHOTO"/>
           <PhotoCapture
             name="file"
             mode="preview"
@@ -707,8 +707,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         </form>
 
         <form action={addStepAction} className="contents">
-          <input type=" hidden" name="jobId" value={job.id} />
-          <input type=" hidden" name="type" value="VOICE"/>
+          <input type="hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="type" value="VOICE"/>
           <PhotoCapture
             name="file"
             mode="preview"
@@ -723,7 +723,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         </form>
 
         <form action={requestPartAction} className="contents">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <div className={bigBtn}>
             <span className="text-3xl">📦</span>
             {t("requestPart")}

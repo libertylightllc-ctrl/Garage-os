@@ -116,9 +116,9 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
       ) : null}
 
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
-        <input type=" hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
-        <input type=" hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />
-        <input type=" hidden" name="via" defaultValue={via} />
+        <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
+        <input type="hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />
+        <input type="hidden" name="via" defaultValue={via} />
 
         {/* Customer */}
         <fieldset className="flex flex-col gap-2 rounded-xl border border-border p-3">

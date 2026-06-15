@@ -219,7 +219,7 @@ export default async function RemindersQueue({
           submits GET so URL stays bookmarkable; the selected month
           carries over via the hidden input. */}
       <form method="get" className="flex flex-wrap gap-2">
-        <input type=" hidden" name="month" value={selKey} />
+        <input type="hidden" name="month" value={selKey} />
         <input
           name="q"
           type="search"
@@ -262,7 +262,7 @@ export default async function RemindersQueue({
           </Link>
         </div>
         <form method="get" className="flex items-center gap-2">
-          {q ? <input type=" hidden" name="q" value={q} /> : null}
+          {q ? <input type="hidden" name="q" value={q} /> : null}
           <label className="text-xs text-text-mute">
             {t("remindersJumpToMonth")}
           </label>
@@ -390,13 +390,13 @@ export default async function RemindersQueue({
                         </span>
                         <span className="flex shrink-0 gap-2">
                           <form action={sendReminderAction}>
-                            <input type=" hidden" name="reminderId" value={r.id} />
+                            <input type="hidden" name="reminderId" value={r.id} />
                             <button className={BTN_PRIMARY}>
                               {t("remindersSendToCustomer")}
                             </button>
                           </form>
                           <form action={cancelReminderAction}>
-                            <input type=" hidden" name="reminderId" value={r.id} />
+                            <input type="hidden" name="reminderId" value={r.id} />
                             <button className={BTN}>
                               {t("cancelReminderBtn")}
                             </button>

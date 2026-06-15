@@ -49,14 +49,14 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
         </div>
         {thread.mode ==="BOT"? (
           <form action={takeOverAction}>
-            <input type=" hidden" name="threadId" value={thread.id} />
+            <input type="hidden" name="threadId" value={thread.id} />
             <button className="rounded-md border border-border px-3 py-1 text-sm font-medium">
               {t("takeOver")}
             </button>
           </form>
         ) : (
           <form action={releaseAction}>
-            <input type=" hidden" name="threadId" value={thread.id} />
+            <input type="hidden" name="threadId" value={thread.id} />
             <button className="rounded-md border border-border px-3 py-1 text-sm font-medium">
               {t("release")}
             </button>
@@ -73,13 +73,13 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
           <p className="mb-2">{d.body}</p>
           <div className="flex gap-2">
             <form action={approveDraftAction}>
-              <input type=" hidden" name="messageId" value={d.id} />
+              <input type="hidden" name="messageId" value={d.id} />
               <button className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold bg-success-600 text-white hover:bg-success-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                 {t("approveSend")}
               </button>
             </form>
             <form action={discardDraftAction}>
-              <input type=" hidden" name="messageId" value={d.id} />
+              <input type="hidden" name="messageId" value={d.id} />
               <button className="rounded-md border border-border px-3 py-1 text-xs">
                 {t("discard")}
               </button>
@@ -110,7 +110,7 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
 
       {/* Manual reply (advisor) */}
       <form action={sendManualAction} className="flex gap-2">
-        <input type=" hidden" name="threadId" value={thread.id} />
+        <input type="hidden" name="threadId" value={thread.id} />
         <input name="body" placeholder={t("message")} required className={field} />
         <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
           {t("send")}
@@ -119,7 +119,7 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
 
       {/* Dev: simulate a customer message */}
       <form action={simulateInboundAction} className="flex gap-2 border-t border-dashed border-border pt-3">
-        <input type=" hidden" name="threadId" value={thread.id} />
+        <input type="hidden" name="threadId" value={thread.id} />
         <input name="body" placeholder={t("simulateInbound")} className={field} />
         <button className="rounded-md border border-border px-3 py-1 text-sm">
           ⤵

@@ -81,13 +81,13 @@ export default async function NewJobMoulkiaBack({
         <form action={moulkiaBackAction} className="flex flex-col gap-3">
           {/* Carry the FRONT extraction across into the back action — every
               field the front captured rides along so the merge can see them. */}
-          <input type=" hidden" name="frontOwnerName" value={ownerName} />
-          <input type=" hidden" name="frontPlate" value={plate} />
-          <input type=" hidden" name="frontVin" value={vin} />
-          <input type=" hidden" name="frontMake" value={make} />
-          <input type=" hidden" name="frontModel" value={model} />
-          <input type=" hidden" name="frontYear" value={year} />
-          <input type=" hidden" name="assignedToId" value={assignedToId} />
+          <input type="hidden" name="frontOwnerName" value={ownerName} />
+          <input type="hidden" name="frontPlate" value={plate} />
+          <input type="hidden" name="frontVin" value={vin} />
+          <input type="hidden" name="frontMake" value={make} />
+          <input type="hidden" name="frontModel" value={model} />
+          <input type="hidden" name="frontYear" value={year} />
+          <input type="hidden" name="assignedToId" value={assignedToId} />
           <PhotoCapture
             name="file"
             mode="auto-submit"

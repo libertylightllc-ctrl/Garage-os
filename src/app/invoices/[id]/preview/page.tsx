@@ -250,7 +250,7 @@ export default async function InvoicePreview({
           </p>
         ) : (
           <form action={sendInvoiceToCustomerAction}>
-            <input type=" hidden" name="invoiceId" value={inv.id} />
+            <input type="hidden" name="invoiceId" value={inv.id} />
             <button
               type="submit"
               className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"

@@ -184,7 +184,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       {/* Queue priority (Tier 2 #6) */}
       {!cancelled && !delivered ? (
         <form action={setPriorityAction} className="flex items-center gap-2 text-sm">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <span className="text-text-mute">{t("priorityLabel")}</span>
           <select
             name="priority"
@@ -204,7 +204,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       {/* Bay / ramp assignment (Tier 2 #7) */}
       {!cancelled && !delivered && bays.length > 0 ? (
         <form action={setBayAction} className="flex items-center gap-2 text-sm">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <span className="text-text-mute">{t("bayLabel")}</span>
           <select
             name="bayId"
@@ -237,7 +237,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </span>
         </div>
         <form action={reassignJobAction} className="flex gap-2">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <select
             name="assignedToId"
             defaultValue={job.assignedToId ?? ""}
@@ -265,7 +265,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             action={checkInPhotoAction}
             className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3 text-sm"
           >
-            <input type=" hidden" name="jobId" value={job.id} />
+            <input type="hidden" name="jobId" value={job.id} />
             <span className="text-text">📷 {t("checkInPhotoPrompt")}</span>
             <PhotoCapture
               name="file"
@@ -306,7 +306,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       {/* Delivery — form when INVOICED, read-only summary once delivered */}
       {canRecordDelivery(status) ? (
         <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <h2 className="text-sm font-medium">{t("jcDelivery")}</h2>
           <label className="text-xs text-text-mute">
             {t("mileageOutLabel")}
@@ -392,7 +392,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       {all.length > 0 ? (
         <form action={jobActionAction} className="flex flex-col gap-3">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           {primary ? (
             <button
               type="submit"
@@ -445,7 +445,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       {skippableTargets(status).length > 0 ? (
         <form action={skipToStageAction} className="flex items-center gap-2 text-sm">
-          <input type=" hidden" name="jobId" value={job.id} />
+          <input type="hidden" name="jobId" value={job.id} />
           <span className="text-text-mute">{t("skipTo")}</span>
           <select
             name="target"
@@ -496,7 +496,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
           {canScheduleReminders ? (
             <form action={scheduleRemindersAction} className="mb-3 flex flex-col gap-2 rounded-xl border border-border p-3">
-              <input type=" hidden" name="jobId" value={job.id} />
+              <input type="hidden" name="jobId" value={job.id} />
               <div className="text-xs text-text-mute">{t("scheduleReminders")}</div>
               <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
                 {REMINDER_TYPES.map((rt) => (

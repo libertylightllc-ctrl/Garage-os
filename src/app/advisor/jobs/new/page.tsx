@@ -91,7 +91,7 @@ export default async function NewJobCard({
         </p>
         <p className="mt-1 text-xs text-text-mute">{t("step1of2")}</p>
         <form action={moulkiaFrontAction} className="mt-3 flex flex-col gap-3">
-          <input type=" hidden" name="consent" value="on"/>
+          <input type="hidden" name="consent" value="on"/>
           <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
           <PhotoCapture
             name="file"

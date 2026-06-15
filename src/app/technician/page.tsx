@@ -169,7 +169,7 @@ export default async function TechnicianHome({
                   </span>
                 </span>
                 <form action={claimJobAction}>
-                  <input type=" hidden" name="jobId" value={j.id} />
+                  <input type="hidden" name="jobId" value={j.id} />
                   <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("take")}
                   </button>
@@ -272,7 +272,7 @@ export default async function TechnicianHome({
                     ) : null}
                     {canSendForEstimate ? (
                       <form action={sendForEstimateAction}>
-                        <input type=" hidden" name="jobId" value={j.id} />
+                        <input type="hidden" name="jobId" value={j.id} />
                         <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                           {t("sendForEstimate")}
                         </button>
@@ -280,7 +280,7 @@ export default async function TechnicianHome({
                     ) : null}
                     {canSendForReestimate ? (
                       <form action={sendForReestimateAction}>
-                        <input type=" hidden" name="jobId" value={j.id} />
+                        <input type="hidden" name="jobId" value={j.id} />
                         <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                           {t("extrasSendForApproval").replace(
                           "{count}",
@@ -327,7 +327,7 @@ export default async function TechnicianHome({
                   </span>
                 </span>
                 <form action={joinJobAction}>
-                  <input type=" hidden" name="jobId" value={j.id} />
+                  <input type="hidden" name="jobId" value={j.id} />
                   <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("joinJob")}
                   </button>

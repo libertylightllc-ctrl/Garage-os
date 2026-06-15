@@ -42,7 +42,7 @@ export default async function CustomerCollection({
         <>
           <p className="text-sm text-zinc-600 dark:text-text-mute">{t("collectionIntro")}</p>
           <form action={confirmCollectionPublic}>
-            <input type=" hidden" name="token" value={token} />
+            <input type="hidden" name="token" value={token} />
             <button className="inline-flex w-full h-12 items-center justify-center rounded-lg bg-success-600 px-4 text-base font-semibold text-white hover:bg-success-700 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("confirmCollectionBtn")}
             </button>

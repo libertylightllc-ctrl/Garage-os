@@ -48,8 +48,8 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               </span>
               {est.status ==="SENT"? (
                 <form action={toggleLinePublic}>
-                  <input type=" hidden" name="token" value={token} />
-                  <input type=" hidden" name="lineId" value={l.id} />
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="lineId" value={l.id} />
                   <button className="text-xs text-text-mute hover:underline">
                     {l.declined ? t("restore") : t("skip")}
                   </button>
@@ -72,13 +72,13 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
       ) : est.status ==="SENT"? (
         <div className="flex gap-2">
           <form action={approveEstimatePublic} className="flex-1">
-            <input type=" hidden" name="token" value={token} />
+            <input type="hidden" name="token" value={token} />
             <button className="inline-flex w-full h-12 items-center justify-center rounded-lg bg-accent-500 px-4 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("approve")}
             </button>
           </form>
           <form action={rejectEstimatePublic} className="flex-1">
-            <input type=" hidden" name="token" value={token} />
+            <input type="hidden" name="token" value={token} />
             <button className="inline-flex w-full h-12 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("decline")}
             </button>

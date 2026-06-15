@@ -42,8 +42,8 @@ function PartRow({
       </span>
       {editable ? (
         <form action={addLineFromPartAction}>
-          <input type=" hidden" name="estimateId" value={estimateId} />
-          <input type=" hidden" name="jobPartId" value={p.id} />
+          <input type="hidden" name="estimateId" value={estimateId} />
+          <input type="hidden" name="jobPartId" value={p.id} />
           <button className="shrink-0 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-surface-2 dark:border-white/20">
             {t("priceThisPart")}
           </button>
@@ -218,7 +218,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {editable ? (
         <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
-          <input type=" hidden" name="estimateId" value={est.id} />
+          <input type="hidden" name="estimateId" value={est.id} />
           <div className="flex flex-wrap gap-2">
             <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               <option value="LABOR">{t("labor")}</option>
@@ -306,7 +306,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   className="mt-4 flex flex-wrap items-end gap-2"
                 >
                   <input
-                    type=" hidden"
+                    type="hidden"
                     name="jobCardId"
                     value={est.jobCard.id}
                   />
@@ -379,7 +379,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             'Awaiting final invoice' bucket. */}
         {canPrice && est.status ==="APPROVED"&& !est.invoice && jobStatus ==="TECH_COMPLETE"? (
           <form action={generateInvoiceAction}>
-            <input type=" hidden" name="estimateId" value={est.id} />
+            <input type="hidden" name="estimateId" value={est.id} />
             <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("generateInvoice")}
             </button>
@@ -420,8 +420,8 @@ function StatusButton({
 }) {
   return (
     <form action={setEstimateStatusAction}>
-      <input type=" hidden" name="estimateId" value={estimateId} />
-      <input type=" hidden" name="status" value={status} />
+      <input type="hidden" name="estimateId" value={estimateId} />
+      <input type="hidden" name="status" value={status} />
       <button
         className={
           primary

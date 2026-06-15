@@ -54,13 +54,13 @@ export default async function BookingsInbox() {
                 ) : null}
                 <div className="mt-3 flex gap-2">
                   <form action={confirmBookingAction}>
-                    <input type=" hidden" name="bookingId" value={b.id} />
+                    <input type="hidden" name="bookingId" value={b.id} />
                     <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                       {t("confirmCreateJob")}
                     </button>
                   </form>
                   <form action={rejectBookingAction}>
-                    <input type=" hidden" name="bookingId" value={b.id} />
+                    <input type="hidden" name="bookingId" value={b.id} />
                     <button className="rounded-md border border-border px-4 py-2 text-sm font-medium">
                       {t("reject")}
                     </button>

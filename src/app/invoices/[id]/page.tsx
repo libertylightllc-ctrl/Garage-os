@@ -157,7 +157,7 @@ export default async function InvoiceView({
         {["CASHIER","OWNER"].includes(session.user.role) ? (
           customer.email ? (
             <form action={emailInvoiceAction} className="contents">
-              <input type=" hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="invoiceId" value={inv.id} />
               <button
                 type="submit"
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -279,9 +279,9 @@ export default async function InvoiceView({
                 className="col-span-full grid grid-cols-subgrid items-center gap-x-2 gap-y-1 border-b border-border py-2"
               >
                 <form action={updateInvoiceLineAction} className="contents">
-                  <input type=" hidden" name="invoiceId" value={inv.id} />
-                  <input type=" hidden" name="lineId" value={l.id} />
-                  <input type=" hidden" name="kind" value={l.kind} />
+                  <input type="hidden" name="invoiceId" value={inv.id} />
+                  <input type="hidden" name="lineId" value={l.id} />
+                  <input type="hidden" name="kind" value={l.kind} />
                   <input
                     name="description"
                     defaultValue={l.description}
@@ -325,8 +325,8 @@ export default async function InvoiceView({
                   action={removeInvoiceLineAction}
                   className="col-span-full flex justify-end px-2"
                 >
-                  <input type=" hidden" name="invoiceId" value={inv.id} />
-                  <input type=" hidden" name="lineId" value={l.id} />
+                  <input type="hidden" name="invoiceId" value={inv.id} />
+                  <input type="hidden" name="lineId" value={l.id} />
                   <button
                     type="submit"
                     className="text-xs font-semibold text-danger-700 hover:underline dark:text-danger-500"
@@ -361,7 +361,7 @@ export default async function InvoiceView({
           action={addInvoiceLineAction}
           className="rounded-lg border border-black/10 p-3 print:hidden dark:border-white/15"
         >
-          <input type=" hidden" name="invoiceId" value={inv.id} />
+          <input type="hidden" name="invoiceId" value={inv.id} />
           <div className="mb-2 text-sm font-medium">{t("addLineTitle")}</div>
           <div className="grid grid-cols-[6rem_1fr_4.5rem_6rem_auto] items-center gap-2">
             <select
@@ -442,8 +442,8 @@ export default async function InvoiceView({
               action={setInvoiceDiscountAction}
               className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
             >
-              <input type=" hidden" name="invoiceId" value={inv.id} />
-              <input type=" hidden" name="mode" value="PERCENT"/>
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="PERCENT"/>
               <label className="text-xs text-zinc-600 dark:text-text-mute">
                 {t("discountPercentLabel")}
               </label>
@@ -469,8 +469,8 @@ export default async function InvoiceView({
               action={setInvoiceDiscountAction}
               className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
             >
-              <input type=" hidden" name="invoiceId" value={inv.id} />
-              <input type=" hidden" name="mode" value="AMOUNT"/>
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="AMOUNT"/>
               <label className="text-xs text-zinc-600 dark:text-text-mute">
                 {t("discountAmountLabel")}
               </label>
@@ -494,9 +494,9 @@ export default async function InvoiceView({
           </div>
           {discountLine ? (
             <form action={setInvoiceDiscountAction} className="mt-2 flex justify-end">
-              <input type=" hidden" name="invoiceId" value={inv.id} />
-              <input type=" hidden" name="mode" value="NONE"/>
-              <input type=" hidden" name="value" value="0"/>
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <input type="hidden" name="mode" value="NONE"/>
+              <input type="hidden" name="value" value="0"/>
               <button
                 type="submit"
                 className="text-xs text-red-600 hover:underline"

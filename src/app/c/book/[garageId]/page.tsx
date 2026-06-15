@@ -24,7 +24,7 @@ export default async function CustomerBooking({ params }: { params: Promise<{ ga
       </div>
 
       <form action={createBookingPublic} className="flex flex-col gap-3">
-        <input type=" hidden" name="garageId" value={garageId} />
+        <input type="hidden" name="garageId" value={garageId} />
         <div className="flex gap-2">
           <input name="name" placeholder={t("name")} className={field} />
           <input name="phone" placeholder={t("phone")} required className={field} />

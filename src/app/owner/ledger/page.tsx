@@ -27,6 +27,22 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
   * Read-only, ALWAYS garage-scoped (companyGarageIds includes the
   * owner's branches), no raw SQL — matches the CLAUDE.md rule.
   */
+// Natural balance side per account, used by the 'By account' table to
+// present each row's Net as a positive number + DR/CR label instead
+// of a signed value. AR's spec rule:
+//   Asset accounts (debit-normal) → DR
+//   Revenue + liability accounts (credit-normal) → CR
+// The underlying ledger math (debit, credit, signed net) is unchanged
+// — only the Net column's DISPLAY is reformatted, so a non-accountant
+// owner doesn't read 'Sales Revenue −16,382.10' as a loss.
+const NATURAL_SIDE: Record<string, "DR" | "CR"> = {
+  [ACCOUNTS.CASH]: "DR",
+  [ACCOUNTS.AR]: "DR",
+  [ACCOUNTS.DEPOSITS]: "CR",
+  [ACCOUNTS.VAT_PAYABLE]: "CR",
+  [ACCOUNTS.SALES]: "CR",
+};
+
 function startOfMonth(d: Date) {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), 1);
 }
@@ -303,8 +319,26 @@ export default async function OwnerLedger({
                   <td className="py-2 px-2 text-end tabular-nums">
                     {money(r.credit)}
                   </td>
+                  {/* Net column — AR's spec: show abs value + a small
+                      muted DR/CR tag based on the account's NATURAL
+                      side. Cash/Bank and AR are debit-normal (DR);
+                      Sales / VAT Payable / Customer Deposits are
+                      credit-normal (CR). The signed net is preserved
+                      in r.net (used elsewhere); only the display
+                      changes. Unknown account → fall back to the
+                      signed value so a future-added account doesn't
+                      silently lose its sign. */}
                   <td className="py-2 ps-2 text-end tabular-nums font-semibold">
-                    {money(r.net)}
+                    {NATURAL_SIDE[r.account] ? (
+                      <>
+                        {money(Math.abs(r.net))}
+                        <span className="ms-1.5 text-xs font-medium tracking-wide text-text-mute">
+                          {NATURAL_SIDE[r.account]}
+                        </span>
+                      </>
+                    ) : (
+                      money(r.net)
+                    )}
                   </td>
                 </tr>
               ))}

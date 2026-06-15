@@ -29,9 +29,9 @@ export default async function PartsQueue() {
   });
 
   const btn =
-    "rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
+    "rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10";
   const btnPrimary =
-    "rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black";
+    "inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -39,26 +39,26 @@ export default async function PartsQueue() {
       <h1 className="text-2xl font-semibold tracking-tight">{t("partsQueue")}</h1>
 
       {requests.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noOpenParts")}</p>
+        <p className="text-sm text-text-mute">{t("noOpenParts")}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {requests.map((r) => {
             const available = r.part ? inStock(r.part.qtyOnHand, r.qty) : false;
             return (
-              <li key={r.id} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
+              <li key={r.id} className="rounded-xl border border-border p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-medium">
                       📦 {r.qty}× {r.description}
                     </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="text-xs text-text-mute">
                       <Link href={`/advisor/jobs/${r.jobCardId}`} className="hover:underline">
                         {r.jobCard.vehicle.make} {r.jobCard.vehicle.model} · {r.jobCard.vehicle.plate}
                       </Link>
                       {r.requestedBy?.name ? ` · ${t("requestedByLabel")} ${r.requestedBy.name}` : ""}
                     </div>
                     {r.note ? (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">— {r.note}</div>
+                      <div className="text-xs text-text-mute">— {r.note}</div>
                     ) : null}
                   </div>
                   <span className="whitespace-nowrap text-xs">
@@ -91,7 +91,7 @@ export default async function PartsQueue() {
                       <input
                         name="note"
                         placeholder={t("supplierNote")}
-                        className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                        className="rounded-md border border-border bg-transparent px-2 py-1 text-sm "
                       />
                       <button className={btn}>{t("actOrder")}</button>
                     </form>

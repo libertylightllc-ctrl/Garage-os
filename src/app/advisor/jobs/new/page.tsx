@@ -17,7 +17,7 @@ const ERR: Record<string, MessageKey> = {
   ocr: "errOcrFailed",
 };
 
-const FIELD = "rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20";
+const FIELD = "rounded-md border border-border bg-transparent px-2 py-1 text-sm ";
 
 function TechSelect({
   techs,
@@ -66,14 +66,14 @@ export default async function NewJobCard({
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="jobs" />
       <div>
-        <Link href="/advisor" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
+        <Link href="/advisor" className="text-sm text-text-mute hover:underline">
           {t("backActiveJobs")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("newJobTitle")}</h1>
       </div>
 
       {error && ERR[error] ? (
-        <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
           {t(ERR[error])}
         </p>
       ) : null}
@@ -83,13 +83,13 @@ export default async function NewJobCard({
           with a clear by-action statement. moulkiaConsentAt is still stamped on
           the resulting JobCard. If the legal review requires an explicit tick,
           add the checkbox back and remove the hidden `consent=on` input. */}
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <h2 className="text-sm font-medium">{t("newCustomerMoulkia")}</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-xs text-text-mute">
           {t("moulkiaConsentInline")}
           <span className="block">{t("moulkiaOrManualHint")}</span>
         </p>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("step1of2")}</p>
+        <p className="mt-1 text-xs text-text-mute">{t("step1of2")}</p>
         <form action={moulkiaFrontAction} className="mt-3 flex flex-col gap-3">
           <input type="hidden" name="consent" value="on" />
           <TechSelect techs={techs} unassignedLabel={t("unassigned")} />
@@ -110,24 +110,24 @@ export default async function NewJobCard({
       </section>
 
       {/* Repeat customer — plate lookup */}
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <h2 className="text-sm font-medium">{t("repeatCustomer")}</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("plateLookupHint")}</p>
+        <p className="mt-1 text-xs text-text-mute">{t("plateLookupHint")}</p>
         <form action={plateLookupAction} className="mt-3 flex gap-2">
           <input name="plate" placeholder={t("plate")} required className={`${field} flex-1`} />
-          <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+          <button className="rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
             {t("lookupBtn")}
           </button>
         </form>
       </section>
 
       {/* Manual entry — no Moulkia photo (or OCR failed/skipped) */}
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <h2 className="text-sm font-medium">{t("manualEntry")}</h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("manualEntryHint")}</p>
+        <p className="mt-1 text-xs text-text-mute">{t("manualEntryHint")}</p>
         <Link
           href="/advisor/jobs/new/confirm?via=manual"
-          className="mt-3 inline-block rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="mt-3 inline-block rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10"
         >
           {t("enterManually")}
         </Link>
@@ -155,14 +155,14 @@ export default async function NewJobCard({
                 <li key={v.id}>
                   <Link
                     href={`/advisor/jobs/new/confirm?${q.toString()}`}
-                    className="flex items-center justify-between rounded-lg border border-black/10 p-4 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                    className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-black/5  dark:hover:bg-white/10"
                   >
                     <span>
                       <span className="block font-medium">
                         {v.make} {v.model}
-                        <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">{v.plate}</span>
+                        <span className="ml-2 text-sm text-text-mute">{v.plate}</span>
                       </span>
-                      <span className="block text-sm text-zinc-500 dark:text-zinc-400">{v.customer.name}</span>
+                      <span className="block text-sm text-text-mute">{v.customer.name}</span>
                     </span>
                     <span className="text-sm font-medium">{t("start")}</span>
                   </Link>

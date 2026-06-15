@@ -137,7 +137,7 @@ export default async function OwnerAnalytics({
       <AppNav role="OWNER" active="analytics" />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("analyticsTitle")}</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("analyticsSubtitle")}</p>
+        <p className="text-sm text-text-mute">{t("analyticsSubtitle")}</p>
       </div>
 
       {/* Window selector — fixed-set of windows the page is willing
@@ -150,8 +150,8 @@ export default async function OwnerAnalytics({
             className={
               "rounded-full px-3 py-1 text-sm " +
               (n === days
-                ? "bg-zinc-900 text-white dark:bg-white dark:text-black"
-                : "border border-black/15 text-zinc-700 hover:bg-black/5 dark:border-white/20 dark:text-zinc-200 dark:hover:bg-white/10")
+                ? "bg-brand-900 text-white dark:bg-white dark:text-brand-900"
+                : "border border-border text-text hover:bg-surface-2 transition-colors")
             }
           >
             {n}d
@@ -205,8 +205,8 @@ export default async function OwnerAnalytics({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
-      <div className="text-xs text-zinc-500 dark:text-zinc-400">{label}</div>
+    <div className="rounded-xl border border-border p-4">
+      <div className="text-xs text-text-mute">{label}</div>
       <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
     </div>
   );
@@ -240,10 +240,10 @@ function BarChart({
   const colW = (W - PAD * 2) / Math.max(1, series.length);
   const palette = COLORS[color];
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+    <div className="rounded-xl border border-border p-4">
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="text-sm font-medium">{title}</h2>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
+        <span className="text-xs text-text-mute tabular-nums">
           max {format(max)}
         </span>
       </div>
@@ -282,7 +282,7 @@ function BarChart({
           );
         })}
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+      <div className="mt-1 flex justify-between text-[10px] text-text-mute tabular-nums">
         <span>{series[0]?.label ?? ""}</span>
         <span>{series[series.length - 1]?.label ?? ""}</span>
       </div>

@@ -148,28 +148,28 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   });
 
   const bigBtn =
-    "flex flex-col items-center justify-center gap-1 rounded-2xl border border-black/10 p-6 text-center text-base font-medium hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10";
+    "flex flex-col items-center justify-center gap-1 rounded-2xl border border-border p-6 text-center text-base font-medium hover:bg-black/5  dark:hover:bg-white/10";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="TECH" active="workshop" />
       <div>
-        <Link href="/technician" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
+        <Link href="/technician" className="text-sm text-text-mute hover:underline">
           {t("backWorkshop")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           {job.vehicle.make} {job.vehicle.model}
         </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{job.vehicle.plate}</p>
+        <p className="text-sm text-text-mute">{job.vehicle.plate}</p>
         {job.helpers.length > 0 ? (
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-text-mute">
             {t("helpersLabel")}: {job.helpers.map((h) => h.tech.name).join(", ")}
           </p>
         ) : null}
         {amHelper ? (
           <form action={leaveHelperAction} className="mt-1">
             <input type="hidden" name="jobId" value={job.id} />
-            <button className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:text-zinc-400">
+            <button className="text-xs text-text-mute underline hover:text-zinc-700 dark:text-text-mute">
               {t("leaveJob")}
             </button>
           </form>
@@ -189,12 +189,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           themselves contextually. */}
       {job.status === "ESTIMATE" ? (
         // Tech sent for estimate; cashier owns the next step.
-        <section className="rounded-2xl border border-violet-500/40 bg-violet-50 p-6 text-center dark:bg-violet-950/40">
+        <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
           <div className="text-4xl">💸</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
             {t("sentToCashierTitle")}
           </h2>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+          <p className="mt-1 text-sm text-text">
             {t("sentToCashierSubtitle")}
           </p>
         </section>
@@ -212,12 +212,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         // hasApprovedEstimate, so it ALSO won't show prematurely, but
         // we additionally gate it on hasWorkProof below to keep both
         // surfaces in sync.
-        <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
+        <section className="rounded-xl border border-success-500/40 bg-success-50 p-6 text-center dark:border-success-500/30 dark:bg-success-500/10">
           <div className="text-4xl">🔧</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
             {t("jobApprovedStartWorkTitle")}
           </h2>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+          <p className="mt-1 text-sm text-text">
             {t("jobApprovedStartWorkSubtitle")}
           </p>
           {!amHelper && hasWorkProof ? (
@@ -225,7 +225,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <input type="hidden" name="jobId" value={job.id} />
               <button
                 type="submit"
-                className="rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white hover:bg-green-500"
+                className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
               >
                 {t("markComplete")}
               </button>
@@ -235,7 +235,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             // 'work has started' so the tech knows what to do next
             // (snap a photo, hit Save on findings, etc.) and doesn't
             // think the page is broken because the button is missing.
-            <p className="mt-3 inline-block rounded-md bg-emerald-100 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
+            <p className="mt-3 inline-block rounded-xl border border-success-500/40 bg-success-50 px-3 py-2 text-xs text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
               ⏳ {t("beginYourWorkHint")}
             </p>
           ) : null}
@@ -244,12 +244,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         // Tech tapped Mark Complete; cashier owns the next step
         // (invoice prep + send). No actions here — read-only banner so
         // the tech can confirm the handoff went through.
-        <section className="rounded-2xl border border-teal-500/40 bg-teal-50 p-6 text-center dark:bg-teal-950/40">
+        <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
           <div className="text-4xl">🧾</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
             {t("sentToCashierForInvoiceTitle")}
           </h2>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-200">
+          <p className="mt-1 text-sm text-text">
             {t("sentToCashierForInvoiceSubtitle")}
           </p>
         </section>
@@ -261,7 +261,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           and 'This job was cancelled' are no longer reachable here. */}
 
       {job.status === "ON_HOLD" && job.holdReason ? (
-        <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+        <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
           🟡 {t("onHold")}:{" "}
           {(
             {
@@ -277,11 +277,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
       {/* Customer complaint (from reception) */}
       {job.complaint ? (
-        <div className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
-          <div className="text-xs text-zinc-500 dark:text-zinc-400">{t("complaintFromReception")}</div>
+        <div className="rounded-lg border border-border p-3 text-sm ">
+          <div className="text-xs text-text-mute">{t("complaintFromReception")}</div>
           <p>{job.complaint}</p>
           {job.mileageIn ? (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="mt-1 text-xs text-text-mute">
               {t("mileageInLabel")}: {job.mileageIn}
             </p>
           ) : null}
@@ -289,11 +289,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       ) : null}
 
       {/* Findings & diagnosis + parts required (Job-Card-Data-Model.md) */}
-      <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-3 dark:border-white/15">
+      <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">{t("jcFindings")}</h2>
           {submitted ? (
-            <span className="text-xs text-green-700 dark:text-green-400">
+            <span className="text-xs text-success-700 dark:text-success-500">
               ✅ {t("submittedToCashier")} · {job.finding!.submittedAt!.toISOString().slice(0, 16).replace("T", " ")}
             </span>
           ) : null}
@@ -303,9 +303,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <div className="text-sm">
             <p>{job.finding?.findings}</p>
             {job.finding?.diagnosis ? (
-              <p className="mt-1 text-zinc-600 dark:text-zinc-300">{job.finding.diagnosis}</p>
+              <p className="mt-1 text-text">{job.finding.diagnosis}</p>
             ) : null}
-            <p className="mt-1 text-xs text-zinc-400">{t("findingsLocked")}</p>
+            <p className="mt-1 text-xs text-text-mute">{t("findingsLocked")}</p>
           </div>
         ) : (
           <form action={saveFindingsAction} className="flex flex-col gap-2">
@@ -317,7 +317,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               defaultValue={job.finding?.findings ?? ""}
               rows={3}
               placeholder={t("findingsLabel")}
-              className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
+              className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm "
             />
             <DictateTextarea
               locale={locale}
@@ -326,28 +326,28 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               defaultValue={job.finding?.diagnosis ?? ""}
               rows={2}
               placeholder={t("diagnosisLabel")}
-              className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
+              className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm "
             />
-            <button className="self-start rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            <button className="self-start rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
               {t("saveDraft")}
             </button>
           </form>
         )}
 
         {/* Parts required */}
-        <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("partsRequired")}</h3>
+        <h3 className="text-xs font-medium text-text">{t("partsRequired")}</h3>
         {requiredParts.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noPartsRequired")}</p>
+          <p className="text-sm text-text-mute">{t("noPartsRequired")}</p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
             {requiredParts.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded-md border border-black/10 p-2 dark:border-white/15"
+                className="flex items-center justify-between rounded-md border border-border p-2 "
               >
                 <span>
-                  {p.partNo ? <span className="text-zinc-400">{p.partNo} </span> : null}
-                  {p.description} <span className="text-zinc-500 dark:text-zinc-400">×{p.qty}</span>
+                  {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
+                  {p.description} <span className="text-text-mute">×{p.qty}</span>
                 </span>
                 {!submitted ? (
                   <form action={removeJobPartAction}>
@@ -372,7 +372,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <select
               name="partId"
               defaultValue=""
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             >
               <option value="">{t("catalogPartOptional")}</option>
               {parts.map((p) => (
@@ -384,14 +384,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <input
               name="partNo"
               placeholder={t("partNoLabel")}
-              className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <DictateInput
               locale={locale}
               labels={dictLabels}
               name="description"
               placeholder={t("colDescription")}
-              className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <input
               name="qty"
@@ -399,15 +399,15 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
-            <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+            <button className="rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
               {t("addPartLine")}
             </button>
           </form>
         ) : null}
 
-        <p className="text-xs text-zinc-400">📷 {t("photographDamaged")}</p>
+        <p className="text-xs text-text-mute">📷 {t("photographDamaged")}</p>
 
         {/* 'Send to Cashier for Estimate' button — Per spec, this appears
             once the tech has at least one Required part listed. The button
@@ -423,7 +423,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         (job.status === "ARRIVED" || job.status === "INSPECTION") ? (
           <form action={sendForEstimateAction}>
             <input type="hidden" name="jobId" value={job.id} />
-            <button className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black">
+            <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("submitToCashier")}
             </button>
           </form>
@@ -435,18 +435,18 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           'Send for Approval' rolls them into a new draft Estimate. Only
           shown while status is APPROVED / REPAIR (active work window). */}
       {canManageExtras ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-rose-500/40 bg-rose-50 p-3 dark:border-rose-700/40 dark:bg-rose-950/30">
+        <div className="flex flex-col gap-3 rounded-xl border border-danger-500/40 bg-danger-50 p-4 dark:border-danger-500/30 dark:bg-danger-500/10">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium">{t("extrasPanelTitle")}</h2>
             {extraParts.length > 0 ? (
-              <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-medium text-white">
+              <span className="inline-flex items-center rounded-full bg-danger-600 px-2 py-0.5 text-xs font-semibold text-white">
                 {extraParts.length}
               </span>
             ) : null}
           </div>
 
           {extraParts.length === 0 ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="text-sm text-text">
               {t("extrasPanelEmpty")}
             </p>
           ) : (
@@ -454,14 +454,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               {extraParts.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border border-rose-300/60 bg-white p-2 dark:border-rose-700/40 dark:bg-zinc-950"
+                  className="flex items-center justify-between rounded-lg border border-danger-500/30 bg-surface p-2"
                 >
                   <span>
                     {p.partNo ? (
-                      <span className="text-zinc-400">{p.partNo} </span>
+                      <span className="text-text-mute">{p.partNo} </span>
                     ) : null}
                     {p.description}{" "}
-                    <span className="text-zinc-500 dark:text-zinc-400">×{p.qty}</span>
+                    <span className="text-text-mute">×{p.qty}</span>
                   </span>
                   <form action={removeExtraJobPartAction}>
                     <input type="hidden" name="jobId" value={job.id} />
@@ -482,7 +482,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <input
               name="partNo"
               placeholder={t("partNoLabel")}
-              className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <DictateInput
               locale={locale}
@@ -490,7 +490,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               name="description"
               placeholder={t("extrasDescriptionPlaceholder")}
               required
-              className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <input
               name="qty"
@@ -498,9 +498,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
-            <button className="rounded-md border border-rose-500 px-3 py-1 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:border-rose-400 dark:text-rose-200 dark:hover:bg-rose-900/50">
+            <button className="inline-flex h-8 items-center justify-center rounded-lg border border-danger-500/40 bg-transparent px-3 text-xs font-semibold text-danger-700 hover:bg-danger-50 transition-colors dark:text-danger-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("extrasAdd")}
             </button>
           </form>
@@ -511,7 +511,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {extraParts.length > 0 ? (
             <form action={sendForReestimateAction} className="self-start">
               <input type="hidden" name="jobId" value={job.id} />
-              <button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">
+              <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                 {t("extrasSendForApproval").replace("{count}", String(extraParts.length))}
               </button>
             </form>
@@ -521,11 +521,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
       {/* Repair — work completed & parts used (after Approval #1) */}
       {hasApprovedEstimate ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium">{t("jcRepair")}</h2>
             {job.workCompletedAt ? (
-              <span className="text-xs text-green-700 dark:text-green-400">
+              <span className="text-xs text-success-700 dark:text-success-500">
                 ✅ {t("workCompletedBadge")} · {job.workCompletedAt.toISOString().slice(0, 16).replace("T", " ")}
               </span>
             ) : null}
@@ -541,33 +541,33 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 defaultValue={job.workNotes ?? ""}
                 rows={2}
                 placeholder={t("workNotesLabel")}
-                className="w-full rounded-md border border-black/15 bg-transparent px-2 py-1 pr-10 text-sm dark:border-white/20"
+                className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm "
               />
-              <button className="self-start rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+              <button className="self-start rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
                 {t("saveDraft")}
               </button>
             </form>
           ) : (
             <div className="text-sm">
               {job.workNotes ? <p>{job.workNotes}</p> : null}
-              <p className="mt-1 text-xs text-zinc-400">{t("repairLockedNote")}</p>
+              <p className="mt-1 text-xs text-text-mute">{t("repairLockedNote")}</p>
             </div>
           )}
 
           {/* Parts used */}
-          <h3 className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t("partsUsed")}</h3>
+          <h3 className="text-xs font-medium text-text">{t("partsUsed")}</h3>
           {usedParts.length === 0 ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noPartsUsed")}</p>
+            <p className="text-sm text-text-mute">{t("noPartsUsed")}</p>
           ) : (
             <ul className="flex flex-col gap-1 text-sm">
               {usedParts.map((p) => (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between rounded-md border border-black/10 p-2 dark:border-white/15"
+                  className="flex items-center justify-between rounded-md border border-border p-2 "
                 >
                   <span>
-                    {p.partNo ? <span className="text-zinc-400">{p.partNo} </span> : null}
-                    {p.description} <span className="text-zinc-500 dark:text-zinc-400">×{p.qty}</span>
+                    {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
+                    {p.description} <span className="text-text-mute">×{p.qty}</span>
                   </span>
                   {repairOpen ? (
                     <form action={removeUsedPartAction}>
@@ -588,7 +588,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <select
                   name="partId"
                   defaultValue=""
-                  className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                  className="rounded-md border border-border bg-transparent px-2 py-1 text-sm "
                 >
                   <option value="">{t("catalogPartOptional")}</option>
                   {parts.map((p) => (
@@ -600,14 +600,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <input
                   name="partNo"
                   placeholder={t("partNoLabel")}
-                  className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                  className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
                 />
                 <DictateInput
                   locale={locale}
                   labels={dictLabels}
                   name="description"
                   placeholder={t("colDescription")}
-                  className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                  className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
                 />
                 <input
                   name="qty"
@@ -615,9 +615,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   min="1"
                   defaultValue="1"
                   aria-label={t("colQty")}
-                  className="w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+                  className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
                 />
-                <button className="rounded-md border border-black/15 px-3 py-1 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                <button className="rounded-md border border-border px-3 py-1 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
                   {t("addPartLine")}
                 </button>
               </form>
@@ -636,12 +636,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               {hasWorkProof ? (
                 <form action={markCompleteAction}>
                   <input type="hidden" name="jobId" value={job.id} />
-                  <button className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+                  <button className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("markComplete")}
                   </button>
                 </form>
               ) : (
-                <p className="rounded-md bg-emerald-100 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200">
+                <p className="rounded-xl border border-success-500/40 bg-success-50 px-3 py-2 text-xs text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
                   ⏳ {t("beginYourWorkHint")}
                 </p>
               )}
@@ -652,11 +652,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
       {/* Quality Control — after work is complete */}
       {job.workCompletedAt ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+        <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium">{t("jcQc")}</h2>
             {qcSignedOff(job.qcAt) ? (
-              <span className="text-xs text-green-700 dark:text-green-400">
+              <span className="text-xs text-success-700 dark:text-success-500">
                 ✅ {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} · {job.qcAt!.toISOString().slice(0, 10)}
               </span>
             ) : null}
@@ -664,7 +664,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {qcSignedOff(job.qcAt) ? (
             <ul className="flex flex-col gap-0.5 text-sm">
               {job.qcChecks.map((c) => (
-                <li key={c} className="text-green-700 dark:text-green-400">
+                <li key={c} className="text-success-700 dark:text-success-500">
                   ✓ {t(`qc_${c}` as MessageKey)}
                 </li>
               ))}
@@ -680,7 +680,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   </label>
                 ))}
               </div>
-              <button className="self-start rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+              <button className="self-start inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                 {t("signOffQc")}
               </button>
             </form>
@@ -730,7 +730,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <select
               name="partId"
               defaultValue=""
-              className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             >
               <option value="">{t("pickPart")}</option>
               {parts.map((p) => (
@@ -744,7 +744,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               labels={dictLabels}
               name="description"
               placeholder={t("orTypePart")}
-              className="mt-1 w-full rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <input
               name="qty"
@@ -752,7 +752,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="mt-1 w-16 rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="mt-1 w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm "
             />
             <button type="submit" className="mt-1 text-sm font-semibold underline">
               {t("request")}
@@ -776,12 +776,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {job.partRequests.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-2 dark:border-white/15"
+                className="flex items-center justify-between rounded-lg border border-border p-2 "
               >
                 <span>
                   📦 {r.qty}× {r.description}
                 </span>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="text-xs text-text-mute">
                   {t(partStatusKey(r.status))}
                 </span>
               </li>
@@ -794,11 +794,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       <div>
         <h2 className="mb-2 text-sm font-medium">{t("activity")}</h2>
         {job.steps.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("nothingYet")}</p>
+          <p className="text-sm text-text-mute">{t("nothingYet")}</p>
         ) : (
           <ul className="flex flex-col gap-3">
             {job.steps.map((s) => (
-              <li key={s.id} className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15">
+              <li key={s.id} className="rounded-lg border border-border p-3 text-sm ">
                 <div className="mb-1 font-medium">
                   {STEP_ICON[s.type] ?? "•"} {s.type.replace("_", " ").toLowerCase()}
                 </div>
@@ -809,7 +809,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 {s.voiceNoteUrl ? (
                   <audio controls src={s.voiceNoteUrl} className="w-full" />
                 ) : null}
-                {s.transcript ? <p className="text-zinc-600 dark:text-zinc-300">{s.transcript}</p> : null}
+                {s.transcript ? <p className="text-text">{s.transcript}</p> : null}
               </li>
             ))}
           </ul>

@@ -34,7 +34,7 @@ export default async function ChatsInbox() {
 
       <ul className="flex flex-col gap-2">
         {threads.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
+          <li className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
             {t("noChats")}
           </li>
         ) : (
@@ -42,22 +42,22 @@ export default async function ChatsInbox() {
             <li key={th.id}>
               <Link
                 href={`/advisor/chats/${th.id}`}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm hover:bg-black/5  dark:hover:bg-white/10"
               >
                 <span className="min-w-0">
                   <span className="block font-medium">{th.customer.name}</span>
-                  <span className="block truncate text-zinc-500 dark:text-zinc-400">
+                  <span className="block truncate text-text-mute">
                     {th.messages[0]?.body ?? ""}
                   </span>
                 </span>
                 <span className="ms-2 flex shrink-0 items-center gap-1">
                   {th.threadStatus === "NEEDS_HUMAN" ? (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">
+                    <span className="inline-flex items-center rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                       {t("needsHuman")}
                     </span>
                   ) : null}
                   {th.mode === "HUMAN" ? (
-                    <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-700">
+                    <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-mute">
                       {t("humanMode")}
                     </span>
                   ) : null}
@@ -72,14 +72,14 @@ export default async function ChatsInbox() {
       {customers.length > 0 ? (
         <form
           action={startTestConversationAction}
-          className="flex flex-col gap-2 rounded-lg border border-dashed border-black/15 p-3 text-sm dark:border-white/20"
+          className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3 text-sm "
         >
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          <span className="text-xs font-medium text-text-mute">
             {t("startTestConvo")}
           </span>
           <select
             name="customerId"
-            className="rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+            className="rounded-md border border-border bg-transparent px-2 py-1 "
           >
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -91,9 +91,9 @@ export default async function ChatsInbox() {
             <input
               name="body"
               placeholder="is my car ready? / how much? / I want a refund"
-              className="flex-1 rounded-md border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 "
             />
-            <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
+            <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("send")}
             </button>
           </div>

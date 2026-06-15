@@ -29,7 +29,7 @@ export default async function AdvisorWhatsApp() {
         <h1 className="text-2xl font-semibold tracking-tight">
           {t("waStatusTitle")}
         </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-text-mute">
           {t("waStatusSubtitleAdvisor")}
         </p>
       </div>
@@ -45,13 +45,13 @@ export default async function AdvisorWhatsApp() {
       <div className="flex flex-wrap gap-2">
         <Link
           href="/advisor/reminders"
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("waStatusGoReminders")}
         </Link>
         <Link
           href="/advisor/chats"
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("waStatusGoChats")}
         </Link>

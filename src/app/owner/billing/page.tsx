@@ -28,33 +28,33 @@ export default async function BillingPage() {
       <AppNav role="OWNER" active="billing" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("billing")}</h1>
 
-      <div className="rounded-lg border border-black/10 p-4 text-sm dark:border-white/15">
+      <div className="rounded-lg border border-border p-4 text-sm ">
         {t("statusLabel")}: <span className="font-medium">{sub?.status ?? "PILOT"}</span>
         {sub?.plan ? ` · ${sub.plan.name}` : ""}
       </div>
 
       {isPilot ? (
-        <p className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+        <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
           🟢 {t("onPilotNotBilled")}
         </p>
       ) : null}
 
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("billingManual")}</p>
+      <p className="text-sm text-text-mute">{t("billingManual")}</p>
 
       {/* Per-branch seats — billing is per branch. */}
       {branches.length > 1 ? (
         <div>
-          <p className="mb-2 text-xs text-zinc-400">{t("perBranchBilling")}</p>
+          <p className="mb-2 text-xs text-text-mute">{t("perBranchBilling")}</p>
           <ul className="flex flex-col gap-1">
             {branches.map((b) => (
               <li
                 key={b.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm "
               >
                 <span className="font-medium">
                   {b.name}
                   {b.isRoot ? (
-                    <span className="ms-2 text-xs text-zinc-400">{t("branchMainTag")}</span>
+                    <span className="ms-2 text-xs text-text-mute">{t("branchMainTag")}</span>
                   ) : null}
                 </span>
                 <span className="text-xs">{b.isPilot ? `🟢 ${t("statusLabel")}: PILOT` : ""}</span>
@@ -66,11 +66,11 @@ export default async function BillingPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         {plans.map((p) => (
-          <div key={p.id} className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+          <div key={p.id} className="rounded-xl border border-border p-4">
             <div className="text-sm font-medium">{p.name}</div>
             <div className="mt-1 text-lg font-semibold">
               {p.currency} {Number(p.priceMonthly).toFixed(0)}
-              <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs font-normal text-text-mute">
                 {" "}
                 /{t("perMonth")}
               </span>

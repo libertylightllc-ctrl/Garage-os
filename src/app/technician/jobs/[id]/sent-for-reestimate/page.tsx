@@ -33,24 +33,24 @@ export default async function SentForReestimate({
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="TECH" active="workshop" />
 
-      <section className="rounded-2xl border border-rose-500/40 bg-rose-50 p-6 text-center dark:bg-rose-950/40">
+      <section className="rounded-xl border border-danger-500/40 bg-danger-50 p-6 text-center dark:border-danger-500/30 dark:bg-danger-500/10">
         <div className="text-5xl">🔧</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           {t("sentForReestimateTitle")}
         </h1>
-        <p className="mt-2 text-base text-zinc-700 dark:text-zinc-200">
+        <p className="mt-2 text-base text-text">
           {t("sentForReestimateSubtitle")}
         </p>
       </section>
 
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-base">
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("handoffJobNo")}
           </dt>
           <dd className="font-semibold tabular-nums">#{job.number ?? "—"}</dd>
 
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("secVehicle")}
           </dt>
           <dd>
@@ -59,7 +59,7 @@ export default async function SentForReestimate({
             <span className="font-medium">{job.vehicle.plate}</span>
           </dd>
 
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("secCustomer")}
           </dt>
           <dd>
@@ -71,13 +71,13 @@ export default async function SentForReestimate({
       <div className="flex flex-col gap-2">
         <Link
           href="/technician"
-          className="rounded-lg bg-zinc-900 px-5 py-3 text-center text-base font-semibold text-white dark:bg-white dark:text-black"
+          className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-center text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("sentToCashierBackToWorkshop")}
         </Link>
         <Link
           href={`/technician/jobs/${job.id}`}
-          className="rounded-lg border border-black/15 px-5 py-3 text-center text-base font-medium dark:border-white/20"
+          className="rounded-lg border border-border px-5 py-3 text-center text-base font-medium "
         >
           {t("sentToCashierViewJob")}
         </Link>

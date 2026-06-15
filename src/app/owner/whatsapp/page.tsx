@@ -60,7 +60,7 @@ export default async function WhatsAppSettings() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="OWNER" active="whatsapp" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("waConnect")}</h1>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("waConnectIntro")}</p>
+      <p className="text-sm text-text-mute">{t("waConnectIntro")}</p>
 
       {/* Mode banner — sandbox uses an amber pill so the owner is
           never in doubt about which mode they're in. Production mode
@@ -69,29 +69,29 @@ export default async function WhatsAppSettings() {
         className={
           "inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold " +
           (productionMode
-            ? "border-emerald-500/40 bg-emerald-50 text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200"
-            : "border-amber-500/40 bg-amber-50 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200")
+            ? "border-success-500/40 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
+            : "border-warning-500/40 bg-warning-50 text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500")
         }
       >
         {productionMode ? `🟢 ${t("waProdMode")}` : `🟡 ${t("waSandboxMode")}`}
       </div>
 
       {connected ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
+        <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
           <div className="text-sm">
             🟢 {t("waConnected")} ·{" "}
             <span className="font-medium">{acct?.phoneNumber}</span>
           </div>
           <form action={disconnectWhatsAppAction}>
-            <button className="text-sm text-red-600 hover:underline">
+            <button className="text-sm text-danger-700 hover:underline dark:text-danger-500">
               {t("waDisconnect")}
             </button>
           </form>
         </div>
       ) : productionMode ? (
         // ── PRODUCTION mode: launch Facebook Embedded Signup ──
-        <div className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
+          <p className="text-xs text-text-mute">
             {t("waProdHint")}
           </p>
           <EmbeddedSignupButton
@@ -104,17 +104,17 @@ export default async function WhatsAppSettings() {
         // ── SANDBOX mode: simulation form ──
         <form
           action={connectWhatsAppAction}
-          className="flex flex-col gap-2 rounded-lg border border-black/10 p-4 dark:border-white/15"
+          className="flex flex-col gap-2 rounded-xl border border-border p-4"
         >
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-text-mute">
             {t("waConnectHint")}
           </p>
           <input
             name="phoneNumber"
             placeholder="+9715XXXXXXXX"
-            className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
-          <button className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
             {t("waConnectBtnSandbox")}
           </button>
         </form>
@@ -122,7 +122,7 @@ export default async function WhatsAppSettings() {
 
       {/* Help line — points the owner at the docs page that explains
           how to get Meta BSP credentials and what to set in Vercel. */}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="text-xs text-text-mute">
         {t("waHelpNeedCreds")}
       </p>
     </main>

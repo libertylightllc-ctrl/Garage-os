@@ -69,22 +69,23 @@ export default async function AdvisorHome() {
       <AppNav role="ADVISOR" active="jobs" />
       <h1 className="text-2xl font-semibold tracking-tight">{t("activeJobs")}</h1>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
+        {/* HERO — the advisor's primary action on this overview screen */}
         <Link
           href="/advisor/jobs/new"
-          className="flex-1 rounded-lg bg-zinc-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg bg-accent-500 px-4 text-center text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("newJobCard")}
         </Link>
         <Link
           href="/advisor/bookings"
-          className="flex-1 rounded-lg border border-black/15 px-4 py-3 text-center text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-center text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("newBookings")}{pendingBookings > 0 ? ` (${pendingBookings})` : ""}
         </Link>
         <Link
           href="/advisor/eod"
-          className="flex-1 rounded-lg border border-black/15 px-4 py-3 text-center text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-center text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("tabEod")}
         </Link>
@@ -92,7 +93,7 @@ export default async function AdvisorHome() {
 
       <ul className="flex flex-col gap-2">
         {jobs.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
+          <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
             {t("noActiveJobs")}
           </li>
         ) : (
@@ -100,16 +101,16 @@ export default async function AdvisorHome() {
             <li key={job.id}>
               <Link
                 href={`/advisor/jobs/${job.id}`}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-4 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                className="flex items-center justify-between rounded-xl border border-border p-4 hover:bg-surface-2 transition-colors"
               >
                 <span>
                   <span className="block font-medium">
                     {priorityMeta(job.priority).badge} {job.vehicle.make} {job.vehicle.model}
-                    <span className="ml-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    <span className="ml-2 text-sm text-text-mute">
                       {job.vehicle.plate}
                     </span>
                   </span>
-                  <span className="block text-sm text-zinc-500 dark:text-zinc-400">
+                  <span className="block text-sm text-text-mute">
                     {job.vehicle.customer.name}
                     {techName(job.claimedById)
                       ? ` · 🔧 ${techName(job.claimedById)}`
@@ -150,7 +151,7 @@ export default async function AdvisorHome() {
                     );
                   })()}
                   {job.status === "ON_HOLD" ? (
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="text-xs text-text-mute">
                       {reasonLabel(job.holdReason)}
                     </span>
                   ) : null}

@@ -131,7 +131,7 @@ export default async function TechnicianHome({
       <h1 className="text-2xl font-semibold tracking-tight">{t("tabWorkshop")}</h1>
 
       {taken ? (
-        <p className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+        <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
           {t("alreadyTaken")}
         </p>
       ) : null}
@@ -140,7 +140,7 @@ export default async function TechnicianHome({
       <section>
         <h2 className="mb-2 text-sm font-medium">{t("waiting")}</h2>
         {waiting.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20 dark:text-zinc-400">
+          <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
             {t("noWaiting")}
           </p>
         ) : (
@@ -148,13 +148,13 @@ export default async function TechnicianHome({
             {waiting.map((j) => (
               <li
                 key={j.id}
-                className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
+                className="flex items-center justify-between rounded-xl border border-border p-4"
               >
                 <span>
                   <span className="block text-lg font-medium">
                     {priorityMeta(j.priority).badge} {carLine(j)}
                   </span>
-                  <span className="mt-1 inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="mt-1 inline-flex items-center gap-2 text-xs text-text-mute">
                     <FriendlyStatusBadge
                       status={friendlyStatus({
                         status: j.status as JobStatus,
@@ -170,7 +170,7 @@ export default async function TechnicianHome({
                 </span>
                 <form action={claimJobAction}>
                   <input type="hidden" name="jobId" value={j.id} />
-                  <button className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-semibold text-white dark:bg-white dark:text-black">
+                  <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("take")}
                   </button>
                 </form>
@@ -184,7 +184,7 @@ export default async function TechnicianHome({
       <section>
         <h2 className="mb-2 text-sm font-medium">{t("inProgressMine")}</h2>
         {inProgress.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
+          <p className="text-sm text-text-mute">—</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {inProgress.map((j) => {
@@ -221,7 +221,7 @@ export default async function TechnicianHome({
               return (
                 <li
                   key={j.id}
-                  className="flex flex-col gap-2 rounded-xl border border-black/10 p-4 dark:border-white/15"
+                  className="flex flex-col gap-2 rounded-xl border border-border p-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Link
@@ -230,7 +230,7 @@ export default async function TechnicianHome({
                     >
                       {priorityMeta(j.priority).badge} {carLine(j)}
                       {amHelper(j) ? (
-                        <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        <span className="ms-2 text-xs text-text-mute">
                           · {t("helpingTag")}
                         </span>
                       ) : null}
@@ -265,7 +265,7 @@ export default async function TechnicianHome({
                     {showOpenButton ? (
                       <Link
                         href={`/technician/jobs/${j.id}`}
-                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
+                        className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                       >
                         {t("open")}
                       </Link>
@@ -273,7 +273,7 @@ export default async function TechnicianHome({
                     {canSendForEstimate ? (
                       <form action={sendForEstimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500">
+                        <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                           {t("sendForEstimate")}
                         </button>
                       </form>
@@ -281,7 +281,7 @@ export default async function TechnicianHome({
                     {canSendForReestimate ? (
                       <form action={sendForReestimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500">
+                        <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                           {t("extrasSendForApproval").replace(
                             "{count}",
                             String(extraCount),
@@ -316,19 +316,19 @@ export default async function TechnicianHome({
             {others.map((j) => (
               <li
                 key={j.id}
-                className="flex items-center justify-between rounded-xl border border-black/10 p-4 dark:border-white/15"
+                className="flex items-center justify-between rounded-xl border border-border p-4"
               >
                 <span>
                   <span className="block font-medium">
                     {priorityMeta(j.priority).badge} {carLine(j)}
                   </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="text-xs text-text-mute">
                     🔧 {techNames.get(j.claimedById ?? "") ?? "—"}
                   </span>
                 </span>
                 <form action={joinJobAction}>
                   <input type="hidden" name="jobId" value={j.id} />
-                  <button className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                  <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("joinJob")}
                   </button>
                 </form>
@@ -346,17 +346,17 @@ export default async function TechnicianHome({
             {paused.map((j) => (
               <li
                 key={j.id}
-                className="flex items-center justify-between rounded-xl border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950"
+                className="flex items-center justify-between rounded-xl border border-warning-500/40 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10"
               >
                 <span>
                   <span className="block text-lg font-medium">{carLine(j)}</span>
-                  <span className="text-xs text-yellow-800 dark:text-yellow-300">
+                  <span className="text-xs text-warning-600 dark:text-warning-500">
                     🟡 {reasonLabel(j.holdReason)}
                   </span>
                 </span>
                 <Link
                   href={`/technician/jobs/${j.id}`}
-                  className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                 >
                   {t("open")}
                 </Link>

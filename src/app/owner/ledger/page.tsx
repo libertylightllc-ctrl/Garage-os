@@ -208,37 +208,37 @@ export default async function OwnerLedger({
       <AppNav role="OWNER" active="ledger" />
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("ledgerTitle")}</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("ledgerSubtitle")}</p>
+        <p className="text-sm text-text-mute">{t("ledgerSubtitle")}</p>
       </div>
 
       {/* Date-range filter — GET form so URL stays bookmarkable.
           Default range (this month → today) shows when params absent. */}
       <form method="get" className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
+        <label className="flex flex-col text-xs text-text-mute">
           {t("ledgerFrom")}
           <input
             type="date"
             name="from"
             defaultValue={ymd(fromD)}
-            className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
         </label>
-        <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
+        <label className="flex flex-col text-xs text-text-mute">
           {t("ledgerTo")}
           <input
             type="date"
             name="to"
             defaultValue={ymd(now)}
-            className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
         </label>
-        <button className="rounded-md border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+        <button className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10">
           {t("ledgerApply")}
         </button>
         {rawFrom || rawTo ? (
           <Link
             href="/owner/ledger"
-            className="rounded-md border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-black/5  dark:hover:bg-white/10"
           >
             {t("ledgerReset")}
           </Link>
@@ -250,8 +250,8 @@ export default async function OwnerLedger({
         className={
           "rounded-lg border p-3 text-sm " +
           (balanced
-            ? "border-emerald-500/40 bg-emerald-50 text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200"
-            : "border-red-500/40 bg-red-50 text-red-900 dark:border-red-700/40 dark:bg-red-950/30 dark:text-red-200")
+            ? "border-success-500/40 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
+            : "border-danger-500/40 bg-danger-50 text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500")
         }
       >
         {balanced ? "✓ " : "⚠ "}
@@ -260,12 +260,12 @@ export default async function OwnerLedger({
       </div>
 
       {/* Per-account rollup */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+      <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">{t("ledgerByAccount")}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-zinc-500 dark:text-zinc-400">
+              <tr className="text-left text-text-mute">
                 <th className="py-1 pe-3">{t("ledgerAccount")}</th>
                 <th className="py-1 px-2 text-right">{t("ledgerDebit")}</th>
                 <th className="py-1 px-2 text-right">{t("ledgerCredit")}</th>
@@ -300,12 +300,12 @@ export default async function OwnerLedger({
           received. Migrated advances get a faded 'migrated' chip so
           the owner can tell which advances have already been applied
           to a final invoice. */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+      <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">
           {t("ledgerPayments")} ({feed.length})
         </h2>
         {feed.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-text-mute">
             {t("ledgerPaymentsEmpty")}
           </p>
         ) : (
@@ -316,27 +316,27 @@ export default async function OwnerLedger({
                 className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 px-3 py-2 text-sm dark:border-white/10"
               >
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="tabular-nums text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="tabular-nums text-xs text-text-mute">
                     {row.at.toISOString().slice(0, 16).replace("T", " ")}
                   </span>
                   <span className="font-medium">{row.customer}</span>
                   {row.kind === "PAYMENT" ? (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+                    <span className="inline-flex items-center rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-700 dark:bg-success-500/10 dark:text-success-500">
                       INV-{String(row.invoiceNumber).padStart(4, "0")}
                     </span>
                   ) : (
                     <>
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+                      <span className="inline-flex items-center rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
                         advance
                       </span>
                       {row.migrated ? (
-                        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                        <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-mute">
                           migrated
                         </span>
                       ) : null}
                     </>
                   )}
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="text-xs text-text-mute">
                     {row.method === "CASH"
                       ? t("methodCash")
                       : row.method === "CARD_POS"

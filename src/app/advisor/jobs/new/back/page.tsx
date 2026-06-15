@@ -57,15 +57,15 @@ export default async function NewJobMoulkiaBack({
       <div>
         <Link
           href="/advisor/jobs/new"
-          className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
+          className="text-sm text-text-mute hover:underline"
         >
           {t("backActiveJobs")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("backOfMoulkia")}</h1>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t("step2of2")}</p>
+        <p className="mt-1 text-xs text-text-mute">{t("step2of2")}</p>
       </div>
 
-      <section className="rounded-lg border border-emerald-500/40 bg-emerald-50 p-3 text-sm dark:bg-emerald-950/40">
+      <section className="rounded-xl border border-success-500/40 bg-success-50 p-4 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
         <p className="font-medium">{t("frontCaptured")}</p>
         {ownerName ? <p className="mt-1 text-xs">{ownerName}</p> : null}
         {plate ? <p className="text-xs">{plate}</p> : null}
@@ -77,7 +77,7 @@ export default async function NewJobMoulkiaBack({
         {vin ? <p className="text-xs">{vin}</p> : null}
       </section>
 
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <form action={moulkiaBackAction} className="flex flex-col gap-3">
           {/* Carry the FRONT extraction across into the back action — every
               field the front captured rides along so the merge can see them. */}
@@ -107,7 +107,7 @@ export default async function NewJobMoulkiaBack({
       <div className="text-center">
         <Link
           href={skipHref}
-          className="text-sm text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400"
+          className="text-sm text-text-mute underline-offset-2 hover:underline dark:text-text-mute"
         >
           {t("skipBackLink")}
         </Link>

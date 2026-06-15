@@ -56,23 +56,23 @@ export default async function HandoffDone({
       <AppNav role="ADVISOR" active="jobs" />
 
       {/* Success card — the visual confirmation */}
-      <section className="rounded-2xl border border-emerald-500/40 bg-emerald-50 p-6 text-center dark:bg-emerald-950/40">
+      <section className="rounded-xl border border-success-500/40 bg-success-50 p-6 text-center dark:border-success-500/30 dark:bg-success-500/10">
         <div className="text-5xl">✅</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t("handoffTitle")}</h1>
-        <p className="mt-2 text-base text-zinc-700 dark:text-zinc-200">{handoffMessage}</p>
+        <p className="mt-2 text-base text-text">{handoffMessage}</p>
       </section>
 
       {/* Summary of what was created — gives the advisor confidence the
           right data made it through and a quick reference if they're
           handing the keys over to a teammate. */}
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-xl border border-border p-4">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-base">
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("handoffJobNo")}
           </dt>
           <dd className="font-semibold tabular-nums">#{job.number ?? "—"}</dd>
 
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("secVehicle")}
           </dt>
           <dd>
@@ -81,7 +81,7 @@ export default async function HandoffDone({
             <span className="font-medium">{job.vehicle.plate}</span>
           </dd>
 
-          <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <dt className="text-sm font-medium text-text-mute">
             {t("secCustomer")}
           </dt>
           <dd>
@@ -90,7 +90,7 @@ export default async function HandoffDone({
 
           {job.complaint ? (
             <>
-              <dt className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              <dt className="text-sm font-medium text-text-mute">
                 {t("secComplaint")}
               </dt>
               <dd>{job.complaint}</dd>
@@ -105,19 +105,19 @@ export default async function HandoffDone({
       <div className="flex flex-col gap-2">
         <Link
           href="/advisor/jobs/new"
-          className="rounded-lg bg-zinc-900 px-5 py-3 text-center text-base font-semibold text-white dark:bg-white dark:text-black"
+          className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-center text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("handoffCreateAnother")}
         </Link>
         <Link
           href={`/advisor/jobs/${job.id}`}
-          className="rounded-lg border border-black/15 px-5 py-3 text-center text-base font-medium dark:border-white/20"
+          className="rounded-lg border border-border px-5 py-3 text-center text-base font-medium "
         >
           {t("handoffViewJob")}
         </Link>
         <Link
           href="/advisor"
-          className="rounded-lg px-5 py-3 text-center text-base text-zinc-500 hover:underline dark:text-zinc-400"
+          className="rounded-lg px-5 py-3 text-center text-base text-text-mute hover:underline dark:text-text-mute"
         >
           {t("handoffBackToActive")}
         </Link>

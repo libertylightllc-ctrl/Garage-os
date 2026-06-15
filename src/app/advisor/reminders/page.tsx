@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
 const BTN =
-  "rounded-md border border-black/15 px-3 py-1 text-xs font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
+  "rounded-md border border-border px-3 py-1 text-xs font-medium hover:bg-black/5  dark:hover:bg-white/10";
 const BTN_PRIMARY =
-  "rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white dark:bg-white dark:text-black";
+  "inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 
 type T = (k: MessageKey) => string;
 
@@ -225,7 +225,7 @@ export default async function RemindersQueue({
           type="search"
           defaultValue={q}
           placeholder={t("remindersFilterPlaceholder")}
-          className="min-w-40 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          className="min-w-40 flex-1 h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         />
         <button className={BTN}>{t("remindersFilterApply")}</button>
         {q ? (
@@ -243,7 +243,7 @@ export default async function RemindersQueue({
           Prev/next are plain Links → server re-renders with the new
           month. The native picker uses a GET form so a date jump
           works without JS too. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3">
         <div className="flex items-center gap-2">
           <Link
             href={`/advisor/reminders?month=${monthKeyFromYM(prevYM.year, prevYM.month)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
@@ -263,14 +263,14 @@ export default async function RemindersQueue({
         </div>
         <form method="get" className="flex items-center gap-2">
           {q ? <input type="hidden" name="q" value={q} /> : null}
-          <label className="text-xs text-zinc-500 dark:text-zinc-400">
+          <label className="text-xs text-text-mute">
             {t("remindersJumpToMonth")}
           </label>
           <input
             type="month"
             name="month"
             defaultValue={selKey}
-            className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+            className="rounded-md border border-border bg-transparent px-2 py-1 text-sm "
           />
           <button className={BTN}>{t("remindersFilterApply")}</button>
         </form>
@@ -280,7 +280,7 @@ export default async function RemindersQueue({
           Reflects the FILTERED count (i.e. respects ?q=), not the raw
           DB total. The '· M cars' clause is hidden when the month is
           empty so '0 reminders due in Nov 2026' still reads cleanly. */}
-      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+      <p className="text-sm text-text">
         <span className="font-semibold tabular-nums">{inMonth.length}</span>{" "}
         {inMonth.length === 1
           ? t("remindersReminderSingular")
@@ -303,17 +303,17 @@ export default async function RemindersQueue({
           for this month' so the advisor doesn't think the page is
           broken when they navigate to an empty future month. */}
       {all.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-text-mute">
           {t("noReminders")}
         </p>
       ) : null}
       {all.length > 0 && filtered.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-text-mute">
           {t("remindersFilterNoMatch")}
         </p>
       ) : null}
       {filtered.length > 0 && inMonth.length === 0 ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-text-mute">
           {t("remindersMonthEmpty")}
         </p>
       ) : null}
@@ -347,8 +347,8 @@ export default async function RemindersQueue({
                   className={
                     "flex flex-col gap-2 rounded-lg border p-3 text-sm " +
                     (overdue
-                      ? "border-red-500/40 bg-red-50 dark:border-red-700/40 dark:bg-red-950/30"
-                      : "border-black/10 dark:border-white/15")
+                      ? "border-danger-500/40 bg-danger-50 dark:border-danger-500/30 dark:bg-danger-500/10"
+                      : "border-border")
                   }
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -356,17 +356,17 @@ export default async function RemindersQueue({
                       <span className="font-semibold">
                         {g.vehicle.make} {g.vehicle.model}
                       </span>
-                      <span className="ms-2 text-zinc-600 dark:text-zinc-300">
+                      <span className="ms-2 text-text">
                         {g.vehicle.plate} · {g.vehicle.customer.name}
                       </span>
                     </span>
                     <span className="flex items-center gap-2">
                       {overdue ? (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                        <span className="inline-flex items-center rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                           {t("remindersBucketOverdue")}
                         </span>
                       ) : null}
-                      <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                      <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold tabular-nums text-text-mute">
                         {g.rs.length}{" "}
                         {g.rs.length === 1
                           ? t("remindersReminderSingular")
@@ -378,13 +378,13 @@ export default async function RemindersQueue({
                     {g.rs.map((r) => (
                       <li
                         key={r.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 bg-white/60 px-2 py-1.5 dark:border-white/10 dark:bg-zinc-900/40"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-1.5"
                       >
                         <span>
                           <span className="font-medium">
                             🔧 {t(reminderTypeKey(r.type))}
                           </span>
-                          <span className="ms-2 text-xs text-zinc-500 dark:text-zinc-400">
+                          <span className="ms-2 text-xs text-text-mute">
                             {t("dueOn")} {day(r.dueAt)}
                           </span>
                         </span>
@@ -420,7 +420,7 @@ export default async function RemindersQueue({
           double the page length). */}
       {otherMonthList.length > 0 ? (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
+          <h2 className="text-sm font-medium text-text">
             {t("remindersOtherMonths")}
           </h2>
           <ul className="flex flex-col gap-1">
@@ -428,18 +428,18 @@ export default async function RemindersQueue({
               <li key={m.key}>
                 <Link
                   href={`/advisor/reminders?month=${m.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/10 px-3 py-2 text-sm hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-black/5  dark:hover:bg-white/10"
                 >
                   <span className="font-medium">{m.label}</span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    <span className="tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">
+                  <span className="text-xs text-text-mute">
+                    <span className="tabular-nums font-semibold text-text">
                       {m.total}
                     </span>{" "}
                     {m.total === 1
                       ? t("remindersReminderSingular")
                       : t("remindersReminderPlural")}
                     {" · "}
-                    <span className="tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">
+                    <span className="tabular-nums font-semibold text-text">
                       {m.vehicleBullets.length}
                     </span>{" "}
                     {m.vehicleBullets.length === 1

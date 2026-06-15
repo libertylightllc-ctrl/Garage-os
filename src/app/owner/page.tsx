@@ -267,29 +267,29 @@ export default async function OwnerHome({
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {metrics.map((m) => (
-          <div key={m.key} className="rounded-xl border border-black/10 p-3 dark:border-white/15">
+          <div key={m.key} className="rounded-xl border border-border p-3 ">
             <div className="text-2xl">{m.icon}</div>
-            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{t(m.key)}</div>
+            <div className="mt-1 text-xs text-text-mute">{t(m.key)}</div>
             <div className="text-base font-semibold">{m.value}</div>
           </div>
         ))}
       </div>
-      <p className="-mt-3 text-xs text-zinc-400">
+      <p className="-mt-3 text-xs text-text-mute">
         {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ? "+" : ""}
         {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
 
       {/* Copilot */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+      <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">{t("askCopilot")}</h2>
         <form method="GET" className="flex gap-2">
           <input
             name="q"
             defaultValue={q ?? ""}
             placeholder={t("sampleOwes")}
-            className="flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            className="flex-1 h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
-          <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
             {t("ask")}
           </button>
         </form>
@@ -300,7 +300,7 @@ export default async function OwnerHome({
               <Link
                 key={key}
                 href={`/owner?q=${encodeURIComponent(s)}`}
-                className="rounded-full border border-black/10 px-3 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/10"
+                className="rounded-full border border-border px-3 py-1 text-xs text-text hover:bg-black/5  dark:text-zinc-300 dark:hover:bg-white/10"
               >
                 {s}
               </Link>
@@ -308,13 +308,13 @@ export default async function OwnerHome({
           })}
         </div>
         {answer ? (
-          <p className="mt-3 rounded-md bg-zinc-100 p-3 text-sm dark:bg-zinc-800">{answer}</p>
+          <p className="mt-3 rounded-xl border border-border bg-surface-2 p-4 text-sm">{answer}</p>
         ) : null}
-        <p className="mt-2 text-xs text-zinc-400">{t("copilotReadonly")}</p>
+        <p className="mt-2 text-xs text-text-mute">{t("copilotReadonly")}</p>
       </div>
 
       {/* Pilot instrumentation + AI margin meter */}
-      <div className="rounded-xl border border-black/10 p-4 text-sm dark:border-white/15">
+      <div className="rounded-xl border border-border p-4 text-sm ">
         <h2 className="mb-2 text-sm font-medium">{t("pilotMetrics")}</h2>
         <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
           <li>
@@ -322,7 +322,7 @@ export default async function OwnerHome({
             <span className="font-medium">
               {acceptance.rate === null ? "—" : `${Math.round(acceptance.rate * 100)}%`}
             </span>{" "}
-            <span className="text-zinc-400">
+            <span className="text-text-mute">
               ({acceptance.confirmed}/{acceptance.confirmed + acceptance.rejected})
             </span>
           </li>
@@ -339,7 +339,7 @@ export default async function OwnerHome({
             {t("aiCost")}: <span className="font-medium">${usage.costUsd.toFixed(4)}</span>
           </li>
         </ul>
-        <p className="mt-2 text-xs text-zinc-400">{t("aiCostNote")}</p>
+        <p className="mt-2 text-xs text-text-mute">{t("aiCostNote")}</p>
       </div>
 
       {/* Per-technician productivity — slice #3 adds time math:
@@ -349,15 +349,15 @@ export default async function OwnerHome({
           Existing columns (jobs/steps/photos/voice/parts/finishes)
           stay so the owner doesn't lose their existing read of the
           table. */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+      <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">{t("techActivity")}</h2>
         {techWork.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t("noTechActivity")}</p>
+          <p className="text-sm text-text-mute">{t("noTechActivity")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                <tr className="text-left text-text-mute">
                   <th className="py-1 pe-3">{t("colTechnician")}</th>
                   <th className="py-1 px-2 text-right">{t("colJobs")}</th>
                   <th className="py-1 px-2 text-right" title={t("colAvgTimeTitle")}>⏱ avg</th>
@@ -404,17 +404,17 @@ export default async function OwnerHome({
             ⏱ avg    — mean time customer sat on a quote before
                       deciding (sentAt → approvedAt). null=— rendered
                       when the advisor has no approvals yet. */}
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/15">
+      <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">{t("advisorActivity")}</h2>
         {advisorWork.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="text-sm text-text-mute">
             {t("noAdvisorActivity")}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                <tr className="text-left text-text-mute">
                   <th className="py-1 pe-3">{t("colAdvisor")}</th>
                   <th className="py-1 px-2 text-right">{t("colJobs")}</th>
                   <th className="py-1 px-2 text-right">{t("colEstimatesSent")}</th>

@@ -220,18 +220,18 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
           <input type="hidden" name="estimateId" value={est.id} />
           <div className="flex flex-wrap gap-2">
-            <select name="kind" className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20">
+            <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               <option value="LABOR">{t("labor")}</option>
               <option value="PART">{t("part")}</option>
               <option value="FEE">{t("fee")}</option>
               <option value="DISCOUNT">{t("discount")}</option>
             </select>
-            <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="min-w-40 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20" />
+            <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="min-w-40 flex-1 h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60" />
           </div>
           <div className="flex flex-wrap gap-2">
             <input name="qty" type="number" step="any" min="0" inputMode="decimal" defaultValue="1" className="w-20 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20" />
             <input name="unitPrice" type="number" step="any" min="0" inputMode="decimal" placeholder="Unit price" required className="min-w-32 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20" />
-            <button className="rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black">
+            <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("addLine")}
             </button>
           </div>
@@ -258,7 +258,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           );
           const advanceBalance = balanceDue(approvedTotal, advancePaid);
           return (
-            <section className="rounded-xl border border-amber-500/40 bg-amber-50 p-4 dark:border-amber-700/40 dark:bg-amber-950/30">
+            <section className="rounded-xl border border-warning-500/40 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
               <header className="flex items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">
                   {t("advancePaymentsTitle")}
@@ -320,7 +320,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       max={advanceBalance.toFixed(2)}
                       defaultValue={advanceBalance.toFixed(2)}
                       required
-                      className="w-32 rounded-md border border-amber-500/50 bg-white px-3 py-2 text-right text-base text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                      className="h-10 w-32 rounded-lg border border-border bg-surface px-3 text-right text-base text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                     />
                   </label>
                   <label className="flex flex-col text-xs text-amber-900 dark:text-amber-200">
@@ -328,13 +328,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                     <select
                       name="method"
                       defaultValue="CASH"
-                      className="rounded-md border border-amber-500/50 bg-white px-3 py-2 text-base text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
+                      className="h-10 rounded-lg border border-border bg-surface px-3 text-base text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                     >
                       <option value="CASH">{t("methodCash")}</option>
                       <option value="CARD_POS">{t("methodCardPos")}</option>
                     </select>
                   </label>
-                  <button className="rounded-lg bg-amber-600 px-4 py-2 text-base font-semibold text-white hover:bg-amber-500">
+                  <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                     {t("receiveAdvancePayment")}
                   </button>
                 </form>
@@ -359,7 +359,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         {canPrice && est.status === "DRAFT" && est.lines.length > 0 ? (
           <Link
             href={`/estimates/${est.id}/preview`}
-            className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-semibold text-white dark:bg-white dark:text-black"
+            className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           >
             {t("estimatePreviewButton")}
           </Link>
@@ -380,13 +380,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         {canPrice && est.status === "APPROVED" && !est.invoice && jobStatus === "TECH_COMPLETE" ? (
           <form action={generateInvoiceAction}>
             <input type="hidden" name="estimateId" value={est.id} />
-            <button className="rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white hover:bg-green-500">
+            <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("generateInvoice")}
             </button>
           </form>
         ) : null}
         {est.invoice ? (
-          <Link href={`/invoices/${est.invoice.id}`} className="rounded-lg border border-black/15 px-5 py-3 text-base font-medium dark:border-white/20">
+          <Link href={`/invoices/${est.invoice.id}`} className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
             {t("viewInvoice")}
           </Link>
         ) : null}
@@ -396,7 +396,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           explicit 'why is there no button right now' message instead of
           guessing. */}
       {est.status === "APPROVED" && !est.invoice && workNotComplete ? (
-        <p className="rounded-lg border border-emerald-500/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+        <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
           {t("estimateApprovedSentToTech")}
         </p>
       ) : null}
@@ -425,8 +425,8 @@ function StatusButton({
       <button
         className={
           primary
-            ? "rounded-lg bg-zinc-900 px-5 py-3 text-base font-semibold text-white dark:bg-white dark:text-black"
-            : "rounded-lg border border-black/15 px-5 py-3 text-base font-medium dark:border-white/20"
+            ? "inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+            : "inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         }
       >
         {label}

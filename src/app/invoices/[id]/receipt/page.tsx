@@ -75,7 +75,7 @@ export default async function InvoiceReceipt({
 
       {/* Header: garage identity + RECEIPT label so the customer
           immediately knows what this paper is. */}
-      <div className="flex items-start justify-between border-b border-black/15 pb-4">
+      <div className="flex items-start justify-between border-b border-border pb-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {t("invoiceReceiptTitle")}
@@ -121,7 +121,7 @@ export default async function InvoiceReceipt({
         <dd className="tabular-nums">{money(total)}</dd>
       </dl>
 
-      <p className="border-t border-black/10 pt-4 text-center text-xs text-zinc-500">
+      <p className="border-t border-border pt-4 text-center text-xs text-text-mute">
         {t("invoiceReceiptThanks")}
       </p>
     </main>

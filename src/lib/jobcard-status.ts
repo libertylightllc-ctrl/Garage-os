@@ -133,31 +133,37 @@ export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
  * so colours stay consistent everywhere the badge renders.
  *   bg / text classes for both light and dark mode.
  */
+// Visual polish C2: mapped to the Workshop 4-tone semantic palette.
+// Every status that means 'waiting on someone' uses warning (amber).
+// Every status that means 'in progress / informational' uses info (blue).
+// Success (green) reserved for completed / approved / paid states.
+// Danger (red) for problem states (re-estimate awaiting approval, on hold).
+// Neutral (zinc) for terminal/cancelled.
 export const FRIENDLY_STATUS_TONE: Record<FriendlyStatus, string> = {
   WAITING_FOR_TECH:
-    "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200",
+    "bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-500",
   TECH_DIAGNOSING:
-    "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200",
+    "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   ESTIMATE_UNDER_PROCESS:
-    "bg-violet-100 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200",
+    "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   AWAITING_CUSTOMER_APPROVAL:
-    "bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200",
+    "bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-500",
   APPROVED_IN_PROGRESS:
-    "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200",
+    "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500",
   EXTRA_WORK_AWAITING_APPROVAL:
-    "bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200",
+    "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-500",
   COMPLETE_AWAITING_INVOICE:
-    "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-200",
+    "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   AWAITING_PAYMENT:
-    "bg-fuchsia-100 text-fuchsia-900 dark:bg-fuchsia-950/60 dark:text-fuchsia-200",
+    "bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-500",
   READY_FOR_PICKUP:
-    "bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200",
+    "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   COMPLETE:
-    "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500",
   ON_HOLD:
-    "bg-yellow-100 text-yellow-900 dark:bg-yellow-950/60 dark:text-yellow-200",
+    "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-500",
   CANCELLED:
-    "bg-red-100 text-red-900 dark:bg-red-950/60 dark:text-red-200",
+    "bg-neutral-100 text-neutral-700 dark:bg-surface-2 dark:text-text-mute",
 };
 
 export function isLinear(s: JobStatus): boolean {

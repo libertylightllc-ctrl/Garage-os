@@ -77,7 +77,7 @@ export default async function EstimatePreview({
       {/* White card surface so the preview reads as a discrete document
           even in dark mode — approximates the WhatsApp / PDF render
           the customer will see. */}
-      <div className="rounded-2xl border border-black/10 bg-white p-8 text-zinc-900 shadow-sm dark:border-white/20 dark:shadow-none">
+      <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -172,7 +172,7 @@ export default async function EstimatePreview({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href={`/estimates/${est.id}`}
-          className="rounded-lg border border-black/15 px-5 py-3 text-center text-base font-semibold hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-center text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("estimatePreviewGoBack")}
         </Link>
@@ -181,7 +181,7 @@ export default async function EstimatePreview({
           <input type="hidden" name="status" value="SENT" />
           <button
             type="submit"
-            className="rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500"
+            className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           >
             {t("estimateSendToCustomer")}
           </button>

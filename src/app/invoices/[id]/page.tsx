@@ -130,7 +130,7 @@ export default async function InvoiceView({
           searchParam). Hidden on print so it doesn't end up on the
           customer's PDF. */}
       {justEmailed ? (
-        <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800 print:hidden dark:bg-green-950 dark:text-green-200">
+        <div className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 print:hidden dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
           📧 {t("invoiceEmailedConfirmation")}
         </div>
       ) : null}
@@ -141,7 +141,7 @@ export default async function InvoiceView({
           The WhatsApp send button on /invoices/[id]/preview stays
           where it was — per spec, this slice doesn't touch it. */}
       <div className="flex flex-wrap gap-2 print:hidden">
-        <PrintButton className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+        <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
           🖨️ {t("invoicePrintInvoice")}
         </PrintButton>
         {state === "PAID" ? (
@@ -149,7 +149,7 @@ export default async function InvoiceView({
             href={`/invoices/${inv.id}/receipt`}
             target="_blank"
             rel="noopener"
-            className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           >
             🧾 {t("invoicePrintReceipt")}
           </Link>
@@ -160,7 +160,7 @@ export default async function InvoiceView({
               <input type="hidden" name="invoiceId" value={inv.id} />
               <button
                 type="submit"
-                className="rounded-md border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
               >
                 📧 {t("invoiceEmailInvoice")}
               </button>
@@ -187,7 +187,7 @@ export default async function InvoiceView({
                 returns 'PAID' so this branch is naturally false for
                 paid invoices. */}
             {state === "OVERDUE" ? (
-              <span className="inline-block whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/60 dark:text-red-200">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                 {t("invoiceBadgeOverdue")}
               </span>
             ) : null}
@@ -196,12 +196,12 @@ export default async function InvoiceView({
                 (an overdue invoice that's also partial returns OVERDUE,
                 not PARTIAL — the date signal wins). */}
             {state === "PARTIAL" ? (
-              <span className="inline-block whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
                 {t("invoiceBadgePartial")}
               </span>
             ) : null}
             {state === "PAID" ? (
-              <span className="inline-block whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
                 {t("invoiceBadgePaid")}
               </span>
             ) : null}
@@ -381,7 +381,7 @@ export default async function InvoiceView({
             />
             <button
               type="submit"
-              className="rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+              className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
               {t("addLineButton")}
             </button>
@@ -442,7 +442,7 @@ export default async function InvoiceView({
               <span className="text-xs text-zinc-500 dark:text-zinc-400">%</span>
               <button
                 type="submit"
-                className="ms-auto rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+                className="ms-auto inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
               >
                 {t("discountApply")}
               </button>
@@ -468,7 +468,7 @@ export default async function InvoiceView({
               <span className="text-xs text-zinc-500 dark:text-zinc-400">AED</span>
               <button
                 type="submit"
-                className="ms-auto rounded-md bg-zinc-900 px-3 py-1 text-sm font-medium text-white dark:bg-white dark:text-black"
+                className="ms-auto inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
               >
                 {t("discountApply")}
               </button>
@@ -587,17 +587,17 @@ export default async function InvoiceView({
       !inv.jobCard.invoiceSentAt ? (
         <Link
           href={`/invoices/${inv.id}/preview`}
-          className="block rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-4 text-center print:hidden dark:bg-fuchsia-950/40"
+          className="block rounded-xl border border-accent-500/40 bg-accent-50 p-4 text-center print:hidden dark:border-accent-500/30 dark:bg-accent-500/10"
         >
-          <p className="text-sm text-fuchsia-900 dark:text-fuchsia-100">
+          <p className="text-sm text-brand-900 dark:text-accent-400">
             {t("invoicePreviewNote")}
           </p>
-          <span className="mt-3 inline-block rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500">
+          <span className="mt-3 inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors">
             {t("invoicePreviewButton")}
           </span>
         </Link>
       ) : inv.jobCard.invoiceSentAt ? (
-        <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 print:hidden dark:bg-zinc-900 dark:text-zinc-300">
+        <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute print:hidden">
           📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{" "}
           {inv.jobCard.invoiceSentAt.toISOString().slice(0, 16).replace("T", " ")}
         </p>

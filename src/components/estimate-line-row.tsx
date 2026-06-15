@@ -48,11 +48,11 @@ export interface LineProps {
 }
 
 // 16px (text-base) on inputs prevents iOS Safari from auto-zooming on focus.
-// Padding gives ~44px tap height — meets iOS HIG / Android Material minimums.
+// Padding gives 40px tap height — matches the Workshop md button size.
 const FIELD =
-  "rounded-md border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20";
+  "h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 const ACTION =
-  "rounded-md px-3 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/10";
+  "inline-flex h-10 items-center justify-center rounded-lg px-3 text-sm font-semibold hover:bg-surface-2 transition-colors";
 
 /**
  * One CARD per estimate line. Two modes:
@@ -91,7 +91,7 @@ export function EstimateLineRow({
   // ---- Editing mode: full inline edit form ----
   if (editing && editable) {
     return (
-      <div className="rounded-lg border border-zinc-900/30 bg-zinc-50 p-3 dark:border-white/30 dark:bg-zinc-900">
+      <div className="rounded-xl border border-border bg-surface-2 p-4">
         <form
           action={updateEstimateLineAction}
           className="flex flex-col gap-3"
@@ -145,14 +145,14 @@ export function EstimateLineRow({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="flex-1 rounded-md bg-zinc-900 px-4 py-2 text-base font-semibold text-white dark:bg-white dark:text-black"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
               {labels.save}
             </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
-              className="flex-1 rounded-md border border-black/15 px-4 py-2 text-base font-medium dark:border-white/20"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
               {labels.cancel}
             </button>

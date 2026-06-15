@@ -93,6 +93,16 @@ function invoiceDateIso(inv: InvoiceRowLike): string {
   return inv.issuedAt.toISOString().slice(0, 10);
 }
 
+// Visual polish C2: shared button class strings used by the section
+// action rows below. Keeps every dashboard action consistent with the
+// Workshop design system. /cashier is an overview, so it has NO hero
+// (amber) action — every section action is `primary`. Hero is
+// reserved for focused detail pages where one action dominates.
+const BTN_PRIMARY_MD =
+  "inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
+const BTN_GHOST_SM =
+  "inline-flex h-8 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
+
 // Permitted tab values; anything else falls back to 'estimates'.
 const VALID_TABS = new Set<string>([
   "estimates",
@@ -478,7 +488,7 @@ export default async function CashierHome({
           view. Sits above the section list so the cashier sees 'this
           is a drilldown, not the whole estimates tab' at a glance. */}
       {currentTab === "estimates" && estimateFilter !== null ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-500/40 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-700/40 dark:bg-sky-950/40 dark:text-sky-200">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-info-500/40 bg-info-50 px-4 py-2.5 text-sm text-info-600 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-500">
           <span>
             {t("cashierFilterActive")}:{" "}
             <span className="font-semibold">
@@ -497,7 +507,7 @@ export default async function CashierHome({
           </span>
           <Link
             href="/cashier?tab=estimates"
-            className="rounded-md border border-sky-500/40 bg-white px-3 py-1 text-xs font-semibold text-sky-900 hover:bg-sky-100 dark:bg-sky-900/50 dark:text-sky-100 dark:hover:bg-sky-900/80"
+            className={BTN_GHOST_SM}
           >
             {t("cashierClearFilter")}
           </Link>
@@ -529,7 +539,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-rose-500/40 bg-rose-50 p-3 text-sm dark:border-rose-700/40 dark:bg-rose-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-danger-500/40 bg-danger-50 p-4 text-sm dark:border-danger-500/30 dark:bg-danger-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -556,7 +566,7 @@ export default async function CashierHome({
                   <div className="flex justify-end">
                     <Link
                       href={href}
-                      className="rounded-md bg-rose-600 px-3 py-1 font-medium text-white hover:bg-rose-500"
+                      className={BTN_PRIMARY_MD}
                     >
                       {t("cashierPriceExtraWork")}
                     </Link>
@@ -588,7 +598,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-fuchsia-500/40 bg-fuchsia-50 p-3 text-sm dark:border-fuchsia-700/40 dark:bg-fuchsia-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-warning-500/40 bg-warning-50 p-4 text-sm dark:border-warning-500/30 dark:bg-warning-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -627,7 +637,7 @@ export default async function CashierHome({
                         <input type="hidden" name="invoiceId" value={inv.id} />
                         <button
                           type="submit"
-                          className="rounded-md bg-fuchsia-600 px-3 py-1 font-medium text-white hover:bg-fuchsia-500"
+                          className={BTN_PRIMARY_MD}
                         >
                           {t("cashierSendInvoiceToCustomer")}
                         </button>
@@ -658,7 +668,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-teal-500/40 bg-teal-50 p-3 text-sm dark:border-teal-700/40 dark:bg-teal-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-info-500/40 bg-info-50 p-4 text-sm dark:border-info-500/30 dark:bg-info-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -691,7 +701,7 @@ export default async function CashierHome({
                   <div className="flex justify-end">
                     <Link
                       href={href}
-                      className="rounded-md bg-teal-600 px-3 py-1 font-medium text-white hover:bg-teal-500"
+                      className={BTN_PRIMARY_MD}
                     >
                       {hasInvoice ? t("cashierGoToInvoice") : t("cashierGenerateInvoice")}
                     </Link>
@@ -741,7 +751,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                  className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -772,7 +782,7 @@ export default async function CashierHome({
                     ) : (
                       <form action={createEstimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
-                        <button className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white dark:bg-white dark:text-black">
+                        <button className={BTN_PRIMARY_MD}>
                           {t("setPrice")}
                         </button>
                       </form>
@@ -819,7 +829,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-orange-500/40 bg-orange-50 p-3 text-sm dark:border-orange-700/40 dark:bg-orange-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-warning-500/40 bg-warning-50 p-4 text-sm dark:border-warning-500/30 dark:bg-warning-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -855,7 +865,7 @@ export default async function CashierHome({
                             contract. */}
                         <Link
                           href={`/estimates/${est.id}/preview`}
-                          className="rounded-md bg-orange-600 px-3 py-1 font-medium text-white hover:bg-orange-500"
+                          className={BTN_PRIMARY_MD}
                         >
                           {t("cashierResendEstimate")}
                         </Link>
@@ -911,7 +921,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-50 p-3 text-sm dark:border-emerald-700/40 dark:bg-emerald-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-success-500/40 bg-success-50 p-4 text-sm dark:border-success-500/30 dark:bg-success-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -949,7 +959,7 @@ export default async function CashierHome({
                     {techDone && est ? (
                       <Link
                         href={`/estimates/${est.id}`}
-                        className="rounded-md bg-emerald-600 px-3 py-1 font-medium text-white hover:bg-emerald-500"
+                        className={BTN_PRIMARY_MD}
                       >
                         {t("cashierGenerateInvoice")}
                       </Link>
@@ -994,7 +1004,7 @@ export default async function CashierHome({
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-lg border border-rose-500/40 bg-rose-50 p-3 text-sm dark:border-rose-700/40 dark:bg-rose-950/30"
+                  className="flex flex-col gap-2 rounded-xl border border-danger-500/40 bg-danger-50 p-4 text-sm dark:border-danger-500/30 dark:bg-danger-500/10"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
@@ -1026,7 +1036,7 @@ export default async function CashierHome({
                     ) : null}
                     <form action={createEstimateAction}>
                       <input type="hidden" name="jobId" value={j.id} />
-                      <button className="rounded-md bg-rose-600 px-3 py-1 font-medium text-white hover:bg-rose-500">
+                      <button className={BTN_PRIMARY_MD}>
                         {t("cashierReviseEstimate")}
                       </button>
                     </form>
@@ -1056,7 +1066,7 @@ export default async function CashierHome({
                 data-filter-row
                 data-search={jobSearchTokens(j)}
                 data-date={jobDateIso(j)}
-                className="flex flex-col gap-2 rounded-lg border border-black/10 bg-zinc-50 p-3 text-sm dark:border-white/15 dark:bg-zinc-900/40"
+                className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-4 text-sm"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>
@@ -1120,7 +1130,7 @@ export default async function CashierHome({
                     data-filter-row
                     data-search={invoiceSearchTokens(inv)}
                     data-date={invoiceDateIso(inv)}
-                    className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                    className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm"
                   >
                     <Link
                       href={`/invoices/${inv.id}`}
@@ -1135,7 +1145,7 @@ export default async function CashierHome({
                             small sizes where the emoji can read as a
                             decoration. */}
                         {state === "OVERDUE" ? (
-                          <span className="ms-2 inline-block whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                          <span className="ms-2 inline-flex items-center whitespace-nowrap rounded-full bg-danger-50 text-danger-700 px-2 py-0.5 text-xs font-semibold dark:bg-danger-500/10 dark:text-danger-500">
                             {t("invoiceBadgeOverdue")}
                           </span>
                         ) : null}

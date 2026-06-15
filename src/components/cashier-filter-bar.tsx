@@ -89,12 +89,12 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
       // The form swallows Enter so a casual press doesn't trigger
       // any inadvertent navigation. Filtering is already live.
       onSubmit={(e) => e.preventDefault()}
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-900/40"
+      className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface p-4"
     >
       <div className="flex flex-1 flex-col gap-1">
         <label
           htmlFor={searchInputId}
-          className="text-xs text-zinc-500 dark:text-zinc-400"
+          className="text-xs text-text-mute"
         >
           {labels.searchPlaceholder}
         </label>
@@ -105,13 +105,13 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="INV-2026-0013, Ad 2342, ARAFATH, #38…"
-          className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         />
       </div>
       <div className="flex flex-col gap-1">
         <label
           htmlFor={fromInputId}
-          className="text-xs text-zinc-500 dark:text-zinc-400"
+          className="text-xs text-text-mute"
         >
           {labels.fromLabel}
         </label>
@@ -120,13 +120,13 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
           type="date"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
-          className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         />
       </div>
       <div className="flex flex-col gap-1">
         <label
           htmlFor={toInputId}
-          className="text-xs text-zinc-500 dark:text-zinc-400"
+          className="text-xs text-text-mute"
         >
           {labels.toLabel}
         </label>
@@ -135,7 +135,7 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
           type="date"
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          className="rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         />
       </div>
       <button
@@ -145,7 +145,7 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
         // 'Clear' stays visible at all times so the cashier always
         // sees a way to reset (vs hiding when no filter is active).
         // Just disable it then so the affordance is clear.
-        className="rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
+        className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
       >
         ✕ {labels.clearLabel}
       </button>

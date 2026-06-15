@@ -239,12 +239,12 @@ export default async function InvoicePreview({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href={`/invoices/${inv.id}`}
-          className="rounded-lg border border-black/15 px-5 py-3 text-center text-base font-semibold hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-center text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
         >
           {t("invoicePreviewGoBack")}
         </Link>
         {alreadySent ? (
-          <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+          <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute">
             📨 {t("invoiceAlreadySent")} ·{" "}
             {inv.jobCard.invoiceSentAt!.toISOString().slice(0, 16).replace("T", " ")}
           </p>
@@ -253,7 +253,7 @@ export default async function InvoicePreview({
             <input type="hidden" name="invoiceId" value={inv.id} />
             <button
               type="submit"
-              className="rounded-lg bg-fuchsia-600 px-5 py-3 text-base font-semibold text-white hover:bg-fuchsia-500"
+              className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
               {t("sendInvoiceToCustomer")}
             </button>

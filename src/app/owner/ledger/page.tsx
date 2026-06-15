@@ -245,47 +245,65 @@ export default async function OwnerLedger({
         ) : null}
       </form>
 
-      {/* Trial-balance banner — green = books balanced, red = drift. */}
+      {/* Trial-balance banner — success-toned card when the books are
+          balanced (debit total == credit total) and danger-toned when
+          there's drift. Includes a leading status icon + the totals so
+          the owner can see both 'are we balanced?' and 'what's the
+          gross volume?' at a glance. */}
       <div
         className={
-        "rounded-lg border p-3 text-sm"+
+          "flex flex-wrap items-center gap-2 rounded-xl border p-4 text-sm " +
           (balanced
-            ?"border-success-500/40 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
-            :"border-danger-500/40 bg-danger-50 text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500")
+            ? "border-success-500/40 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500"
+            : "border-danger-500/40 bg-danger-50 text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500")
         }
       >
-        {balanced ?"✓":"⚠"}
-        {t("ledgerTrialBalance")}: {t("ledgerDebit")} {money(totalDebit)} ·{""}
-        {t("ledgerCredit")} {money(totalCredit)}
+        <span className="text-lg" aria-hidden="true">{balanced ? "✓" : "⚠"}</span>
+        <span className="font-semibold">{t("ledgerTrialBalance")}</span>
+        <span className="text-text-mute">·</span>
+        <span className="tabular-nums">
+          {t("ledgerDebit")} <span className="font-semibold">{money(totalDebit)}</span>
+        </span>
+        <span className="text-text-mute">·</span>
+        <span className="tabular-nums">
+          {t("ledgerCredit")} <span className="font-semibold">{money(totalCredit)}</span>
+        </span>
       </div>
 
-      {/* Per-account rollup */}
+      {/* Per-account rollup — same table treatment as the tech /
+          advisor tables on /owner: uppercase tracking on headers,
+          border-b row separation, zebra-stripe surface-2 on even rows.
+          All money values right-aligned with tabular-nums so decimals
+          stack cleanly. */}
       <div className="rounded-xl border border-border p-4">
-        <h2 className="mb-2 text-sm font-medium">{t("ledgerByAccount")}</h2>
+        <h2 className="mb-3 text-base font-semibold">{t("ledgerByAccount")}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-text-mute">
-                <th className="py-1 pe-3">{t("ledgerAccount")}</th>
-                <th className="py-1 px-2 text-right">{t("ledgerDebit")}</th>
-                <th className="py-1 px-2 text-right">{t("ledgerCredit")}</th>
-                <th className="py-1 ps-2 text-right">{t("ledgerNet")}</th>
+              <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
+                <th className="py-2 pe-3 text-start font-semibold">{t("ledgerAccount")}</th>
+                <th className="py-2 px-2 text-end font-semibold">{t("ledgerDebit")}</th>
+                <th className="py-2 px-2 text-end font-semibold">{t("ledgerCredit")}</th>
+                <th className="py-2 ps-2 text-end font-semibold">{t("ledgerNet")}</th>
               </tr>
             </thead>
             <tbody>
-              {accountRows.map((r) => (
+              {accountRows.map((r, i) => (
                 <tr
                   key={r.account}
-                  className="border-t border-black/5 dark:border-white/10"
+                  className={
+                    "border-b border-border/60 " +
+                    (i % 2 === 1 ? "bg-surface-2/40" : "")
+                  }
                 >
-                  <td className="py-1 pe-3 font-medium">{r.account}</td>
-                  <td className="py-1 px-2 text-right tabular-nums">
+                  <td className="py-2 pe-3 font-medium">{r.account}</td>
+                  <td className="py-2 px-2 text-end tabular-nums">
                     {money(r.debit)}
                   </td>
-                  <td className="py-1 px-2 text-right tabular-nums">
+                  <td className="py-2 px-2 text-end tabular-nums">
                     {money(r.credit)}
                   </td>
-                  <td className="py-1 ps-2 text-right tabular-nums font-semibold">
+                  <td className="py-2 ps-2 text-end tabular-nums font-semibold">
                     {money(r.net)}
                   </td>
                 </tr>
@@ -301,19 +319,22 @@ export default async function OwnerLedger({
           the owner can tell which advances have already been applied
           to a final invoice. */}
       <div className="rounded-xl border border-border p-4">
-        <h2 className="mb-2 text-sm font-medium">
-          {t("ledgerPayments")} ({feed.length})
+        <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
+          {t("ledgerPayments")}
+          <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold tabular-nums text-text-mute">
+            {feed.length}
+          </span>
         </h2>
         {feed.length === 0 ? (
           <p className="text-sm text-text-mute">
             {t("ledgerPaymentsEmpty")}
           </p>
         ) : (
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-1.5">
             {feed.map((row) => (
               <li
                 key={`${row.kind}:${row.id}`}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-black/5 px-3 py-2 text-sm dark:border-white/10"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="tabular-nums text-xs text-text-mute">

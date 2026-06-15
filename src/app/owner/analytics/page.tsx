@@ -140,23 +140,35 @@ export default async function OwnerAnalytics({
         <p className="text-sm text-text-mute">{t("analyticsSubtitle")}</p>
       </div>
 
-      {/* Window selector — fixed-set of windows the page is willing
-          to render. Selected one is highlighted. */}
-      <div className="flex flex-wrap gap-1">
-        {[7, 14, 30, 90, 365].map((n) => (
-          <Link
-            key={n}
-            href={`/owner/analytics?days=${n}`}
-            className={
-            "rounded-full px-3 py-1 text-sm"+
-              (n === days
-                ?"bg-brand-900 text-white dark:bg-white dark:text-brand-900"
-                :"border border-border text-text hover:bg-surface-2 transition-colors")
-            }
-          >
-            {n}d
-          </Link>
-        ))}
+      {/* Window selector — proper segmented control. All buttons live
+          inside one rounded container; only the active button has the
+          filled slate background. The seams between buttons (subtle
+          dividers) read as 'these are mutually-exclusive options' at
+          a glance. */}
+      <div
+        role="tablist"
+        aria-label={t("analyticsWindowSelector")}
+        className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
+      >
+        {[7, 14, 30, 90, 365].map((n) => {
+          const isActive = n === days;
+          return (
+            <Link
+              key={n}
+              href={`/owner/analytics?days=${n}`}
+              role="tab"
+              aria-selected={isActive}
+              className={
+                "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-semibold tabular-nums transition-colors " +
+                (isActive
+                  ? "bg-surface text-text shadow-sm dark:bg-brand-900 dark:text-white"
+                  : "text-text-mute hover:bg-surface hover:text-text dark:hover:bg-brand-900/40")
+              }
+            >
+              {n}d
+            </Link>
+          );
+        })}
       </div>
 
       {/* Headline totals — same shape as the existing owner dashboard
@@ -205,9 +217,11 @@ export default async function OwnerAnalytics({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border p-4">
-      <div className="text-xs text-text-mute">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+    <div className="flex h-full flex-col rounded-xl border border-border bg-surface p-4">
+      <div className="text-xs font-medium uppercase tracking-wide text-text-mute">
+        {label}
+      </div>
+      <div className="mt-auto pt-2 text-xl font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
@@ -239,10 +253,18 @@ function BarChart({
   const max = Math.max(1, ...series.map((s) => s.value));
   const colW = (W - PAD * 2) / Math.max(1, series.length);
   const palette = COLORS[color];
+  // Subtle y-axis reference lines at 50% and 100% of max. SVG-drawn
+  // so they scale with the viewBox; styled via Tailwind tokens to
+  // match the rest of the design system (border color + opacity).
+  const yLines = [
+    { yFrac: 0, label: "0" },
+    { yFrac: 0.5, label: format(max / 2) },
+    { yFrac: 1, label: format(max) },
+  ];
   return (
-    <div className="rounded-xl border border-border p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="text-sm font-medium">{title}</h2>
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">{title}</h2>
         <span className="text-xs text-text-mute tabular-nums">
           max {format(max)}
         </span>
@@ -252,6 +274,26 @@ function BarChart({
         className="h-32 w-full"
         preserveAspectRatio="none"
       >
+        {/* Y-axis reference lines — drawn first so the bars paint
+            over them. 50% line is a subtle visual anchor; 100% is the
+            ceiling so the eye can see where the tallest bar sits
+            relative to max. */}
+        {yLines.map((g) => {
+          const y = PAD + (1 - g.yFrac) * (H - 2 * PAD);
+          return (
+            <line
+              key={g.label}
+              x1={PAD}
+              x2={W - PAD}
+              y1={y}
+              y2={y}
+              className="stroke-border"
+              strokeWidth={1}
+              strokeDasharray="2 3"
+              opacity={g.yFrac === 0 ? 0.8 : 0.4}
+            />
+          );
+        })}
         {series.map((s, i) => {
           const h = (s.value / max) * (H - 2 * PAD);
           const x = PAD + i * colW;
@@ -282,7 +324,7 @@ function BarChart({
           );
         })}
       </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-text-mute tabular-nums">
+      <div className="mt-2 flex justify-between text-[10px] tabular-nums text-text-mute">
         <span>{series[0]?.label ?? ""}</span>
         <span>{series[series.length - 1]?.label ?? ""}</span>
       </div>

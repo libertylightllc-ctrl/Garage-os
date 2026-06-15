@@ -265,12 +265,20 @@ export default async function OwnerHome({
       <AppNav role="OWNER" active="dashboard"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("ownerDashboard")}</h1>
 
+      {/* Metric cards — equal heights via flex+grow so a longer label
+          on one card doesn't make its neighbours shorter. text-2xl
+          icon sized uniformly across all 5 cards. Value uses tabular-
+          nums so digit widths line up between adjacent cards (e.g.
+          revenue + profit decimals stack). */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {metrics.map((m) => (
-          <div key={m.key} className="rounded-xl border border-border p-3">
-            <div className="text-2xl">{m.icon}</div>
-            <div className="mt-1 text-xs text-text-mute">{t(m.key)}</div>
-            <div className="text-base font-semibold">{m.value}</div>
+          <div
+            key={m.key}
+            className="flex h-full flex-col rounded-xl border border-border bg-surface p-4"
+          >
+            <div className="text-2xl leading-none" aria-hidden="true">{m.icon}</div>
+            <div className="mt-2 text-xs font-medium text-text-mute">{t(m.key)}</div>
+            <div className="mt-auto pt-1 text-lg font-semibold tabular-nums">{m.value}</div>
           </div>
         ))}
       </div>
@@ -357,36 +365,56 @@ export default async function OwnerHome({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-mute">
-                  <th className="py-1 pe-3">{t("colTechnician")}</th>
-                  <th className="py-1 px-2 text-right">{t("colJobs")}</th>
-                  <th className="py-1 px-2 text-right" title={t("colAvgTimeTitle")}>⏱ avg</th>
-                  <th className="py-1 px-2 text-right" title={t("colTodayTimeTitle")}>today ⏱</th>
-                  <th className="py-1 px-2 text-right" title={t("colTodayJobsTitle")}>today #</th>
-                  <th className="py-1 px-2 text-right">{t("colSteps")}</th>
-                  <th className="py-1 px-2 text-right">📷</th>
-                  <th className="py-1 px-2 text-right">🎤</th>
-                  <th className="py-1 px-2 text-right">📦</th>
-                  <th className="py-1 ps-2 text-right">✅</th>
+                {/* Header row — bottom border separates head from body
+                    cleanly without per-cell tone juggling. Text-mute
+                    label colour; uppercase tracking for 'this is a
+                    column header' affordance. */}
+                <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
+                  <th className="py-2 pe-3 text-start font-semibold">{t("colTechnician")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("colJobs")}</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colAvgTimeTitle")}>
+                    ⏱ {t("colAvgShort")}
+                  </th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colTodayTimeTitle")}>
+                    {t("colTodayTime")}
+                  </th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colTodayJobsTitle")}>
+                    {t("colTodayJobs")}
+                  </th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("colSteps")}</th>
+                  {/* Icon-only columns get a title= so a long-press /
+                      hover reveals what the icon means; aria-label for
+                      screen readers. Renders as the icon glyph but is
+                      keyboard / a11y accessible. */}
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colPhotosTitle")} aria-label={t("colPhotosTitle")}>📷</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colVoiceTitle")} aria-label={t("colVoiceTitle")}>🎤</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colPartsTitle")} aria-label={t("colPartsTitle")}>📦</th>
+                  <th className="py-2 ps-2 text-end font-semibold" title={t("colFinishesTitle")} aria-label={t("colFinishesTitle")}>✅</th>
                 </tr>
               </thead>
               <tbody>
-                {techWork.map((tw) => (
-                  <tr key={tw.techId} className="border-t border-black/5 dark:border-white/10">
-                    <td className="py-1 pe-3 font-medium">{tw.name}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.jobs}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">
+                {techWork.map((tw, i) => (
+                  <tr
+                    key={tw.techId}
+                    className={
+                      "border-b border-border/60 " +
+                      (i % 2 === 1 ? "bg-surface-2/40" : "")
+                    }
+                  >
+                    <td className="py-2 pe-3 font-medium">{tw.name}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.jobs}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">
                       {tw.avgTimePerJobMin === null ?"—": formatMin(tw.avgTimePerJobMin)}
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums">
+                    <td className="py-2 px-2 text-end tabular-nums">
                       {tw.totalTimeTodayMin > 0 ? formatMin(tw.totalTimeTodayMin) :"—"}
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.jobsToday}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.steps}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.photos}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.voice}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{tw.parts}</td>
-                    <td className="py-1 ps-2 text-right tabular-nums">{tw.finishes}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.jobsToday}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.steps}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.photos}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.voice}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{tw.parts}</td>
+                    <td className="py-2 ps-2 text-end tabular-nums">{tw.finishes}</td>
                   </tr>
                 ))}
               </tbody>
@@ -414,36 +442,45 @@ export default async function OwnerHome({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-text-mute">
-                  <th className="py-1 pe-3">{t("colAdvisor")}</th>
-                  <th className="py-1 px-2 text-right">{t("colJobs")}</th>
-                  <th className="py-1 px-2 text-right">{t("colEstimatesSent")}</th>
-                  <th className="py-1 px-2 text-right">✓</th>
-                  <th className="py-1 px-2 text-right">✗</th>
-                  <th className="py-1 px-2 text-right" title={t("colApprovalRateTitle")}>
+                <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
+                  <th className="py-2 pe-3 text-start font-semibold">{t("colAdvisor")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("colJobs")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("colEstimatesSent")}</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colApprovedTitle")} aria-label={t("colApprovedTitle")}>✓</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colRejectedTitle")} aria-label={t("colRejectedTitle")}>✗</th>
+                  <th className="py-2 px-2 text-end font-semibold" title={t("colApprovalRateTitle")}>
                     {t("colApprovalRate")}
                   </th>
-                  <th className="py-1 ps-2 text-right" title={t("colApprovalTimeTitle")}>
+                  <th className="py-2 ps-2 text-end font-semibold" title={t("colApprovalTimeTitle")}>
                     ⏱ {t("colApprovalTimeShort")}
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {advisorWork.map((a) => (
-                  <tr key={a.advisorId} className="border-t border-black/5 dark:border-white/10">
-                    <td className="py-1 pe-3 font-medium">{a.name}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{a.jobsCreated}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">{a.estimatesSent}</td>
-                    <td className="py-1 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-300">
+                {advisorWork.map((a, i) => (
+                  <tr
+                    key={a.advisorId}
+                    className={
+                      "border-b border-border/60 " +
+                      (i % 2 === 1 ? "bg-surface-2/40" : "")
+                    }
+                  >
+                    <td className="py-2 pe-3 font-medium">{a.name}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{a.jobsCreated}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{a.estimatesSent}</td>
+                    {/* ✓ / ✗ counts in semantic palette (success /
+                        danger), aligned with the rest of the app's
+                        green=success / red=rejected convention. */}
+                    <td className="py-2 px-2 text-end tabular-nums font-semibold text-success-700 dark:text-success-500">
                       {a.approvedCount}
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums text-rose-700 dark:text-rose-300">
+                    <td className="py-2 px-2 text-end tabular-nums font-semibold text-danger-700 dark:text-danger-500">
                       {a.rejectedCount}
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums">
+                    <td className="py-2 px-2 text-end tabular-nums">
                       {a.approvalRate === null ?"—": `${a.approvalRate}%`}
                     </td>
-                    <td className="py-1 ps-2 text-right tabular-nums">
+                    <td className="py-2 ps-2 text-end tabular-nums">
                       {a.avgApprovalMin === null ?"—": formatMin(a.avgApprovalMin)}
                     </td>
                   </tr>

@@ -7,5 +7,5 @@ import { redirect } from "next/navigation";
 // /cashier?tab=payments.
 
 export default function CashierPaidRedirect() {
- redirect("/cashier?tab=payments");
+  redirect("/cashier?tab=payments");
 }

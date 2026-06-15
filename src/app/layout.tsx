@@ -6,36 +6,36 @@ import { isRtl } from "@/i18n/config";
 import { LangSwitcher } from "@/components/lang-switcher";
 
 const geistSans = Geist({
- variable:"--font-geist-sans",
- subsets: ["latin"],
+  variable:"--font-geist-sans",
+  subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
- variable:"--font-geist-mono",
- subsets: ["latin"],
+  variable:"--font-geist-mono",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
- title:"GarageOS",
- description:"The garage operating system where AI does the thinking and the human decides.",
+  title:"GarageOS",
+  description:"The garage operating system where AI does the thinking and the human decides.",
 };
 
 export default async function RootLayout({
- children,
+  children,
 }: Readonly<{
- children: React.ReactNode;
+  children: React.ReactNode;
 }>) {
- const locale = await getLocale();
- return (
-  <html
-   lang={locale}
-   dir={isRtl(locale) ?"rtl":"ltr"}
-   className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-  >
-   <body className="min-h-full flex flex-col">
-    <LangSwitcher locale={locale} />
-    {children}
-   </body>
-  </html>
- );
+  const locale = await getLocale();
+  return (
+    <html
+      lang={locale}
+      dir={isRtl(locale) ?"rtl":"ltr"}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">
+        <LangSwitcher locale={locale} />
+        {children}
+      </body>
+    </html>
+  );
 }

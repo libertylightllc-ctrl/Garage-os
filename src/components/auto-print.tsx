@@ -8,11 +8,11 @@ import { useEffect } from "react";
 // 'Save as PDF' on mobile) without an intermediate click.
 
 export function AutoPrint() {
-  useEffect(() => {
-    // Defer by one tick so the page paints first — printing a
-    // half-rendered page on Safari occasionally cuts the bottom off.
-    const id = window.setTimeout(() => window.print(), 50);
-    return () => window.clearTimeout(id);
-  }, []);
-  return null;
+    useEffect(() => {
+        // Defer by one tick so the page paints first — printing a
+        // half-rendered page on Safari occasionally cuts the bottom off.
+        const id = window.setTimeout(() => window.print(), 50);
+        return () => window.clearTimeout(id);
+    }, []);
+    return null;
 }

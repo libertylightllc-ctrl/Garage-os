@@ -10,19 +10,19 @@ import type { ReactNode } from "react";
 // which the spec calls out explicitly.
 
 export function PrintButton({
-  children,
-  className,
+    children,
+    className,
 }: {
-  children: ReactNode;
-  className?: string;
+    children: ReactNode;
+    className?: string;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={() => window.print()}
-      className={className}
-    >
-      {children}
-    </button>
-  );
+    return (
+        <button
+            type="button"
+            onClick={() => window.print()}
+            className={className}
+        >
+            {children}
+        </button>
+    );
 }

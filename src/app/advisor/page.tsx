@@ -14,25 +14,32 @@ export default async function AdvisorHome() {
   const session = await requireRole("ADVISOR");
   const t = await getT();
 
+  // Explicit select on JobCard to bypass the 'missing column in
+  // live DB' risk that's been blocking the vehicle-history page.
+  // Only the fields the page render actually reads are listed —
+  // ANY column in the Prisma schema that isn't in the live DB no
+  // longer takes this page down.
   const [jobs, pendingBookings, techs] = await Promise.all([
     prisma.jobCard.findMany({
       where: {
         garageId: session.user.garageId,
         status: { notIn: ["DELIVERED","CANCELLED"] },
       },
-      include: {
-        vehicle: { include: { customer: true } },
-        // Latest estimate so the friendly badge can distinguish
-        // 'Estimate under process' from 'Awaiting customer approval',
-        // plus sentAt for the pricing-duration display.
+      select: {
+        id: true,
+        status: true,
+        priority: true,
+        claimedById: true,
+        claimedAt: true,
+        assignedToId: true,
+        sentForEstimateAt: true,
+        holdReason: true,
+        vehicle: { select: { make: true, model: true, plate: true, customer: { select: { name: true } } } },
         estimates: {
           orderBy: { createdAt:"desc"},
           take: 1,
           select: { status: true, sentAt: true, createdAt: true },
         },
-        // Latest invoice + its payments so the badge can swing from
-        // 'Awaiting payment' to 'Ready for pickup' once the customer
-        // has paid in full (Stage 9 → 10).
         invoices: {
           orderBy: { issuedAt:"desc"},
           take: 1,

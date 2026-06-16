@@ -116,6 +116,23 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
         </div>
       ) : null}
 
+      {/* Returning vehicle banner — surfaces when the advisor came
+          here via the plate-lookup or repeat-customer path. Gives the
+          advisor a one-tap link into the full service history before
+          they start a new job card. Hidden on first-time customers
+          (no vehicleId in the searchParams). */}
+      {isRepeat && sp.vehicleId ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info-500/40 bg-info-50 p-4 text-sm text-info-600 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-500">
+          <span>🕘 {t("vehicleBeenHere")}</span>
+          <Link
+            href={`/advisor/vehicles/${sp.vehicleId}`}
+            className="inline-flex h-9 items-center justify-center rounded-lg border border-info-500/40 bg-surface px-3 text-xs font-semibold text-info-600 hover:bg-info-50 transition-colors dark:text-info-500 dark:bg-info-500/10"
+          >
+            {t("vehicleViewHistory")} →
+          </Link>
+        </div>
+      ) : null}
+
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
         <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
         <input type="hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />

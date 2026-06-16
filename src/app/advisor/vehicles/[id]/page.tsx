@@ -50,29 +50,107 @@ export default async function VehicleHistory({
   const t = await getT();
   const locale = await getLocale();
 
-  const vehicle = await prisma.vehicle.findFirst({
-    where: { id, customer: { garageId: session.user.garageId } },
-    include: {
-      customer: { select: { name: true, phone: true } },
-      jobCards: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          finding: { select: { findings: true, diagnosis: true } },
-          // One invoice per job in practice (Invoice.estimateId unique
-          // and jobCard 1:* invoices). Pull all + sort to be safe.
-          invoices: {
-            orderBy: { issuedAt: "desc" },
-            include: {
-              lines: { orderBy: { createdAt: "asc" } },
-              payments: { select: { amount: true } },
+  // Explicit `select` on every level instead of `include`. This
+  // narrows the Prisma query to ONLY the columns the render reads —
+  // so any schema column that exists in the Prisma client but isn't
+  // in the live DB (a drift from prior unmigrated additions) no longer
+  // affects this page. Also try/catch the fetch so we can surface a
+  // human-friendly 'couldn't load history' message instead of the
+  // generic red error card, AND log the real error to Vercel function
+  // logs for follow-up debugging.
+  async function loadVehicle() {
+    return prisma.vehicle.findFirst({
+      where: { id, customer: { garageId: session.user.garageId } },
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        year: true,
+        plate: true,
+        vin: true,
+        customer: { select: { name: true, phone: true } },
+        jobCards: {
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            claimedById: true,
+            mileageIn: true,
+            complaint: true,
+            finding: { select: { findings: true, diagnosis: true } },
+            invoices: {
+              orderBy: { issuedAt: "desc" },
+              select: {
+                id: true,
+                number: true,
+                issuedAt: true,
+                total: true,
+                lines: {
+                  orderBy: { createdAt: "asc" },
+                  select: {
+                    id: true,
+                    kind: true,
+                    description: true,
+                    qty: true,
+                    lineTotal: true,
+                  },
+                },
+                payments: { select: { amount: true } },
+              },
             },
           },
         },
       },
-    },
-  });
-  if (!vehicle) notFound();
-
+    });
+  }
+  type VehicleResult = Awaited<ReturnType<typeof loadVehicle>>;
+  let vehicle: VehicleResult = null;
+  let fetchError: string | null = null;
+  try {
+    vehicle = await loadVehicle();
+  } catch (err) {
+    // Log the real Prisma error to Vercel function logs so we have
+    // it for follow-up. Then render a graceful fallback instead of
+    // the red error card so the advisor can still take other actions.
+    console.error("[vehicle-history]", err);
+    fetchError =
+      err instanceof Error ? err.message : "Unknown error loading history";
+  }
+  // ── Graceful fetch-error render ─────────────────────────────────
+  // If the Prisma query threw (e.g. a column or relation expected by
+  // the schema but missing from the live DB), render a clean fallback
+  // page instead of letting the error bubble up to the red error
+  // card. The advisor can still navigate back to the search and use
+  // every other surface; only this page degrades.
+  // (Guards split into two so TypeScript narrows `vehicle` to
+  // non-null on the happy path below.)
+  if (fetchError) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+        <AppNav role="ADVISOR" active="vehicles" />
+        <Link
+          href="/advisor/vehicles"
+          className="inline-block py-2 text-sm text-text-mute hover:underline"
+        >
+          ← {t("vehiclesBackToSearch")}
+        </Link>
+        <div className="flex flex-col gap-3 rounded-xl border border-danger-500/40 bg-danger-50 p-6 text-sm dark:border-danger-500/30 dark:bg-danger-500/10">
+          <h1 className="text-lg font-semibold text-danger-700 dark:text-danger-500">
+            {t("vehiclesLoadErrorTitle")}
+          </h1>
+          <p className="text-text">{t("vehiclesLoadErrorBody")}</p>
+          <pre className="select-all whitespace-pre-wrap break-words rounded-lg border border-border bg-surface p-3 text-xs font-mono">
+            {fetchError}
+          </pre>
+        </div>
+      </main>
+    );
+  }
+  if (!vehicle) {
+    notFound();
+    return null; // unreachable; satisfies TypeScript's narrowing
+  }
   const jobs = vehicle.jobCards;
 
   // ── Summary aggregations ────────────────────────────────────────

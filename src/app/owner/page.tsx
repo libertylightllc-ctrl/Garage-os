@@ -340,14 +340,16 @@ export default async function OwnerHome({
               {confirmMins === null ?"—": `${confirmMins} ${t("min")}`}
             </span>
           </li>
+          {/* AI cost (dollar figure) intentionally hidden from the
+              owner view — it's the platform operator's per-call running
+              cost, not a metric a garage owner should see. Call count
+              stays since 'how much is the AI doing for me' is a fair
+              owner question; the dollar figure lives in admin /
+              platform metrics only. */}
           <li>
             {t("aiCalls")}: <span className="font-medium">{usage.events}</span>
           </li>
-          <li>
-            {t("aiCost")}: <span className="font-medium">${usage.costUsd.toFixed(4)}</span>
-          </li>
         </ul>
-        <p className="mt-2 text-xs text-text-mute">{t("aiCostNote")}</p>
       </div>
 
       {/* Per-technician productivity — slice #3 adds time math:

@@ -36,11 +36,20 @@ export const SAMPLE_QUESTIONS = [
 export function classifyIntent(question: string): CopilotIntent {
   const q = question.toLowerCase();
 
-  // INVOICES_SUMMARY — explicit 'invoice' mention with summary intent.
+  // INVOICES_SUMMARY — natural phrasings the owner reaches for when
+  // asking 'how are invoices going?'. Expanded after AR reported that
+  // 'invoices so far' fell through to UNKNOWN. WHO_OWES regression
+  // ('show me outstanding invoices' must NOT hit here) is preserved
+  // because none of these alternatives match 'outstanding invoices' —
+  // 'outstanding' isn't in any of the alternative phrases.
   if (
-    /(invoice.*(summary|total|count|how many)|how many invoices|invoices today|invoices this month|الفواتير|عدد الفواتير)/.test(
-      q,
-    )
+    /invoice.*(summary|total|count|how many|so far|to date|this (month|week|year))/.test(q) ||
+    /how many invoices/.test(q) ||
+    /invoices? (today|this (month|week|year)|so far|to date)/.test(q) ||
+    /^\s*invoices?\s*\??\s*$/.test(q) ||
+    /^\s*any invoices/.test(q) ||
+    /^\s*show me (all )?invoices?\s*\??\s*$/.test(q) ||
+    /الفواتير|عدد الفواتير/.test(q)
   )
     return "INVOICES_SUMMARY";
 

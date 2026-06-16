@@ -19,6 +19,21 @@ describe("copilot intent classification", () => {
       "INVOICES_SUMMARY",
     );
     expect(classifyIntent("invoice total")).toBe("INVOICES_SUMMARY");
+    // ── Slice 'copilot natural phrasings' — AR's verify scenarios ──
+    // 'invoices so far' previously fell through to UNKNOWN; this is
+    // the regression guard for AR's reported case.
+    expect(classifyIntent("invoices so far")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("invoices to date")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("invoices this year")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("invoices today")).toBe("INVOICES_SUMMARY");
+    // Bare single-word query.
+    expect(classifyIntent("invoices")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("invoice")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("invoices?")).toBe("INVOICES_SUMMARY");
+    // Polite phrasing.
+    expect(classifyIntent("any invoices?")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("show me invoices")).toBe("INVOICES_SUMMARY");
+    expect(classifyIntent("show me all invoices")).toBe("INVOICES_SUMMARY");
   });
   it("detects VAT questions", () => {
     expect(classifyIntent("how much VAT this month?")).toBe("VAT_MONTH");

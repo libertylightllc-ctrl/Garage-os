@@ -86,7 +86,15 @@ export function EstimateLineRow({
     // sees the same word they typed when they added the line.
     const isDiscountLine = line.kind === "FEE" && line.unitPrice < 0;
     const displayKind = isDiscountLine ? "DISCOUNT" : line.kind;
-    const priceForInput = Math.abs(line.unitPrice).toFixed(2);
+    // Empty input when the line was saved with a zero price — the
+  // cashier was about to type one in, and seeing '0.00' pre-filled
+  // forces them to select+delete before typing (small but every-line
+  // friction). For non-zero prices, show the value AS-IS (no forced
+  // .toFixed(2)) so the cashier can type '50' instead of '50.00';
+  // the read-only display below still renders with two decimals when
+  // the line is saved.
+  const priceForInput =
+    line.unitPrice === 0 ? "" : String(Math.abs(line.unitPrice));
 
     // ---- Editing mode: full inline edit form ----
     if (editing && editable) {

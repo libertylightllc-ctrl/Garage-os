@@ -1,6 +1,24 @@
 "use client";
 
-export default function Error({ reset }: { error: Error; reset: () => void }) {
+import { useEffect } from "react";
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  // Log to the browser console so the message + stack appear in
+  // devtools when a user encounters this page. Vercel's production
+  // build hides the raw message in the HTML response (for security),
+  // but the browser console will still get the React-side stack
+  // for client-side throws, and the digest is enough to find the
+  // server-side stack in Vercel logs.
+  useEffect(() => {
+    console.error("[error.tsx]", error);
+  }, [error]);
+
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 p-8 text-center">
       {/* Themed error fallback (Workshop). Replaces the previous
@@ -22,6 +40,11 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
         >
           Try again
         </button>
+        {error.digest ? (
+          <p className="mt-2 select-all text-[10px] font-mono text-text-mute">
+            ref: {error.digest}
+          </p>
+        ) : null}
       </div>
     </main>
   );

@@ -9,9 +9,10 @@ import {
   EXTERIOR_OPTIONS,
   INTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
-  OIL_TYPES,
+  FUEL_TYPES,
   FUEL_LEVELS,
 } from "@/lib/jobcard-fields";
+import { VinDecodeButton } from "@/components/vin-decode-button";
 
 export const dynamic ="force-dynamic";
 
@@ -147,9 +148,27 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
               {t("plate")}
               <input name="plate" defaultValue={sp.plate ?? ""} required className={FIELD} />
             </label>
-            <label className="text-xs text-text-mute">
+            {/* VIN + decode button — col-span-2 so the decode UI gets
+                full width below the input. The button itself is a
+                client component that reads the form, validates the
+                VIN, calls the server-side NHTSA route, and fills any
+                BLANK fields it can (preserves OCR / typed values). */}
+            <label className="col-span-2 text-xs text-text-mute">
               {t("vinLabel")}
               <input name="vin" defaultValue={sp.vin ?? ""} className={FIELD} />
+              <div className="mt-2">
+                <VinDecodeButton
+                  labels={{
+                    decodeBtn: t("vinDecodeBtn"),
+                    decoding: t("vinDecoding"),
+                    invalidVin: t("vinInvalid"),
+                    notFound: t("vinNotFound"),
+                    networkError: t("vinNetworkError"),
+                    decodedNote: t("vinDecodedNote"),
+                    filledFields: t("vinFilledFields"),
+                  }}
+                />
+              </div>
             </label>
             <label className="text-xs text-text-mute">
               {t("make")}
@@ -167,12 +186,18 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
               {t("mileageInLabel")}
               <input name="mileageIn" type="number" min="0" required className={FIELD} />
             </label>
+            {/* Fuel type — replaces the previous Oil-type field per
+                spec. Auto-fills from NHTSA VIN decode when the engine
+                is mapped. The 'oilType' column stays on the schema for
+                later (default NONE) but is no longer exposed on this
+                form. */}
             <label className="text-xs text-text-mute">
-              {t("oilTypeLabel")}
-              <select name="oilType" defaultValue="NONE" className={FIELD}>
-                {OIL_TYPES.map((v) => (
+              {t("fuelTypeLabel")}
+              <select name="fuelType" defaultValue="" className={FIELD}>
+                <option value="">—</option>
+                {FUEL_TYPES.map((v) => (
                   <option key={v} value={v}>
-                    {t(`oil_${v}` as MessageKey)}
+                    {t(`fuelType_${v}` as MessageKey)}
                   </option>
                 ))}
               </select>

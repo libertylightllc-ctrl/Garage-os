@@ -4,6 +4,10 @@ import {
   sanitizeChoices,
   toOilType,
   toFuelLevel,
+  toFuelType,
+  normalizeVin,
+  isValidVin,
+  nhtsaFuelToInternal,
   qcSignedOff,
   EXTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
@@ -56,5 +60,58 @@ describe("job-card reception helpers", () => {
     expect(qcSignedOff(new Date())).toBe(true);
     expect(qcSignedOff(null)).toBe(false);
     expect(qcSignedOff(undefined)).toBe(false);
+  });
+
+  // ── Fuel type + VIN slice ──────────────────────────────────────────
+  it("coerces fuel type, null when unset/invalid", () => {
+    expect(toFuelType("PETROL")).toBe("PETROL");
+    expect(toFuelType("DIESEL")).toBe("DIESEL");
+    expect(toFuelType("HYBRID")).toBe("HYBRID");
+    expect(toFuelType("ELECTRIC")).toBe("ELECTRIC");
+    expect(toFuelType("OTHER")).toBe("OTHER");
+    expect(toFuelType("")).toBeNull();
+    expect(toFuelType("gas")).toBeNull();
+  });
+
+  it("normalizeVin enforces 17 chars + allowed alphabet", () => {
+    // Real VINs from the task spec.
+    expect(normalizeVin("WF0BB2KF1ELY11017")).toBe("WF0BB2KF1ELY11017");
+    expect(normalizeVin("1HGCM82633A004352")).toBe("1HGCM82633A004352");
+    // Uppercases + trims input.
+    expect(normalizeVin("  wf0bb2kf1ely11017  ")).toBe("WF0BB2KF1ELY11017");
+    // Wrong length.
+    expect(normalizeVin("1HGCM82633")).toBeNull();
+    expect(normalizeVin("1HGCM82633A0043521")).toBeNull();
+    // Empty.
+    expect(normalizeVin("")).toBeNull();
+    // Contains forbidden I / O / Q (ISO 3779 — avoid 1/0 confusion).
+    expect(normalizeVin("1HGCM82633A00435I")).toBeNull();
+    expect(normalizeVin("1HGCM82633A00435O")).toBeNull();
+    expect(normalizeVin("1HGCM82633A00435Q")).toBeNull();
+    // Non-alphanumeric.
+    expect(normalizeVin("1HGCM82633A00435-")).toBeNull();
+  });
+
+  it("isValidVin is the boolean wrapper", () => {
+    expect(isValidVin("1HGCM82633A004352")).toBe(true);
+    expect(isValidVin("nope")).toBe(false);
+  });
+
+  it("nhtsaFuelToInternal maps free-text NHTSA values to our enum", () => {
+    // NHTSA's actual values (FuelTypePrimary):
+    expect(nhtsaFuelToInternal("Gasoline")).toBe("PETROL");
+    expect(nhtsaFuelToInternal("gasoline")).toBe("PETROL");
+    expect(nhtsaFuelToInternal("Diesel")).toBe("DIESEL");
+    expect(nhtsaFuelToInternal("Electric")).toBe("ELECTRIC");
+    expect(nhtsaFuelToInternal("Hybrid Electric Vehicle")).toBe("HYBRID");
+    expect(nhtsaFuelToInternal("Plug-in Hybrid Electric")).toBe("HYBRID");
+    // Compressed Natural Gas etc — falls back to OTHER so the field is
+    // still meaningful rather than silently dropped.
+    expect(nhtsaFuelToInternal("Compressed Natural Gas (CNG)")).toBe("OTHER");
+    // Empty / null / undefined → null so the caller preserves the
+    // existing field value (the OCR-friendly rule from the spec).
+    expect(nhtsaFuelToInternal("")).toBeNull();
+    expect(nhtsaFuelToInternal(null)).toBeNull();
+    expect(nhtsaFuelToInternal(undefined)).toBeNull();
   });
 });

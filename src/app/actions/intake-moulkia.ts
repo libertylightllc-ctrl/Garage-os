@@ -16,6 +16,7 @@ import {
   sanitizeChoices,
   toOilType,
   toFuelLevel,
+  toFuelType,
   EXTERIOR_OPTIONS,
   INTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
@@ -246,7 +247,12 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   // Reception detail
   const mileageRaw = parseInt(get("mileageIn"), 10);
   const mileageIn = Number.isFinite(mileageRaw) ? mileageRaw : null;
+  // oilType field has been hidden from the intake UI for now (the
+  // schema column stays per the 'we may revisit oil spec later' note
+  // in CLAUDE.md). Empty form value coerces to NONE, which matches
+  // the column default — safe transition.
   const oilType = toOilType(get("oilType"));
+  const fuelType = toFuelType(get("fuelType")); // null if unset
   const fuelLevel = toFuelLevel(get("fuelLevel"));
   const complaint = get("complaint");
   const exteriorCondition = sanitizeChoices(getAll("exterior"), EXTERIOR_OPTIONS);
@@ -323,6 +329,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         number: g.jobSeq,
         mileageIn,
         oilType,
+        fuelType,
         fuelLevel,
         complaint,
         exteriorCondition,

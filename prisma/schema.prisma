@@ -376,7 +376,8 @@ model JobCard {
   // ----- Reception (Job-Card-Data-Model.md) — captured at intake by the advisor -----
   number            Int?       // gapless per-garage Job Card No, rendered JC-2026-0001
   mileageIn         Int?       // odometer at arrival
-  oilType           OilType    @default(NONE) // feeds maintenance reminders
+  oilType           OilType    @default(NONE) // kept for future maintenance-reminder spec; UI temporarily hidden
+  fuelType          String?    // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER — also auto-filled from NHTSA VIN decode
   fuelLevel         FuelLevel? // Empty/¼/½/¾/Full
   complaint         String?    // customer complaint(s)
   exteriorCondition String[]   // checkbox values (NO_DAMAGE, SCRATCHES, ...)

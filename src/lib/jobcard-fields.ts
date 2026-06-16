@@ -19,6 +19,9 @@ export const INTERIOR_OPTIONS = ["CLEAN", "DIRTY", "WARNING_LIGHT", "OTHER"] as 
 export const VALUABLES_OPTIONS = ["NONE", "DOCUMENTS", "CASH", "MOBILE_CHARGER", "OTHER"] as const;
 export const OIL_TYPES = ["KM_5000", "KM_10000", "NONE"] as const;
 export const FUEL_LEVELS = ["EMPTY", "QUARTER", "HALF", "THREE_QUARTER", "FULL"] as const;
+// Fuel TYPE (engine fuel) — different from fuel LEVEL (tank fill). Driven by
+// the new NHTSA VIN decode + manual selection on intake.
+export const FUEL_TYPES = ["PETROL", "DIESEL", "HYBRID", "ELECTRIC", "OTHER"] as const;
 // Quality-control checklist (Job-Card-Data-Model.md).
 export const QC_CHECKS = ["REPAIR_COMPLETED", "ROAD_TEST", "NO_WARNING_LIGHTS", "VEHICLE_CLEANED"] as const;
 
@@ -41,4 +44,46 @@ export function toOilType(v: string): (typeof OIL_TYPES)[number] {
 /** Coerce a form value to a valid FuelLevel, or null if unset/invalid. */
 export function toFuelLevel(v: string): (typeof FUEL_LEVELS)[number] | null {
   return (FUEL_LEVELS as readonly string[]).includes(v) ? (v as (typeof FUEL_LEVELS)[number]) : null;
+}
+
+/** Coerce a form value to a valid FuelType, or null if unset/invalid. */
+export function toFuelType(v: string): (typeof FUEL_TYPES)[number] | null {
+  return (FUEL_TYPES as readonly string[]).includes(v) ? (v as (typeof FUEL_TYPES)[number]) : null;
+}
+
+/**
+ * VIN validation — strict per ISO 3779:
+ *   - Exactly 17 alphanumeric characters
+ *   - Letters I, O, Q are not allowed (visually ambiguous with 1, 0, 0)
+ *
+ * Returns the normalized (uppercase) VIN when valid, or null otherwise.
+ * Caller should null-check before submitting to NHTSA — invalid VINs
+ * waste a network round trip and return garbage.
+ */
+export function normalizeVin(raw: string): string | null {
+  const v = raw.trim().toUpperCase();
+  if (v.length !== 17) return null;
+  // Allowed: A-H, J-N, P, R-Z, 0-9. Exclude I, O, Q.
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return null;
+  return v;
+}
+
+export function isValidVin(raw: string): boolean {
+  return normalizeVin(raw) !== null;
+}
+
+/**
+ * Map NHTSA's free-text "FuelTypePrimary" string to our internal
+ * FuelType enum. NHTSA returns values like "Gasoline", "Diesel",
+ * "Electric", "Hybrid", or empty string. Empty input → null (caller
+ * preserves the existing value rather than wiping it).
+ */
+export function nhtsaFuelToInternal(v: string | undefined | null): (typeof FUEL_TYPES)[number] | null {
+  if (!v) return null;
+  const s = v.toLowerCase();
+  if (s.includes("electric") && !s.includes("hybrid")) return "ELECTRIC";
+  if (s.includes("hybrid")) return "HYBRID";
+  if (s.includes("diesel")) return "DIESEL";
+  if (s.includes("gasoline") || s.includes("petrol")) return "PETROL";
+  return "OTHER";
 }

@@ -81,7 +81,7 @@ const EXPECTED_JOBCARD_COLUMNS = [
   "updatedAt",
 ];
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return new NextResponse("Not authorized — please sign in first.\n", {
@@ -89,9 +89,22 @@ export async function GET() {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
+  // ?apply=1 → actually run the ALTER statements for any JobCard
+  // columns missing from the live DB. OWNER role only — we don't want
+  // arbitrary signed-in users running schema changes. Idempotent: if
+  // the column already exists, the SQL is skipped. This route exists
+  // because AR has been trying to ALTER from the Supabase SQL editor
+  // and it isn't taking effect (possibly wrong project) — running via
+  // Prisma's connection guarantees we hit the same DB Prisma queries.
+  const url = new URL(req.url);
+  const wantsApply = url.searchParams.get("apply") === "1";
+  const allowApply = wantsApply && session.user.role === "OWNER";
 
   const lines: string[] = [];
   lines.push("=== GarageOS DB schema diagnostic ===");
+  if (wantsApply && !allowApply) {
+    lines.push("⚠ apply=1 ignored: only OWNER role can apply schema changes.");
+  }
   lines.push("");
 
   // ── Which tables exist ────────────────────────────────────────────
@@ -139,6 +152,32 @@ export async function GET() {
       for (const c of missing) {
         const type = guessType(c);
         lines.push(`  ALTER TABLE "JobCard" ADD COLUMN "${c}" ${type};`);
+      }
+      // ── Auto-apply path ─────────────────────────────────────────
+      // Triggered by ?apply=1, OWNER role only. Runs the ALTER
+      // statements via the same Prisma connection that detected the
+      // missing columns, which guarantees we hit the actual DB the
+      // app uses (and not a different Supabase project the user
+      // might have opened in the SQL editor by mistake).
+      if (allowApply) {
+        lines.push("");
+        lines.push("Applying via Prisma connection (apply=1):");
+        for (const c of missing) {
+          const type = guessType(c);
+          // IF NOT EXISTS makes this re-runnable without conflict.
+          const stmt = `ALTER TABLE "JobCard" ADD COLUMN IF NOT EXISTS "${c}" ${type}`;
+          try {
+            await prisma.$executeRawUnsafe(stmt);
+            lines.push(`  ✓ added "${c}"`);
+          } catch (e) {
+            lines.push(
+              `  ✗ FAILED "${c}": ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
+      } else if (!wantsApply) {
+        lines.push("");
+        lines.push("To apply automatically, OWNER can visit this URL with ?apply=1");
       }
     } else {
       lines.push("  ✓ all expected JobCard columns are present");

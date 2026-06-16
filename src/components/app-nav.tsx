@@ -66,9 +66,28 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
     return (
         <header className="sticky top-0 z-40 -mx-6 mb-2 border-b border-black/10 bg-white/80 px-6 py-3 backdrop-blur dark:border-white/15 dark:bg-black/60">
             <div className="flex items-center justify-between gap-3">
-                <Link href={items[0].href} className="text-sm font-semibold tracking-tight">
-                    GarageOS
-                    <span className="ms-2 font-normal text-zinc-500 dark:text-zinc-400">
+                <Link
+                    href={items[0].href}
+                    className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+                    aria-label="GarageOS"
+                >
+                    {/* GarageOS brand mark. Plain <img> (not next/image)
+                        so the public file is served as-is — no build-
+                        time optimisation step that could fail when the
+                        logo asset hasn't been uploaded yet. h-8 caps
+                        the height so a wide logo file still fits the
+                        nav bar; w-auto preserves aspect ratio. The
+                        dark-mode invert lets a black-on-white mark
+                        flip cleanly on a dark background; remove or
+                        swap to a separate -dark file if your logo
+                        uses colour beyond black/white. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/garageos-logo.png"
+                        alt=""
+                        className="h-8 w-auto dark:invert"
+                    />
+                    <span className="font-normal text-zinc-500 dark:text-zinc-400">
                         {t(`role${role}` as MessageKey)}
                     </span>
                 </Link>

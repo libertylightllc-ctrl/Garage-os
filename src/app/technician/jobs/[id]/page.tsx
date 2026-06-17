@@ -39,6 +39,7 @@ import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
 import { PhotoCapture } from "@/components/photo-capture";
+import { VoiceNoteDictation } from "@/components/voice-note-dictation";
 
 export const dynamic ="force-dynamic";
 
@@ -762,21 +763,29 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           />
         </form>
 
-        <form action={addStepAction} className="contents">
-          <input type="hidden" name="jobId" value={job.id} />
-          <input type="hidden" name="type" value="VOICE"/>
-          <PhotoCapture
-            name="file"
-            mode="preview"
-            kind="voice"
-            required
-            buttonLabel={t("voiceNote")}
-            retakeLabel={t("retake")}
-            continueLabel={t("useRecording")}
-            tooBigLabel={t("fileTooBig")}
-            wrongTypeLabel={t("wrongFileType")}
-          />
-        </form>
+        {/* Voice Note → speech-to-text (NOT a file upload). When tapped,
+            kicks off Web Speech recognition; the running transcript is
+            shown in an editable textarea so the tech can tweak before
+            saving. On unsupported browsers it falls back to a plain
+            textarea, never to the file picker. Submits to the same
+            addStepAction the photo tile uses, with type="VOICE" and the
+            transcript text instead of a file. */}
+        <VoiceNoteDictation
+          jobId={job.id}
+          locale={locale}
+          action={addStepAction}
+          bigBtnClass={bigBtn}
+          labels={{
+            tap: t("voiceNote"),
+            listening: t("dictateListening"),
+            stop: t("voiceNoteStop"),
+            save: t("voiceNoteSave"),
+            cancel: t("voiceNoteCancel"),
+            typePlaceholder: t("voiceNoteTypePh"),
+            unsupported: t("voiceNoteUnsupported"),
+            error: t("dictateError"),
+          }}
+        />
 
         <form action={requestPartAction} className="contents">
           <input type="hidden" name="jobId" value={job.id} />

@@ -49,6 +49,22 @@ export async function createEstimateAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "");
   await jobInGarage(jobId, user.garageId);
 
+  // Idempotency: if a DRAFT estimate already exists on this job, route
+  // straight to it instead of creating a sibling. Defends against the
+  // double-click race we saw in prod where the cashier tapped "Set
+  // price" twice within seconds and ended up with a stale empty DRAFT
+  // alongside a priced one. We pick the OLDEST DRAFT so resuming after
+  // a Vercel cold-start retry lands on the cashier's actual work, not
+  // a brand-new blank.
+  const existingDraft = await prisma.estimate.findFirst({
+    where: { jobCardId: jobId, status: "DRAFT" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (existingDraft) {
+    redirect(`/estimates/${existingDraft.id}`);
+  }
+
   // Revision branch — if the job's most recent estimate is REJECTED,
   // clone its line items into the new DRAFT so the cashier opens onto
   // the original prices to edit instead of a blank canvas with AED

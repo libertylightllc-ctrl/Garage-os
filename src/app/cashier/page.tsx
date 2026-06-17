@@ -177,10 +177,15 @@ export default async function CashierHome({
       include: {
         vehicle: { include: { customer: true } },
         // Latest estimate drives the friendly status (SENT → 'Awaiting customer
-        // approval', else 'Estimate under process').
+        // approval', else 'Estimate under process'). Pulled WITHOUT `take`
+        // because the Approved row also needs to find the APPROVED
+        // sibling for routing — if a stray empty DRAFT exists alongside
+        // an APPROVED one (the double-tap race), the 'Generate Invoice'
+        // link must land on the APPROVED estimate's id, not the
+        // most-recent (empty) one. Most jobs have 1-3 estimates max so
+        // dropping `take: 1` is cheap.
         estimates: {
           orderBy: { createdAt:"desc"},
-          take: 1,
           // `total` added for the Approved/Rejected estimate rows that
           // show 'AED <total>' beside the status badge so the cashier
           // sees pipeline value without clicking in.
@@ -262,7 +267,12 @@ export default async function CashierHome({
   // 'Work in progress' section so the cashier doesn't see the same job
   // listed twice.
   const approvedEstimateJobs = jobs.filter(
-    (j) => j.estimates[0]?.status ==="APPROVED"&& j.invoices.length === 0,
+    // Use .some() instead of [0]?.status so a stray empty DRAFT sitting
+    // alongside an APPROVED estimate (legacy double-tap race) doesn't
+    // hide the job from this bucket — the APPROVED row is what drives
+    // "Generate Invoice", regardless of which estimate happens to be
+    // chronologically newest on the job.
+    (j) => j.estimates.some((e) => e.status === "APPROVED") && j.invoices.length === 0,
   );
   const rejectedEstimateJobs = jobs.filter(
     (j) => j.estimates[0]?.status ==="REJECTED",
@@ -908,7 +918,14 @@ export default async function CashierHome({
         ) : (
           <ul className="flex flex-col gap-1">
             {approvedEstimateJobs.map((j) => {
-              const est = j.estimates[0];
+              // Prefer the APPROVED sibling for routing — `j.estimates[0]`
+              // is just the most-recent row, which can be a stale empty
+              // DRAFT left over from a double-tap on "Set price". The
+              // priced lines live on the APPROVED row, so 'Generate
+              // Invoice' must open THAT one. Falls back to the first
+              // estimate for legacy rows where no APPROVED exists.
+              const est =
+                j.estimates.find((e) => e.status === "APPROVED") ?? j.estimates[0];
               const techDone = j.status ==="TECH_COMPLETE";
               const fs = friendlyStatus({
                 status: j.status as JobStatus,

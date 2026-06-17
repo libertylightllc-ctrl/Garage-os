@@ -102,24 +102,15 @@ export async function requestPartAction(formData: FormData) {
     },
   });
 
-  // Also surface the requested part in the technician's "Parts required"
-  // table — same JobPart REQUIRED row that the Add-part form creates.
-  // This means a tech who taps Request Part doesn't need to ALSO type
-  // the part into the diagnosis list separately, and the vehicle
-  // Make / Model / Year automatically show in the table (the table reads
-  // job.vehicle for those columns, not the JobPart row itself). The
-  // PartRequest record stays alongside so the advisor's parts queue +
-  // out-of-stock auto-pause behaviour is unchanged.
-  await prisma.jobPart.create({
-    data: {
-      jobCardId: job.id,
-      kind: "REQUIRED",
-      partId: part?.id ?? null,
-      description,
-      qty,
-      createdById: user.id,
-    },
-  });
+  // Note: do NOT also write a JobPart REQUIRED here. An earlier slice
+  // (e3a0918) tried to surface the requested part in the tech's
+  // diagnosis Parts-required table, but it created duplicate rows in
+  // jobs where the tech had ALSO typed the same part into the Add-part
+  // form during diagnosis. The duplicates showed up on the cashier's
+  // "Technician findings & parts required" panel as ghost AED-0 lines.
+  // The PartRequest is the canonical record for the fulfillment loop;
+  // the diagnosis-phase Add-part form is the canonical record for the
+  // Parts-required table. Keep them independent.
 
   // Activity log entry so the request shows on the job timeline too.
   await prisma.jobStep.create({

@@ -211,3 +211,70 @@ export async function fulfillPartRequestAction(formData: FormData) {
 export async function cancelPartRequestAction(formData: FormData) {
   await advanceRequest(formData, "CANCELLED");
 }
+
+/**
+ * Technician undo for a part request they submitted by mistake. Strictly
+ * narrower than the advisor / owner cancelPartRequestAction:
+ *   - Only the TECH who originally requested it may cancel.
+ *   - Only while the request is still REQUESTED (untouched by parts).
+ *     Once it's ORDERED / ARRIVED / FULFILLED the cashier/advisor has
+ *     already actioned it (or stock has moved) — the tech must escalate
+ *     to the advisor's queue rather than silently undoing real work.
+ *
+ * The PartRequest row is NOT hard-deleted. It flips to CANCELLED so the
+ * audit trail stays intact, and a JobStep PART_REQUEST entry records
+ * who cancelled it. maybeResumeJob() runs in case the job was on hold
+ * waiting for this part — same release path the advisor cancel uses.
+ */
+export async function cancelOwnPartRequestAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
+  const user = session.user;
+
+  const requestId = String(formData.get("requestId") ?? "");
+  const req = await prisma.partRequest.findFirst({
+    where: { id: requestId, garageId: user.garageId },
+    select: {
+      id: true,
+      jobCardId: true,
+      status: true,
+      qty: true,
+      description: true,
+      requestedById: true,
+    },
+  });
+  if (!req) throw new Error("Part request not found in this garage");
+  // Ownership gate — tech may only cancel their own requests. Another
+  // tech on the same job (e.g. a helper) cannot undo someone else's
+  // mistake; that escalates to the advisor as before.
+  if (req.requestedById !== user.id) {
+    throw new Error("You can only cancel your own part requests.");
+  }
+  // State gate — once advisor / parts has moved it, the tech can't
+  // silently roll it back. Hide-or-error: we error so a stale UI click
+  // (the row's status changed after page load) doesn't quietly succeed.
+  if (req.status !== "REQUESTED") {
+    throw new Error("This request has already been actioned and can't be cancelled from here.");
+  }
+
+  await prisma.partRequest.update({
+    where: { id: req.id },
+    data: { status: "CANCELLED" },
+  });
+  await prisma.jobStep.create({
+    data: {
+      jobCardId: req.jobCardId,
+      type: "PART_REQUEST",
+      techId: user.id,
+      transcript: `Part request cancelled — ${req.qty}× ${req.description}`,
+    },
+  });
+  // If the job was paused specifically waiting for THIS part (and no
+  // other open requests remain), the helper releases it. Same release
+  // path the advisor cancel uses, so behaviour stays symmetric.
+  await maybeResumeJob(req.jobCardId);
+
+  revalidatePath(`/technician/jobs/${req.jobCardId}`);
+  revalidatePath(`/advisor/jobs/${req.jobCardId}`);
+  revalidatePath("/advisor/parts");
+}

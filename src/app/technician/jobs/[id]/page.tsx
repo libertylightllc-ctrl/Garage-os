@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
-import { requestPartAction } from "@/app/actions/parts";
+import { requestPartAction, cancelOwnPartRequestAction } from "@/app/actions/parts";
+import { ConfirmButton } from "@/components/confirm-button";
 import {
   leaveHelperAction,
   addExtraJobPartAction,
@@ -863,12 +864,29 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 key={r.id}
                 className="flex flex-col gap-1 rounded-lg border border-border p-2"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span>
                     📦 {r.qty}× {r.description}
                   </span>
-                  <span className="text-xs text-text-mute">
+                  <span className="flex items-center gap-2 text-xs text-text-mute">
                     {t(partStatusKey(r.status))}
+                    {/* Cancel ✕ — only the tech who made the request can
+                        undo it, and only while it's still REQUESTED
+                        (untouched by advisor / parts). The server action
+                        re-checks both gates, so a stale-page click is
+                        rejected rather than silently mutating an already-
+                        actioned row. */}
+                    {r.requestedById === me && r.status === "REQUESTED" ? (
+                      <form action={cancelOwnPartRequestAction}>
+                        <input type="hidden" name="requestId" value={r.id} />
+                        <ConfirmButton
+                          message={t("cancelPartRequestConfirm")}
+                          className="text-danger-600 hover:text-danger-700"
+                        >
+                          ✕
+                        </ConfirmButton>
+                      </form>
+                    ) : null}
                   </span>
                 </div>
                 {formatVehicleSpec(job.vehicle).length > 0 ? (

@@ -17,6 +17,7 @@ import {
 import { balanceDue } from "@/lib/billing";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { EstimateLineRow } from "@/components/estimate-line-row";
+import { EstimateLineCard } from "@/components/estimate-line-card";
 
 export const dynamic ="force-dynamic";
 
@@ -167,72 +168,118 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         </div>
       ) : null}
 
-      {/* Lines table — Make / Model / Year live in their own columns;
-          the Description column is the cashier-typed part name without
-          the legacy "(Make Model)" suffix (stripped on display). Wrapped
-          in overflow-x-auto so narrow screens scroll horizontally rather
-          than wrap each row into a mess. Non-PART lines (LABOR / FEE /
-          DISCOUNT) leave the vehicle cells empty since those aren't
-          vehicle-specific. */}
+      {/* Lines — responsive layout:
+          - Mobile (< md / 768px): stacked cards. Action buttons fit on
+            the same row as the Type badge, so Edit / Skip / Delete are
+            never cut off. Vehicle make/model/year appear as a small
+            one-liner under the badge.
+          - Desktop (md+): the wide 9-column table, scoped to a single
+            overflow-x-auto container in case a narrow laptop window
+            still needs a sideways nudge.
+          Both render the same data + actions — only the layout differs,
+          so totals/VAT/qty/price flow identically. */}
       {est.lines.length > 0 ? (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
-              <tr>
-                <th className="px-2 py-2 text-left">{t("colKind")}</th>
-                <th className="px-2 py-2 text-left">{t("colMake")}</th>
-                <th className="px-2 py-2 text-left">{t("colModel")}</th>
-                <th className="px-2 py-2 text-left">{t("colYear")}</th>
-                <th className="px-2 py-2 text-left">{t("colPart")}</th>
-                <th className="px-2 py-2 text-right">{t("colQty")}</th>
-                <th className="px-2 py-2 text-right">{t("colUnit")}</th>
-                <th className="px-2 py-2 text-right">{t("colTotal")}</th>
-                {editable || canDecline ? (
-                  <th className="px-2 py-2 text-left">{t("colActions")}</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {est.lines.map((l) => (
-                <EstimateLineRow
-                  key={l.id}
-                  estimateId={est.id}
-                  editable={editable}
-                  canDecline={canDecline}
-                  vehicle={{
-                    make: est.jobCard.vehicle.make,
-                    model: est.jobCard.vehicle.model,
-                    year: est.jobCard.vehicle.year,
-                  }}
-                  columnCount={editable || canDecline ? 9 : 8}
-                  line={{
-                    id: l.id,
-                    kind: l.kind,
-                    description: l.description,
-                    qty: Number(l.qty),
-                    unitPrice: Number(l.unitPrice),
-                    lineTotal: Number(l.lineTotal),
-                    declined: l.declined,
-                  }}
-                  displayDescription={translateLineDescription(l.description, locale)}
-                  labels={{
-                    edit: t("editLine"),
-                    delete: t("deleteLine"),
-                    save: t("saveLine"),
-                    cancel: t("cancelLine"),
-                    skip: t("skip"),
-                    restore: t("restore"),
-                    confirmDelete: t("confirmDeleteLine"),
-                    kindLabor: t("labor"),
-                    kindPart: t("part"),
-                    kindFee: t("fee"),
-                    kindDiscount: t("discount"),
-                  }}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Mobile card list */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {est.lines.map((l) => (
+              <EstimateLineCard
+                key={l.id}
+                estimateId={est.id}
+                editable={editable}
+                canDecline={canDecline}
+                vehicle={{
+                  make: est.jobCard.vehicle.make,
+                  model: est.jobCard.vehicle.model,
+                  year: est.jobCard.vehicle.year,
+                }}
+                line={{
+                  id: l.id,
+                  kind: l.kind,
+                  description: l.description,
+                  qty: Number(l.qty),
+                  unitPrice: Number(l.unitPrice),
+                  lineTotal: Number(l.lineTotal),
+                  declined: l.declined,
+                }}
+                displayDescription={translateLineDescription(l.description, locale)}
+                labels={{
+                  edit: t("editLine"),
+                  delete: t("deleteLine"),
+                  save: t("saveLine"),
+                  cancel: t("cancelLine"),
+                  skip: t("skip"),
+                  restore: t("restore"),
+                  confirmDelete: t("confirmDeleteLine"),
+                  kindLabor: t("labor"),
+                  kindPart: t("part"),
+                  kindFee: t("fee"),
+                  kindDiscount: t("discount"),
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
+                <tr>
+                  <th className="px-2 py-2 text-left">{t("colKind")}</th>
+                  <th className="px-2 py-2 text-left">{t("colMake")}</th>
+                  <th className="px-2 py-2 text-left">{t("colModel")}</th>
+                  <th className="px-2 py-2 text-left">{t("colYear")}</th>
+                  <th className="px-2 py-2 text-left">{t("colPart")}</th>
+                  <th className="px-2 py-2 text-right">{t("colQty")}</th>
+                  <th className="px-2 py-2 text-right">{t("colUnit")}</th>
+                  <th className="px-2 py-2 text-right">{t("colTotal")}</th>
+                  {editable || canDecline ? (
+                    <th className="px-2 py-2 text-left">{t("colActions")}</th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody>
+                {est.lines.map((l) => (
+                  <EstimateLineRow
+                    key={l.id}
+                    estimateId={est.id}
+                    editable={editable}
+                    canDecline={canDecline}
+                    vehicle={{
+                      make: est.jobCard.vehicle.make,
+                      model: est.jobCard.vehicle.model,
+                      year: est.jobCard.vehicle.year,
+                    }}
+                    columnCount={editable || canDecline ? 9 : 8}
+                    line={{
+                      id: l.id,
+                      kind: l.kind,
+                      description: l.description,
+                      qty: Number(l.qty),
+                      unitPrice: Number(l.unitPrice),
+                      lineTotal: Number(l.lineTotal),
+                      declined: l.declined,
+                    }}
+                    displayDescription={translateLineDescription(l.description, locale)}
+                    labels={{
+                      edit: t("editLine"),
+                      delete: t("deleteLine"),
+                      save: t("saveLine"),
+                      cancel: t("cancelLine"),
+                      skip: t("skip"),
+                      restore: t("restore"),
+                      confirmDelete: t("confirmDeleteLine"),
+                      kindLabor: t("labor"),
+                      kindPart: t("part"),
+                      kindFee: t("fee"),
+                      kindDiscount: t("discount"),
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : (
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
           {t("noLineItems")}

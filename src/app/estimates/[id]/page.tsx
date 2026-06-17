@@ -180,10 +180,10 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
               <tr>
                 <th className="px-2 py-2 text-left">{t("colKind")}</th>
-                <th className="px-2 py-2 text-left">{t("colPart")}</th>
                 <th className="px-2 py-2 text-left">{t("colMake")}</th>
                 <th className="px-2 py-2 text-left">{t("colModel")}</th>
                 <th className="px-2 py-2 text-left">{t("colYear")}</th>
+                <th className="px-2 py-2 text-left">{t("colPart")}</th>
                 <th className="px-2 py-2 text-right">{t("colQty")}</th>
                 <th className="px-2 py-2 text-right">{t("colUnit")}</th>
                 <th className="px-2 py-2 text-right">{t("colTotal")}</th>

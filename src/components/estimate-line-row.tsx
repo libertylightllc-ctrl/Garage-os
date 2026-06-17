@@ -184,10 +184,10 @@ export function EstimateLineRow({
                     {displayKind}
                 </span>
             </td>
-            <td className={`${td} font-medium ${valueClass}`}>{cleanDescription}</td>
             <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.make ?? "—") : "—"}</td>
             <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.model ?? "—") : "—"}</td>
             <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.year ?? "—") : "—"}</td>
+            <td className={`${td} font-medium ${valueClass}`}>{cleanDescription}</td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>{Number(line.qty)}</td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>
                 {Number(line.unitPrice).toFixed(2)}

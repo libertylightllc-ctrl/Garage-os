@@ -356,10 +356,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <table className="w-full min-w-[520px] text-sm">
               <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                   <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
                   <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
                   <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                   <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                   {!submitted ? <th className="px-2 py-1.5"></th> : null}
                 </tr>
@@ -367,13 +367,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <tbody>
                 {requiredParts.map((p) => (
                   <tr key={p.id} className="border-t border-border align-top">
-                    <td className="px-2 py-1.5">
-                      {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                      {p.description}
-                    </td>
                     <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
                     <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
                     <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                    <td className="px-2 py-1.5">{p.description}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                     {!submitted ? (
                       <td className="px-2 py-1.5 text-right">
@@ -486,10 +483,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-danger-50 text-xs uppercase tracking-wide text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                   <tr>
-                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                     <th className="px-2 py-1.5"></th>
                   </tr>
@@ -497,13 +494,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {extraParts.map((p) => (
                     <tr key={p.id} className="border-t border-danger-500/20 align-top">
-                      <td className="px-2 py-1.5">
-                        {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                        {p.description}
-                      </td>
                       <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
                       <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
                       <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="px-2 py-1.5">{p.description}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                       <td className="px-2 py-1.5 text-right">
                         <form action={removeExtraJobPartAction}>
@@ -609,10 +603,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                   <tr>
-                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                     {repairOpen ? <th className="px-2 py-1.5"></th> : null}
                   </tr>
@@ -620,13 +614,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {usedParts.map((p) => (
                     <tr key={p.id} className="border-t border-border align-top">
-                      <td className="px-2 py-1.5">
-                        {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                        {p.description}
-                      </td>
                       <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
                       <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
                       <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="px-2 py-1.5">{p.description}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                       {repairOpen ? (
                         <td className="px-2 py-1.5 text-right">

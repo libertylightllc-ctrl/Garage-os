@@ -53,10 +53,10 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
             <tr>
-              <th className="px-2 py-2 text-left">{t("colPart")}</th>
               <th className="px-2 py-2 text-left">{t("colMake")}</th>
               <th className="px-2 py-2 text-left">{t("colModel")}</th>
               <th className="px-2 py-2 text-left">{t("colYear")}</th>
+              <th className="px-2 py-2 text-left">{t("colPart")}</th>
               <th className="px-2 py-2 text-right">{t("colQty")}</th>
               <th className="px-2 py-2 text-right">{t("colTotal")}</th>
               {est.status === "SENT" ? <th className="px-2 py-2"></th> : null}
@@ -68,10 +68,10 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               const strike = l.declined ? "text-text-mute line-through" : "";
               return (
                 <tr key={l.id} className="border-t border-border align-top">
-                  <td className={`px-2 py-2 font-medium ${strike}`}>{cleanDesc(l)}</td>
                   <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.make ?? "—") : "—"}</td>
                   <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.model ?? "—") : "—"}</td>
                   <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.year ?? "—") : "—"}</td>
+                  <td className={`px-2 py-2 font-medium ${strike}`}>{cleanDesc(l)}</td>
                   <td className={`px-2 py-2 text-right tabular-nums ${strike}`}>
                     {Number(l.qty)}
                   </td>

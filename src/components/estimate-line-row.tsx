@@ -7,30 +7,33 @@ import {
     updateEstimateLineAction,
 } from "@/app/actions/billing";
 import { ConfirmButton } from "@/components/confirm-button";
+import { stripVehicleLabel } from "@/lib/jobcard-fields";
 
 export interface LineProps {
     line: {
         id: string;
         kind: string;
-        /** Raw stored description (what the cashier typed). Used as the
-          *  edit-form defaultValue so saves round-trip without mutating
-          *  what's stored. */
         description: string;
         qty: number;
         unitPrice: number;
         lineTotal: number;
         declined: boolean;
     };
-    /** Optional display-only override for the description shown in
-      *  idle mode. Parents pass the locale-translated version here so
-      *  Arabic-locale renders see Arabic, while the edit form still
-      *  loads the canonical English (or whatever was typed) for editing. */
+    /** Optional locale-translated description override for idle mode. */
     displayDescription?: string;
+    /** Vehicle on the job — driven into the Make/Model/Year columns. */
+    vehicle: {
+        make: string | null;
+        model: string | null;
+        year: number | null;
+    };
     estimateId: string;
-    /** DRAFT + pricing role → Edit + Delete are visible. */
     editable: boolean;
-    /** !invoice + pricing role → Skip/Restore is visible (separate from delete). */
     canDecline: boolean;
+    /** Total number of columns in the parent table — used by the
+     *  editing-mode row's <td colspan> so the inline form spans the
+     *  full width without breaking the column grid. */
+    columnCount: number;
     labels: {
         edit: string;
         delete: string;
@@ -39,7 +42,6 @@ export interface LineProps {
         skip: string;
         restore: string;
         confirmDelete: string;
-        /** Header labels for the kind dropdown */
         kindLabor: string;
         kindPart: string;
         kindFee: string;
@@ -47,194 +49,184 @@ export interface LineProps {
     };
 }
 
-// 16px (text-base) on inputs prevents iOS Safari from auto-zooming on focus.
-// Padding gives 40px tap height — matches the Workshop md button size.
 const FIELD =
     "h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 const ACTION =
-    "inline-flex h-10 items-center justify-center rounded-lg px-3 text-sm font-semibold hover:bg-surface-2 transition-colors";
+    "inline-flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold hover:bg-surface-2 transition-colors";
 
 /**
-  * One CARD per estimate line. Two modes:
-  *
-  *   idle    — read-only display + [Edit] [Skip/Restore] [Delete] buttons
-  *   editing — inline form (kind dropdown + description + qty + unit price)
-  *             + [Save] [Cancel] buttons. Cancel discards local edits, no
-  *             server round-trip.
-  *
-  * We render as a <div> card (not a <tr>) so each line gets its own breathing
-  * room on narrow screens. The previous table layout collapsed numbers
-  * together on mobile ("185.511.00185.51") — cards fix that by giving the
-  * numbers labels and their own line.
-  *
-  * The kind dropdown shows DISCOUNT separately even though it stores as
-  * FEE with a negative amount — matches addEstimateLineAction's sugar.
-  * On render, a FEE line with negative price is detected and the dropdown
-  * pre-selects DISCOUNT so the round-trip preserves intent.
-  */
+ * One table ROW per estimate line. Modes:
+ *   idle    — Kind | Part | Make | Model | Year | Qty | Unit | Total | Actions cells
+ *   editing — single full-width <td colspan> with the inline form
+ *
+ * Vehicle make / model / year render in their own columns. The
+ * description column is auto-stripped of any legacy "(MAKE MODEL)"
+ * suffix so old snapshots still read cleanly without the redundant
+ * info — see stripVehicleLabel. PART kind is the only one that fills
+ * Make / Model / Year cells; LABOR / FEE / DISCOUNT lines leave them
+ * blank since they aren't vehicle-specific.
+ */
 export function EstimateLineRow({
     line,
     displayDescription,
+    vehicle,
     estimateId,
     editable,
     canDecline,
+    columnCount,
     labels,
 }: LineProps) {
     const [editing, setEditing] = useState(false);
 
-    // Display kind: surface DISCOUNT for negative FEE lines so the user
-    // sees the same word they typed when they added the line.
     const isDiscountLine = line.kind === "FEE" && line.unitPrice < 0;
     const displayKind = isDiscountLine ? "DISCOUNT" : line.kind;
-    // Empty input when the line was saved with a zero price — the
-  // cashier was about to type one in, and seeing '0.00' pre-filled
-  // forces them to select+delete before typing (small but every-line
-  // friction). For non-zero prices, show the value AS-IS (no forced
-  // .toFixed(2)) so the cashier can type '50' instead of '50.00';
-  // the read-only display below still renders with two decimals when
-  // the line is saved.
-  const priceForInput =
-    line.unitPrice === 0 ? "" : String(Math.abs(line.unitPrice));
+    const priceForInput =
+        line.unitPrice === 0 ? "" : String(Math.abs(line.unitPrice));
 
-    // ---- Editing mode: full inline edit form ----
+    // Display description gets the locale-translated copy when provided,
+    // then strips any embedded "(Make Model)" suffix from legacy snapshots
+    // so the column reads "Oil filter" cleanly with Make / Model in their
+    // own cells. Strip is a no-op when the suffix isn't there.
+    const cleanDescription = stripVehicleLabel(
+        displayDescription ?? line.description,
+        vehicle.make,
+        vehicle.model,
+    );
+    // The edit form's defaultValue must round-trip the canonical stored
+    // description (not the translated / stripped copy) so a save keeps
+    // exactly what's in the DB.
+    const editDefault = stripVehicleLabel(line.description, vehicle.make, vehicle.model);
+
+    const isPart = line.kind === "PART";
+    const valueClass = line.declined
+        ? "line-through text-text-mute"
+        : "";
+
+    // ---- Editing mode ----
     if (editing && editable) {
         return (
-            <div className="rounded-xl border border-border bg-surface-2 p-4">
-                <form
-                    action={updateEstimateLineAction}
-                    className="flex flex-col gap-3"
-                    onSubmit={() => setEditing(false)}
-                >
-                    <input type="hidden" name="estimateId" value={estimateId} />
-                    <input type="hidden" name="lineId" value={line.id} />
-                    <div className="flex flex-wrap gap-2">
-                        <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
-                            <option value="LABOR">{labels.kindLabor}</option>
-                            <option value="PART">{labels.kindPart}</option>
-                            <option value="FEE">{labels.kindFee}</option>
-                            <option value="DISCOUNT">{labels.kindDiscount}</option>
-                        </select>
-                        <input
-                            name="description"
-                            defaultValue={line.description}
-                            required
-                            className={`${FIELD} min-w-40 flex-1`}
-                        />
-                    </div>
-                    {/* step="any" — let the user type any decimal (35, 35.5, 35.00).
-                            Server still enforces qty > 0 and price >= 0, so the UI step
-                            is purely a hint. */}
-                    <div className="flex flex-wrap gap-2">
-                        <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
-                            Qty
+            <tr className="border-b border-border bg-surface-2">
+                <td colSpan={columnCount} className="p-3">
+                    <form
+                        action={updateEstimateLineAction}
+                        className="flex flex-col gap-3"
+                        onSubmit={() => setEditing(false)}
+                    >
+                        <input type="hidden" name="estimateId" value={estimateId} />
+                        <input type="hidden" name="lineId" value={line.id} />
+                        <div className="flex flex-wrap gap-2">
+                            <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
+                                <option value="LABOR">{labels.kindLabor}</option>
+                                <option value="PART">{labels.kindPart}</option>
+                                <option value="FEE">{labels.kindFee}</option>
+                                <option value="DISCOUNT">{labels.kindDiscount}</option>
+                            </select>
                             <input
-                                name="qty"
-                                type="number"
-                                step="any"
-                                min="0"
-                                inputMode="decimal"
-                                defaultValue={line.qty}
-                                className={`${FIELD} mt-1 w-24 text-right`}
+                                name="description"
+                                defaultValue={editDefault}
+                                required
+                                className={`${FIELD} min-w-40 flex-1`}
                             />
-                        </label>
-                        <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
-                            Unit (AED)
-                            <input
-                                name="unitPrice"
-                                type="number"
-                                step="any"
-                                min="0"
-                                inputMode="decimal"
-                                defaultValue={priceForInput}
-                                className={`${FIELD} mt-1 flex-1 text-right`}
-                            />
-                        </label>
-                    </div>
-                    <div className="flex gap-2">
-                        <button
-                            type="submit"
-                            className="inline-flex h-10 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-                        >
-                            {labels.save}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setEditing(false)}
-                            className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-                        >
-                            {labels.cancel}
-                        </button>
-                    </div>
-                </form>
-            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <label className="flex flex-col text-xs text-text-mute">
+                                Qty
+                                <input
+                                    name="qty"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    inputMode="decimal"
+                                    defaultValue={line.qty}
+                                    className={`${FIELD} mt-1 w-24 text-right`}
+                                />
+                            </label>
+                            <label className="flex flex-col text-xs text-text-mute">
+                                Unit (AED)
+                                <input
+                                    name="unitPrice"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    inputMode="decimal"
+                                    defaultValue={priceForInput}
+                                    className={`${FIELD} mt-1 flex-1 text-right`}
+                                />
+                            </label>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="submit"
+                                className="inline-flex h-10 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
+                            >
+                                {labels.save}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditing(false)}
+                                className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
+                            >
+                                {labels.cancel}
+                            </button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
         );
     }
 
-    // ---- Idle mode: card display ----
-    const cardClass =
-        "rounded-lg border border-black/10 bg-white p-3 dark:border-white/15 dark:bg-zinc-950 " +
-        (line.declined ? "opacity-60" : "");
-    const valueClass = line.declined ? "line-through" : "";
-
+    // ---- Idle mode: real table row ----
+    const td = "px-2 py-2 align-top text-sm";
     return (
-        <div className={cardClass}>
-            {/* Row 1: kind badge + description */}
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                    <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                        {displayKind}
-                    </span>
-                    <p className={`mt-1.5 text-base font-medium ${valueClass}`}>
-                        {displayDescription ?? line.description}
-                    </p>
-                </div>
-                {/* Big line total on the right — the cashier's eye lands here */}
-                <div className="text-right">
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Total</div>
-                    <div className={`text-lg font-semibold tabular-nums ${valueClass}`}>
-                        AED {Number(line.lineTotal).toFixed(2)}
-                    </div>
-                </div>
-            </div>
-
-            {/* Row 2: qty × unit price breakdown */}
-            <div className="mt-2 flex items-center gap-1 text-sm text-zinc-600 dark:text-zinc-300">
-                <span className="tabular-nums">{Number(line.qty)}</span>
-                <span className="text-zinc-400">×</span>
-                <span className="tabular-nums">AED {Number(line.unitPrice).toFixed(2)}</span>
-            </div>
-
-            {/* Row 3: actions */}
+        <tr className={`border-b border-border ${line.declined ? "opacity-60" : ""}`}>
+            <td className={td}>
+                <span className="inline-block rounded bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-mute">
+                    {displayKind}
+                </span>
+            </td>
+            <td className={`${td} font-medium ${valueClass}`}>{cleanDescription}</td>
+            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.make ?? "—") : "—"}</td>
+            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.model ?? "—") : "—"}</td>
+            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.year ?? "—") : "—"}</td>
+            <td className={`${td} text-right tabular-nums ${valueClass}`}>{Number(line.qty)}</td>
+            <td className={`${td} text-right tabular-nums ${valueClass}`}>
+                {Number(line.unitPrice).toFixed(2)}
+            </td>
+            <td className={`${td} text-right font-semibold tabular-nums ${valueClass}`}>
+                {Number(line.lineTotal).toFixed(2)}
+            </td>
             {editable || canDecline ? (
-                <div className="mt-3 flex flex-wrap gap-1 border-t border-black/5 pt-2 dark:border-white/10">
-                    {editable ? (
-                        <button type="button" onClick={() => setEditing(true)} className={ACTION}>
-                            {labels.edit}
-                        </button>
-                    ) : null}
-                    {canDecline ? (
-                        <form action={toggleEstimateLineAction}>
-                            <input type="hidden" name="estimateId" value={estimateId} />
-                            <input type="hidden" name="lineId" value={line.id} />
-                            <button className={ACTION}>
-                                {line.declined ? labels.restore : labels.skip}
+                <td className={`${td} whitespace-nowrap`}>
+                    <div className="flex flex-wrap items-center gap-1">
+                        {editable ? (
+                            <button type="button" onClick={() => setEditing(true)} className={ACTION}>
+                                {labels.edit}
                             </button>
-                        </form>
-                    ) : null}
-                    {editable ? (
-                        <form action={removeEstimateLineAction} className="ms-auto">
-                            <input type="hidden" name="estimateId" value={estimateId} />
-                            <input type="hidden" name="lineId" value={line.id} />
-                            <ConfirmButton
-                                message={labels.confirmDelete}
-                                className={`${ACTION} text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40`}
-                            >
-                                {labels.delete}
-                            </ConfirmButton>
-                        </form>
-                    ) : null}
-                </div>
+                        ) : null}
+                        {canDecline ? (
+                            <form action={toggleEstimateLineAction}>
+                                <input type="hidden" name="estimateId" value={estimateId} />
+                                <input type="hidden" name="lineId" value={line.id} />
+                                <button className={ACTION}>
+                                    {line.declined ? labels.restore : labels.skip}
+                                </button>
+                            </form>
+                        ) : null}
+                        {editable ? (
+                            <form action={removeEstimateLineAction}>
+                                <input type="hidden" name="estimateId" value={estimateId} />
+                                <input type="hidden" name="lineId" value={line.id} />
+                                <ConfirmButton
+                                    message={labels.confirmDelete}
+                                    className={`${ACTION} text-danger-700 hover:bg-danger-50 dark:text-danger-500 dark:hover:bg-danger-500/10`}
+                                >
+                                    {labels.delete}
+                                </ConfirmButton>
+                            </form>
+                        ) : null}
+                    </div>
+                </td>
             ) : null}
-        </div>
+        </tr>
     );
 }

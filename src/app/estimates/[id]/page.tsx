@@ -167,48 +167,77 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         </div>
       ) : null}
 
-      {/* Each line renders as its own card — gives the description, qty,
-          unit price, total and action buttons enough room to breathe on
-          a phone screen. The previous <table> collapsed numbers into a
-          single unreadable blob on narrow widths. */}
-      <div className="flex flex-col gap-2">
-        {est.lines.map((l) => (
-          <EstimateLineRow
-            key={l.id}
-            estimateId={est.id}
-            editable={editable}
-            canDecline={canDecline}
-            line={{
-              id: l.id,
-              kind: l.kind,
-              description: l.description,
-              qty: Number(l.qty),
-              unitPrice: Number(l.unitPrice),
-              lineTotal: Number(l.lineTotal),
-              declined: l.declined,
-            }}
-            displayDescription={translateLineDescription(l.description, locale)}
-            labels={{
-              edit: t("editLine"),
-              delete: t("deleteLine"),
-              save: t("saveLine"),
-              cancel: t("cancelLine"),
-              skip: t("skip"),
-              restore: t("restore"),
-              confirmDelete: t("confirmDeleteLine"),
-              kindLabor: t("labor"),
-              kindPart: t("part"),
-              kindFee: t("fee"),
-              kindDiscount: t("discount"),
-            }}
-          />
-        ))}
-        {est.lines.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-black/15 p-6 text-center text-sm text-zinc-500 dark:border-white/20">
-            {t("noLineItems")}
-          </p>
-        ) : null}
-      </div>
+      {/* Lines table — Make / Model / Year live in their own columns;
+          the Description column is the cashier-typed part name without
+          the legacy "(Make Model)" suffix (stripped on display). Wrapped
+          in overflow-x-auto so narrow screens scroll horizontally rather
+          than wrap each row into a mess. Non-PART lines (LABOR / FEE /
+          DISCOUNT) leave the vehicle cells empty since those aren't
+          vehicle-specific. */}
+      {est.lines.length > 0 ? (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
+              <tr>
+                <th className="px-2 py-2 text-left">{t("colKind")}</th>
+                <th className="px-2 py-2 text-left">{t("colPart")}</th>
+                <th className="px-2 py-2 text-left">{t("colMake")}</th>
+                <th className="px-2 py-2 text-left">{t("colModel")}</th>
+                <th className="px-2 py-2 text-left">{t("colYear")}</th>
+                <th className="px-2 py-2 text-right">{t("colQty")}</th>
+                <th className="px-2 py-2 text-right">{t("colUnit")}</th>
+                <th className="px-2 py-2 text-right">{t("colTotal")}</th>
+                {editable || canDecline ? (
+                  <th className="px-2 py-2 text-left">{t("colActions")}</th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {est.lines.map((l) => (
+                <EstimateLineRow
+                  key={l.id}
+                  estimateId={est.id}
+                  editable={editable}
+                  canDecline={canDecline}
+                  vehicle={{
+                    make: est.jobCard.vehicle.make,
+                    model: est.jobCard.vehicle.model,
+                    year: est.jobCard.vehicle.year,
+                  }}
+                  columnCount={editable || canDecline ? 9 : 8}
+                  line={{
+                    id: l.id,
+                    kind: l.kind,
+                    description: l.description,
+                    qty: Number(l.qty),
+                    unitPrice: Number(l.unitPrice),
+                    lineTotal: Number(l.lineTotal),
+                    declined: l.declined,
+                  }}
+                  displayDescription={translateLineDescription(l.description, locale)}
+                  labels={{
+                    edit: t("editLine"),
+                    delete: t("deleteLine"),
+                    save: t("saveLine"),
+                    cancel: t("cancelLine"),
+                    skip: t("skip"),
+                    restore: t("restore"),
+                    confirmDelete: t("confirmDeleteLine"),
+                    kindLabor: t("labor"),
+                    kindPart: t("part"),
+                    kindFee: t("fee"),
+                    kindDiscount: t("discount"),
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
+          {t("noLineItems")}
+        </p>
+      )}
 
       <div className="ml-auto text-right text-base tabular-nums">
         <div className="text-zinc-600 dark:text-text-mute">{t("subtotal")}: {money(Number(est.subtotal))}</div>

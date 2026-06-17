@@ -109,27 +109,10 @@ function titleCase(s: string): string {
 }
 
 /**
- * Append "(Make Model)" to a part-line description so the cashier (and
- * the customer's printed invoice) can see which vehicle each part is
- * for. Idempotent: if the description already contains the vehicle
- * suffix (case-insensitive), returns it unchanged. Returns the original
- * description when make/model is missing (edge-case-safe per spec).
- *
- *   appendVehicleLabel("Oil filter", "Ford", "Focus")
- *     → "Oil filter (Ford Focus)"
- *
- *   // re-applying is a no-op
- *   appendVehicleLabel("Oil filter (Ford Focus)", "Ford", "Focus")
- *     → "Oil filter (Ford Focus)"
- *
- *   // missing data is safe
- *   appendVehicleLabel("Oil filter", null, null)
- *     → "Oil filter"
- *
- * Used at line-save time on Estimate (snapshot), at invoice-generation
- * belt-and-braces, and inline on the technician's parts UI. One format
- * across every surface so the customer's printed invoice matches what
- * the tech saw at diagnosis.
+ * Append "(Make Model)" to a part-line description. Retained for
+ * backwards-compatibility with the table-rendering helpers below (and
+ * for any future surface that still wants an inline label); idempotent
+ * so re-applying is a no-op and missing data is safe.
  */
 export function appendVehicleLabel(
   desc: string,
@@ -139,11 +122,37 @@ export function appendVehicleLabel(
   const head = [make, model].filter(Boolean).join(" ").trim();
   if (!head) return desc;
   const suffix = `(${head})`;
-  // Case-insensitive contains-check so manual edits with different
-  // capitalisation don't get a duplicate suffix appended.
   if (desc.toLowerCase().includes(suffix.toLowerCase())) return desc;
-  // Trim trailing whitespace so we don't end up with "Oil filter  (Ford Focus)".
   return `${desc.trimEnd()} ${suffix}`;
+}
+
+/**
+ * Inverse of appendVehicleLabel: returns the part-name without the
+ * "(Make Model)" suffix, so a table column can render just "Oil filter"
+ * while Make / Model live in their own cells. Strips a trailing
+ * "(...)" segment that matches the vehicle make+model — case-insensitive
+ * — and leaves the description alone if the suffix is something else
+ * (e.g. the cashier typed their own parenthetical note).
+ *
+ *   stripVehicleLabel("Oil filter (Ford Focus)", "Ford", "Focus")
+ *     → "Oil filter"
+ *   stripVehicleLabel("Oil filter (OEM)", "Ford", "Focus")
+ *     → "Oil filter (OEM)"     // not the vehicle label, untouched
+ *   stripVehicleLabel("Oil filter", null, null)
+ *     → "Oil filter"
+ */
+export function stripVehicleLabel(
+  desc: string,
+  make: string | null | undefined,
+  model: string | null | undefined,
+): string {
+  const head = [make, model].filter(Boolean).join(" ").trim();
+  if (!head) return desc;
+  const pattern = new RegExp(
+    `\\s*\\(\\s*${head.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*\\)\\s*$`,
+    "i",
+  );
+  return desc.replace(pattern, "").trimEnd();
 }
 
 /**

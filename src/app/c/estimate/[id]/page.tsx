@@ -4,6 +4,7 @@ import { approveEstimatePublic, rejectEstimatePublic, toggleLinePublic } from "@
 import { verifyToken } from "@/lib/tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import { stripVehicleLabel } from "@/lib/jobcard-fields";
 
 export const dynamic ="force-dynamic";
 
@@ -26,39 +27,74 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
 
   const decided = est.status ==="APPROVED"|| est.status ==="REJECTED";
 
+  // Vehicle data — same for every line, surfaced as table columns so
+  // the customer can read "this is for my Ford Focus" at a glance.
+  const v = est.jobCard.vehicle;
+  // Description column reads clean even on legacy lines that still
+  // carry the "(Make Model)" suffix from a prior code path.
+  const cleanDesc = (line: { description: string }) =>
+    stripVehicleLabel(
+      translateLineDescription(line.description, locale),
+      v.make,
+      v.model,
+    );
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-5 p-6">
       <div>
         <p className="text-sm text-text-mute">{est.jobCard.garage.name}</p>
         <h1 className="text-2xl font-semibold tracking-tight">{t("yourEstimate")}</h1>
         <p className="text-sm text-text-mute">
-          {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate}
+          {v.make} {v.model} · {v.plate}
         </p>
       </div>
 
-      <ul className="flex flex-col gap-1 text-sm">
-        {est.lines.map((l) => (
-          <li key={l.id} className="flex items-center justify-between gap-2">
-            <span className={l.declined ?"text-text-mute line-through":""}>
-              {translateLineDescription(l.description, locale)}
-            </span>
-            <span className="flex items-center gap-2">
-              <span className={l.declined ?"text-text-mute line-through":""}>
-                {Number(l.lineTotal).toFixed(2)}
-              </span>
-              {est.status ==="SENT"? (
-                <form action={toggleLinePublic}>
-                  <input type="hidden" name="token" value={token} />
-                  <input type="hidden" name="lineId" value={l.id} />
-                  <button className="text-xs text-text-mute hover:underline">
-                    {l.declined ? t("restore") : t("skip")}
-                  </button>
-                </form>
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
+            <tr>
+              <th className="px-2 py-2 text-left">{t("colPart")}</th>
+              <th className="px-2 py-2 text-left">{t("colMake")}</th>
+              <th className="px-2 py-2 text-left">{t("colModel")}</th>
+              <th className="px-2 py-2 text-left">{t("colYear")}</th>
+              <th className="px-2 py-2 text-right">{t("colQty")}</th>
+              <th className="px-2 py-2 text-right">{t("colTotal")}</th>
+              {est.status === "SENT" ? <th className="px-2 py-2"></th> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {est.lines.map((l) => {
+              const isPart = l.kind === "PART";
+              const strike = l.declined ? "text-text-mute line-through" : "";
+              return (
+                <tr key={l.id} className="border-t border-border align-top">
+                  <td className={`px-2 py-2 font-medium ${strike}`}>{cleanDesc(l)}</td>
+                  <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.make ?? "—") : "—"}</td>
+                  <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.model ?? "—") : "—"}</td>
+                  <td className={`px-2 py-2 ${strike}`}>{isPart ? (v.year ?? "—") : "—"}</td>
+                  <td className={`px-2 py-2 text-right tabular-nums ${strike}`}>
+                    {Number(l.qty)}
+                  </td>
+                  <td className={`px-2 py-2 text-right tabular-nums ${strike}`}>
+                    {Number(l.lineTotal).toFixed(2)}
+                  </td>
+                  {est.status === "SENT" ? (
+                    <td className="px-2 py-2 text-right">
+                      <form action={toggleLinePublic}>
+                        <input type="hidden" name="token" value={token} />
+                        <input type="hidden" name="lineId" value={l.id} />
+                        <button className="text-xs text-text-mute hover:underline">
+                          {l.declined ? t("restore") : t("skip")}
+                        </button>
+                      </form>
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       <div className="border-t border-border pt-2 text-right text-sm">
         <div>{t("subtotal")}: {money(Number(est.subtotal))}</div>
         <div>{t("vat5")}: {money(Number(est.vatAmount))}</div>

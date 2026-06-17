@@ -10,6 +10,7 @@ import {
   nhtsaFuelToInternal,
   formatVehicleSpec,
   appendVehicleLabel,
+  stripVehicleLabel,
   qcSignedOff,
   EXTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
@@ -199,5 +200,49 @@ describe("job-card reception helpers", () => {
     expect(appendVehicleLabel("Oil filter   ", "Ford", "Focus")).toBe(
       "Oil filter (Ford Focus)",
     );
+  });
+
+  // ── stripVehicleLabel — inverse of appendVehicleLabel ─────────────
+  // Used by the new table layouts so the part-name column reads clean
+  // even on legacy rows whose snapshot still has the "(Ford Focus)"
+  // suffix baked in.
+  it("stripVehicleLabel removes a trailing vehicle suffix", () => {
+    expect(stripVehicleLabel("Oil filter (Ford Focus)", "Ford", "Focus")).toBe(
+      "Oil filter",
+    );
+    expect(stripVehicleLabel("Engine oil 5L (Toyota Prado)", "Toyota", "Prado")).toBe(
+      "Engine oil 5L",
+    );
+  });
+
+  it("stripVehicleLabel is case-insensitive on the suffix", () => {
+    expect(stripVehicleLabel("Oil filter (FORD FOCUS)", "Ford", "Focus")).toBe(
+      "Oil filter",
+    );
+    expect(stripVehicleLabel("Oil filter (ford focus)", "Ford", "Focus")).toBe(
+      "Oil filter",
+    );
+  });
+
+  it("stripVehicleLabel leaves unrelated parentheticals alone", () => {
+    // A cashier-typed note that happens to be parenthesised must survive.
+    expect(stripVehicleLabel("Oil filter (OEM)", "Ford", "Focus")).toBe(
+      "Oil filter (OEM)",
+    );
+    expect(stripVehicleLabel("Oil filter (Nissan Patrol)", "Ford", "Focus")).toBe(
+      "Oil filter (Nissan Patrol)",
+    );
+  });
+
+  it("stripVehicleLabel returns desc unchanged when make/model is missing", () => {
+    expect(stripVehicleLabel("Oil filter (Ford Focus)", null, null)).toBe(
+      "Oil filter (Ford Focus)",
+    );
+    expect(stripVehicleLabel("Oil filter", undefined, undefined)).toBe("Oil filter");
+  });
+
+  it("append → strip round-trips cleanly", () => {
+    const labelled = appendVehicleLabel("Oil filter", "Ford", "Focus");
+    expect(stripVehicleLabel(labelled, "Ford", "Focus")).toBe("Oil filter");
   });
 });

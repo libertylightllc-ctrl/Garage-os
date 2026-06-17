@@ -32,12 +32,7 @@ import {
   signOffQcAction,
 } from "@/app/actions/techfindings";
 import { repairUnlocked } from "@/lib/jobfindings";
-import {
-  QC_CHECKS,
-  qcSignedOff,
-  formatVehicleSpec,
-  appendVehicleLabel,
-} from "@/lib/jobcard-fields";
+import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
@@ -349,36 +344,53 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </form>
         )}
 
-        {/* Parts required */}
+        {/* Parts required — table so the tech / parts supplier can read
+            Make / Model / Year in their own columns when calling the
+            supplier. Description column is just the part name (no inline
+            vehicle suffix); the vehicle cells carry that info. */}
         <h3 className="text-xs font-medium text-text">{t("partsRequired")}</h3>
         {requiredParts.length === 0 ? (
           <p className="text-sm text-text-mute">{t("noPartsRequired")}</p>
         ) : (
-          <ul className="flex flex-col gap-1 text-sm">
-            {requiredParts.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between rounded-md border border-border p-2"
-              >
-                <span>
-                  {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                  {/* Vehicle model is auto-appended to every part line so
-                      the technician + parts supplier see exactly which
-                      car the part is for, without re-typing. Same format
-                      as the estimate + invoice snapshots downstream. */}
-                  {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
-                  <span className="text-text-mute">×{p.qty}</span>
-                </span>
-                {!submitted ? (
-                  <form action={removeJobPartAction}>
-                    <input type="hidden" name="jobId" value={job.id} />
-                    <input type="hidden" name="partLineId" value={p.id} />
-                    <button className="text-red-600">✕</button>
-                  </form>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
+                <tr>
+                  <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
+                  <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                  <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
+                  {!submitted ? <th className="px-2 py-1.5"></th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {requiredParts.map((p) => (
+                  <tr key={p.id} className="border-t border-border align-top">
+                    <td className="px-2 py-1.5">
+                      {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
+                      {p.description}
+                    </td>
+                    <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
+                    <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
+                    <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
+                    {!submitted ? (
+                      <td className="px-2 py-1.5 text-right">
+                        <form action={removeJobPartAction}>
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <input type="hidden" name="partLineId" value={p.id} />
+                          <button className="text-danger-600 hover:text-danger-700" aria-label={t("deleteLine")}>
+                            ✕
+                          </button>
+                        </form>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Add Parts form — only available during the diagnosis stage so
@@ -470,29 +482,43 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               {t("extrasPanelEmpty")}
             </p>
           ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {extraParts.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center justify-between rounded-lg border border-danger-500/30 bg-surface p-2"
-                >
-                  <span>
-                    {p.partNo ? (
-                      <span className="text-text-mute">{p.partNo} </span>
-                    ) : null}
-                    {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
-                    <span className="text-text-mute">×{p.qty}</span>
-                  </span>
-                  <form action={removeExtraJobPartAction}>
-                    <input type="hidden" name="jobId" value={job.id} />
-                    <input type="hidden" name="jobPartId" value={p.id} />
-                    <button className="text-red-600" aria-label={t("extrasRemove")}>
-                      ✕
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto rounded-md border border-danger-500/30 bg-surface">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead className="bg-danger-50 text-xs uppercase tracking-wide text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
+                    <th className="px-2 py-1.5"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {extraParts.map((p) => (
+                    <tr key={p.id} className="border-t border-danger-500/20 align-top">
+                      <td className="px-2 py-1.5">
+                        {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
+                        {p.description}
+                      </td>
+                      <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
+                      <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
+                      <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        <form action={removeExtraJobPartAction}>
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <input type="hidden" name="jobPartId" value={p.id} />
+                          <button className="text-danger-600 hover:text-danger-700" aria-label={t("extrasRemove")}>
+                            ✕
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {/* Add an extra item — description required, qty default 1.
@@ -579,27 +605,45 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {usedParts.length === 0 ? (
             <p className="text-sm text-text-mute">{t("noPartsUsed")}</p>
           ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {usedParts.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center justify-between rounded-md border border-border p-2"
-                >
-                  <span>
-                    {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                    {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
-                    <span className="text-text-mute">×{p.qty}</span>
-                  </span>
-                  {repairOpen ? (
-                    <form action={removeUsedPartAction}>
-                      <input type="hidden" name="jobId" value={job.id} />
-                      <input type="hidden" name="partLineId" value={p.id} />
-                      <button className="text-red-600">✕</button>
-                    </form>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
+                    <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
+                    {repairOpen ? <th className="px-2 py-1.5"></th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {usedParts.map((p) => (
+                    <tr key={p.id} className="border-t border-border align-top">
+                      <td className="px-2 py-1.5">
+                        {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
+                        {p.description}
+                      </td>
+                      <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
+                      <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
+                      <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
+                      {repairOpen ? (
+                        <td className="px-2 py-1.5 text-right">
+                          <form action={removeUsedPartAction}>
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <input type="hidden" name="partLineId" value={p.id} />
+                            <button className="text-danger-600 hover:text-danger-700" aria-label={t("deleteLine")}>
+                              ✕
+                            </button>
+                          </form>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {repairOpen ? (

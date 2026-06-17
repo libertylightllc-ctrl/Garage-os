@@ -22,6 +22,12 @@ import {
 } from "@/lib/jobcard-status";
 import { getT } from "@/i18n/server";
 import { statusKey } from "@/i18n/config";
+import { WorkflowStepper } from "@/components/workflow-stepper";
+import { workflowStage } from "@/lib/workflow-stage";
+import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
+import { JobTimeline } from "@/components/job-timeline";
+import { loadJobTimeline } from "@/lib/job-timeline-server";
+import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 
 export const dynamic ="force-dynamic";
 
@@ -68,6 +74,27 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
   const claimedName = techName(job.claimedById);
   const assignedName = techName(job.assignedToId);
+
+  // Workflow stepper state — most recent estimate (already pulled
+  // desc) + invoice paid-ness from a small companion query.
+  const latestEstimateStatus = job.estimates[0]?.status ?? null;
+  const latestInvoice = await prisma.invoice.findFirst({
+    where: { jobCardId: id },
+    orderBy: { createdAt: "desc" },
+    select: { total: true, payments: { select: { amount: true } } },
+  });
+  const invoicePaid = latestInvoice
+    ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
+      Number(latestInvoice.total) - 0.005
+    : false;
+  const stepperState = workflowStage({
+    status: job.status,
+    heldFrom: job.heldFrom,
+    heldReason: job.holdReason,
+    latestEstimateStatus,
+    invoicePaid,
+  });
+  const timelineEvents = await loadJobTimeline(job.id, session.user.garageId);
 
   const status = job.status as JobStatus;
   const heldFrom = (job.heldFrom ?? null) as JobStatus | null;
@@ -123,6 +150,8 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             :""}
         </p>
       </div>
+
+      <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
       {/* Reception detail (Job-Card-Data-Model.md) */}
       <div className="rounded-lg border border-border p-3 text-sm">
@@ -535,6 +564,8 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           ) : null}
         </div>
       ) : null}
+
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
 
       {/* Technician activity — the live link from the workshop into this job */}
       {job.steps.length > 0 ? (

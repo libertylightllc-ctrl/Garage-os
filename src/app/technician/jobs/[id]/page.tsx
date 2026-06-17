@@ -39,6 +39,12 @@ import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
 import { PhotoCapture } from "@/components/photo-capture";
+import { WorkflowStepper } from "@/components/workflow-stepper";
+import { workflowStage } from "@/lib/workflow-stage";
+import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
+import { JobTimeline } from "@/components/job-timeline";
+import { loadJobTimeline } from "@/lib/job-timeline-server";
+import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 
 export const dynamic ="force-dynamic";
 
@@ -87,6 +93,37 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     },
   });
   if (!job) notFound();
+
+  // Workflow stepper inputs — derive on every render so a status/
+  // estimate/payment change is reflected without us caching a
+  // "stage" field somewhere else. Two cheap queries: most-recent
+  // Estimate.status, plus most-recent Invoice + payments to know
+  // if it's been paid in full.
+  const [latestEstimate, latestInvoice] = await Promise.all([
+    prisma.estimate.findFirst({
+      where: { jobCardId: id },
+      orderBy: { createdAt: "desc" },
+      select: { status: true },
+    }),
+    prisma.invoice.findFirst({
+      where: { jobCardId: id },
+      orderBy: { createdAt: "desc" },
+      select: { total: true, payments: { select: { amount: true } } },
+    }),
+  ]);
+  const invoicePaid =
+    latestInvoice
+      ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
+        Number(latestInvoice.total) - 0.005
+      : false;
+  const stepperState = workflowStage({
+    status: job.status,
+    heldFrom: job.heldFrom,
+    heldReason: job.holdReason,
+    latestEstimateStatus: latestEstimate?.status ?? null,
+    invoicePaid,
+  });
+  const timelineEvents = await loadJobTimeline(job.id, session.user.garageId);
 
   // Per spec: finished jobs are not the technician's concern. If the
   // job has moved past TECH_COMPLETE — INVOICED, DELIVERED, or
@@ -185,6 +222,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </form>
         ) : null}
       </div>
+
+      <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
       {/* Status banner — reads LIVE job.status and tells the technician
           where the job is in the workflow at this moment, with the
@@ -842,6 +881,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           </ul>
         </div>
       ) : null}
+
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
 
       {/* Activity */}
       <div>

@@ -25,6 +25,12 @@ import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import { WorkflowStepper } from "@/components/workflow-stepper";
+import { workflowStage } from "@/lib/workflow-stage";
+import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
+import { JobTimeline } from "@/components/job-timeline";
+import { loadJobTimeline } from "@/lib/job-timeline-server";
+import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 
 export const dynamic ="force-dynamic";
 
@@ -70,6 +76,24 @@ export default async function InvoiceView({
   const balance = balanceDue(total, paid);
   const state = arState(total, paid, inv.dueDate, new Date());
   const customer = inv.jobCard.vehicle.customer;
+
+  // Workflow stepper — invoicePaid is just balance == 0 of THIS invoice
+  // (we don't bother fetching a sibling here; cashier viewing one
+  // invoice is viewing this job's invoice). latestEstimateStatus comes
+  // from a small companion query.
+  const latestEstimate = await prisma.estimate.findFirst({
+    where: { jobCardId: inv.jobCardId },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+  });
+  const stepperState = workflowStage({
+    status: inv.jobCard.status,
+    heldFrom: inv.jobCard.heldFrom,
+    heldReason: inv.jobCard.holdReason,
+    latestEstimateStatus: latestEstimate?.status ?? null,
+    invoicePaid: paid >= total - 0.005,
+  });
+  const timelineEvents = await loadJobTimeline(inv.jobCardId, session.user.garageId);
   // Line edits are unlocked for cashier/owner only while the invoice
   // is still 'pre-send'. Once sendInvoiceToCustomerAction stamps
   // jobCard.invoiceSentAt the inputs disappear and the table falls
@@ -134,6 +158,12 @@ export default async function InvoiceView({
           📧 {t("invoiceEmailedConfirmation")}
         </div>
       ) : null}
+
+      {/* Workflow stepper — hidden from print so the customer's PDF
+          doesn't carry the internal progress UI. */}
+      <div className="print:hidden">
+        <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
+      </div>
 
       {/* Action bar — Print Invoice / Print Receipt (when paid) /
           Email Invoice. All three hidden from the print output so
@@ -629,6 +659,12 @@ export default async function InvoiceView({
           Mark as Paid button) but lives next to the customer name +
           balance, which is the real context for a payment-record
           decision. */}
+
+      {/* Audit timeline — print:hidden so the customer-facing PDF
+          doesn't expose internal staff actions. */}
+      <div className="print:hidden">
+        <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+      </div>
     </main>
   );
 }

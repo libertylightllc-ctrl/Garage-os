@@ -18,6 +18,12 @@ import { balanceDue } from "@/lib/billing";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { EstimateLineRow } from "@/components/estimate-line-row";
 import { EstimateLineCard } from "@/components/estimate-line-card";
+import { WorkflowStepper } from "@/components/workflow-stepper";
+import { workflowStage } from "@/lib/workflow-stage";
+import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
+import { JobTimeline } from "@/components/job-timeline";
+import { loadJobTimeline } from "@/lib/job-timeline-server";
+import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 
 export const dynamic ="force-dynamic";
 
@@ -108,6 +114,34 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const usedParts = est.jobCard.jobParts.filter((p) => p.kind ==="USED");
   const workNotes = est.jobCard.workNotes;
 
+  // Workflow stepper — latest estimate on this job + latest invoice.
+  // est itself is one of those estimates; we may be looking at an OLD
+  // revision, so query for the actual most recent one.
+  const [latestEstimate, latestInvoice] = await Promise.all([
+    prisma.estimate.findFirst({
+      where: { jobCardId: est.jobCardId },
+      orderBy: { createdAt: "desc" },
+      select: { status: true },
+    }),
+    prisma.invoice.findFirst({
+      where: { jobCardId: est.jobCardId },
+      orderBy: { createdAt: "desc" },
+      select: { total: true, payments: { select: { amount: true } } },
+    }),
+  ]);
+  const invoicePaid = latestInvoice
+    ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
+      Number(latestInvoice.total) - 0.005
+    : false;
+  const stepperState = workflowStage({
+    status: est.jobCard.status,
+    heldFrom: est.jobCard.heldFrom,
+    heldReason: est.jobCard.holdReason,
+    latestEstimateStatus: latestEstimate?.status ?? null,
+    invoicePaid,
+  });
+  const timelineEvents = await loadJobTimeline(est.jobCardId, session.user.garageId);
+
   const editable = canPrice && est.status ==="DRAFT";
   const canDecline = canPrice && !est.invoice; // skip lines until the invoice is cut
   const backHref = role ==="ADVISOR"? `/advisor/jobs/${est.jobCardId}` :"/cashier";
@@ -134,6 +168,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           </p>
         ) : null}
       </div>
+
+      <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
       {/* Technician findings & parts required — what the cashier prices from */}
       {finding?.submittedAt || requiredParts.length > 0 ? (
@@ -483,6 +519,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       <p className="text-xs text-zinc-400">
         (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>
+
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
     </main>
   );
 }

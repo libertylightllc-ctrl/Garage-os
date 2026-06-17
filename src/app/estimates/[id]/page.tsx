@@ -220,19 +220,23 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             ))}
           </div>
 
-          {/* Desktop table */}
-          <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
-            <table className="w-full min-w-[640px] text-sm">
+          {/* Desktop table — fits the container, no horizontal scroll.
+              Make / Model / Year collapsed into one "Vehicle" column
+              ("Ford Focus 2014") to free width. Part / description gets
+              the flex/auto column so it takes whatever remains; the
+              numeric cells (Qty / Unit / Total) and the Type badge are
+              tight + right-aligned. table-layout:auto lets the browser
+              shrink the long description before the narrow numerics. */}
+          <div className="hidden rounded-lg border border-border md:block">
+            <table className="w-full text-sm">
               <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                 <tr>
                   <th className="px-2 py-2 text-left">{t("colKind")}</th>
-                  <th className="px-2 py-2 text-left">{t("colMake")}</th>
-                  <th className="px-2 py-2 text-left">{t("colModel")}</th>
-                  <th className="px-2 py-2 text-left">{t("colYear")}</th>
+                  <th className="px-2 py-2 text-left">{t("colVehicle")}</th>
                   <th className="px-2 py-2 text-left">{t("colPart")}</th>
-                  <th className="px-2 py-2 text-right">{t("colQty")}</th>
-                  <th className="px-2 py-2 text-right">{t("colUnit")}</th>
-                  <th className="px-2 py-2 text-right">{t("colTotal")}</th>
+                  <th className="w-16 px-2 py-2 text-right">{t("colQty")}</th>
+                  <th className="w-20 px-2 py-2 text-right">{t("colUnit")}</th>
+                  <th className="w-24 px-2 py-2 text-right">{t("colTotal")}</th>
                   {editable || canDecline ? (
                     <th className="px-2 py-2 text-left">{t("colActions")}</th>
                   ) : null}
@@ -250,7 +254,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       model: est.jobCard.vehicle.model,
                       year: est.jobCard.vehicle.year,
                     }}
-                    columnCount={editable || canDecline ? 9 : 8}
+                    columnCount={editable || canDecline ? 7 : 6}
                     line={{
                       id: l.id,
                       kind: l.kind,

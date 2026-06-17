@@ -101,6 +101,14 @@ export function EstimateLineRow({
     const valueClass = line.declined
         ? "line-through text-text-mute"
         : "";
+    // Compact one-liner for the desktop "Vehicle" column. PART lines
+    // get make/model/year glued together; non-vehicle lines (labor,
+    // fee, discount) show an em-dash so the column reads consistently.
+    const vehicleLabel = isPart
+        ? [vehicle.make, vehicle.model, vehicle.year]
+            .filter(Boolean)
+            .join(" ") || "—"
+        : "—";
 
     // ---- Editing mode ----
     if (editing && editable) {
@@ -184,9 +192,7 @@ export function EstimateLineRow({
                     {displayKind}
                 </span>
             </td>
-            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.make ?? "—") : "—"}</td>
-            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.model ?? "—") : "—"}</td>
-            <td className={`${td} ${valueClass}`}>{isPart ? (vehicle.year ?? "—") : "—"}</td>
+            <td className={`${td} whitespace-nowrap ${valueClass}`}>{vehicleLabel}</td>
             <td className={`${td} font-medium ${valueClass}`}>{cleanDescription}</td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>{Number(line.qty)}</td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>

@@ -23,6 +23,23 @@ import {
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { PRICING_ROLES, SEND_ROLES } from "@/lib/permissions";
+import { appendVehicleLabel } from "@/lib/jobcard-fields";
+
+// Resolve the vehicle (make + model only — the suffix this slice cares
+// about) for a given JobCard. Returned record is the input shape that
+// appendVehicleLabel expects: nullable make/model so a legacy job
+// without a vehicle row still degrades gracefully (helper returns the
+// description unchanged).
+async function vehicleMakeModelForJob(jobCardId: string): Promise<{
+  make: string | null;
+  model: string | null;
+}> {
+  const j = await prisma.jobCard.findUnique({
+    where: { id: jobCardId },
+    select: { vehicle: { select: { make: true, model: true } } },
+  });
+  return { make: j?.vehicle?.make ?? null, model: j?.vehicle?.model ?? null };
+}
 
 async function customerForJob(jobCardId: string) {
   const j = await prisma.jobCard.findUnique({
@@ -152,8 +169,17 @@ export async function addEstimateLineAction(formData: FormData) {
   const rawKind = String(formData.get("kind") ?? "LABOR");
   const isDiscount = rawKind === "DISCOUNT";
   const kind = (isDiscount ? "FEE" : rawKind) as LineKind;
-  const description =
+  const rawDesc =
     String(formData.get("description") ?? "").trim() || (isDiscount ? "Discount" : "Item");
+  // PART lines get an auto "(Make Model)" suffix appended to the snapshot
+  // so the customer's printed invoice shows which vehicle each part is
+  // for. Idempotent — re-saving an already-labelled line is a no-op.
+  // LABOR / FEE / DISCOUNT lines aren't vehicle-specific; left alone.
+  let description = rawDesc;
+  if (kind === "PART") {
+    const v = await vehicleMakeModelForJob(est.jobCardId);
+    description = appendVehicleLabel(rawDesc, v.make, v.model);
+  }
   const qty = Math.max(0, Number(formData.get("qty") ?? 1));
   const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
@@ -182,12 +208,20 @@ export async function addLineFromPartAction(formData: FormData) {
 
   const qty = Math.max(1, jp.qty);
   const unitPrice = jp.part ? Number(jp.part.price) : 0; // catalog price, else cashier sets it
+  // Auto "(Make Model)" suffix — the tech listed "oil filter" without
+  // typing the vehicle; this is the slot that lifts the JobPart into
+  // an estimate snapshot, so it's where the label is stamped on.
+  const v = await vehicleMakeModelForJob(est.jobCardId);
   await prisma.estimateLine.create({
     data: {
       estimateId,
       kind: "PART",
       partId: jp.partId,
-      description: jobPartLineDescription(jp.partNo, jp.description),
+      description: appendVehicleLabel(
+        jobPartLineDescription(jp.partNo, jp.description),
+        v.make,
+        v.model,
+      ),
       qty,
       unitPrice,
       lineTotal: lineTotal(qty, unitPrice),
@@ -270,7 +304,15 @@ export async function updateEstimateLineAction(formData: FormData) {
     unitPrice: formData.get("unitPrice"),
   });
   if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
-  const { kind, description, qty, unitPrice } = parsed;
+  const { kind, qty, unitPrice } = parsed;
+  // Re-apply "(Make Model)" to PART lines so an edit through the inline
+  // form picks the label up even if the cashier didn't type it. Helper
+  // is idempotent — already-labelled descriptions are unchanged.
+  let description = parsed.description;
+  if (kind === "PART") {
+    const v = await vehicleMakeModelForJob(est.jobCardId);
+    description = appendVehicleLabel(description, v.make, v.model);
+  }
 
   await prisma.estimateLine.update({
     where: { id: lineId },
@@ -387,6 +429,16 @@ export async function generateInvoiceAction(formData: FormData) {
     throw new Error("No approved estimates to bill");
   }
 
+  // Belt-and-braces vehicle suffix: PART lines saved before this slice
+  // existed won't have "(Make Model)" in their snapshot, so we relabel
+  // any unlabelled PART line at invoice-generation time. Helper is
+  // idempotent — newly saved (already-labelled) lines pass through
+  // unchanged. Money math runs on Number(qty) × Number(unitPrice) which
+  // we are not touching, so totals/VAT are guaranteed unchanged.
+  const v = await vehicleMakeModelForJob(clicked.jobCardId);
+  const labelPart = (kind: string, desc: string): string =>
+    kind === "PART" ? appendVehicleLabel(desc, v.make, v.model) : desc;
+
   // Merge all non-declined lines across estimates. Order: original
   // estimate's lines first, then each subsequent re-estimate's lines
   // appended — preserves the natural reading order on the invoice.
@@ -433,7 +485,7 @@ export async function generateInvoiceAction(formData: FormData) {
         data: missing.map((l) => ({
           invoiceId: existingInvoiceId,
           kind: l.kind,
-          description: l.description,
+          description: labelPart(l.kind, l.description),
           qty: l.qty,
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
@@ -502,7 +554,7 @@ export async function generateInvoiceAction(formData: FormData) {
         lines: {
           create: mergedLines.map((l) => ({
             kind: l.kind,
-            description: l.description,
+            description: labelPart(l.kind, l.description),
             qty: l.qty,
             unitPrice: l.unitPrice,
             lineTotal: l.lineTotal,

@@ -109,6 +109,44 @@ function titleCase(s: string): string {
 }
 
 /**
+ * Append "(Make Model)" to a part-line description so the cashier (and
+ * the customer's printed invoice) can see which vehicle each part is
+ * for. Idempotent: if the description already contains the vehicle
+ * suffix (case-insensitive), returns it unchanged. Returns the original
+ * description when make/model is missing (edge-case-safe per spec).
+ *
+ *   appendVehicleLabel("Oil filter", "Ford", "Focus")
+ *     → "Oil filter (Ford Focus)"
+ *
+ *   // re-applying is a no-op
+ *   appendVehicleLabel("Oil filter (Ford Focus)", "Ford", "Focus")
+ *     → "Oil filter (Ford Focus)"
+ *
+ *   // missing data is safe
+ *   appendVehicleLabel("Oil filter", null, null)
+ *     → "Oil filter"
+ *
+ * Used at line-save time on Estimate (snapshot), at invoice-generation
+ * belt-and-braces, and inline on the technician's parts UI. One format
+ * across every surface so the customer's printed invoice matches what
+ * the tech saw at diagnosis.
+ */
+export function appendVehicleLabel(
+  desc: string,
+  make: string | null | undefined,
+  model: string | null | undefined,
+): string {
+  const head = [make, model].filter(Boolean).join(" ").trim();
+  if (!head) return desc;
+  const suffix = `(${head})`;
+  // Case-insensitive contains-check so manual edits with different
+  // capitalisation don't get a duplicate suffix appended.
+  if (desc.toLowerCase().includes(suffix.toLowerCase())) return desc;
+  // Trim trailing whitespace so we don't end up with "Oil filter  (Ford Focus)".
+  return `${desc.trimEnd()} ${suffix}`;
+}
+
+/**
  * Map NHTSA's free-text "FuelTypePrimary" string to our internal
  * FuelType enum. NHTSA returns values like "Gasoline", "Diesel",
  * "Electric", "Hybrid", or empty string. Empty input → null (caller

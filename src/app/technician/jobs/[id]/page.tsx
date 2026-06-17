@@ -32,7 +32,12 @@ import {
   signOffQcAction,
 } from "@/app/actions/techfindings";
 import { repairUnlocked } from "@/lib/jobfindings";
-import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields";
+import {
+  QC_CHECKS,
+  qcSignedOff,
+  formatVehicleSpec,
+  appendVehicleLabel,
+} from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
@@ -357,7 +362,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               >
                 <span>
                   {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                  {p.description} <span className="text-text-mute">×{p.qty}</span>
+                  {/* Vehicle model is auto-appended to every part line so
+                      the technician + parts supplier see exactly which
+                      car the part is for, without re-typing. Same format
+                      as the estimate + invoice snapshots downstream. */}
+                  {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
+                  <span className="text-text-mute">×{p.qty}</span>
                 </span>
                 {!submitted ? (
                   <form action={removeJobPartAction}>
@@ -470,7 +480,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                     {p.partNo ? (
                       <span className="text-text-mute">{p.partNo} </span>
                     ) : null}
-                    {p.description}{""}
+                    {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
                     <span className="text-text-mute">×{p.qty}</span>
                   </span>
                   <form action={removeExtraJobPartAction}>
@@ -577,7 +587,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 >
                   <span>
                     {p.partNo ? <span className="text-text-mute">{p.partNo} </span> : null}
-                    {p.description} <span className="text-text-mute">×{p.qty}</span>
+                    {appendVehicleLabel(p.description, job.vehicle.make, job.vehicle.model)}{" "}
+                    <span className="text-text-mute">×{p.qty}</span>
                   </span>
                   {repairOpen ? (
                     <form action={removeUsedPartAction}>

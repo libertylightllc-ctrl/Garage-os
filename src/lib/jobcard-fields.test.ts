@@ -9,6 +9,7 @@ import {
   isValidVin,
   nhtsaFuelToInternal,
   formatVehicleSpec,
+  appendVehicleLabel,
   qcSignedOff,
   EXTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
@@ -161,5 +162,42 @@ describe("job-card reception helpers", () => {
     expect(
       formatVehicleSpec({ make: "Toyota", model: "Camry", fuelType: "HYBRID" }),
     ).toBe("Toyota Camry · Hybrid");
+  });
+
+  // ── Vehicle-label slice ───────────────────────────────────────────
+  // The part-line auto-label that makes "Oil filter" become "Oil filter
+  // (Ford Focus)" on every estimate, invoice, and printed receipt.
+  it("appendVehicleLabel appends make + model in parens", () => {
+    expect(appendVehicleLabel("Oil filter", "Ford", "Focus")).toBe(
+      "Oil filter (Ford Focus)",
+    );
+    expect(appendVehicleLabel("Engine oil 5L", "Toyota", "Prado")).toBe(
+      "Engine oil 5L (Toyota Prado)",
+    );
+  });
+
+  it("appendVehicleLabel is idempotent — re-applying doesn't double the suffix", () => {
+    expect(
+      appendVehicleLabel("Oil filter (Ford Focus)", "Ford", "Focus"),
+    ).toBe("Oil filter (Ford Focus)");
+    // Case-insensitive — the cashier may have typed "ford focus" in their
+    // own description and the label still shouldn't be duplicated.
+    expect(
+      appendVehicleLabel("Oil filter (ford focus)", "Ford", "Focus"),
+    ).toBe("Oil filter (ford focus)");
+  });
+
+  it("appendVehicleLabel returns desc unchanged when make/model is missing", () => {
+    expect(appendVehicleLabel("Oil filter", null, null)).toBe("Oil filter");
+    expect(appendVehicleLabel("Oil filter", undefined, undefined)).toBe("Oil filter");
+    expect(appendVehicleLabel("Oil filter", "Ford", null)).toBe("Oil filter (Ford)");
+    expect(appendVehicleLabel("Oil filter", null, "Focus")).toBe("Oil filter (Focus)");
+    expect(appendVehicleLabel("Oil filter", "", "")).toBe("Oil filter");
+  });
+
+  it("appendVehicleLabel trims trailing whitespace before appending", () => {
+    expect(appendVehicleLabel("Oil filter   ", "Ford", "Focus")).toBe(
+      "Oil filter (Ford Focus)",
+    );
   });
 });

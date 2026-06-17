@@ -47,23 +47,12 @@ export async function addStepAction(formData: FormData) {
   }
 
   let photoUrl: string | undefined;
-  let voiceNoteUrl: string | undefined;
   let transcript: string | undefined;
 
   if (type === "PHOTO") {
     const f = formData.get("file");
     if (f instanceof File && f.size > 0) photoUrl = await saveUpload(f, user.garageId);
     else throw new Error("No photo selected");
-  } else if (type === "VOICE") {
-    // Voice notes are speech-to-text only now (matches the dictation
-    // flow the tech already uses for findings). The legacy file-upload
-    // path is removed — what arrives is a transcript string from
-    // VoiceNoteDictation. A blank transcript is a user error, not a
-    // 500 — surface it cleanly so the form doesn't disappear into a
-    // generic crash.
-    const t = String(formData.get("transcript") ?? "").trim();
-    if (!t) throw new Error("Voice note is empty — say something or type a note.");
-    transcript = t;
   } else if (type === "FINISH") {
     transcript = "Technician marked work finished";
   } else {
@@ -71,7 +60,7 @@ export async function addStepAction(formData: FormData) {
   }
 
   await prisma.jobStep.create({
-    data: { jobCardId: job.id, type, techId: user.id, photoUrl, voiceNoteUrl, transcript },
+    data: { jobCardId: job.id, type, techId: user.id, photoUrl, transcript },
   });
   revalidatePath(`/technician/jobs/${job.id}`);
 }

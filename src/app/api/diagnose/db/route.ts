@@ -37,6 +37,24 @@ const EXPECTED_TABLES = [
   "AdvancePayment",
 ] as const;
 
+// Vehicle columns the app expects to find. Mirrors the Prisma model; if the
+// live DB is missing any of these, the auto-applier below adds them. Same
+// pattern as JobCard's expected-column list — kept hand-curated so a single
+// route doubles as 'schema drift detector' + 'one-tap fixer'.
+const EXPECTED_VEHICLE_COLUMNS = [
+  "id",
+  "customerId",
+  "make",
+  "model",
+  "year",
+  "plate",
+  "vin",
+  "engineSize",
+  "fuelType",
+  "createdAt",
+  "updatedAt",
+];
+
 const EXPECTED_JOBCARD_COLUMNS = [
   "id",
   "garageId",
@@ -184,6 +202,53 @@ export async function GET(req: Request) {
     }
   } catch (err) {
     lines.push(`JOBCARD COLUMNS QUERY FAILED: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── Vehicle columns ──────────────────────────────────────────────
+  // Same pattern as JobCard — list, diff, optionally ALTER. Added when
+  // engineSize + fuelType moved onto Vehicle (intrinsic vehicle spec)
+  // so the technician + parts pages can render "Toyota Prado · 2.7 ·
+  // Petrol" without manual SQL ever leaving AR's Supabase tab.
+  lines.push("");
+  try {
+    const rows = (await prisma.$queryRawUnsafe(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'Vehicle'
+        ORDER BY column_name`,
+    )) as Array<{ column_name: string }>;
+    const present = new Set(rows.map((r) => r.column_name));
+    const missing = EXPECTED_VEHICLE_COLUMNS.filter((c) => !present.has(c));
+
+    lines.push(`Vehicle columns: ${rows.length} present`);
+    if (missing.length > 0) {
+      lines.push("");
+      lines.push("MISSING columns (need ALTER TABLE):");
+      for (const c of missing) lines.push(`  ✗ ${c}`);
+      lines.push("");
+      lines.push("Generated ALTER TABLE statements to fix:");
+      for (const c of missing) {
+        lines.push(`  ALTER TABLE "Vehicle" ADD COLUMN "${c}" TEXT;`);
+      }
+      if (allowApply) {
+        lines.push("");
+        lines.push("Applying via Prisma connection (apply=1):");
+        for (const c of missing) {
+          const stmt = `ALTER TABLE "Vehicle" ADD COLUMN IF NOT EXISTS "${c}" TEXT`;
+          try {
+            await prisma.$executeRawUnsafe(stmt);
+            lines.push(`  ✓ added "${c}"`);
+          } catch (e) {
+            lines.push(
+              `  ✗ FAILED "${c}": ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
+      }
+    } else {
+      lines.push("  ✓ all expected Vehicle columns are present");
+    }
+  } catch (err) {
+    lines.push(`VEHICLE COLUMNS QUERY FAILED: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return new NextResponse(lines.join("\n") + "\n", {

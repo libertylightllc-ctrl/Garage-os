@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
 import { inStock } from "@/lib/partrequest";
+import { formatVehicleSpec } from "@/lib/jobcard-fields";
 import {
   fulfillPartRequestAction,
   orderPartRequestAction,
@@ -57,6 +58,14 @@ export default async function PartsQueue() {
                       </Link>
                       {r.requestedBy?.name ? ` · ${t("requestedByLabel")} ${r.requestedBy.name}` :""}
                     </div>
+                    {/* Full vehicle spec — shown inline so the parts orderer
+                        can read make/model/year/engine/fuel on a phone call
+                        with a supplier without opening the job card. */}
+                    {formatVehicleSpec(r.jobCard.vehicle).length > 0 ? (
+                      <div className="mt-0.5 text-xs text-text-mute">
+                        🔧 {formatVehicleSpec(r.jobCard.vehicle)}
+                      </div>
+                    ) : null}
                     {r.note ? (
                       <div className="text-xs text-text-mute">— {r.note}</div>
                     ) : null}

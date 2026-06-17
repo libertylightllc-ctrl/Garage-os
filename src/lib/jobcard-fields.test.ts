@@ -8,6 +8,7 @@ import {
   normalizeVin,
   isValidVin,
   nhtsaFuelToInternal,
+  formatVehicleSpec,
   qcSignedOff,
   EXTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
@@ -113,5 +114,52 @@ describe("job-card reception helpers", () => {
     expect(nhtsaFuelToInternal("")).toBeNull();
     expect(nhtsaFuelToInternal(null)).toBeNull();
     expect(nhtsaFuelToInternal(undefined)).toBeNull();
+  });
+
+  // ── Vehicle spec slice ─────────────────────────────────────────────
+  // The technician / parts surfaces need a stable, locale-safe one-liner
+  // for "Toyota Prado 2014 · 2.7 · Petrol". Each tail field must drop
+  // gracefully so legacy vehicles still render the head cleanly.
+  it("formatVehicleSpec renders the canonical one-liner", () => {
+    expect(
+      formatVehicleSpec({
+        make: "Toyota",
+        model: "Prado",
+        year: 2014,
+        engineSize: "2.7",
+        fuelType: "PETROL",
+      }),
+    ).toBe("Toyota Prado · 2014 · 2.7 · Petrol");
+  });
+
+  it("formatVehicleSpec omits missing tail fields without leaving stray separators", () => {
+    expect(
+      formatVehicleSpec({ make: "Toyota", model: "Prado", year: 2014 }),
+    ).toBe("Toyota Prado · 2014");
+    expect(formatVehicleSpec({ make: "Toyota", model: "Prado" })).toBe("Toyota Prado");
+    // Legacy row with neither year nor spec.
+    expect(formatVehicleSpec({ make: "Nissan", model: "Patrol" })).toBe("Nissan Patrol");
+    // Engine but no fuel — fine.
+    expect(
+      formatVehicleSpec({ make: "Toyota", model: "Prado", engineSize: "2.7" }),
+    ).toBe("Toyota Prado · 2.7");
+  });
+
+  it("formatVehicleSpec handles partial / empty input gracefully", () => {
+    expect(formatVehicleSpec({})).toBe("");
+    expect(formatVehicleSpec({ make: null, model: null })).toBe("");
+    // Whitespace-only engineSize is treated as missing.
+    expect(
+      formatVehicleSpec({ make: "Toyota", model: "Prado", engineSize: "   " }),
+    ).toBe("Toyota Prado");
+  });
+
+  it("formatVehicleSpec title-cases the fuelType enum value", () => {
+    expect(
+      formatVehicleSpec({ make: "Nissan", model: "Patrol", fuelType: "DIESEL" }),
+    ).toBe("Nissan Patrol · Diesel");
+    expect(
+      formatVehicleSpec({ make: "Toyota", model: "Camry", fuelType: "HYBRID" }),
+    ).toBe("Toyota Camry · Hybrid");
   });
 });

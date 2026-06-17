@@ -25,6 +25,10 @@ interface SP {
   model?: string;
   year?: string;
   vin?: string;
+  // Intrinsic vehicle spec — carried through plate-lookup so a returning
+  // vehicle pre-fills these too. NHTSA VIN decode fills the blanks.
+  engineSize?: string;
+  fuelType?: string;
   vehicleId?: string;
   assignedToId?: string;
   //"moulkia"= OCR path (consent required);"manual"= no photo;"repeat"= pick-existing
@@ -203,6 +207,20 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
               {t("mileageInLabel")}
               <input name="mileageIn" type="number" min="0" required className={FIELD} />
             </label>
+            {/* Engine size — free text ("2.7", "4.0", "2.0T"). NHTSA's
+                DisplacementL fills this when VIN decode succeeds. Always
+                editable so a tech in the GCC who knows the spec from
+                memory can type it even when neither OCR nor NHTSA gives
+                anything (which happens for GCC-spec vehicles). */}
+            <label className="text-xs text-text-mute">
+              {t("engineSizeLabel")}
+              <input
+                name="engineSize"
+                defaultValue={sp.engineSize ?? ""}
+                placeholder="2.7"
+                className={FIELD}
+              />
+            </label>
             {/* Fuel type — replaces the previous Oil-type field per
                 spec. Auto-fills from NHTSA VIN decode when the engine
                 is mapped. The 'oilType' column stays on the schema for
@@ -210,7 +228,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
                 form. */}
             <label className="text-xs text-text-mute">
               {t("fuelTypeLabel")}
-              <select name="fuelType" defaultValue="" className={FIELD}>
+              <select name="fuelType" defaultValue={sp.fuelType ?? ""} className={FIELD}>
                 <option value="">—</option>
                 {FUEL_TYPES.map((v) => (
                   <option key={v} value={v}>

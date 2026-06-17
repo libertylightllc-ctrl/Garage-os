@@ -315,6 +315,12 @@ model Vehicle {
   year         Int?
   plate        String
   vin          String?
+  // Intrinsic vehicle spec — used to render "Toyota Prado 2014 · 2.7 · Petrol"
+  // on the technician job screen and next to each part request so the parts
+  // supplier knows exactly which part fits. engineSize is free-text (NHTSA
+  // returns decimal liters but advisors may type "2.0T" / "5.7L HEMI" / etc.)
+  engineSize   String?
+  fuelType     String?    // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER
 
   jobCards JobCard[]
   bookings Booking[]

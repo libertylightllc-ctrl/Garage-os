@@ -99,12 +99,31 @@ export async function POST(req: Request) {
   // we still return whatever fields ARE populated (NHTSA frequently
   // returns partial data for GCC-spec vehicles — make/model OK but
   // fuel type empty). The CLIENT decides whether to fill blanks.
+  // engineSize — DisplacementL is the canonical liters value (e.g. "2.7",
+  // "4.0"). NHTSA sometimes returns trailing zeros ("2.70000") which look
+  // ugly in the input; trim them down so the field shows the same way a
+  // human would write it. Stored as a free-text string on Vehicle so this
+  // value round-trips cleanly.
+  const engineSize = (() => {
+    const raw = emptyToNull(row.DisplacementL);
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return raw;
+    // Drop trailing zeros: 2.7 not 2.7000; 4 not 4.0000. parseFloat-toString
+    // is the simplest path but loses 4.0 → "4"; for engine size, "2.7" /
+    // "4.0" both read naturally to a mechanic so we keep one decimal when
+    // it's a whole number, otherwise trust the parsed value.
+    if (Number.isInteger(n)) return `${n}.0`;
+    return String(n);
+  })();
+
   const result = {
     vin,
     make: emptyToNull(row.Make),
     model: emptyToNull(row.Model),
     year: emptyToNull(row.ModelYear),
     fuelType: nhtsaFuelToInternal(row.FuelTypePrimary),
+    engineSize,
     engine: [
       emptyToNull(row.EngineModel),
       emptyToNull(row.EngineCylinders) && `${row.EngineCylinders} cyl`,

@@ -34,6 +34,9 @@ interface NhtsaResult {
   model: string | null;
   year: string | null;
   fuelType: "PETROL" | "DIESEL" | "HYBRID" | "ELECTRIC" | "OTHER" | null;
+  /** Clean numeric displacement (e.g. "2.7", "4.0") for the engineSize
+   *  form field — same OCR-friendly fill-if-empty rule as the others. */
+  engineSize: string | null;
   engine: string | null;
   errorCode: string | null;
   errorText: string | null;
@@ -115,9 +118,12 @@ export function VinDecodeButton({ labels }: { labels: VinDecodeLabels }) {
       if (fillIfEmpty("model", data.model)) filled.push("Model");
       if (fillIfEmpty("year", data.year)) filled.push("Year");
       if (fillIfEmpty("fuelType", data.fuelType)) filled.push("Fuel type");
-      // 'engine' has no field on the form yet — exposed in the
-      // success message so the advisor can capture it manually in
-      // the complaint / notes if useful.
+      if (fillIfEmpty("engineSize", data.engineSize)) filled.push("Engine size");
+      // 'engine' (the full string with cylinders + model name) has no
+      // dedicated field; the displacement number is now its own field
+      // above. Still surface 'engine' in the success message so the
+      // advisor can capture full engine model in the complaint / notes
+      // if useful.
       if (filled.length === 0 && !data.engine) {
         setStatus("error");
         setMessage(labels.notFound);

@@ -73,6 +73,42 @@ export function isValidVin(raw: string): boolean {
 }
 
 /**
+ * One-line vehicle spec used wherever we need to tell the technician
+ * or parts supplier exactly which car they're ordering for: the tech
+ * job screen header and every part-request row. Format:
+ *
+ *   "Toyota Prado 2014 · 2.7 · Petrol"
+ *
+ * Each tail segment (year, engineSize, fuelType) is dropped if missing
+ * so legacy vehicles (pre-spec-fields) still render the make/model
+ * cleanly instead of leaving stray separators. fuelType is title-cased
+ * because the stored value is the FUEL_TYPES enum (PETROL/DIESEL/...)
+ * which looks shouty next to "Toyota".
+ */
+export function formatVehicleSpec(v: {
+  make?: string | null;
+  model?: string | null;
+  year?: number | null;
+  engineSize?: string | null;
+  fuelType?: string | null;
+}): string {
+  const head = [v.make ?? "", v.model ?? ""].filter(Boolean).join(" ").trim();
+  const tail = [
+    v.year ? String(v.year) : null,
+    v.engineSize && v.engineSize.trim() ? v.engineSize.trim() : null,
+    v.fuelType ? titleCase(v.fuelType) : null,
+  ].filter(Boolean) as string[];
+  if (!head && tail.length === 0) return "";
+  if (!head) return tail.join(" · ");
+  if (tail.length === 0) return head;
+  return `${head} · ${tail.join(" · ")}`;
+}
+
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+/**
  * Map NHTSA's free-text "FuelTypePrimary" string to our internal
  * FuelType enum. NHTSA returns values like "Gasoline", "Diesel",
  * "Electric", "Hybrid", or empty string. Empty input → null (caller

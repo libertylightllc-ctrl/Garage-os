@@ -220,6 +220,11 @@ export async function plateLookupAction(formData: FormData) {
       model: v.model,
       year: v.year ? String(v.year) : "",
       vin: v.vin ?? "",
+      // Carry intrinsic spec through so the returning vehicle pre-fills
+      // the new Engine size / Fuel type inputs (saved once, used for
+      // every subsequent visit + every part request).
+      engineSize: v.engineSize ?? "",
+      fuelType: v.fuelType ?? "",
     }),
   );
 }
@@ -241,6 +246,10 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const vin = get("vin") || null;
   const yearRaw = parseInt(get("year"), 10);
   const year = Number.isFinite(yearRaw) ? yearRaw : null;
+  // Intrinsic vehicle spec — these live on Vehicle so they survive
+  // across job cards. engineSize is free text; fuelType is validated
+  // against FUEL_TYPES below (matches the JobCard.fuelType slot).
+  const engineSize = get("engineSize") || null;
   const assignedToRaw = get("assignedToId");
   let vehicleId = get("vehicleId");
 
@@ -295,7 +304,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       });
       await tx.vehicle.update({
         where: { id: existing.id },
-        data: { make, model, year, plate, vin },
+        data: { make, model, year, plate, vin, engineSize, fuelType },
       });
     } else {
       // New customer + vehicle. Upsert customer by phone so a known number attaches.
@@ -306,7 +315,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         select: { id: true },
       });
       const vehicle = await tx.vehicle.create({
-        data: { customerId: customer.id, make, model, year, plate, vin },
+        data: { customerId: customer.id, make, model, year, plate, vin, engineSize, fuelType },
         select: { id: true },
       });
       vehicleId = vehicle.id;

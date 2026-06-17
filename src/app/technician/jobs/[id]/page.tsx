@@ -32,7 +32,7 @@ import {
   signOffQcAction,
 } from "@/app/actions/techfindings";
 import { repairUnlocked } from "@/lib/jobfindings";
-import { QC_CHECKS, qcSignedOff } from "@/lib/jobcard-fields";
+import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
@@ -161,6 +161,16 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {job.vehicle.make} {job.vehicle.model}
         </h1>
         <p className="text-sm text-text-mute">{job.vehicle.plate}</p>
+        {/* Full vehicle spec one-liner — "Toyota Prado 2014 · 2.7 · Petrol".
+            Lets the technician glance at the right part-spec without
+            digging into the job card. The same line repeats below next
+            to every part request so the tech / parts supplier sees it
+            wherever a part is mentioned. */}
+        {formatVehicleSpec(job.vehicle).length > 0 ? (
+          <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs font-medium text-text">
+            🔧 {formatVehicleSpec(job.vehicle)}
+          </p>
+        ) : null}
         {job.helpers.length > 0 ? (
           <p className="mt-1 text-xs text-text-mute">
             {t("helpersLabel")}: {job.helpers.map((h) => h.tech.name).join(",")}
@@ -768,7 +778,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             TECH_COMPLETE. */}
       </div>
 
-      {/* Part requests + live status */}
+      {/* Part requests + live status. Each row carries the vehicle spec
+          inline so the technician (and whoever they hand the phone to:
+          parts orderer, supplier on a call) can see exactly what
+          vehicle the part fits without scrolling back to the header.
+          Spec is hidden when empty so legacy rows still render
+          cleanly. */}
       {job.partRequests.length > 0 ? (
         <div>
           <h2 className="mb-2 text-sm font-medium">{t("partRequests")}</h2>
@@ -776,14 +791,21 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {job.partRequests.map((r) => (
               <li
                 key={r.id}
-                className="flex items-center justify-between rounded-lg border border-border p-2"
+                className="flex flex-col gap-1 rounded-lg border border-border p-2"
               >
-                <span>
-                  📦 {r.qty}× {r.description}
-                </span>
-                <span className="text-xs text-text-mute">
-                  {t(partStatusKey(r.status))}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span>
+                    📦 {r.qty}× {r.description}
+                  </span>
+                  <span className="text-xs text-text-mute">
+                    {t(partStatusKey(r.status))}
+                  </span>
+                </div>
+                {formatVehicleSpec(job.vehicle).length > 0 ? (
+                  <span className="text-xs text-text-mute">
+                    🔧 {formatVehicleSpec(job.vehicle)}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

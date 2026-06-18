@@ -71,14 +71,14 @@ export default async function PartsQueue() {
                     ) : null}
                   </div>
                   <span className="whitespace-nowrap text-xs">
-                    <span className="rounded-full bg-black/5 px-2 py-0.5 dark:bg-white/10">
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5">
                       {t(partStatusKey(r.status))}
                     </span>
                     {r.part ? (
                       <span
                         className={
                         "ms-1"+
-                          (available ?"text-green-600 dark:text-green-400":"text-amber-600 dark:text-amber-400")
+                          (available ?"text-success-700 dark:text-success-500":"text-warning-600 dark:text-warning-500")
                         }
                       >
                         {available ? t("inStockTag") : t("outOfStock")}

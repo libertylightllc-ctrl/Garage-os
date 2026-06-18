@@ -180,10 +180,10 @@ export function PhotoCapture({
                         <img
                             src={preview}
                             alt=""
-                            className="max-h-64 rounded-lg border border-black/10 dark:border-white/15"
+                            className="max-h-64 rounded-lg border border-border"
                         />
                     ) : (
-                        <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                        <p className="text-sm text-text">
                             {icon} {filename}
                         </p>
                     )}
@@ -191,13 +191,13 @@ export function PhotoCapture({
                         <button
                             type="button"
                             onClick={onRetake}
-                            className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-2"
                         >
                             {icon} {retakeLabel}
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                            className="flex-1 rounded-lg bg-brand-900 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
                         >
                             {continueLabel}
                         </button>
@@ -209,7 +209,7 @@ export function PhotoCapture({
                 <>
                     <label
                         htmlFor={inputId}
-                        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 px-4 py-8 text-center hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border px-4 py-8 text-center hover:bg-surface-2"
                     >
                         <span className="text-4xl" aria-hidden>
                             {icon}
@@ -218,14 +218,14 @@ export function PhotoCapture({
                     </label>
                     {optimizing && optimizingLabel ? (
                         <p
-                            className="rounded-md bg-zinc-100 px-3 py-2 text-center text-sm font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                            className="rounded-md bg-surface-2 px-3 py-2 text-center text-sm font-medium text-text"
                             aria-live="polite"
                         >
                             ⚙️ {optimizingLabel}
                         </p>
                     ) : null}
                     {error ? (
-                        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                        <p className="text-sm text-danger-700 dark:text-danger-500" role="alert">
                             {error}
                         </p>
                     ) : null}

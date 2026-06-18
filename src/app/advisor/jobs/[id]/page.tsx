@@ -203,7 +203,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           ) : null}
         </dl>
         {job.qcAt ? (
-          <p className="mt-2 border-t border-border pt-2 text-xs text-green-700 dark:border-white/10 dark:text-green-400">
+          <p className="mt-2 border-t border-border pt-2 text-xs text-success-700 dark:text-success-500">
             ✅ {t("jcQc")}: {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} ·{""}
             {job.qcChecks.map((c) => t(`qc_${c}` as never)).join(",")}
           </p>

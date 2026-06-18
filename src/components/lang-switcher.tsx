@@ -10,10 +10,10 @@ export function LangSwitcher({ locale }: { locale: string }) {
         router.refresh();
     }
     const base = "px-2 py-0.5 text-xs rounded";
-    const on = "bg-zinc-900 text-white dark:bg-white dark:text-black";
-    const off = "text-zinc-500 dark:text-zinc-400";
+    const on = "bg-brand-900 text-white dark:bg-white dark:text-brand-900";
+    const off = "text-text-mute";
     return (
-        <div className="fixed end-3 top-3 z-50 flex gap-1 rounded-full border border-black/10 bg-white/80 p-0.5 backdrop-blur dark:border-white/15 dark:bg-black/50">
+        <div className="fixed end-3 top-3 z-50 flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur">
             <button onClick={() => set("en")} className={`${base} ${locale === "en" ? on : off}`}>
                 EN
             </button>

@@ -52,7 +52,7 @@ export default async function BaysPage({
             <span className="font-medium">🛠️ {b.name}</span>
             <form action={removeBayAction}>
               <input type="hidden" name="bayId" value={b.id} />
-              <button className="text-xs text-red-600 hover:underline">{t("remove")}</button>
+              <button className="text-xs text-danger-700 hover:underline">{t("remove")}</button>
             </form>
           </li>
         ))}

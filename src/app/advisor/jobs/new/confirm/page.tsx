@@ -101,7 +101,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <span>⚠️ {t("errOcrFailed")}</span>
           <Link
             href="/advisor/jobs/new"
-            className="rounded-md border border-amber-300 bg-white/60 px-3 py-1 text-xs font-medium hover:bg-white dark:border-amber-700 dark:bg-black/30 dark:hover:bg-surface-20"
+            className="rounded-md border border-warning-500/40 bg-surface px-3 py-1 text-xs font-medium hover:bg-surface-2"
           >
             📷 {t("tryAgain")}
           </Link>

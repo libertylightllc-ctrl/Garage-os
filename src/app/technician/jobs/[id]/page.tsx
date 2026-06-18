@@ -217,7 +217,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         {amHelper ? (
           <form action={leaveHelperAction} className="mt-1">
             <input type="hidden" name="jobId" value={job.id} />
-            <button className="text-xs text-text-mute underline hover:text-zinc-700 dark:text-text-mute">
+            <button className="text-xs text-text-mute underline hover:text-text">
               {t("leaveJob")}
             </button>
           </form>

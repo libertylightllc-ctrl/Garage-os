@@ -64,7 +64,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
         }
     }
     return (
-        <header className="sticky top-0 z-40 -mx-6 mb-2 border-b border-black/10 bg-white/80 px-6 py-3 backdrop-blur dark:border-white/15 dark:bg-black/60">
+        <header className="sticky top-0 z-40 -mx-6 mb-2 border-b border-border bg-surface/80 px-6 py-3 backdrop-blur">
             <div className="flex items-center justify-between gap-3">
                 <Link
                     href={items[0].href}
@@ -87,7 +87,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         alt=""
                         className="h-8 w-auto dark:invert"
                     />
-                    <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                    <span className="font-normal text-text-mute">
                         {t(`role${role}` as MessageKey)}
                     </span>
                 </Link>
@@ -103,23 +103,23 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                                 className={
                                     "whitespace-nowrap rounded-full px-3 py-1 text-sm " +
                                     (isActive
-                                        ? "bg-zinc-900 text-white dark:bg-white dark:text-black"
-                                        : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10")
+                                        ? "bg-brand-900 text-white dark:bg-white dark:text-brand-900"
+                                        : "text-text-mute hover:bg-surface-2")
                                 }
                             >
                                 {t(it.labelKey)}
                                 {it.key === "chats" && needsHuman > 0 ? (
-                                    <span className="ms-1 rounded-full bg-red-500 px-1.5 text-xs text-white">
+                                    <span className="ms-1 rounded-full bg-danger-500 px-1.5 text-xs text-white">
                                         {needsHuman}
                                     </span>
                                 ) : null}
                                 {it.key === "parts" && openParts > 0 ? (
-                                    <span className="ms-1 rounded-full bg-amber-500 px-1.5 text-xs text-white">
+                                    <span className="ms-1 rounded-full bg-warning-500 px-1.5 text-xs text-white">
                                         {openParts}
                                     </span>
                                 ) : null}
                                 {it.key === "reminders" && dueReminders > 0 ? (
-                                    <span className="ms-1 rounded-full bg-blue-500 px-1.5 text-xs text-white">
+                                    <span className="ms-1 rounded-full bg-info-500 px-1.5 text-xs text-white">
                                         {dueReminders}
                                     </span>
                                 ) : null}
@@ -127,7 +127,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         );
                     })}
                     <form action={signOutAction} className="ms-1">
-                        <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-zinc-500 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10">
+                        <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2">
                             {t("signOut")}
                         </button>
                     </form>

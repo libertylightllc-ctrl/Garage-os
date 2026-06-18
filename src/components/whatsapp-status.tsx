@@ -65,7 +65,7 @@ export async function WhatsAppStatusPanel({
                         <span className="text-sm tabular-nums">{acct.phoneNumber}</span>
                     ) : null}
                 </div>
-                <p className="text-xs text-zinc-600 dark:text-zinc-300">
+                <p className="text-xs text-text-mute">
                     {connected
                         ? t(
                                 helpForRole === "advisor"
@@ -84,7 +84,7 @@ export async function WhatsAppStatusPanel({
             <div className="flex flex-col gap-2">
                 <h2 className="flex items-center gap-2 text-sm font-medium">
                     {t("waRecentOutbound")}
-                    <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-text">
                         {recent.length}
                     </span>
                 </h2>
@@ -97,13 +97,13 @@ export async function WhatsAppStatusPanel({
                         {recent.map((m) => (
                             <li
                                 key={m.id}
-                                className="flex flex-col gap-1 rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                                className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm"
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <span className="font-medium">
                                         {m.thread.customer.name}
                                     </span>
-                                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    <span className="text-xs text-text-mute">
                                         {m.thread.customer.phone} ·{" "}
                                         {m.createdAt.toISOString().slice(0, 16).replace("T", " ")}
                                     </span>
@@ -113,9 +113,9 @@ export async function WhatsAppStatusPanel({
                                         estimate_link) — body is a teaser, not the full
                                         text, so a single screen of recent sends stays
                                         scannable. */}
-                                <div className="text-xs text-zinc-600 dark:text-zinc-300">
+                                <div className="text-xs text-text-mute">
                                     {m.template ? (
-                                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                                        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-text">
                                             {m.template}
                                         </span>
                                     ) : null}{" "}
@@ -132,7 +132,7 @@ export async function WhatsAppStatusPanel({
             {/* Footer: link to the owner connect surface for completeness so
                     the role knows where to point the owner when they need to
                     change the connection. */}
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-text-mute">
                 {t("waStatusOwnerControls")}{" "}
                 <Link href="/owner/whatsapp" className="underline">
                     /owner/whatsapp

@@ -42,7 +42,7 @@ function PartRow({
   t: (k: MessageKey) => string;
 }) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 text-base text-zinc-600 dark:text-text-mute">
+    <li className="flex flex-wrap items-center justify-between gap-2 text-base text-text-mute">
       <span>
         • {p.partNo ? `${p.partNo} ` :""}
         {p.description} ×{p.qty}
@@ -51,7 +51,7 @@ function PartRow({
         <form action={addLineFromPartAction}>
           <input type="hidden" name="estimateId" value={estimateId} />
           <input type="hidden" name="jobPartId" value={p.id} />
-          <button className="shrink-0 rounded-md border border-black/15 px-3 py-2 text-sm font-medium hover:bg-surface-2 dark:border-white/20">
+          <button className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-2">
             {t("priceThisPart")}
           </button>
         </form>
@@ -150,19 +150,19 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role={role} active={role ==="ADVISOR"?"jobs":"accounts"} />
       <div>
-        <Link href={backHref} className="inline-block py-2 text-base text-zinc-500 hover:underline dark:text-zinc-400">
+        <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
           {role ==="ADVISOR"? t("backJob") : t("accounts")}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("estimate")}</h1>
-        <p className="text-base text-zinc-600 dark:text-text-mute">
+        <p className="text-base text-text-mute">
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{""}
           <span className="font-medium">{est.status}</span>
         </p>
         {!canPrice ? (
-          <p className="text-sm text-zinc-400">{t("pricingByCashier")}</p>
+          <p className="text-sm text-text-mute">{t("pricingByCashier")}</p>
         ) : null}
         {est.approvedAt ? (
-          <p className="text-sm text-green-700 dark:text-green-400">
+          <p className="text-sm text-success-700 dark:text-success-500">
             ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{""}
             {est.approvedAt.toISOString().slice(0, 10)}
           </p>
@@ -173,11 +173,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Technician findings & parts required — what the cashier prices from */}
       {finding?.submittedAt || requiredParts.length > 0 ? (
-        <div className="rounded-lg border border-black/10 p-4 text-base dark:border-white/15">
+        <div className="rounded-lg border border-border p-4 text-base">
           <h2 className="mb-2 text-base font-semibold">{t("techFindingsPanel")}</h2>
           {finding?.findings ? <p>{finding.findings}</p> : null}
           {finding?.diagnosis ? (
-            <p className="text-zinc-600 dark:text-text-mute">{finding.diagnosis}</p>
+            <p className="text-text-mute">{finding.diagnosis}</p>
           ) : null}
           {requiredParts.length > 0 ? (
             <ul className="mt-2 flex flex-col gap-1">
@@ -191,9 +191,9 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Parts used & work notes (Repair stage) — reconcile Final Billing */}
       {usedParts.length > 0 || workNotes ? (
-        <div className="rounded-lg border border-black/10 p-4 text-base dark:border-white/15">
+        <div className="rounded-lg border border-border p-4 text-base">
           <h2 className="mb-2 text-base font-semibold">{t("partsUsedPanel")}</h2>
-          {workNotes ? <p className="text-zinc-600 dark:text-text-mute">{workNotes}</p> : null}
+          {workNotes ? <p className="text-text-mute">{workNotes}</p> : null}
           {usedParts.length > 0 ? (
             <ul className="mt-1 flex flex-col gap-1">
               {usedParts.map((p) => (
@@ -327,13 +327,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       )}
 
       <div className="ml-auto text-right text-base tabular-nums">
-        <div className="text-zinc-600 dark:text-text-mute">{t("subtotal")}: {money(Number(est.subtotal))}</div>
-        <div className="text-zinc-600 dark:text-text-mute">{t("vat5")}: {money(Number(est.vatAmount))}</div>
+        <div className="text-text-mute">{t("subtotal")}: {money(Number(est.subtotal))}</div>
+        <div className="text-text-mute">{t("vat5")}: {money(Number(est.vatAmount))}</div>
         <div className="mt-1 text-lg font-semibold">{t("total")}: {money(Number(est.total))}</div>
       </div>
 
       {editable ? (
-        <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/15">
+        <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-border p-4">
           <input type="hidden" name="estimateId" value={est.id} />
           <div className="flex flex-wrap gap-2">
             <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
@@ -345,8 +345,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             <DictateInput locale={locale} labels={dictLabels} name="description" placeholder={t("description")} required className="min-w-40 flex-1 h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"/>
           </div>
           <div className="flex flex-wrap gap-2">
-            <input name="qty" type="number" step="any" min="0" inputMode="decimal" defaultValue="1" className="w-20 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20"/>
-            <input name="unitPrice" type="number" step="any" min="0" inputMode="decimal" placeholder="Unit price" required className="min-w-32 flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-base text-right dark:border-white/20"/>
+            <input name="qty" type="number" step="any" min="0" inputMode="decimal" defaultValue="1" className="w-20 rounded-md border border-border bg-transparent px-3 py-2 text-base text-right"/>
+            <input name="unitPrice" type="number" step="any" min="0" inputMode="decimal" placeholder="Unit price" required className="min-w-32 flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-base text-right"/>
             <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("addLine")}
             </button>
@@ -376,10 +376,10 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           return (
             <section className="rounded-xl border border-warning-500/40 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
               <header className="flex items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">
+                <h2 className="text-lg font-semibold text-warning-700 dark:text-warning-500">
                   {t("advancePaymentsTitle")}
                 </h2>
-                <p className="text-xs text-amber-800 dark:text-amber-300">
+                <p className="text-xs text-warning-700 dark:text-warning-500">
                   {t("advancePaymentsCeiling")}: {money(approvedTotal)}
                 </p>
               </header>
@@ -388,7 +388,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   surfaces. balanceDue() guarantees
                   advancePaid + advanceBalance === approvedTotal. */}
               <dl className="mt-3 grid grid-cols-[max-content_max-content] gap-x-6 gap-y-1 text-sm tabular-nums">
-                <dt className="text-zinc-700 dark:text-zinc-200">
+                <dt className="text-text">
                   {t("invoiceAdvancePaid")}
                 </dt>
                 <dd className="text-end">{money(advancePaid)}</dd>
@@ -402,7 +402,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   {est.jobCard.advancePayments.map((a) => (
                     <li
                       key={a.id}
-                      className="flex justify-between gap-3 text-amber-900 dark:text-amber-200"
+                      className="flex justify-between gap-3 text-warning-700 dark:text-warning-500"
                     >
                       <span>
                         {a.receivedAt.toISOString().slice(0, 10)} ·{""}
@@ -426,7 +426,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                     name="jobCardId"
                     value={est.jobCard.id}
                   />
-                  <label className="flex flex-col text-xs text-amber-900 dark:text-amber-200">
+                  <label className="flex flex-col text-xs text-warning-700 dark:text-warning-500">
                     {t("amount")}
                     <input
                       name="amount"
@@ -439,7 +439,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       className="h-10 w-32 rounded-lg border border-border bg-surface px-3 text-right text-base text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                     />
                   </label>
-                  <label className="flex flex-col text-xs text-amber-900 dark:text-amber-200">
+                  <label className="flex flex-col text-xs text-warning-700 dark:text-warning-500">
                     {t("method")}
                     <select
                       name="method"
@@ -455,7 +455,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   </button>
                 </form>
               ) : (
-                <p className="mt-3 text-sm text-amber-900 dark:text-amber-200">
+                <p className="mt-3 text-sm text-warning-700 dark:text-warning-500">
                   ✓ {t("advancePaymentsFullyCovered")}
                 </p>
               )}
@@ -516,7 +516,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           {t("estimateApprovedSentToTech")}
         </p>
       ) : null}
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs text-text-mute">
         (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>
 

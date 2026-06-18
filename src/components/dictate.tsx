@@ -123,9 +123,9 @@ function useDictation<T extends HTMLInputElement | HTMLTextAreaElement>(
 const MIC_BTN_BASE =
     "inline-flex shrink-0 items-center justify-center rounded-md border text-base leading-none";
 const MIC_BTN_IDLE =
-    "border-black/15 bg-transparent text-zinc-500 hover:bg-black/5 dark:border-white/20 dark:text-zinc-300 dark:hover:bg-white/10";
+    "border-border bg-transparent text-text-mute hover:bg-surface-2";
 const MIC_BTN_LISTENING =
-    "border-red-500 bg-red-500 text-white animate-pulse";
+    "border-danger-500 bg-danger-500 text-white animate-pulse";
 
 function MicButton({
     supported,
@@ -173,10 +173,10 @@ export function DictateInput({ locale, labels, className, ...rest }: DictateInpu
                 <MicButton supported={supported} listening={listening} start={start} stop={stop} labels={labelsMemo} />
             </span>
             {listening ? (
-                <span className="text-xs text-red-600 dark:text-red-400">{labelsMemo.listening}</span>
+                <span className="text-xs text-danger-700 dark:text-danger-500">{labelsMemo.listening}</span>
             ) : null}
             {error ? (
-                <span className="text-xs text-red-600 dark:text-red-400">{error}</span>
+                <span className="text-xs text-danger-700 dark:text-danger-500">{error}</span>
             ) : null}
         </span>
     );
@@ -207,10 +207,10 @@ export function DictateTextarea({
                 className="absolute end-1 top-1"
             />
             {listening ? (
-                <span className="text-xs text-red-600 dark:text-red-400">{labelsMemo.listening}</span>
+                <span className="text-xs text-danger-700 dark:text-danger-500">{labelsMemo.listening}</span>
             ) : null}
             {error ? (
-                <span className="text-xs text-red-600 dark:text-red-400">{error}</span>
+                <span className="text-xs text-danger-700 dark:text-danger-500">{error}</span>
             ) : null}
         </span>
     );

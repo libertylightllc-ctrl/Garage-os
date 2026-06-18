@@ -46,7 +46,7 @@ export function CashierTabs({
         // phones, active pill in inverted colour to match the existing
         // GarageOS top-nav treatment.
         <nav className="-mx-6 overflow-x-auto px-6">
-            <div className="flex min-w-max items-center gap-1 border-b border-black/10 pb-2 dark:border-white/15">
+            <div className="flex min-w-max items-center gap-1 border-b border-border pb-2">
                 {CASHIER_TABS.map((tab) => {
                     const isActive = tab === currentTab;
                     // Estimates is the default; we omit ?tab=estimates from the URL
@@ -61,8 +61,8 @@ export function CashierTabs({
                             className={
                                 "whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition " +
                                 (isActive
-                                    ? "bg-zinc-900 text-white dark:bg-white dark:text-black"
-                                    : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10")
+                                    ? "bg-brand-900 text-white dark:bg-white dark:text-brand-900"
+                                    : "text-text-mute hover:bg-surface-2")
                             }
                         >
                             {labels[tab]}

@@ -142,7 +142,7 @@ export default async function InvoiceView({
             ? `/advisor/jobs/${inv.jobCardId}`
             :"/cashier?tab=invoices"
         }
-        className="inline-block py-2 text-sm text-zinc-500 hover:underline print:hidden dark:text-zinc-400"
+        className="inline-block py-2 text-sm text-text-mute hover:underline print:hidden"
       >
         {session.user.role ==="ADVISOR"
           ? t("backJob")
@@ -199,7 +199,7 @@ export default async function InvoiceView({
             <span
               aria-disabled="true"
               title={t("invoiceEmailNoEmailOnFile")}
-              className="cursor-not-allowed rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium text-zinc-400 dark:border-white/10 dark:text-zinc-600"
+              className="cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text-mute"
             >
               📧 {t("invoiceEmailNoEmailOnFile")}
             </span>
@@ -242,21 +242,21 @@ export default async function InvoiceView({
         </div>
         <div className="text-right text-sm">
           <div className="font-medium">{inv.garage.name}</div>
-          <div className="text-zinc-500 dark:text-zinc-400">TRN: {inv.garage.trn ??"—"}</div>
-          <div className="text-zinc-500 dark:text-zinc-400">{inv.garage.country}</div>
+          <div className="text-text-mute">TRN: {inv.garage.trn ??"—"}</div>
+          <div className="text-text-mute">{inv.garage.country}</div>
         </div>
       </div>
 
       <div className="flex justify-between text-sm">
         <div>
-          <div className="text-zinc-500 dark:text-zinc-400">{t("billTo")}</div>
+          <div className="text-text-mute">{t("billTo")}</div>
           <div className="font-medium">{customer.name}</div>
-          <div className="text-zinc-500 dark:text-zinc-400">{customer.phone}</div>
-          <div className="text-zinc-500 dark:text-zinc-400">
+          <div className="text-text-mute">{customer.phone}</div>
+          <div className="text-text-mute">
             {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} · {inv.jobCard.vehicle.plate}
           </div>
         </div>
-        <div className="text-right text-zinc-500 dark:text-zinc-400">
+        <div className="text-right text-text-mute">
           <div>{t("issued")}: {inv.issuedAt.toISOString().slice(0, 10)}</div>
           <div>{t("due")}: {inv.dueDate.toISOString().slice(0, 10)}</div>
           <div>{t("clearance")}: {inv.clearanceStatus}</div>
@@ -389,7 +389,7 @@ export default async function InvoiceView({
         // to a negative FEE per the existing convention.
         <form
           action={addInvoiceLineAction}
-          className="rounded-lg border border-black/10 p-3 print:hidden dark:border-white/15"
+          className="rounded-lg border border-border p-3 print:hidden"
         >
           <input type="hidden" name="invoiceId" value={inv.id} />
           <div className="mb-2 text-sm font-medium">{t("addLineTitle")}</div>
@@ -397,7 +397,7 @@ export default async function InvoiceView({
             <select
               name="kind"
               defaultValue="LABOR"
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
               aria-label={t("colKind")}
             >
               <option value="LABOR">{t("kindLabor")}</option>
@@ -408,7 +408,7 @@ export default async function InvoiceView({
             <input
               name="description"
               placeholder={t("colDescription")}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
             />
             <input
               name="qty"
@@ -417,7 +417,7 @@ export default async function InvoiceView({
               min="0"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-end text-sm tabular-nums"
             />
             <input
               name="unitPrice"
@@ -425,7 +425,7 @@ export default async function InvoiceView({
               step="0.01"
               defaultValue="0"
               aria-label={t("colUnit")}
-              className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+              className="rounded-md border border-border bg-transparent px-2 py-1 text-end text-sm tabular-nums"
             />
             <button
               type="submit"
@@ -445,11 +445,11 @@ export default async function InvoiceView({
           already applied. Discount applies BEFORE VAT — handled in
           recomputeInvoice via the negative FEE line. */}
       {canEditLines ? (
-        <div className="rounded-lg border border-black/10 p-3 print:hidden dark:border-white/15">
+        <div className="rounded-lg border border-border p-3 print:hidden">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{t("discountSectionTitle")}</span>
             {discountLabelKey ? (
-              <span className="text-xs text-rose-700 dark:text-rose-400">
+              <span className="text-xs text-danger-700 dark:text-danger-500">
                 {discountLabelKey.mode ==="PERCENT"
                   ? t("discountCurrentPercent").replace(
                     "{pct}",
@@ -462,7 +462,7 @@ export default async function InvoiceView({
                 · −{money(discountAmount)}
               </span>
             ) : (
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-text-mute">
                 {t("discountNone")}
               </span>
             )}
@@ -470,11 +470,11 @@ export default async function InvoiceView({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <form
               action={setInvoiceDiscountAction}
-              className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
+              className="flex items-center gap-2 rounded-md border border-border p-2"
             >
               <input type="hidden" name="invoiceId" value={inv.id} />
               <input type="hidden" name="mode" value="PERCENT"/>
-              <label className="text-xs text-zinc-600 dark:text-text-mute">
+              <label className="text-xs text-text-mute">
                 {t("discountPercentLabel")}
               </label>
               <input
@@ -485,9 +485,9 @@ export default async function InvoiceView({
                 max="100"
                 placeholder="2"
                 aria-label={t("discountPercentLabel")}
-                className="w-20 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                className="w-20 rounded-md border border-border bg-transparent px-2 py-1 text-end text-sm tabular-nums"
               />
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">%</span>
+              <span className="text-xs text-text-mute">%</span>
               <button
                 type="submit"
                 className="ms-auto inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -497,11 +497,11 @@ export default async function InvoiceView({
             </form>
             <form
               action={setInvoiceDiscountAction}
-              className="flex items-center gap-2 rounded-md border border-black/10 p-2 dark:border-white/15"
+              className="flex items-center gap-2 rounded-md border border-border p-2"
             >
               <input type="hidden" name="invoiceId" value={inv.id} />
               <input type="hidden" name="mode" value="AMOUNT"/>
-              <label className="text-xs text-zinc-600 dark:text-text-mute">
+              <label className="text-xs text-text-mute">
                 {t("discountAmountLabel")}
               </label>
               <input
@@ -511,9 +511,9 @@ export default async function InvoiceView({
                 min="0"
                 placeholder="200"
                 aria-label={t("discountAmountLabel")}
-                className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-end text-sm tabular-nums"
               />
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">AED</span>
+              <span className="text-xs text-text-mute">AED</span>
               <button
                 type="submit"
                 className="ms-auto inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -529,7 +529,7 @@ export default async function InvoiceView({
               <input type="hidden" name="value" value="0"/>
               <button
                 type="submit"
-                className="text-xs text-red-600 hover:underline"
+                className="text-xs text-danger-700 hover:underline"
               >
                 ✕ {t("discountRemove")}
               </button>
@@ -541,10 +541,10 @@ export default async function InvoiceView({
       <div className="flex items-end justify-between">
         {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}
         <div className="flex flex-col items-center">
-          <div className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-black/20 text-[10px] text-zinc-400 dark:border-white/20">
+          <div className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-border text-[10px] text-text-mute">
             QR
           </div>
-          <span className="mt-1 text-[10px] text-zinc-400">{t("qrPlaceholder")}</span>
+          <span className="mt-1 text-[10px] text-text-mute">{t("qrPlaceholder")}</span>
         </div>
         {/* Totals — per spec the order is strict:
               with discount:
@@ -570,30 +570,30 @@ export default async function InvoiceView({
         <dl className="ml-auto grid grid-cols-[max-content_max-content] gap-x-6 gap-y-1 text-sm tabular-nums">
           {discountLine ? (
             <>
-              <dt className="text-start text-zinc-600 dark:text-text-mute">
+              <dt className="text-start text-text-mute">
                 {t("subtotalBeforeDiscount")}
               </dt>
               <dd className="text-end">{money(grossSubtotal)}</dd>
-              <dt className="text-start text-rose-700 dark:text-rose-400">
+              <dt className="text-start text-danger-700 dark:text-danger-500">
                 {t("discountRow")}
               </dt>
-              <dd className="text-end text-rose-700 dark:text-rose-400">
+              <dd className="text-end text-danger-700 dark:text-danger-500">
                 −{money(discountAmount)}
               </dd>
-              <dt className="text-start text-zinc-600 dark:text-text-mute">
+              <dt className="text-start text-text-mute">
                 {t("subtotalAfterDiscount")}
               </dt>
               <dd className="text-end">{money(Number(inv.subtotal))}</dd>
             </>
           ) : (
             <>
-              <dt className="text-start text-zinc-600 dark:text-text-mute">
+              <dt className="text-start text-text-mute">
                 {t("subtotal")}
               </dt>
               <dd className="text-end">{money(grossSubtotal)}</dd>
             </>
           )}
-          <dt className="text-start text-zinc-600 dark:text-text-mute">
+          <dt className="text-start text-text-mute">
             {t("vat5")}
           </dt>
           <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
@@ -607,10 +607,10 @@ export default async function InvoiceView({
               which is the same invariant we test in billing.test.ts. */}
           {paid > 0 ? (
             <>
-              <dt className="text-start text-zinc-600 dark:text-text-mute">
+              <dt className="text-start text-text-mute">
                 {state ==="PAID"? t("paid") : t("invoiceAdvancePaid")}
               </dt>
-              <dd className="text-end text-zinc-600 dark:text-text-mute">
+              <dd className="text-end text-text-mute">
                 −{money(paid)}
               </dd>
             </>

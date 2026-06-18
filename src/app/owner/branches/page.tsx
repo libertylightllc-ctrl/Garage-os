@@ -48,7 +48,7 @@ export default async function BranchesPage({
             <span>
               <span className="font-medium">{b.name}</span>
               {b.isRoot ? (
-                <span className="ms-2 rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">
+                <span className="ms-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs">
                   {t("branchMainTag")}
                 </span>
               ) : null}

@@ -5,7 +5,7 @@ import { getT } from "@/i18n/server";
 export const dynamic ="force-dynamic";
 
 const field =
-"w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20";
+"w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm";
 
 export default async function Signup({
   searchParams,
@@ -42,7 +42,7 @@ export default async function Signup({
           autoComplete="new-password"
           className={field}
         />
-        <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200">
+        <button className="rounded-md bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200">
           {t("createGarage")}
         </button>
       </form>

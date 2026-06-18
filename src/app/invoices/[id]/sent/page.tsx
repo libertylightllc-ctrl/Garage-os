@@ -41,7 +41,7 @@ export default async function InvoiceSent({
       <section className="rounded-xl border border-success-500/40 bg-success-50 p-6 text-center dark:border-success-500/30 dark:bg-success-500/10">
         <div className="text-5xl">📨</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t("invoiceSentTitle")}</h1>
-        <p className="mt-2 text-base text-zinc-700 dark:text-zinc-200">
+        <p className="mt-2 text-base text-text">
           {t("invoiceSentSubtitle")}
         </p>
         <p className="mt-2 inline-block rounded-xl border border-success-500/40 bg-success-50 px-3 py-2 text-xs text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
@@ -49,7 +49,7 @@ export default async function InvoiceSent({
         </p>
       </section>
 
-      <section className="rounded-lg border border-black/10 p-4 dark:border-white/15">
+      <section className="rounded-lg border border-border p-4">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-base">
           <dt className="text-sm font-medium text-text-mute">
             {t("handoffJobNo")}

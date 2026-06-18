@@ -785,7 +785,7 @@ export default async function CashierHome({
                     {latest && latest.status ==="DRAFT"? (
                       <Link
                         href={`/estimates/${latest.id}`}
-                        className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-surface-2 dark:border-white/20"
+                        className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
                       >
                         {t("continuePricing")}
                       </Link>
@@ -864,7 +864,7 @@ export default async function CashierHome({
                       <>
                         <Link
                           href={`/estimates/${est.id}`}
-                          className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-surface-2 dark:border-white/20"
+                          className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
                         >
                           {t("cashierViewEstimate")}
                         </Link>
@@ -953,7 +953,7 @@ export default async function CashierHome({
                         Lets the cashier eyeball pipeline value without
                         clicking into each row. */}
                     {est ? (
-                      <span className="text-xs tabular-nums text-emerald-900 dark:text-emerald-200">
+                      <span className="text-xs tabular-nums text-success-700 dark:text-success-500">
                         AED {Number(est.total).toFixed(2)}
                       </span>
                     ) : null}
@@ -968,7 +968,7 @@ export default async function CashierHome({
                       t={t}
                     />
                   ) : (
-                    <p className="text-xs text-zinc-600 dark:text-text-mute">
+                    <p className="text-xs text-text-mute">
                       {t("cashierWorkInProgressCaption")}
                     </p>
                   )}
@@ -1033,20 +1033,20 @@ export default async function CashierHome({
                       </span>
                     </span>
                     {est ? (
-                      <span className="text-xs tabular-nums text-rose-900 dark:text-rose-200">
+                      <span className="text-xs tabular-nums text-danger-700 dark:text-danger-500">
                         AED {Number(est.total).toFixed(2)}
                       </span>
                     ) : null}
                     <FriendlyStatusBadge status={fs} t={t} size="sm"/>
                   </div>
-                  <p className="text-xs font-medium text-rose-700 dark:text-rose-400">
+                  <p className="text-xs font-medium text-danger-700 dark:text-danger-500">
                     ⚠️ {t("estimateRejectedRePriceNeeded")}
                   </p>
                   <div className="flex flex-wrap justify-end gap-2">
                     {est ? (
                       <Link
                         href={`/estimates/${est.id}`}
-                        className="rounded-md border border-black/15 px-3 py-1 font-medium hover:bg-surface-2 dark:border-white/20"
+                        className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
                       >
                         {t("cashierViewEstimate")}
                       </Link>
@@ -1189,7 +1189,7 @@ export default async function CashierHome({
                         customer has actually transferred. */}
                     <form
                       action={recordPaymentAction}
-                      className="flex flex-wrap items-center justify-end gap-2 border-t border-black/5 pt-2 dark:border-white/10"
+                      className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-2"
                     >
                       <input type="hidden" name="invoiceId" value={inv.id} />
                       <label className="flex items-center gap-1 text-xs text-text-mute">
@@ -1201,14 +1201,14 @@ export default async function CashierHome({
                           min="0"
                           defaultValue={balance.toFixed(2)}
                           aria-label={t("amount")}
-                          className="w-24 rounded-md border border-black/15 bg-transparent px-2 py-1 text-end text-sm tabular-nums dark:border-white/20"
+                          className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-end text-sm tabular-nums"
                         />
                       </label>
                       <select
                         name="method"
                         defaultValue="CASH"
                         aria-label={t("colMethod")}
-                        className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
+                        className="rounded-md border border-border bg-transparent px-2 py-1 text-xs"
                       >
                         <option value="CASH">{t("methodCash")}</option>
                         <option value="CARD_POS">{t("methodCardPos")}</option>
@@ -1250,7 +1250,7 @@ export default async function CashierHome({
                     data-filter-row
                     data-search={invoiceSearchTokens(inv)}
                     data-date={(paidAt ?? inv.issuedAt).toISOString().slice(0, 10)}
-                    className="rounded-lg border border-black/10 p-3 text-sm dark:border-white/15"
+                    className="rounded-lg border border-border p-3 text-sm"
                   >
                     <Link href={`/invoices/${inv.id}`} className="block hover:underline">
                       <div className="flex items-baseline justify-between gap-2">
@@ -1264,7 +1264,7 @@ export default async function CashierHome({
                         {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} ·{""}
                         {inv.jobCard.vehicle.plate}
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-600 dark:text-text-mute">
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-text-mute">
                         <span>{t("colVat")} {money(vat)}</span>
                         <span>
                           {t("colDatePaid")}{""}
@@ -1280,7 +1280,7 @@ export default async function CashierHome({
               </ul>
 
               {/* Desktop: full six-column table. */}
-              <div className=" hidden overflow-x-auto rounded-lg border border-black/10 sm:block dark:border-white/15">
+              <div className="hidden overflow-x-auto rounded-lg border border-border sm:block">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-2 text-text-mute">
                     <tr className="text-start">
@@ -1299,7 +1299,7 @@ export default async function CashierHome({
                         data-filter-row
                         data-search={invoiceSearchTokens(inv)}
                         data-date={(paidAt ?? inv.issuedAt).toISOString().slice(0, 10)}
-                        className="border-t border-black/10 hover:bg-surface-2 dark:border-white/15 dark:hover:bg-white/5"
+                        className="border-t border-border hover:bg-surface-2"
                       >
                         <td className="p-2">
                           <Link href={`/invoices/${inv.id}`} className="hover:underline">
@@ -1337,7 +1337,7 @@ export default async function CashierHome({
 
       {/* ─── CUSTOMERS TAB ──────────────────────────────────────── */}
       {currentTab ==="customers"? (
-        <div className="rounded-lg border border-dashed border-black/15 p-10 text-center dark:border-white/20">
+        <div className="rounded-lg border border-dashed border-border p-10 text-center">
           <h2 className="text-lg font-semibold tracking-tight">
             {t("cashierTabCustomersHeading")}
           </h2>
@@ -1362,7 +1362,7 @@ export default async function CashierHome({
             {metrics.map((m) => (
               <div
                 key={m.key}
-                className="rounded-lg border border-black/10 p-3 dark:border-white/15"
+                className="rounded-lg border border-border p-3"
               >
                 <div className="text-xs text-text-mute">
                   {t(m.key)}
@@ -1371,7 +1371,7 @@ export default async function CashierHome({
               </div>
             ))}
           </div>
-          <p className="text-xs text-zinc-400">{t("ledgerNote")}</p>
+          <p className="text-xs text-text-mute">{t("ledgerNote")}</p>
         </div>
       ) : null}
     </main>

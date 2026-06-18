@@ -60,7 +60,7 @@ export function JobTimings({
 
     const sep = variant === "inline" ? " · " : null;
     return variant === "inline" ? (
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs text-text-mute">
             {diagnosis ? (
                 <>
                     <span className="font-medium">{t("durDiagnosis")}:</span> {diagnosis}
@@ -74,7 +74,7 @@ export function JobTimings({
             ) : null}
         </span>
     ) : (
-        <div className="flex flex-col gap-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex flex-col gap-0.5 text-xs text-text-mute">
             {diagnosis ? (
                 <span>
                     <span className="font-medium">{t("durDiagnosis")}:</span> {diagnosis}

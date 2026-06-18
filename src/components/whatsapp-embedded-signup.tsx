@@ -127,12 +127,12 @@ export function EmbeddedSignupButton({
                 type="button"
                 disabled={!ready || status === "exchanging" || !appId || !configId}
                 onClick={launch}
-                className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-success-500 px-4 py-2 text-sm font-semibold text-white hover:bg-success-500/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {status === "exchanging" ? "Connecting…" : connectLabel}
             </button>
             {status === "error" ? (
-                <p className="text-xs text-red-600">
+                <p className="text-xs text-danger-700">
                     Connection failed. Check the Meta App Secret env var and try
                     again.
                 </p>

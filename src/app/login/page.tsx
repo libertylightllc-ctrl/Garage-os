@@ -52,7 +52,7 @@ export default async function LoginPage({
           placeholder={t("email")}
           required
           autoComplete="username"
-          className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-transparent"
+          className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
         />
         <input
           name="password"
@@ -60,17 +60,17 @@ export default async function LoginPage({
           placeholder={t("password")}
           required
           autoComplete="current-password"
-          className="rounded-md border border-black/15 px-3 py-2 text-sm dark:border-white/20 dark:bg-transparent"
+          className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
         />
         <button
           type="submit"
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          className="rounded-md bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
         >
           {t("signIn")}
         </button>
       </form>
 
-      <div className="rounded-md border border-black/10 p-3 text-xs text-zinc-500 dark:border-white/15 dark:text-zinc-400">
+      <div className="rounded-md border border-border p-3 text-xs text-text-mute">
         <p className="mb-1 font-medium">{t("demoTitle")}</p>
         <ul className="space-y-0.5">
           <li>owner@demo.garage · advisor@demo.garage</li>

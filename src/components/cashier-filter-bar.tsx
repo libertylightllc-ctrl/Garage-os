@@ -104,7 +104,7 @@ export function CashierFilterBar({ labels }: { labels: CashierFilterBarLabels })
                     inputMode="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="INV-2026-0013, Ad 2342, ARAFATH, #38…"
+                    placeholder="INV-2026-0013, A 12345, Ahmed Al Mansoori, #38…"
                     className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                 />
             </div>

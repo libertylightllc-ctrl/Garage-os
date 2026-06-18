@@ -40,7 +40,7 @@ export default async function EndOfDay() {
       </div>
 
       {jobs.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
+        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
           {t("eodEmpty")}
         </p>
       ) : null}
@@ -54,7 +54,7 @@ export default async function EndOfDay() {
             {grouped.get(b)!.map((j) => (
               <li
                 key={j.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm"
               >
                 <Link href={`/advisor/jobs/${j.id}`} className="hover:underline">
                   <span className="font-medium">

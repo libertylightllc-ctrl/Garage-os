@@ -34,7 +34,7 @@ export default async function ChatsInbox() {
 
       <ul className="flex flex-col gap-2">
         {threads.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
+          <li className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
             {t("noChats")}
           </li>
         ) : (
@@ -42,7 +42,7 @@ export default async function ChatsInbox() {
             <li key={th.id}>
               <Link
                 href={`/advisor/chats/${th.id}`}
-                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm hover:bg-surface-2 transition-colors"
+                className="flex items-center justify-between rounded-xl border border-border p-3 text-sm hover:bg-surface-2 transition-colors"
               >
                 <span className="min-w-0">
                   <span className="block font-medium">{th.customer.name}</span>
@@ -72,7 +72,7 @@ export default async function ChatsInbox() {
       {customers.length > 0 ? (
         <form
           action={startTestConversationAction}
-          className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3 text-sm"
+          className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 text-sm"
         >
           <span className="text-xs font-medium text-text-mute">
             {t("startTestConvo")}

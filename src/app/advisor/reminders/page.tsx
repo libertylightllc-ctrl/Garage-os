@@ -345,7 +345,7 @@ export default async function RemindersQueue({
                 <li
                   key={g.vehicle.id}
                   className={
-                  "flex flex-col gap-2 rounded-lg border p-3 text-sm"+
+                  "flex flex-col gap-2 rounded-xl border p-3 text-sm"+
                     (overdue
                       ?"border-danger-500/40 bg-danger-50 dark:border-danger-500/30 dark:bg-danger-500/10"
                       :"border-border")

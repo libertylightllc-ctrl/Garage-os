@@ -49,7 +49,7 @@ export default async function InvoiceSent({
         </p>
       </section>
 
-      <section className="rounded-lg border border-border p-4">
+      <section className="rounded-xl border border-border p-4">
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-base">
           <dt className="text-sm font-medium text-text-mute">
             {t("handoffJobNo")}

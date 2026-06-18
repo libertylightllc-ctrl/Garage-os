@@ -327,7 +327,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
       {/* Customer complaint (from reception) */}
       {job.complaint ? (
-        <div className="rounded-lg border border-border p-3 text-sm">
+        <div className="rounded-xl border border-border p-3 text-sm">
           <div className="text-xs text-text-mute">{t("complaintFromReception")}</div>
           <p>{job.complaint}</p>
           {job.mileageIn ? (
@@ -862,7 +862,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {job.partRequests.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-col gap-1 rounded-lg border border-border p-2"
+                className="flex flex-col gap-1 rounded-xl border border-border p-2"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span>
@@ -910,7 +910,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         ) : (
           <ul className="flex flex-col gap-3">
             {job.steps.map((s) => (
-              <li key={s.id} className="rounded-lg border border-border p-3 text-sm">
+              <li key={s.id} className="rounded-xl border border-border p-3 text-sm">
                 <div className="mb-1 font-medium">
                   {STEP_ICON[s.type] ??"•"} {s.type.replace("_","").toLowerCase()}
                 </div>

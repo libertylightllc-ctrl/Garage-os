@@ -389,7 +389,7 @@ export default async function InvoiceView({
         // to a negative FEE per the existing convention.
         <form
           action={addInvoiceLineAction}
-          className="rounded-lg border border-border p-3 print:hidden"
+          className="rounded-xl border border-border p-3 print:hidden"
         >
           <input type="hidden" name="invoiceId" value={inv.id} />
           <div className="mb-2 text-sm font-medium">{t("addLineTitle")}</div>
@@ -445,7 +445,7 @@ export default async function InvoiceView({
           already applied. Discount applies BEFORE VAT — handled in
           recomputeInvoice via the negative FEE line. */}
       {canEditLines ? (
-        <div className="rounded-lg border border-border p-3 print:hidden">
+        <div className="rounded-xl border border-border p-3 print:hidden">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{t("discountSectionTitle")}</span>
             {discountLabelKey ? (

@@ -43,7 +43,7 @@ export default async function BranchesPage({
         {branches.map((b) => (
           <li
             key={b.id}
-            className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+            className="flex items-center justify-between rounded-xl border border-border p-3 text-sm"
           >
             <span>
               <span className="font-medium">{b.name}</span>

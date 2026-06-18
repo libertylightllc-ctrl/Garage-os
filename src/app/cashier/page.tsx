@@ -1250,7 +1250,7 @@ export default async function CashierHome({
                     data-filter-row
                     data-search={invoiceSearchTokens(inv)}
                     data-date={(paidAt ?? inv.issuedAt).toISOString().slice(0, 10)}
-                    className="rounded-lg border border-border p-3 text-sm"
+                    className="rounded-xl border border-border p-3 text-sm"
                   >
                     <Link href={`/invoices/${inv.id}`} className="block hover:underline">
                       <div className="flex items-baseline justify-between gap-2">
@@ -1280,7 +1280,7 @@ export default async function CashierHome({
               </ul>
 
               {/* Desktop: full six-column table. */}
-              <div className="hidden overflow-x-auto rounded-lg border border-border sm:block">
+              <div className="hidden overflow-x-auto rounded-xl border border-border sm:block">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-2 text-text-mute">
                     <tr className="text-start">
@@ -1337,7 +1337,7 @@ export default async function CashierHome({
 
       {/* ─── CUSTOMERS TAB ──────────────────────────────────────── */}
       {currentTab ==="customers"? (
-        <div className="rounded-lg border border-dashed border-border p-10 text-center">
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
           <h2 className="text-lg font-semibold tracking-tight">
             {t("cashierTabCustomersHeading")}
           </h2>
@@ -1362,7 +1362,7 @@ export default async function CashierHome({
             {metrics.map((m) => (
               <div
                 key={m.key}
-                className="rounded-lg border border-border p-3"
+                className="rounded-xl border border-border p-3"
               >
                 <div className="text-xs text-text-mute">
                   {t(m.key)}

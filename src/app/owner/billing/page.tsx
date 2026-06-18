@@ -28,7 +28,7 @@ export default async function BillingPage() {
       <AppNav role="OWNER" active="billing"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("billing")}</h1>
 
-      <div className="rounded-lg border border-border p-4 text-sm">
+      <div className="rounded-xl border border-border p-4 text-sm">
         {t("statusLabel")}: <span className="font-medium">{sub?.status ??"PILOT"}</span>
         {sub?.plan ? ` · ${sub.plan.name}` :""}
       </div>
@@ -49,7 +49,7 @@ export default async function BillingPage() {
             {branches.map((b) => (
               <li
                 key={b.id}
-                className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+                className="flex items-center justify-between rounded-xl border border-border p-3 text-sm"
               >
                 <span className="font-medium">
                   {b.name}

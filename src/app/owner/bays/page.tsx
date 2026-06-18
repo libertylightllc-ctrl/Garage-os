@@ -30,7 +30,7 @@ export default async function BaysPage({
       <h1 className="text-2xl font-semibold tracking-tight">{t("baysTitle")}</h1>
       <p className="text-sm text-text-mute">{t("baysIntro")}</p>
 
-      <div className="rounded-lg border border-border p-3 text-sm">
+      <div className="rounded-xl border border-border p-3 text-sm">
         <span className="font-medium">
           {inUse} / {bays.length}
         </span>{""}
@@ -47,7 +47,7 @@ export default async function BaysPage({
         {bays.map((b) => (
           <li
             key={b.id}
-            className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+            className="flex items-center justify-between rounded-xl border border-border p-3 text-sm"
           >
             <span className="font-medium">🛠️ {b.name}</span>
             <form action={removeBayAction}>

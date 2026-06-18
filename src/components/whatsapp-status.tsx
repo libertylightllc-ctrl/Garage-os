@@ -97,7 +97,7 @@ export async function WhatsAppStatusPanel({
                         {recent.map((m) => (
                             <li
                                 key={m.id}
-                                className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm"
+                                className="flex flex-col gap-1 rounded-xl border border-border p-3 text-sm"
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <span className="font-medium">

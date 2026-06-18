@@ -277,7 +277,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
 
         {/* Consent — only relevant on the Moulkia OCR path (extracting from a photo) */}
         {via ==="moulkia"? (
-          <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs text-text">
+          <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-xs text-text">
             <input type="checkbox" name="consent" className="mt-0.5" required />
             {t("moulkiaConsent")}
           </label>

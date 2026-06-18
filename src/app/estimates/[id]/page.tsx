@@ -173,7 +173,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Technician findings & parts required — what the cashier prices from */}
       {finding?.submittedAt || requiredParts.length > 0 ? (
-        <div className="rounded-lg border border-border p-4 text-base">
+        <div className="rounded-xl border border-border p-4 text-base">
           <h2 className="mb-2 text-base font-semibold">{t("techFindingsPanel")}</h2>
           {finding?.findings ? <p>{finding.findings}</p> : null}
           {finding?.diagnosis ? (
@@ -191,7 +191,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
       {/* Parts used & work notes (Repair stage) — reconcile Final Billing */}
       {usedParts.length > 0 || workNotes ? (
-        <div className="rounded-lg border border-border p-4 text-base">
+        <div className="rounded-xl border border-border p-4 text-base">
           <h2 className="mb-2 text-base font-semibold">{t("partsUsedPanel")}</h2>
           {workNotes ? <p className="text-text-mute">{workNotes}</p> : null}
           {usedParts.length > 0 ? (
@@ -263,7 +263,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
               numeric cells (Qty / Unit / Total) and the Type badge are
               tight + right-aligned. table-layout:auto lets the browser
               shrink the long description before the narrow numerics. */}
-          <div className="hidden rounded-lg border border-border md:block">
+          <div className="hidden rounded-xl border border-border md:block">
             <table className="w-full text-sm">
               <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                 <tr>
@@ -321,7 +321,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           </div>
         </>
       ) : (
-        <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
+        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
           {t("noLineItems")}
         </p>
       )}
@@ -333,7 +333,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       </div>
 
       {editable ? (
-        <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+        <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-xl border border-border p-4">
           <input type="hidden" name="estimateId" value={est.id} />
           <div className="flex flex-wrap gap-2">
             <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">

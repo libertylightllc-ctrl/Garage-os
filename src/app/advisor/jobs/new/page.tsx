@@ -155,7 +155,7 @@ export default async function NewJobCard({
                 <li key={v.id}>
                   <Link
                     href={`/advisor/jobs/new/confirm?${q.toString()}`}
-                    className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-surface-2 transition-colors"
+                    className="flex items-center justify-between rounded-xl border border-border p-4 hover:bg-surface-2 transition-colors"
                   >
                     <span>
                       <span className="block font-medium">

@@ -26,7 +26,7 @@ export default async function BookingsInbox() {
       </div>
 
       {bookings.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-text-mute">
+        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-text-mute">
           {t("noPendingBookings")}
         </p>
       ) : (
@@ -34,7 +34,7 @@ export default async function BookingsInbox() {
           {bookings.map((b) => {
             const p = b.aiProposalJson as unknown as IntakeProposal | null;
             return (
-              <li key={b.id} className="rounded-lg border border-border p-4 text-sm">
+              <li key={b.id} className="rounded-xl border border-border p-4 text-sm">
                 <div className="font-medium">
                   {b.vehicle?.make} {b.vehicle?.model}{""}
                   <span className="text-text-mute">{b.vehicle?.plate}</span>

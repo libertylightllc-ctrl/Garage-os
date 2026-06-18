@@ -62,7 +62,7 @@ export function JobTimeline({ events, labels, now }: Props) {
     return (
         <section className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold">{labels.title}</h2>
-            <ol className="flex flex-col gap-0 rounded-lg border border-border">
+            <ol className="flex flex-col gap-0 rounded-xl border border-border">
                 {events.map((e, idx) => {
                     const dKey = dayKey(e.at);
                     const showDay = dKey !== lastDay;

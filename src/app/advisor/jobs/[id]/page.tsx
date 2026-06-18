@@ -154,7 +154,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
       {/* Reception detail (Job-Card-Data-Model.md) */}
-      <div className="rounded-lg border border-border p-3 text-sm">
+      <div className="rounded-xl border border-border p-3 text-sm">
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
           {job.complaint ? (
             <div className="col-span-2">
@@ -254,7 +254,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       ) : null}
 
       {/* Technician assignment */}
-      <div className="rounded-lg border border-border p-3 text-sm">
+      <div className="rounded-xl border border-border p-3 text-sm">
         <div className="mb-2">
           {t("technicianLabel")}:{""}
           <span className="font-medium">
@@ -292,7 +292,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         ) : (curIdx <= TIMELINE.indexOf("INSPECTION")) ? (
           <form
             action={checkInPhotoAction}
-            className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3 text-sm"
+            className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 text-sm"
           >
             <input type="hidden" name="jobId" value={job.id} />
             <span className="text-text">📷 {t("checkInPhotoPrompt")}</span>
@@ -334,7 +334,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       {/* Delivery — form when INVOICED, read-only summary once delivered */}
       {canRecordDelivery(status) ? (
-        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-lg border border-border p-3 text-sm">
+        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-xl border border-border p-3 text-sm">
           <input type="hidden" name="jobId" value={job.id} />
           <h2 className="text-sm font-medium">{t("jcDelivery")}</h2>
           <label className="text-xs text-text-mute">
@@ -352,7 +352,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </button>
         </form>
       ) : job.deliveredAt ? (
-        <div className="rounded-lg border border-border p-3 text-sm">
+        <div className="rounded-xl border border-border p-3 text-sm">
           <h2 className="mb-1 text-sm font-medium">{t("jcDelivery")}</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5">
             {job.mileageOut !== null ? (
@@ -573,7 +573,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           <h2 className="mb-2 text-sm font-medium">{t("techActivity")}</h2>
           <ul className="flex flex-col gap-2 text-sm">
             {job.steps.map((s) => (
-              <li key={s.id} className="rounded-lg border border-border p-2">
+              <li key={s.id} className="rounded-xl border border-border p-2">
                 <div className="text-text-mute">
                   {(
                     { PHOTO:"📷", VOICE:"🎤", PART_REQUEST:"📦", FINISH:"✅"} as Record<string, string>

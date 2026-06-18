@@ -92,13 +92,20 @@ export function workflowStage(input: WorkflowInput): WorkflowState {
       currentIndex = 5; // COMPLETE — tech tapped Mark Complete
       break;
     case "INVOICED":
-      // Invoice issued. Paid-in-full vaults to the PAID step; otherwise
-      // we sit on INVOICE while the cashier records payment. Delivery
-      // is a separate stamp that follows.
-      currentIndex = invoicePaid ? 7 /* PAID */ : 6 /* INVOICE */;
+      // Invoice issued. Once paid, the cashier's work on this row is
+      // DONE — the only remaining step is the customer collecting the
+      // car, which is the DELIVERED stamp. So PAID renders as ✓ and
+      // DELIVERED becomes the current step. While the invoice is still
+      // unpaid the cashier sits at INVOICE waiting to record payment.
+      currentIndex = invoicePaid ? 8 /* DELIVERED is current */ : 6 /* INVOICE */;
       break;
     case "DELIVERED":
-      currentIndex = 8; // DELIVERED — collected
+      // Terminal state — every step including DELIVERED is done. Land
+      // past the end of the stage list so no step renders as "current"
+      // and the whole bar shows ✓. The stepper renders i < currentIndex
+      // as completed; with currentIndex = WORKFLOW_STAGES.length, all
+      // 9 steps satisfy that.
+      currentIndex = 9;
       break;
     default:
       currentIndex = 0;

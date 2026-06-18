@@ -59,14 +59,20 @@ describe("workflowStage", () => {
     ).toBe(6);
   });
 
-  it("INVOICED + paid → PAID step (7)", () => {
+  it("INVOICED + paid → PAID ✓ done, DELIVERED is current (index 8)", () => {
+    // Payment recorded means PAID is complete; the cashier's open work
+    // is now the delivery stamp. Stepper renders PAID as ✓ green and
+    // DELIVERED as ⏳ accent.
     expect(
       workflowStage({ status: "INVOICED", invoicePaid: true }).currentIndex,
-    ).toBe(7);
+    ).toBe(8);
   });
 
-  it("DELIVERED → DELIVERED step (8)", () => {
-    expect(workflowStage({ status: "DELIVERED" }).currentIndex).toBe(8);
+  it("DELIVERED → past-end (index 9, every step ✓)", () => {
+    // Terminal state — no step should render as "current". Index lands
+    // past the end of WORKFLOW_STAGES so the stepper's i < currentIndex
+    // check marks every step done and i === currentIndex never matches.
+    expect(workflowStage({ status: "DELIVERED" }).currentIndex).toBe(9);
   });
 
   it("CANCELLED → isCancelled flag set, currentIndex -1", () => {

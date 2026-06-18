@@ -21,6 +21,7 @@ import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
 import { CashierFilterBar } from "@/components/cashier-filter-bar";
 import { BadgeLink } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
 import { CashierTabs } from "@/components/cashier-tabs";
 
 export const dynamic ="force-dynamic";
@@ -783,12 +784,12 @@ export default async function CashierHome({
                   />
                   <div className="flex justify-end">
                     {latest && latest.status ==="DRAFT"? (
-                      <Link
+                      <ButtonLink
                         href={`/estimates/${latest.id}`}
-                        className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
+                        size="sm"
                       >
                         {t("continuePricing")}
-                      </Link>
+                      </ButtonLink>
                     ) : (
                       <form action={createEstimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
@@ -862,12 +863,9 @@ export default async function CashierHome({
                   <div className="flex flex-wrap justify-end gap-2">
                     {est ? (
                       <>
-                        <Link
-                          href={`/estimates/${est.id}`}
-                          className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
-                        >
+                        <ButtonLink href={`/estimates/${est.id}`} size="sm">
                           {t("cashierViewEstimate")}
-                        </Link>
+                        </ButtonLink>
                         {/* Resend goes via the preview gate (same as the
                             estimate's own page) — the cashier reviews the
                             customer-facing layout before the WhatsApp
@@ -1044,12 +1042,9 @@ export default async function CashierHome({
                   </p>
                   <div className="flex flex-wrap justify-end gap-2">
                     {est ? (
-                      <Link
-                        href={`/estimates/${est.id}`}
-                        className="rounded-md border border-border px-3 py-1 font-medium hover:bg-surface-2"
-                      >
+                      <ButtonLink href={`/estimates/${est.id}`} size="sm">
                         {t("cashierViewEstimate")}
-                      </Link>
+                      </ButtonLink>
                     ) : null}
                     <form action={createEstimateAction}>
                       <input type="hidden" name="jobId" value={j.id} />

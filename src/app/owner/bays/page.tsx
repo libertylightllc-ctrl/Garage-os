@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { addBayAction, removeBayAction } from "@/app/actions/onboarding";
 import { getT } from "@/i18n/server";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -60,9 +61,7 @@ export default async function BaysPage({
 
       <form action={addBayAction} className="flex gap-2 rounded-xl border border-border p-4">
         <input name="name" placeholder={t("bayNamePh")} required className={`${field} flex-1`} />
-        <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-          {t("addBay")}
-        </button>
+        <Button>{t("addBay")}</Button>
       </form>
     </main>
   );

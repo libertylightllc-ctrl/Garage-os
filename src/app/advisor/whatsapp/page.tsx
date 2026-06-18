@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
 import { WhatsAppStatusPanel } from "@/components/whatsapp-status";
 import { getT } from "@/i18n/server";
+import { ButtonLink } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -43,18 +43,8 @@ export default async function AdvisorWhatsApp() {
           with this page — they almost always come here BECAUSE they
           want to send a reminder. Surface those as direct links. */}
       <div className="flex flex-wrap gap-2">
-        <Link
-          href="/advisor/reminders"
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
-          {t("waStatusGoReminders")}
-        </Link>
-        <Link
-          href="/advisor/chats"
-          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
-          {t("waStatusGoChats")}
-        </Link>
+        <ButtonLink href="/advisor/reminders">{t("waStatusGoReminders")}</ButtonLink>
+        <ButtonLink href="/advisor/chats">{t("waStatusGoChats")}</ButtonLink>
       </div>
     </main>
   );

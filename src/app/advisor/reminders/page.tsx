@@ -10,6 +10,7 @@ import {
   sendDueRemindersAction,
   cancelReminderAction,
 } from "@/app/actions/reminders";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic ="force-dynamic";
 
@@ -362,16 +363,16 @@ export default async function RemindersQueue({
                     </span>
                     <span className="flex items-center gap-2">
                       {overdue ? (
-                        <span className="inline-flex items-center rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+                        <Badge tone="danger" size="pill">
                           {t("remindersBucketOverdue")}
-                        </span>
+                        </Badge>
                       ) : null}
-                      <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold tabular-nums text-text-mute">
+                      <Badge tone="neutral" size="pill" className="tabular-nums">
                         {g.rs.length}{""}
                         {g.rs.length === 1
                           ? t("remindersReminderSingular")
                           : t("remindersReminderPlural")}
-                      </span>
+                      </Badge>
                     </span>
                   </div>
                   <ul className="flex flex-col gap-1 ps-2">

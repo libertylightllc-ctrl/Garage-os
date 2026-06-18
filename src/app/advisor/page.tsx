@@ -7,6 +7,7 @@ import { priorityMeta } from "@/lib/priority";
 import { getT } from "@/i18n/server";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
+import { ButtonLink } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -78,24 +79,15 @@ export default async function AdvisorHome() {
 
       <div className="flex flex-wrap gap-2">
         {/* HERO — the advisor's primary action on this overview screen */}
-        <Link
-          href="/advisor/jobs/new"
-          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg bg-accent-500 px-4 text-center text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
+        <ButtonLink href="/advisor/jobs/new" variant="hero" size="lg" className="flex-1">
           {t("newJobCard")}
-        </Link>
-        <Link
-          href="/advisor/bookings"
-          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-center text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
+        </ButtonLink>
+        <ButtonLink href="/advisor/bookings" size="lg" className="flex-1">
           {t("newBookings")}{pendingBookings > 0 ? ` (${pendingBookings})` :""}
-        </Link>
-        <Link
-          href="/advisor/eod"
-          className="inline-flex h-12 flex-1 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-center text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
+        </ButtonLink>
+        <ButtonLink href="/advisor/eod" size="lg" className="flex-1">
           {t("tabEod")}
-        </Link>
+        </ButtonLink>
       </div>
 
       <ul className="flex flex-col gap-2">

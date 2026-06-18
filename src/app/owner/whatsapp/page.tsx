@@ -7,6 +7,7 @@ import {
   disconnectWhatsAppAction,
 } from "@/app/actions/whatsapp-connect";
 import { EmbeddedSignupButton } from "@/components/whatsapp-embedded-signup";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -114,9 +115,7 @@ export default async function WhatsAppSettings() {
             placeholder="+9715XXXXXXXX"
             className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
-          <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-            {t("waConnectBtnSandbox")}
-          </button>
+          <Button>{t("waConnectBtnSandbox")}</Button>
         </form>
       )}
 

@@ -5,6 +5,7 @@ import { verifyToken } from "@/lib/tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -109,15 +110,15 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
         <div className="flex gap-2">
           <form action={approveEstimatePublic} className="flex-1">
             <input type="hidden" name="token" value={token} />
-            <button className="inline-flex w-full h-12 items-center justify-center rounded-lg bg-accent-500 px-4 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+            <Button variant="hero" size="lg" fullWidth>
               {t("approve")}
-            </button>
+            </Button>
           </form>
           <form action={rejectEstimatePublic} className="flex-1">
             <input type="hidden" name="token" value={token} />
-            <button className="inline-flex w-full h-12 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+            <Button variant="ghost" size="lg" fullWidth>
               {t("decline")}
-            </button>
+            </Button>
           </form>
         </div>
       ) : (

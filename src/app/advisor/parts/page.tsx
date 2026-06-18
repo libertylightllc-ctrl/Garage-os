@@ -12,6 +12,7 @@ import {
   arrivePartRequestAction,
   cancelPartRequestAction,
 } from "@/app/actions/parts";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -28,11 +29,6 @@ export default async function PartsQueue() {
     },
     orderBy: { createdAt:"asc"},
   });
-
-  const btn =
-  "inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors";
-  const btnPrimary =
-  "inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -91,7 +87,7 @@ export default async function PartsQueue() {
                   {r.status ==="REQUESTED"&& available ? (
                     <form action={fulfillPartRequestAction}>
                       <input type="hidden" name="requestId" value={r.id} />
-                      <button className={btnPrimary}>{t("actFulfill")}</button>
+                      <Button>{t("actFulfill")}</Button>
                     </form>
                   ) : null}
                   {r.status ==="REQUESTED"? (
@@ -102,30 +98,30 @@ export default async function PartsQueue() {
                         placeholder={t("supplierNote")}
                         className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
                       />
-                      <button className={btn}>{t("actOrder")}</button>
+                      <Button variant="ghost">{t("actOrder")}</Button>
                     </form>
                   ) : null}
                   {r.status ==="ORDERED"? (
                     <form action={arrivePartRequestAction}>
                       <input type="hidden" name="requestId" value={r.id} />
-                      <button className={btnPrimary}>{t("actArrived")}</button>
+                      <Button>{t("actArrived")}</Button>
                     </form>
                   ) : null}
                   {r.status ==="ARRIVED"? (
                     <>
                       <form action={fulfillPartRequestAction}>
                         <input type="hidden" name="requestId" value={r.id} />
-                        <button className={btnPrimary}>{t("actFulfill")}</button>
+                        <Button>{t("actFulfill")}</Button>
                       </form>
                       <form action={orderPartRequestAction}>
                         <input type="hidden" name="requestId" value={r.id} />
-                        <button className={btn}>{t("actReorder")}</button>
+                        <Button variant="ghost">{t("actReorder")}</Button>
                       </form>
                     </>
                   ) : null}
                   <form action={cancelPartRequestAction}>
                     <input type="hidden" name="requestId" value={r.id} />
-                    <button className={btn}>{t("actCancelReq")}</button>
+                    <Button variant="ghost">{t("actCancelReq")}</Button>
                   </form>
                 </div>
               </li>

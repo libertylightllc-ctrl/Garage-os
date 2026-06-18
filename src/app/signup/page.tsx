@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signupAction } from "@/app/actions/onboarding";
 import { getT } from "@/i18n/server";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -42,9 +43,7 @@ export default async function Signup({
           autoComplete="new-password"
           className={field}
         />
-        <button className="rounded-md bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200">
-          {t("createGarage")}
-        </button>
+        <Button>{t("createGarage")}</Button>
       </form>
 
       <p className="text-center text-sm text-text-mute">

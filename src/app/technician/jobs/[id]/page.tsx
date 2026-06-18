@@ -40,6 +40,7 @@ import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
 import { PhotoCapture } from "@/components/photo-capture";
+import { Badge } from "@/components/ui/badge";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
 import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
@@ -508,9 +509,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium">{t("extrasPanelTitle")}</h2>
             {extraParts.length > 0 ? (
-              <span className="inline-flex items-center rounded-full bg-danger-600 px-2 py-0.5 text-xs font-semibold text-white">
+              <Badge tone="danger" size="pill">
                 {extraParts.length}
-              </span>
+              </Badge>
             ) : null}
           </div>
 

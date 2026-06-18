@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function Error({
   error,
@@ -34,12 +35,9 @@ export default function Error({
         <p className="text-sm text-text-mute">
           That action didn’t complete. Please try again.
         </p>
-        <button
-          onClick={reset}
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
+        <Button type="button" onClick={reset}>
           Try again
-        </button>
+        </Button>
         {error.digest ? (
           <p className="mt-2 select-all text-[10px] font-mono text-text-mute">
             ref: {error.digest}

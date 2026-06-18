@@ -3,6 +3,7 @@ import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { getT } from "@/i18n/server";
+import { Button } from "@/components/ui/button";
 
 async function loginAction(formData: FormData) {
 "use server";
@@ -62,12 +63,7 @@ export default async function LoginPage({
           autoComplete="current-password"
           className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
         />
-        <button
-          type="submit"
-          className="rounded-md bg-brand-900 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
-        >
-          {t("signIn")}
-        </button>
+        <Button type="submit">{t("signIn")}</Button>
       </form>
 
       <div className="rounded-md border border-border p-3 text-xs text-text-mute">

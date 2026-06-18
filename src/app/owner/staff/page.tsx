@@ -4,6 +4,7 @@ import { AppNav } from "@/components/app-nav";
 import { addStaffAction, removeStaffAction } from "@/app/actions/onboarding";
 import { listBranches } from "@/lib/branches";
 import { getT } from "@/i18n/server";
+import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
 
@@ -86,9 +87,7 @@ export default async function StaffPage({
         <div className="flex flex-wrap gap-2">
           <input name="email" type="email" placeholder={t("email")} required className={`${field} flex-1`} />
           <input name="password" type="password" placeholder={t("tempPassword")} required minLength={6} className={`${field} flex-1`} />
-          <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-            {t("add")}
-          </button>
+          <Button>{t("add")}</Button>
         </div>
       </form>
     </main>

@@ -115,7 +115,7 @@ export default async function NewJobCard({
         <p className="mt-1 text-xs text-text-mute">{t("plateLookupHint")}</p>
         <form action={plateLookupAction} className="mt-3 flex gap-2">
           <input name="plate" placeholder={t("plate")} required className={`${field} flex-1`} />
-          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             {t("lookupBtn")}
           </button>
         </form>
@@ -127,7 +127,7 @@ export default async function NewJobCard({
         <p className="mt-1 text-xs text-text-mute">{t("manualEntryHint")}</p>
         <Link
           href="/advisor/jobs/new/confirm?via=manual"
-          className="mt-3 inline-block inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors"
+          className="mt-3 inline-block inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
         >
           {t("enterManually")}
         </Link>

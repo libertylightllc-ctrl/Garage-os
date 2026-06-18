@@ -34,7 +34,7 @@ export default async function SentForReestimate({
       <AppNav role="TECH" active="workshop"/>
 
       <section className="rounded-xl border border-danger-500/40 bg-danger-50 p-6 text-center dark:border-danger-500/30 dark:bg-danger-500/10">
-        <div className="text-5xl">🔧</div>
+        <div className="text-4xl">🔧</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           {t("sentForReestimateTitle")}
         </h1>

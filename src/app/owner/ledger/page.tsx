@@ -248,13 +248,13 @@ export default async function OwnerLedger({
             className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           />
         </label>
-        <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+        <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
           {t("ledgerApply")}
         </button>
         {rawFrom || rawTo ? (
           <Link
             href="/owner/ledger"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
           >
             {t("ledgerReset")}
           </Link>

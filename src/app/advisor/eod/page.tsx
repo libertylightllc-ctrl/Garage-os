@@ -67,7 +67,7 @@ export default async function EndOfDay() {
                 {b ==="READY"? (
                   <form action={nudgeCollectionAction}>
                     <input type="hidden" name="jobId" value={j.id} />
-                    <button className="shrink-0 inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+                    <button className="shrink-0 inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors">
                       {t("nudgeCollect")}
                     </button>
                   </form>

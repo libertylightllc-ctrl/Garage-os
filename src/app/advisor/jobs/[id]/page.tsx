@@ -154,7 +154,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
       {/* Reception detail (Job-Card-Data-Model.md) */}
-      <div className="rounded-xl border border-border p-3 text-sm">
+      <div className="rounded-xl border border-border p-4 text-sm">
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
           {job.complaint ? (
             <div className="col-span-2">
@@ -224,7 +224,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             <option value="1">{t("prUrgent")}</option>
             <option value="2">{t("prEmergency")}</option>
           </select>
-          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             {t("setPriority")}
           </button>
         </form>
@@ -247,14 +247,14 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               </option>
             ))}
           </select>
-          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             {t("setPriority")}
           </button>
         </form>
       ) : null}
 
       {/* Technician assignment */}
-      <div className="rounded-xl border border-border p-3 text-sm">
+      <div className="rounded-xl border border-border p-4 text-sm">
         <div className="mb-2">
           {t("technicianLabel")}:{""}
           <span className="font-medium">
@@ -279,7 +279,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               </option>
             ))}
           </select>
-          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             {t("reassign")}
           </button>
         </form>
@@ -292,7 +292,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         ) : (curIdx <= TIMELINE.indexOf("INSPECTION")) ? (
           <form
             action={checkInPhotoAction}
-            className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 text-sm"
+            className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-4 text-sm"
           >
             <input type="hidden" name="jobId" value={job.id} />
             <span className="text-text">📷 {t("checkInPhotoPrompt")}</span>
@@ -334,7 +334,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       {/* Delivery — form when INVOICED, read-only summary once delivered */}
       {canRecordDelivery(status) ? (
-        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-xl border border-border p-3 text-sm">
+        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm">
           <input type="hidden" name="jobId" value={job.id} />
           <h2 className="text-sm font-medium">{t("jcDelivery")}</h2>
           <label className="text-xs text-text-mute">
@@ -352,7 +352,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </button>
         </form>
       ) : job.deliveredAt ? (
-        <div className="rounded-xl border border-border p-3 text-sm">
+        <div className="rounded-xl border border-border p-4 text-sm">
           <h2 className="mb-1 text-sm font-medium">{t("jcDelivery")}</h2>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5">
             {job.mileageOut !== null ? (
@@ -486,7 +486,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               </option>
             ))}
           </select>
-          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+          <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             →
           </button>
         </form>
@@ -524,7 +524,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           <h2 className="mb-2 text-sm font-medium">{t("remindersTitle")}</h2>
 
           {canScheduleReminders ? (
-            <form action={scheduleRemindersAction} className="mb-3 flex flex-col gap-2 rounded-xl border border-border p-3">
+            <form action={scheduleRemindersAction} className="mb-3 flex flex-col gap-2 rounded-xl border border-border p-4">
               <input type="hidden" name="jobId" value={job.id} />
               <div className="text-xs text-text-mute">{t("scheduleReminders")}</div>
               <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">

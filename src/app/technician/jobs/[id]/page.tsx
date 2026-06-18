@@ -367,7 +367,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               defaultValue={job.finding?.findings ?? ""}
               rows={3}
               placeholder={t("findingsLabel")}
-              className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm"
+              className="w-full rounded-lg border border-border bg-transparent px-2 py-1 pr-10 text-sm"
             />
             <DictateTextarea
               locale={locale}
@@ -376,9 +376,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               defaultValue={job.finding?.diagnosis ?? ""}
               rows={2}
               placeholder={t("diagnosisLabel")}
-              className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm"
+              className="w-full rounded-lg border border-border bg-transparent px-2 py-1 pr-10 text-sm"
             />
-            <button className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+            <button className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
               {t("saveDraft")}
             </button>
           </form>
@@ -441,7 +441,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <select
               name="partId"
               defaultValue=""
-              className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             >
               <option value="">{t("catalogPartOptional")}</option>
               {parts.map((p) => (
@@ -453,14 +453,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <input
               name="partNo"
               placeholder={t("partNoLabel")}
-              className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="w-24 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <DictateInput
               locale={locale}
               labels={dictLabels}
               name="description"
               placeholder={t("colDescription")}
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="flex-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <input
               name="qty"
@@ -468,9 +468,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="w-16 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
-            <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+            <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
               {t("addPartLine")}
             </button>
           </form>
@@ -562,7 +562,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <input
               name="partNo"
               placeholder={t("partNoLabel")}
-              className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="w-24 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <DictateInput
               locale={locale}
@@ -570,7 +570,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               name="description"
               placeholder={t("extrasDescriptionPlaceholder")}
               required
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="flex-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <input
               name="qty"
@@ -578,7 +578,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="w-16 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <button className="inline-flex h-8 items-center justify-center rounded-lg border border-danger-500/40 bg-transparent px-3 text-xs font-semibold text-danger-700 hover:bg-danger-50 transition-colors dark:text-danger-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               {t("extrasAdd")}
@@ -621,9 +621,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 defaultValue={job.workNotes ?? ""}
                 rows={2}
                 placeholder={t("workNotesLabel")}
-                className="w-full rounded-md border border-border bg-transparent px-2 py-1 pr-10 text-sm"
+                className="w-full rounded-lg border border-border bg-transparent px-2 py-1 pr-10 text-sm"
               />
-              <button className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+              <button className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
                 {t("saveDraft")}
               </button>
             </form>
@@ -684,7 +684,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <select
                   name="partId"
                   defaultValue=""
-                  className="rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                  className="rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
                 >
                   <option value="">{t("catalogPartOptional")}</option>
                   {parts.map((p) => (
@@ -696,14 +696,14 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <input
                   name="partNo"
                   placeholder={t("partNoLabel")}
-                  className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                  className="w-24 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
                 />
                 <DictateInput
                   locale={locale}
                   labels={dictLabels}
                   name="description"
                   placeholder={t("colDescription")}
-                  className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                  className="flex-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
                 />
                 <input
                   name="qty"
@@ -711,9 +711,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   min="1"
                   defaultValue="1"
                   aria-label={t("colQty")}
-                  className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+                  className="w-16 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
                 />
-                <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors transition-colors">
+                <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
                   {t("addPartLine")}
                 </button>
               </form>
@@ -811,7 +811,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <select
               name="partId"
               defaultValue=""
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="mt-1 w-full rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             >
               <option value="">{t("pickPart")}</option>
               {parts.map((p) => (
@@ -825,7 +825,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               labels={dictLabels}
               name="description"
               placeholder={t("orTypePart")}
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="mt-1 w-full rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <input
               name="qty"
@@ -833,7 +833,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               min="1"
               defaultValue="1"
               aria-label={t("colQty")}
-              className="mt-1 w-16 rounded-md border border-border bg-transparent px-2 py-1 text-sm"
+              className="mt-1 w-16 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <button type="submit" className="mt-1 text-sm font-semibold underline">
               {t("request")}

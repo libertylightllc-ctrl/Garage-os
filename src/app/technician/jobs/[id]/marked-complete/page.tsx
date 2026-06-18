@@ -46,7 +46,7 @@ export default async function MarkedComplete({
       <AppNav role="TECH" active="workshop"/>
 
       <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
-        <div className="text-5xl">🔧</div>
+        <div className="text-4xl">🔧</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           {t("markedCompleteTitle")}
         </h1>

@@ -30,7 +30,7 @@ export default async function LoginPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
       <div>
-        <p className="text-sm text-text-mute">GarageOS</p>
+        <p className="text-sm text-text-mute">Garage OS</p>
         <h1 className="text-2xl font-semibold tracking-tight">{t("signInTitle")}</h1>
       </div>
 

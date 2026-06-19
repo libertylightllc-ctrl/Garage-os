@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 540" role="img" aria-label="Garage OS mark">
+  <title>Garage OS</title>
+  <g fill="none" stroke="#1a1a1a" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 20)">
+    <path d="M 380 80 A 170 170 0 1 0 380 320 L 260 320" transform="rotate(-6 270 200)"/>
+    <ellipse cx="440" cy="400" rx="80" ry="95" transform="rotate(-10 440 400)"/>
+  </g>
+</svg>

@@ -69,7 +69,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                 <Link
                     href={items[0].href}
                     className="flex items-center gap-2 text-sm font-semibold tracking-tight"
-                    aria-label="GarageOS"
+                    aria-label="Garage OS"
                 >
                     {/* GarageOS brand mark. Plain <img> (not next/image)
                         so the public file is served as-is — no build-

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title:"GarageOS",
+  title:"Garage OS",
   description:"The garage operating system where AI does the thinking and the human decides.",
 };
 

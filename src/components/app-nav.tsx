@@ -79,7 +79,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         the #111 fill to white on dark backgrounds. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        src="/brand/garageos-mark-dark.svg"
+                        src="/brand/garageos-mark.png"
                         alt=""
                         className="h-8 w-auto dark:invert"
                     />

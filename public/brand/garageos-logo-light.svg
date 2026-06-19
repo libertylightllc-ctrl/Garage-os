@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 920" role="img" aria-label="Garage Os">
-  <title>Garage Os</title>
-  <g transform="translate(12 35)">
-    <path d="M166 122L85 221L46 323L48 413L88 480L168 517L251 511L333 467L424 373L399 448L396 503L414 559L450 599L512 623L573 619L623 597L675 551L725 456L730 365L694 287L670 264L623 244L555 244L498 272L499 282L557 265L615 272L653 303L672 343L676 409L659 469L621 526L565 566L519 573L483 564L433 513L430 429L471 328L450 328L445 272L313 272L244 288L244 301L389 299L392 309L330 395L252 447L179 459L141 444L119 422L107 358L121 290L161 213L224 140L344 66L424 48L504 53L505 43L430 35L354 48L323 35L248 65Z" fill="#ffffff" fill-rule="evenodd"/>
-  </g>
-  <text x="400" y="850" text-anchor="middle"
-        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-        font-size="92" font-weight="500" letter-spacing="-1" fill="#ffffff">Garage Os</text>
-</svg>

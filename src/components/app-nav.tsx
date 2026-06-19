@@ -71,19 +71,15 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                     className="flex items-center gap-2 text-sm font-semibold tracking-tight"
                     aria-label="Garage OS"
                 >
-                    {/* GarageOS brand mark. Plain <img> (not next/image)
-                        so the public file is served as-is — no build-
-                        time optimisation step that could fail when the
-                        logo asset hasn't been uploaded yet. h-8 caps
-                        the height so a wide logo file still fits the
-                        nav bar; w-auto preserves aspect ratio. The
-                        dark-mode invert lets a black-on-white mark
-                        flip cleanly on a dark background; remove or
-                        swap to a separate -dark file if your logo
-                        uses colour beyond black/white. */}
+                    {/* Garage OS brand mark — calligraphic Go monogram.
+                        Plain <img> (not next/image) so the public SVG is
+                        served as-is, no build-time optimisation step.
+                        h-8 caps the height (32px) to fit the nav bar;
+                        w-auto preserves aspect ratio. dark:invert flips
+                        the #111 fill to white on dark backgrounds. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        src="/garageos-logo.png"
+                        src="/brand/garageos-mark-dark.svg"
                         alt=""
                         className="h-8 w-auto dark:invert"
                     />

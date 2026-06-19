@@ -69,7 +69,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                 <Link
                     href={items[0].href}
                     className="flex items-center gap-2 text-sm font-semibold tracking-tight"
-                    aria-label="Garage OS"
+                    aria-label="Garage Os"
                 >
                     {/* Garage OS brand mark — calligraphic Go monogram.
                         Plain <img> (not next/image) so the public SVG is

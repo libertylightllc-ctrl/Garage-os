@@ -18,7 +18,7 @@ export default async function Signup({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-5 p-8">
       <div>
-        <p className="text-sm text-text-mute">Garage OS</p>
+        <p className="text-sm text-text-mute">Garage Os</p>
         <h1 className="text-2xl font-semibold tracking-tight">{t("signupTitle")}</h1>
         <p className="text-sm text-text-mute">{t("signupIntro")}</p>
       </div>

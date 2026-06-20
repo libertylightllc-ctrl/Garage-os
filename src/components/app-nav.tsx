@@ -83,8 +83,11 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         alt=""
                         className="h-8 w-auto dark:invert"
                     />
-                    <span className="whitespace-nowrap font-normal text-text-mute">
-                        {t(`role${role}` as MessageKey)}
+                    <span className="whitespace-nowrap text-base font-semibold">
+                        Garage Os
+                    </span>
+                    <span className="hidden whitespace-nowrap font-normal text-text-mute sm:inline">
+                        · {t(`role${role}` as MessageKey)}
                     </span>
                 </Link>
 

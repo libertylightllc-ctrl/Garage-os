@@ -68,7 +68,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
             <div className="flex items-center justify-between gap-3">
                 <Link
                     href={items[0].href}
-                    className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+                    className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"
                     aria-label="Garage Os"
                 >
                     {/* Garage OS brand mark — calligraphic Go monogram.
@@ -83,7 +83,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         alt=""
                         className="h-8 w-auto dark:invert"
                     />
-                    <span className="font-normal text-text-mute">
+                    <span className="whitespace-nowrap font-normal text-text-mute">
                         {t(`role${role}` as MessageKey)}
                     </span>
                 </Link>

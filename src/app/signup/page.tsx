@@ -17,10 +17,15 @@ export default async function Signup({
   const t = await getT();
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-5 p-8">
-      <div>
-        <p className="text-sm text-text-mute">Garage Os</p>
+      <div className="flex flex-col items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/garageos-logo.png"
+          alt="Garage Os"
+          className="h-24 w-auto dark:invert"
+        />
         <h1 className="text-2xl font-semibold tracking-tight">{t("signupTitle")}</h1>
-        <p className="text-sm text-text-mute">{t("signupIntro")}</p>
+        <p className="text-center text-sm text-text-mute">{t("signupIntro")}</p>
       </div>
 
       {error ? (

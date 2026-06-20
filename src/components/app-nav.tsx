@@ -77,15 +77,17 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                         h-8 caps the height (32px) to fit the nav bar;
                         w-auto preserves aspect ratio. dark:invert flips
                         the #111 fill to white on dark backgrounds. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src="/brand/garageos-mark.png"
-                        alt=""
-                        className="h-8 w-auto dark:invert"
-                    />
-                    <span className="whitespace-nowrap text-base font-semibold">
-                        Garage Os
-                    </span>
+                    <div className="flex flex-col items-center gap-0.5 leading-none">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src="/brand/garageos-mark.png"
+                            alt=""
+                            className="h-8 w-auto dark:invert"
+                        />
+                        <span className="text-[11px] font-semibold tracking-wide">
+                            Garage Os
+                        </span>
+                    </div>
                     <span className="hidden whitespace-nowrap font-normal text-text-mute sm:inline">
                         · {t(`role${role}` as MessageKey)}
                     </span>

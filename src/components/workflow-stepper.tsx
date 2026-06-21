@@ -98,20 +98,20 @@ export function WorkflowStepper({ state, labels }: Props) {
                             className="flex shrink-0 items-start gap-0"
                             aria-current={isCurrent ? "step" : undefined}
                         >
-                            <div className="flex w-20 flex-col items-center gap-1 px-1">
+                            <div className="flex w-14 flex-col items-center gap-1 px-0.5">
                                 <span
-                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold ${stepClass}`}
+                                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${stepClass}`}
                                 >
                                     {indicator}
                                 </span>
-                                <span className={`whitespace-nowrap text-[10px] uppercase tracking-wide ${labelClass}`}>
+                                <span className={`whitespace-nowrap text-[9px] uppercase tracking-wide ${labelClass}`}>
                                     {labels.stages[stage]}
                                 </span>
                             </div>
                             {i < WORKFLOW_STAGES.length - 1 ? (
                                 <span
                                     aria-hidden="true"
-                                    className={`mt-4 h-0.5 w-4 shrink-0 ${connectorClass}`}
+                                    className={`mt-3.5 h-0.5 w-2 shrink-0 ${connectorClass}`}
                                 />
                             ) : null}
                         </li>

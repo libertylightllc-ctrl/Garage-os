@@ -261,7 +261,7 @@ export default async function OwnerHome({
   const samples: MessageKey[] = ["sampleUpDown","sampleProfit","sampleOwes"];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="OWNER" active="dashboard"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("ownerDashboard")}</h1>
 
@@ -287,6 +287,11 @@ export default async function OwnerHome({
         {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
 
+      {/* Copilot + pilot metrics — stacked on phones, side-by-side on lg+
+          so the desktop horizontal canvas isn't wasted on two small panels
+          alone. Each panel keeps its own rounded-xl border + p-4 so they
+          read as separate cards inside the grid. */}
+      <div className="grid gap-6 lg:grid-cols-2">
       {/* Copilot */}
       <div className="rounded-xl border border-border p-4">
         <h2 className="mb-2 text-sm font-medium">{t("askCopilot")}</h2>
@@ -351,7 +356,14 @@ export default async function OwnerHome({
           </li>
         </ul>
       </div>
+      </div>
 
+      {/* Activity tables — tech productivity + advisor performance.
+          Same lg:grid-cols-2 pattern as the copilot+pilot row so the
+          two read in parallel at desktop width. Each table keeps its
+          own overflow-x-auto wrapper so columns scroll inside the
+          panel rather than pushing the page wider. */}
+      <div className="grid gap-6 lg:grid-cols-2">
       {/* Per-technician productivity — slice #3 adds time math:
             ⏱ avg = mean (workCompletedAt − claimedAt) across completed jobs
             today⏱ = sum of durations for jobs completed today (UTC day)
@@ -491,6 +503,7 @@ export default async function OwnerHome({
             </table>
           </div>
         )}
+      </div>
       </div>
     </main>
   );

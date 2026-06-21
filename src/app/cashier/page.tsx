@@ -404,7 +404,7 @@ export default async function CashierHome({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="CASHIER" active="accounts"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("accounts")}</h1>
 

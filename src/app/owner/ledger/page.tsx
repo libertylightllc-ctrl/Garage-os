@@ -220,7 +220,7 @@ export default async function OwnerLedger({
   ].sort((x, y) => y.at.getTime() - x.at.getTime());
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="OWNER" active="ledger"/>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("ledgerTitle")}</h1>

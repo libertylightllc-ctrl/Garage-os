@@ -58,7 +58,7 @@ export default async function WhatsAppSettings() {
   const productionMode = isProductionMode();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-3xl">
       <AppNav role="OWNER" active="whatsapp"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("waConnect")}</h1>
       <p className="text-sm text-text-mute">{t("waConnectIntro")}</p>

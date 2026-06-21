@@ -133,7 +133,7 @@ export default async function OwnerAnalytics({
   const avgTicket = invCountTotal > 0 ? invSumTotal / invCountTotal : 0;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="OWNER" active="analytics"/>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{t("analyticsTitle")}</h1>
@@ -183,34 +183,38 @@ export default async function OwnerAnalytics({
       {/* Charts — pure SVG, no chart lib. Each is a bar chart over
           the window. Y axis is implicit (max value highlighted in the
           label). Tooltip via <title> on each bar so hovering on
-          desktop reveals the exact value + date. */}
-      <BarChart
-        title={t("analyticsRevenuePerDay")}
-        series={series.map((b) => ({ label: b.day, value: b.revenue }))}
-        format={(v) => money(v)}
-        color="emerald"
-      />
-      <BarChart
-        title={t("analyticsVatPerDay")}
-        series={series.map((b) => ({ label: b.day, value: b.vat }))}
-        format={(v) => money(v)}
-        color="amber"
-      />
-      <BarChart
-        title={t("analyticsJobsPerDay")}
-        series={series.map((b) => ({ label: b.day, value: b.jobs }))}
-        format={(v) => String(v)}
-        color="sky"
-      />
-      <BarChart
-        title={t("analyticsAvgTicketPerDay")}
-        series={series.map((b) => ({
-          label: b.day,
-          value: b.invoiceCount > 0 ? b.invoiceSum / b.invoiceCount : 0,
-        }))}
-        format={(v) => money(v)}
-        color="fuchsia"
-      />
+          desktop reveals the exact value + date.
+          On lg+ they tile 2-up so the wide canvas isn't four narrow
+          charts stacked vertically; below lg they stack as before. */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2">
+        <BarChart
+          title={t("analyticsRevenuePerDay")}
+          series={series.map((b) => ({ label: b.day, value: b.revenue }))}
+          format={(v) => money(v)}
+          color="emerald"
+        />
+        <BarChart
+          title={t("analyticsVatPerDay")}
+          series={series.map((b) => ({ label: b.day, value: b.vat }))}
+          format={(v) => money(v)}
+          color="amber"
+        />
+        <BarChart
+          title={t("analyticsJobsPerDay")}
+          series={series.map((b) => ({ label: b.day, value: b.jobs }))}
+          format={(v) => String(v)}
+          color="sky"
+        />
+        <BarChart
+          title={t("analyticsAvgTicketPerDay")}
+          series={series.map((b) => ({
+            label: b.day,
+            value: b.invoiceCount > 0 ? b.invoiceSum / b.invoiceCount : 0,
+          }))}
+          format={(v) => money(v)}
+          color="fuchsia"
+        />
+      </div>
     </main>
   );
 }

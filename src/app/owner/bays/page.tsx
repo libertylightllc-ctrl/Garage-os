@@ -26,7 +26,7 @@ export default async function BaysPage({
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-5xl xl:max-w-6xl">
       <AppNav role="OWNER" active="bays"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("baysTitle")}</h1>
       <p className="text-sm text-text-mute">{t("baysIntro")}</p>
@@ -44,7 +44,12 @@ export default async function BaysPage({
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-1">
+      {/* Two-column on lg+: existing bays on the left, add-bay form on
+          the right. Below lg the form drops below the list (same source
+          order — no markup move, just a grid wrapper). Remove buttons
+          stay inline on each list row. */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+      <ul className="flex flex-col gap-1 lg:col-span-2">
         {bays.map((b) => (
           <li
             key={b.id}
@@ -59,10 +64,11 @@ export default async function BaysPage({
         ))}
       </ul>
 
-      <form action={addBayAction} className="flex gap-2 rounded-xl border border-border p-4">
+      <form action={addBayAction} className="mt-6 flex gap-2 rounded-xl border border-border p-4 lg:mt-0">
         <input name="name" placeholder={t("bayNamePh")} required className={`${field} flex-1`} />
         <Button>{t("addBay")}</Button>
       </form>
+      </div>
     </main>
   );
 }

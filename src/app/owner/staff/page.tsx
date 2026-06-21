@@ -30,7 +30,7 @@ export default async function StaffPage({
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-5xl xl:max-w-6xl">
       <AppNav role="OWNER" active="team"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("team")}</h1>
 
@@ -40,7 +40,12 @@ export default async function StaffPage({
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-1">
+      {/* Two-column on lg+: staff list on the left, add-staff form on
+          the right. Mobile keeps the existing stacked order. Remove
+          buttons stay inline per row; the OWNER badge replaces the
+          button for the garage owner's own user record. */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+      <ul className="flex flex-col gap-1 lg:col-span-2">
         {staff.map((u) => (
           <li
             key={u.id}
@@ -65,7 +70,7 @@ export default async function StaffPage({
         ))}
       </ul>
 
-      <form action={addStaffAction} className="flex flex-col gap-2 rounded-xl border border-border p-4">
+      <form action={addStaffAction} className="mt-6 flex flex-col gap-2 rounded-xl border border-border p-4 lg:mt-0">
         <h2 className="text-sm font-medium">{t("addStaff")}</h2>
         <div className="flex flex-wrap gap-2">
           <input name="name" placeholder={t("name")} required className={`${field} flex-1`} />
@@ -90,6 +95,7 @@ export default async function StaffPage({
           <Button>{t("add")}</Button>
         </div>
       </form>
+      </div>
     </main>
   );
 }

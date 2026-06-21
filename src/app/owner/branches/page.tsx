@@ -30,7 +30,7 @@ export default async function BranchesPage({
   const staffCount = new Map(counts.map((c) => [c.garageId, c._count._all]));
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-5xl xl:max-w-6xl">
       <AppNav role="OWNER" active="branches"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("branchesTitle")}</h1>
       <p className="text-sm text-text-mute">{t("branchesIntro")}</p>
@@ -41,7 +41,10 @@ export default async function BranchesPage({
         </p>
       ) : null}
 
-      <ul className="flex flex-col gap-1">
+      {/* Two-column on lg+: branches list left, add-branch form right.
+          Mobile keeps the existing single-column source order. */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+      <ul className="flex flex-col gap-1 lg:col-span-2">
         {branches.map((b) => (
           <li
             key={b.id}
@@ -62,10 +65,11 @@ export default async function BranchesPage({
         ))}
       </ul>
 
-      <form action={addBranchAction} className="flex gap-2 rounded-xl border border-border p-4">
+      <form action={addBranchAction} className="mt-6 flex gap-2 rounded-xl border border-border p-4 lg:mt-0">
         <input name="name" placeholder={t("branchName")} required className={`${field} flex-1`} />
         <Button>{t("addBranch")}</Button>
       </form>
+      </div>
     </main>
   );
 }

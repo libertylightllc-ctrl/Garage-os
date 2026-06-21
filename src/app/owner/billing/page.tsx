@@ -24,7 +24,7 @@ export default async function BillingPage() {
   const branches = await listBranches(session.user.garageId);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-4xl xl:max-w-5xl">
       <AppNav role="OWNER" active="billing"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("billing")}</h1>
 

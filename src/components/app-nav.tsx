@@ -138,12 +138,8 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                     tabs. shrink-0 keeps it from being compressed when
                     the nav fills available space. */}
                 <form action={signOutAction} className="shrink-0 border-s border-border ps-3">
-                    <button
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-                        aria-label={t("signOut")}
-                    >
-                        <span aria-hidden="true">↩</span>
-                        <span className="hidden sm:inline">{t("signOut")}</span>
+                    <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                        {t("signOut")}
                     </button>
                 </form>
             </div>

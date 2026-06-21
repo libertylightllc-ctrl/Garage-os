@@ -376,7 +376,49 @@ export default async function OwnerHome({
         {techWork.length === 0 ? (
           <p className="text-sm text-text-mute">{t("noTechActivity")}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phone fallback — the 10-column table doesn't fit on a
+              380 px viewport, so below md we reflow each row into a
+              stacked card with explicit labels for every stat. The
+              icon-only columns from the desktop table (📷 / 🎤 / 📦 /
+              ✅) get full word labels on the card so the owner doesn't
+              have to long-press a glyph to know what it means. */}
+          <ul className="flex flex-col gap-2 md:hidden">
+            {techWork.map((tw) => (
+              <li key={tw.techId} className="rounded-xl border border-border p-3 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">{tw.name}</span>
+                  <span className="tabular-nums text-xs text-text-mute">
+                    {tw.jobs} {t("colJobs")}
+                  </span>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-text-mute">
+                  <dt>⏱ {t("colAvgShort")}</dt>
+                  <dd className="text-end tabular-nums text-text">
+                    {tw.avgTimePerJobMin === null ?"—": formatMin(tw.avgTimePerJobMin)}
+                  </dd>
+                  <dt>{t("colTodayTime")}</dt>
+                  <dd className="text-end tabular-nums text-text">
+                    {tw.totalTimeTodayMin > 0 ? formatMin(tw.totalTimeTodayMin) :"—"}
+                  </dd>
+                  <dt>{t("colTodayJobs")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.jobsToday}</dd>
+                  <dt>{t("colSteps")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.steps}</dd>
+                  <dt>📷 {t("colPhotosTitle")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.photos}</dd>
+                  <dt>🎤 {t("colVoiceTitle")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.voice}</dd>
+                  <dt>📦 {t("colPartsTitle")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.parts}</dd>
+                  <dt>✅ {t("colFinishesTitle")}</dt>
+                  <dd className="text-end tabular-nums text-text">{tw.finishes}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 {/* Header row — bottom border separates head from body
@@ -434,6 +476,7 @@ export default async function OwnerHome({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
@@ -453,7 +496,46 @@ export default async function OwnerHome({
             {t("noAdvisorActivity")}
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phone fallback — same reflow pattern as the tech card
+              list above: stacked card per advisor with full-word
+              labels in place of the ✓ / ✗ icon-only columns from the
+              desktop table. Success / danger semantic colours kept on
+              the ✓ / ✗ values. */}
+          <ul className="flex flex-col gap-2 md:hidden">
+            {advisorWork.map((a) => (
+              <li key={a.advisorId} className="rounded-xl border border-border p-3 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">{a.name}</span>
+                  <span className="tabular-nums text-xs text-text-mute">
+                    {a.jobsCreated} {t("colJobs")}
+                  </span>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-text-mute">
+                  <dt>{t("colEstimatesSent")}</dt>
+                  <dd className="text-end tabular-nums text-text">{a.estimatesSent}</dd>
+                  <dt>✓ {t("colApprovedTitle")}</dt>
+                  <dd className="text-end tabular-nums font-semibold text-success-700 dark:text-success-500">
+                    {a.approvedCount}
+                  </dd>
+                  <dt>✗ {t("colRejectedTitle")}</dt>
+                  <dd className="text-end tabular-nums font-semibold text-danger-700 dark:text-danger-500">
+                    {a.rejectedCount}
+                  </dd>
+                  <dt>{t("colApprovalRate")}</dt>
+                  <dd className="text-end tabular-nums text-text">
+                    {a.approvalRate === null ?"—": `${a.approvalRate}%`}
+                  </dd>
+                  <dt>⏱ {t("colApprovalTimeShort")}</dt>
+                  <dd className="text-end tabular-nums text-text">
+                    {a.avgApprovalMin === null ?"—": formatMin(a.avgApprovalMin)}
+                  </dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
@@ -502,6 +584,7 @@ export default async function OwnerHome({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
       </div>

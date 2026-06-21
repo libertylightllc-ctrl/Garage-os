@@ -127,12 +127,25 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                             </Link>
                         );
                     })}
-                    <form action={signOutAction} className="ms-1">
-                        <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2">
-                            {t("signOut")}
-                        </button>
-                    </form>
                 </nav>
+
+                {/* Account action — Sign out lives OUTSIDE the scrolling
+                    tab strip so it's always reachable in the corner of
+                    the header, identical position on every role/screen.
+                    Uses logical properties (border-s / ps) so it sits
+                    after the nav in LTR and before it in RTL/Arabic
+                    automatically, never crowding the brand mark or
+                    tabs. shrink-0 keeps it from being compressed when
+                    the nav fills available space. */}
+                <form action={signOutAction} className="shrink-0 border-s border-border ps-3">
+                    <button
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                        aria-label={t("signOut")}
+                    >
+                        <span aria-hidden="true">↩</span>
+                        <span className="hidden sm:inline">{t("signOut")}</span>
+                    </button>
+                </form>
             </div>
         </header>
     );

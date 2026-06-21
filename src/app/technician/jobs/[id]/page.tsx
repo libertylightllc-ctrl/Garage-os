@@ -190,7 +190,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   "flex flex-col items-center justify-center gap-1 rounded-2xl border border-border p-6 text-center text-base font-medium hover:bg-surface-2 transition-colors";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="TECH" active="workshop"/>
       <div>
         <Link href="/technician" className="text-sm text-text-mute hover:underline">

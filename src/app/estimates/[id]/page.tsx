@@ -147,7 +147,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const backHref = role ==="ADVISOR"? `/advisor/jobs/${est.jobCardId}` :"/cashier";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role={role} active={role ==="ADVISOR"?"jobs":"accounts"} />
       <div>
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
@@ -170,6 +170,15 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       </div>
 
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
+
+      {/* Two-column layout at lg+ — main work content (findings, parts,
+          line items, timeline) on the left; summary, action buttons,
+          advance payments, status captions on the right rail. Mobile
+          stays single column; the grid collapses to one column below
+          the lg: breakpoint. lg:items-start so the aside doesn't get
+          stretched to match the (taller) main column's height. */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
+      <section className="flex min-w-0 flex-col gap-6 lg:col-span-2">
 
       {/* Technician findings & parts required — what the cashier prices from */}
       {finding?.submittedAt || requiredParts.length > 0 ? (
@@ -325,6 +334,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           {t("noLineItems")}
         </p>
       )}
+
+      </section>
+
+      {/* Right rail — summary, add-line, advance payments, lifecycle
+          actions. On mobile this just stacks naturally below the main
+          panels (lg:mt-0 cancels the mt-6 spacer above the lg breakpoint). */}
+      <aside className="mt-6 flex min-w-0 flex-col gap-6 lg:mt-0">
 
       <div className="ml-auto text-right text-base tabular-nums">
         <div className="text-text-mute">{t("subtotal")}: {money(Number(est.subtotal))}</div>
@@ -521,6 +537,9 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       </p>
 
       <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+
+      </aside>
+      </div>
     </main>
   );
 }

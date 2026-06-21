@@ -134,7 +134,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="ADVISOR" active="jobs"/>
       <div>
         <Link href="/advisor" className="text-sm text-text-mute hover:underline">

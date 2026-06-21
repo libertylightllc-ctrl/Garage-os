@@ -130,7 +130,7 @@ export default async function InvoiceView({
   })();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
       {/* Role-aware Back link — mirrors the /estimates/[id] pattern.
           Cashier (and owner) goes back to the Invoices tab of the
           dashboard; advisor goes back to the parent job. Tech doesn't
@@ -206,6 +206,14 @@ export default async function InvoiceView({
           )
         ) : null}
       </div>
+
+      {/* Two-column layout at lg+ — invoice document (header, bill-to,
+          line items, discount) reads as the primary canvas on the left;
+          totals + QR + lifecycle actions + timeline sit in the right
+          rail. Mobile keeps the single column. print:contents collapses
+          the wrapper so the PDF print layout is unchanged. */}
+      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start print:contents">
+      <section className="flex min-w-0 flex-col gap-6 lg:col-span-2 print:contents">
 
       <div className="flex items-start justify-between">
         <div>
@@ -538,6 +546,13 @@ export default async function InvoiceView({
         </div>
       ) : null}
 
+      </section>
+
+      {/* Right rail — totals + QR, lifecycle (Send Invoice preview gate),
+          and the audit timeline. On mobile this just stacks naturally
+          (lg:mt-0 cancels the mt-6 spacer above the lg breakpoint). */}
+      <aside className="mt-6 flex min-w-0 flex-col gap-6 lg:mt-0 print:contents">
+
       <div className="flex items-end justify-between">
         {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}
         <div className="flex flex-col items-center">
@@ -664,6 +679,9 @@ export default async function InvoiceView({
           doesn't expose internal staff actions. */}
       <div className="print:hidden">
         <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+      </div>
+
+      </aside>
       </div>
     </main>
   );

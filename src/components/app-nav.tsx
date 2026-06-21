@@ -93,7 +93,7 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                     </span>
                 </Link>
 
-                <nav className="flex items-center gap-1 overflow-x-auto">
+                <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
                     {items.map((it) => {
                         const isActive = active === it.key;
                         return (

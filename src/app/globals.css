@@ -138,3 +138,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Mobile overflow fix — body is `flex flex-col`, and every page <main>
+   uses `mx-auto max-w-*`. Without an explicit width, the flex item's
+   `min-width: auto` makes it size to its content's intrinsic min-content,
+   which on mobile ends up being the max-w-* value (e.g. 672 px for
+   max-w-2xl) — wider than the viewport, so the whole page scrolls
+   horizontally. Setting `width: 100%` here lets max-w-* cap the upper
+   bound on desktop while letting <main> shrink to the viewport on phones.
+   Single rule, every page benefits — no per-file edits. */
+body > main { width: 100%; }

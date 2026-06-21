@@ -148,3 +148,11 @@ body {
    bound on desktop while letting <main> shrink to the viewport on phones.
    Single rule, every page benefits — no per-file edits. */
 body > main { width: 100%; }
+
+/* Nav full-bleed safety — AppNav uses `marginLeft/Right: calc(50% - 50vw)`
+   to break the header out of the per-page max-w container. `50vw` includes
+   the vertical scrollbar's width, so the header ends up a few pixels wider
+   than the body's content box, causing a tiny horizontal scrollbar.
+   `overflow-x: clip` on html absorbs that few-pixel overflow without
+   touching vertical scroll or sticky positioning of children. */
+html, body { overflow-x: hidden; }

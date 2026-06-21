@@ -63,9 +63,29 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
             ]);
         }
     }
+    // Header BREAKS OUT of the per-page main container so it spans the
+    // full viewport width on every screen, not just the page max-w.
+    // `marginLeft: calc(50% - 50vw)` on each side is the classic
+    // full-bleed escape: each side gets a negative margin equal to half
+    // the gap between parent width and viewport, then w-screen
+    // explicitly claims 100vw. Works regardless of whether the page is
+    // max-w-xl or max-w-7xl — the header always reaches the viewport
+    // edges. Inner div takes over content centering with its own
+    // max-w-7xl + mx-auto + px-6 + py-3 so the brand + nav + sign out
+    // sit in a sensible content column even on a 1920px monitor. On
+    // phones below max-w-7xl the inner just fills the viewport,
+    // identical to pre-fix behaviour. Inline style (not arbitrary
+    // Tailwind class) because `calc(50% - 50vw)` contains a `%` that
+    // breaks the JSX class-string parser.
     return (
-        <header className="sticky top-0 z-40 -mx-6 mb-2 border-b border-border bg-surface/80 px-6 py-3 backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
+        <header
+            className="sticky top-0 z-40 mb-2 border-b border-border bg-surface/80 backdrop-blur"
+            style={{
+                marginLeft: "calc(50% - 50vw)",
+                marginRight: "calc(50% - 50vw)",
+            }}
+        >
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-3">
                 <Link
                     href={items[0].href}
                     className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"

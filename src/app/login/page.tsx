@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
@@ -22,9 +21,9 @@ async function loginAction(formData: FormData) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; new?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, new: isNew } = await searchParams;
+  const { error } = await searchParams;
   const t = await getT();
 
   return (
@@ -38,12 +37,6 @@ export default async function LoginPage({
         />
         <h1 className="text-2xl font-semibold tracking-tight">{t("signInTitle")}</h1>
       </div>
-
-      {isNew ? (
-        <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
-          {t("garageCreated")}
-        </p>
-      ) : null}
 
       {error ? (
         <p className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
@@ -70,21 +63,6 @@ export default async function LoginPage({
         />
         <Button type="submit">{t("signIn")}</Button>
       </form>
-
-      <div className="rounded-md border border-border p-3 text-xs text-text-mute">
-        <p className="mb-1 font-medium">{t("demoTitle")}</p>
-        <ul className="space-y-0.5">
-          <li>owner@demo.garage · advisor@demo.garage</li>
-          <li>tech@demo.garage · cashier@demo.garage</li>
-        </ul>
-      </div>
-
-      <p className="text-center text-sm text-text-mute">
-        {t("newGarageQ")}{""}
-        <Link href="/signup" className="font-medium underline-offset-2 hover:underline">
-          {t("setOneUp")}
-        </Link>
-      </p>
     </main>
   );
 }

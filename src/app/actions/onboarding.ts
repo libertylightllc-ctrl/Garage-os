@@ -7,27 +7,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { companyGarageIds } from "@/lib/branches";
 
-// PUBLIC — a new garage signs itself up (creates the Garage + its OWNER user).
-export async function signupAction(formData: FormData) {
-  const garageName = String(formData.get("garageName") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").toLowerCase().trim();
-  const password = String(formData.get("password") ?? "");
-  const trn = String(formData.get("trn") ?? "").trim() || null;
-
-  if (!garageName || !name || !email || password.length < 6) redirect("/signup?error=1");
-
-  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) redirect("/signup?error=exists");
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const garage = await prisma.garage.create({ data: { name: garageName, country: "UAE", trn } });
-  await prisma.user.create({
-    data: { garageId: garage.id, role: "OWNER", name, email, passwordHash },
-  });
-
-  redirect("/login?new=1");
-}
+// Garage creation is operator-only — see scripts/create-garage.ts and
+// the shared src/lib/create-garage.ts. There is no public signup action.
 
 async function requireOwner() {
   const session = await auth();

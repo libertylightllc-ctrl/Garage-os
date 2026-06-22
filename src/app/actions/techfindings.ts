@@ -125,8 +125,12 @@ export async function submitFindingsAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "");
   const job = await workableJob(jobId, user.garageId, user.id);
 
-  const finding = await prisma.jobFinding.findUnique({
-    where: { jobCardId: jobId },
+  // Defense-in-depth: scope the JobFinding read through its parent
+  // JobCard's garageId. jobId was already verified by workableJob() above,
+  // so this is a no-op for current flows but makes the query
+  // independently safe.
+  const finding = await prisma.jobFinding.findFirst({
+    where: { jobCardId: jobId, jobCard: { garageId: user.garageId } },
     select: { findings: true, submittedAt: true },
   });
   if (finding?.submittedAt) return; // already handed off

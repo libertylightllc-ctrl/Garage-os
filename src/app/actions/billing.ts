@@ -24,9 +24,15 @@ import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { PRICING_ROLES, SEND_ROLES } from "@/lib/permissions";
 
-async function customerForJob(jobCardId: string) {
-  const j = await prisma.jobCard.findUnique({
-    where: { id: jobCardId },
+// Defense-in-depth: even though every caller passes a jobCardId that's
+// already been garage-verified (via ownedEstimate / ownedInvoice / the
+// outer SEND_ROLES auth), this helper also scopes on garageId so a
+// future refactor can't accidentally remove the upstream check and
+// open a cross-garage leak. findFirst (not findUnique) because we no
+// longer have a single-unique key.
+async function customerForJob(jobCardId: string, garageId: string) {
+  const j = await prisma.jobCard.findFirst({
+    where: { id: jobCardId, garageId },
     include: { vehicle: { include: { customer: true } } },
   });
   return j?.vehicle.customer ?? null;
@@ -322,8 +328,10 @@ export async function setEstimateStatusAction(formData: FormData) {
     // tech keeps doing the originally approved work. For first-time
     // rejection (status=ESTIMATE), the existing 'back to ESTIMATE' loop
     // lets the cashier re-price.
-    const job = await prisma.jobCard.findUnique({
-      where: { id: est.jobCardId },
+    // Defense-in-depth: scope by user.garageId even though est.jobCardId
+    // was already proven to belong to this garage via ownedEstimate above.
+    const job = await prisma.jobCard.findFirst({
+      where: { id: est.jobCardId, garageId: user.garageId },
       select: { status: true },
     });
     const nextStatus = job?.status === "EXTRA_WORK_AWAITING_APPROVAL" ? "APPROVED" : "ESTIMATE";
@@ -342,7 +350,7 @@ export async function setEstimateStatusAction(formData: FormData) {
       },
     });
     // Send the customer the WhatsApp approval link (mock if no Meta token).
-    const customer = await customerForJob(est.jobCardId);
+    const customer = await customerForJob(est.jobCardId, user.garageId);
     if (customer) {
       await sendWhatsApp({
         garageId: user.garageId,
@@ -360,8 +368,10 @@ export async function setEstimateStatusAction(formData: FormData) {
     });
     const lastApproved = Number(prior._max.total ?? 0);
     if (isQuoteIncrease(Number(est.total), lastApproved)) {
-      const job = await prisma.jobCard.findUnique({
-        where: { id: est.jobCardId },
+      // Defense-in-depth: scope by user.garageId; est was already verified
+      // via ownedEstimate at the top of the action.
+      const job = await prisma.jobCard.findFirst({
+        where: { id: est.jobCardId, garageId: user.garageId },
         select: { status: true },
       });
       if (job && job.status !== "ON_HOLD") {
@@ -845,7 +855,7 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   });
   if (!inv) throw new Error("Invoice not found in this garage");
 
-  const customer = await customerForJob(inv.jobCardId);
+  const customer = await customerForJob(inv.jobCardId, user.garageId);
   if (!customer) throw new Error("Customer not found for this invoice");
 
   // Stamp the send + flip the job to its invoice-sent state. We don't
@@ -890,7 +900,7 @@ export async function emailInvoiceAction(formData: FormData) {
   });
   if (!inv) throw new Error("Invoice not found in this garage");
 
-  const customer = await customerForJob(inv.jobCardId);
+  const customer = await customerForJob(inv.jobCardId, user.garageId);
   if (!customer) throw new Error("Customer not found for this invoice");
   if (!customer.email) {
     throw new Error("Customer has no email on file");

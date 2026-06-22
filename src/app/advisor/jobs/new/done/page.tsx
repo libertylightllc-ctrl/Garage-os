@@ -40,9 +40,12 @@ export default async function HandoffDone({
 
   // assignedToId is a raw column (no Prisma relation) — look the tech up
   // separately so we can name them on the confirmation screen.
+  // Defense-in-depth: scope by garageId so even if assignedToId ever
+  // pointed at a user in another garage (data drift, bad migration),
+  // we'd render "unassigned" instead of leaking that user's name.
   const assignedTech = job.assignedToId
-    ? await prisma.user.findUnique({
-        where: { id: job.assignedToId },
+    ? await prisma.user.findFirst({
+        where: { id: job.assignedToId, garageId: session.user.garageId },
         select: { name: true },
       })
     : null;

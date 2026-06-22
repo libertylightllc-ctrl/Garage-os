@@ -58,8 +58,16 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   });
 
   // Maintenance reminders for this vehicle (Workflow-Spec step 16).
+  // Phase 2 multi-tenancy: also scope on garageId — Reminder has a
+  // direct garageId column, and this avoids a same-plate-different-
+  // garage leak (two garages servicing cars with the same plate would
+  // otherwise see each other's reminders for that vehicleId).
   const reminders = await prisma.reminder.findMany({
-    where: { vehicleId: job.vehicleId, status: { in: ["SCHEDULED","SENT"] } },
+    where: {
+      vehicleId: job.vehicleId,
+      garageId: session.user.garageId,
+      status: { in: ["SCHEDULED","SENT"] },
+    },
     orderBy: { dueAt:"asc"},
   });
   const canScheduleReminders = job.status ==="INVOICED"|| job.status ==="DELIVERED";

@@ -27,10 +27,15 @@ function isPausable(status: string): boolean {
 /**
  * After a request closes, resume the job if it was held only for parts and there
  * are no more open requests. Never overrides an AWAITING_APPROVAL hold.
+ *
+ * Defense-in-depth: takes garageId so the read can't reach into another
+ * garage even if a caller ever passed an unverified jobCardId. Every
+ * existing caller already verifies the partRequest before calling, so
+ * this is a no-op for current flows.
  */
-async function maybeResumeJob(jobCardId: string) {
-  const job = await prisma.jobCard.findUnique({
-    where: { id: jobCardId },
+async function maybeResumeJob(jobCardId: string, garageId: string) {
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobCardId, garageId },
     select: { id: true, status: true, holdReason: true, heldFrom: true },
   });
   if (!job) return;
@@ -175,8 +180,10 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
 
   // If ordering an in-stock-or-not request, make sure the job is paused for parts.
   if (to === "ORDERED") {
-    const job = await prisma.jobCard.findUnique({
-      where: { id: req.jobCardId },
+    // Defense-in-depth: scope by user.garageId — req was already verified
+    // via the findFirst at the top of this action.
+    const job = await prisma.jobCard.findFirst({
+      where: { id: req.jobCardId, garageId: user.garageId },
       select: { status: true },
     });
     if (job && isPausable(job.status)) {
@@ -188,7 +195,7 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
   }
 
   // Closing a request may release the job.
-  await maybeResumeJob(req.jobCardId);
+  await maybeResumeJob(req.jobCardId, user.garageId);
 
   revalidatePath("/advisor/parts");
   revalidatePath(`/advisor/jobs/${req.jobCardId}`);
@@ -272,7 +279,7 @@ export async function cancelOwnPartRequestAction(formData: FormData) {
   // If the job was paused specifically waiting for THIS part (and no
   // other open requests remain), the helper releases it. Same release
   // path the advisor cancel uses, so behaviour stays symmetric.
-  await maybeResumeJob(req.jobCardId);
+  await maybeResumeJob(req.jobCardId, user.garageId);
 
   revalidatePath(`/technician/jobs/${req.jobCardId}`);
   revalidatePath(`/advisor/jobs/${req.jobCardId}`);

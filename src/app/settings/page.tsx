@@ -156,10 +156,10 @@ export default async function SettingsPage({
           owner-only actions independently verify role. */}
       {isOwner ? (
         <>
-          <section className="rounded-xl border border-border p-4">
-            <h2 className="text-base font-semibold">{t("settingsSecGarage")}</h2>
-            <p className="mt-0.5 text-xs text-text-mute">{t("settingsSecGarageComingSoon")}</p>
-          </section>
+          {/* Garage details (name / VAT TRN / logo) is intentionally
+              not rendered yet. It'll appear here when the matching
+              actions land — until then we hide the section entirely
+              rather than show a build-status note to the owner. */}
 
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">{t("settingsSecTeam")}</h2>

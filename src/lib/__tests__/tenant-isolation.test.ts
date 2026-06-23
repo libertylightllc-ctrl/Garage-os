@@ -656,5 +656,29 @@ describe("tenant isolation — A and B cannot see each other's data", () => {
       expect(afterA?.name).toBe("Tenant Test A — renamed");
       expect(afterB?.name).toBe(beforeB?.name);
     });
+
+    it("updating User.email by A's owner id only changes A's owner — never B's", async () => {
+      // Simulates updateProfileEmailAction's update. Key is session
+      // id, not anything from the form — so B's row can't be reached.
+      const beforeB = await prisma.user.findFirst({
+        where: { id: B.ownerId },
+        select: { email: true },
+      });
+      const newEmail = `${A.ownerId}+changed@example.test`;
+      await prisma.user.update({
+        where: { id: A.ownerId },
+        data: { email: newEmail },
+      });
+      const afterA = await prisma.user.findFirst({
+        where: { id: A.ownerId },
+        select: { email: true },
+      });
+      const afterB = await prisma.user.findFirst({
+        where: { id: B.ownerId },
+        select: { email: true },
+      });
+      expect(afterA?.email).toBe(newEmail);
+      expect(afterB?.email).toBe(beforeB?.email);
+    });
   });
 });

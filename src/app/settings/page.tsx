@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
-import { updateProfileNameAction } from "@/app/actions/settings";
+import { updateProfileNameAction, updateProfileEmailAction } from "@/app/actions/settings";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { type StaffRole } from "@/lib/roles";
@@ -22,9 +22,16 @@ interface SP {
 const ERR_KEY: Record<string, MessageKey> = {
   "name-required": "settingsErrNameRequired",
   "name-too-long": "settingsErrNameTooLong",
+  "email-missing": "settingsErrEmailMissing",
+  "email-invalid": "settingsErrEmailInvalid",
+  "email-current-wrong": "settingsErrEmailCurrentWrong",
+  "email-taken": "settingsErrEmailTaken",
+  "email-no-password": "settingsErrEmailNoPassword",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
+  email: "settingsOkEmail",
+  "email-unchanged": "settingsOkEmailUnchanged",
 };
 
 export default async function SettingsPage({
@@ -75,6 +82,11 @@ export default async function SettingsPage({
         <h2 className="text-base font-semibold">{t("settingsSecProfile")}</h2>
         <p className="mt-0.5 text-xs text-text-mute">{t("settingsSecProfileHint")}</p>
 
+        {/* Two separate forms in this section:
+              1. Name — no gate, low risk
+              2. Email — current-password gated, high-impact change
+            Splitting them avoids asking for the current password when
+            the user just wants to fix a typo in their name. */}
         <form action={updateProfileNameAction} className="mt-4 flex flex-col gap-3">
           <label className="text-xs text-text-mute">
             {t("settingsProfileName")}
@@ -86,20 +98,41 @@ export default async function SettingsPage({
               className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
             />
           </label>
+          <div>
+            <Button type="submit">{t("settingsProfileSaveName")}</Button>
+          </div>
+        </form>
+
+        <hr className="my-5 border-border" />
+
+        <form action={updateProfileEmailAction} className="flex flex-col gap-3">
           <label className="text-xs text-text-mute">
             {t("settingsProfileEmail")}
             <input
+              name="newEmail"
               type="email"
               defaultValue={me.email}
-              disabled
-              className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text-mute"
+              required
+              maxLength={200}
+              autoComplete="email"
+              className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
             />
-            <span className="mt-1 block text-xs text-text-mute">
-              {t("settingsProfileEmailLockedHint")}
-            </span>
+          </label>
+          <p className="rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+            ⚠️ {t("settingsProfileEmailWarning")}
+          </p>
+          <label className="text-xs text-text-mute">
+            {t("settingsProfileEmailCurrent")}
+            <input
+              name="currentPassword"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+            />
           </label>
           <div>
-            <Button type="submit">{t("settingsProfileSave")}</Button>
+            <Button type="submit">{t("settingsProfileSaveEmail")}</Button>
           </div>
         </form>
       </section>

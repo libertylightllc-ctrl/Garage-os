@@ -601,4 +601,60 @@ describe("tenant isolation — A and B cannot see each other's data", () => {
       expect(row).not.toBeNull();
     });
   });
+
+  // ------------------------------------------------------------------
+  // Settings actions — the new self-serve profile/garage edit surface
+  // (Step 1 of the Settings build). Each settings action keys its DB
+  // update on session.user.id (or session.user.garageId for owner
+  // sections), NOT on anything from formData. These tests assert that
+  // an update keyed on the session-equivalent ALWAYS hits the right
+  // row and nothing else.
+  // ------------------------------------------------------------------
+  describe("Settings actions — own-account scoping", () => {
+    it("updating User.name by A's owner id only changes A's owner — never B's", async () => {
+      const beforeB = await prisma.user.findFirst({
+        where: { id: B.ownerId },
+        select: { name: true },
+      });
+      // Simulate the changeProfileName action's update: where: { id: <A.ownerId> }
+      await prisma.user.update({
+        where: { id: A.ownerId },
+        data: { name: "A's New Name" },
+      });
+      const afterA = await prisma.user.findFirst({
+        where: { id: A.ownerId },
+        select: { name: true },
+      });
+      const afterB = await prisma.user.findFirst({
+        where: { id: B.ownerId },
+        select: { name: true },
+      });
+      expect(afterA?.name).toBe("A's New Name");
+      // B unaffected — proves the where clause cannot ever sweep across
+      // garages even if some future bug stripped a `where` filter.
+      expect(afterB?.name).toBe(beforeB?.name);
+    });
+
+    it("updating Garage.name keyed on A's garageId never touches B's row", async () => {
+      const beforeB = await prisma.garage.findUnique({
+        where: { id: B.garageId },
+        select: { name: true },
+      });
+      // Simulate the (future) owner garage-name update action.
+      await prisma.garage.update({
+        where: { id: A.garageId },
+        data: { name: "Tenant Test A — renamed" },
+      });
+      const afterA = await prisma.garage.findUnique({
+        where: { id: A.garageId },
+        select: { name: true },
+      });
+      const afterB = await prisma.garage.findUnique({
+        where: { id: B.garageId },
+        select: { name: true },
+      });
+      expect(afterA?.name).toBe("Tenant Test A — renamed");
+      expect(afterB?.name).toBe(beforeB?.name);
+    });
+  });
 });

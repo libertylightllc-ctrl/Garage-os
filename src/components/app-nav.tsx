@@ -157,11 +157,19 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                     automatically, never crowding the brand mark or
                     tabs. shrink-0 keeps it from being compressed when
                     the nav fills available space. */}
-                <form action={signOutAction} className="shrink-0 border-s border-border ps-3">
-                    <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-                        {t("signOut")}
-                    </button>
-                </form>
+                <div className="shrink-0 flex items-center gap-1 border-s border-border ps-3">
+                    <Link
+                        href="/account/password"
+                        className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                    >
+                        {t("changePassword")}
+                    </Link>
+                    <form action={signOutAction}>
+                        <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                            {t("signOut")}
+                        </button>
+                    </form>
+                </div>
             </div>
         </header>
     );

@@ -8,7 +8,7 @@ The operational details a basic "happy path" build misses. Organized by priority
 
 ## THE STANDARD FLOW (16 steps — the real garage process)
 
-The clean process as described by the operator. The trunk; branch points connect to the Tier items below. Note: the **cashier/accounts sets prices**, not the advisor, and there are **two approval points**.
+The clean process as described by the operator. The trunk; branch points connect to the Tier items below. Note: the **advisor sets prices** (REVERSED 2026-06-23 after observing real pilot shops — previous rule was "cashier sets prices"; see AGENTS.md Key Decision #5), the **cashier owns invoicing + payment**, and there are **two approval points**.
 
 | # | Step | Role |
 |---|---|---|
@@ -16,12 +16,12 @@ The clean process as described by the operator. The trunk; branch points connect
 | 2 | Advisor inspects; gathers details. New car → Moulkia OCR (owner, VIN, plate, make, model, year). Repeat car → plate lookup. Enters mobile, mileage, complaint | Advisor |
 | 3 | Advisor assigns job to technician (or shared pool) | Advisor |
 | 4 | Technician does deep diagnosis, identifies actual fault | Technician |
-| 5 | Technician reports findings (parts + labor) to cashier/accounts | Technician |
-| 6 | **Cashier/accounts sets the price** → estimate prepared | Cashier |
-| 7 | Estimate sent to customer — **Approval #1**, no work before approval | Customer |
+| 5 | Technician reports findings (parts + labor) to advisor | Technician |
+| 6 | **Advisor sets the price** → estimate prepared | Advisor |
+| 7 | Estimate sent to customer over WhatsApp by the advisor — **Approval #1**, no work before approval | Customer |
 | 8 | Job card opens, technician starts work | Technician |
 | 9 | Mid-work: technician finds **extra problems** not in estimate | Technician |
-| 10 | Technician reports extra work to cashier → **cashier re-estimates** | Cashier |
+| 10 | Technician reports extra work to advisor → **advisor re-estimates** | Advisor |
 | 11 | New estimate to customer — **Approval #2**, **work pauses until approved** | Customer |
 | 12 | Technician finishes all approved work, marks complete | Technician |
 | 13 | Job card → cashier. Cashier finalizes invoice (full edit power) + **auto-VAT** | Cashier |

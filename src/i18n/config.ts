@@ -277,7 +277,7 @@ const en = {
   // Tech 'Send for Re-estimate' button + confirmation screen
   sendForReestimate: "Send for Re-estimate →",
   sentForReestimateTitle: "Sent for re-estimate — extra work flagged",
-  sentForReestimateSubtitle: "The cashier will price the extra work and send the customer a new estimate to approve.",
+  sentForReestimateSubtitle: "The advisor will price the extra work and send the customer a new estimate to approve.",
   // Extras panel on the tech job detail page (mid-job extra parts)
   extrasPanelTitle: "Extras found mid-job (awaiting approval)",
   extrasPanelEmpty: "No extras added yet. Add any new parts or issues found during the approved work.",
@@ -637,8 +637,12 @@ const en = {
   tlVoiceLogged: "Voice note logged",
   tlPartRequested: "Part requested",
   tlFindingsSubmitted: "Findings submitted",
-  tlSentForEstimate: "Sent to cashier for estimate",
-  tlSentForReestimate: "Sent for re-estimate (extras)",
+  // KEY DECISION #5 (2026-06-23): estimate pricing moved from cashier
+  // to advisor. Re-labelled so HISTORICAL timeline rows on existing
+  // job cards stop saying "cashier" — the JobAction enum value didn't
+  // change, only the human-readable label.
+  tlSentForEstimate: "Sent to advisor for estimate",
+  tlSentForReestimate: "Sent to advisor for re-estimate (extras)",
   tlEstimateCreated: "Estimate created",
   tlEstimateSent: "Estimate sent to customer",
   tlEstimateApproved: "Estimate approved by customer",
@@ -704,7 +708,7 @@ const en = {
   cashierFilterActive: "Filtered",
   cashierClearFilter: "Clear filter ×",
   cashierWaitingDiagnosisTitle: "Waiting for technician diagnosis",
-  cashierWaitingDiagnosisCaption: "Pricing will open once the technician sends this for estimate.",
+  cashierWaitingDiagnosisCaption: "The advisor will price this once the technician finishes diagnosis.",
   cashierWorkInProgressTitle: "Work in progress (customer approved)",
   cashierWorkInProgressCaption: "Work in progress — waiting for technician to complete.",
   cashierToSendInvoiceTitle: "Invoice ready — send to customer",
@@ -1223,7 +1227,7 @@ const ar: typeof en = {
   errCannotReestimate: "هذه البطاقة ليست في مرحلة العمل — لا يمكن إرسالها لإعادة التقدير.",
   sendForReestimate: "إرسال لإعادة التقدير ←",
   sentForReestimateTitle: "تم الإرسال لإعادة التقدير — أعمال إضافية",
-  sentForReestimateSubtitle: "سيقوم أمين الصندوق بتسعير الأعمال الإضافية وإرسال تقدير جديد للعميل للموافقة.",
+  sentForReestimateSubtitle: "سيقوم مستشار الخدمة بتسعير الأعمال الإضافية وإرسال تقدير جديد للعميل للموافقة.",
   extrasPanelTitle: "أعمال إضافية مكتشفة (بانتظار الموافقة)",
   extrasPanelEmpty: "لا توجد إضافات بعد. أضف أي قطع أو مشكلات إضافية وجدتها أثناء العمل المعتمد.",
   extrasDescriptionPlaceholder: "قطعة أو مشكلة إضافية",
@@ -1573,8 +1577,8 @@ const ar: typeof en = {
   tlVoiceLogged: "تم تسجيل ملاحظة صوتية",
   tlPartRequested: "تم طلب قطعة",
   tlFindingsSubmitted: "تم تسليم الفحص",
-  tlSentForEstimate: "تم إرسال إلى المحاسب للتسعير",
-  tlSentForReestimate: "تم إرسال إلى المحاسب لإعادة التسعير",
+  tlSentForEstimate: "تم إرسال إلى مستشار الخدمة للتسعير",
+  tlSentForReestimate: "تم إرسال إلى مستشار الخدمة لإعادة التسعير",
   tlEstimateCreated: "تم إنشاء التقدير",
   tlEstimateSent: "تم إرسال التقدير إلى العميل",
   tlEstimateApproved: "وافق العميل على التقدير",
@@ -1638,7 +1642,7 @@ const ar: typeof en = {
   cashierFilterActive: "مفلتر",
   cashierClearFilter: "إزالة الفلتر ×",
   cashierWaitingDiagnosisTitle: "بانتظار فحص الفني",
-  cashierWaitingDiagnosisCaption: "سيُتاح التسعير بعد إرسال الفني لإعادة التقدير.",
+  cashierWaitingDiagnosisCaption: "سيقوم مستشار الخدمة بالتسعير بعد انتهاء الفني من الفحص.",
   cashierWorkInProgressTitle: "العمل جارٍ (وافق العميل على التقدير)",
   cashierWorkInProgressCaption: "العمل جارٍ — بانتظار اكتمال عمل الفني.",
   cashierToSendInvoiceTitle: "الفاتورة جاهزة — أرسلها للعميل",

@@ -73,8 +73,9 @@ Specs in `/docs` (read before deciding):
    edit owner name + mobile. Capture consent at onboarding; store only extracted fields;
    legal review before launch.
 8. **Four roles, per branch:** Owner (all branches, billing, reports), Advisor (creates
-   jobs/assigns, sends estimates — NOT prices), Technician (claim + workshop mode, no
-   pricing), Cashier (sets price + invoice + VAT + payment record). Billing is per branch;
+   jobs/assigns, prices estimates, sends to customer — owns customer relationship),
+   Technician (claim + workshop mode, no pricing), Cashier (invoice + VAT + payment
+   record only — does NOT price estimates anymore; see Key Decision #5). Billing is per branch;
    each branch has own staff/WhatsApp/queue; owner sees branches aggregated.
 
 ## Rules

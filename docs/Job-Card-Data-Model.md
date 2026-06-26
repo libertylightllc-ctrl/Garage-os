@@ -84,7 +84,7 @@ System-generated task list for the technician: verify complaint · visual inspec
 | VAT/Tax (5%) | money (AUTO) | System | Estimate | yes |
 | Total Estimate | money (AUTO) | System | Estimate | yes |
 
-> Cashier sets prices, NOT advisor/technician. VAT auto-calculated, shown as separate line.
+> **Advisor sets prices** (REVERSED 2026-06-23 — previously the cashier did; see AGENTS.md Key Decision #5). Technician never prices. **Cashier owns invoice + payment** — VAT auto-calculated, shown as separate line.
 
 ## Customer Approval #1
 | Field | Type | Role | Stage | Required |

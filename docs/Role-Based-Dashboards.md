@@ -101,12 +101,12 @@ Total:        AED 630
 1. Advisor creates job card (Moulkia OCR or plate lookup).
 2. Advisor assigns to technician / shared pool.
 3. Technician claims, diagnoses, reports findings.
-4. Cashier sets price → estimate.
+4. **Advisor** sets price → estimate, sends to customer. (REVERSED 2026-06-23 — see AGENTS.md Key Decision #5; previously the cashier did.)
 5. Customer approves (Approval #1) — no work before approval.
 6. Technician works.
-7. If extra problems found → cashier re-estimates → Customer approves (Approval #2) — work pauses until approved.
+7. If extra problems found → **advisor** re-estimates → Customer approves (Approval #2) — work pauses until approved.
 8. Technician completes → job card goes to cashier.
-9. Cashier finalizes invoice (full edit power) + auto-VAT → sends to customer.
+9. **Cashier** finalizes invoice (full edit power) + auto-VAT → sends to customer. Cashier owns invoicing + payment but does NOT price estimates anymore.
 10. Customer notified "ready".
 11. Customer pays (cash/card recorded) → vehicle delivered.
 12. Automated maintenance reminders scheduled (see Workflow-Spec).

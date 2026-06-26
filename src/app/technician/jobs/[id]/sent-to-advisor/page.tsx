@@ -10,10 +10,11 @@ export const dynamic ="force-dynamic";
 /**
   * Confirmation screen the tech lands on after tapping 'Send for Estimate'.
   * Mirrors the advisor handoff page — explicit visual confirmation that
-  * the job has moved onto the cashier so the tech can pick up the next
-  * car without wondering whether the previous one made it through.
+  * the job has moved onto the advisor (rev. 2026-06-23: estimate
+  * pricing moved from cashier to advisor) so the tech can pick up the
+  * next car without wondering whether the previous one made it through.
   */
-export default async function SentToCashier({
+export default async function SentToAdvisor({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -35,12 +36,12 @@ export default async function SentToCashier({
       <AppNav role="TECH" active="workshop"/>
 
       <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
-        <div className="text-4xl">💸</div>
+        <div className="text-4xl">🧾</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-          {t("sentToCashierTitle")}
+          {t("sentToAdvisorTitle")}
         </h1>
         <p className="mt-2 text-base text-text">
-          {t("sentToCashierSubtitle")}
+          {t("sentToAdvisorSubtitle")}
         </p>
       </section>
 

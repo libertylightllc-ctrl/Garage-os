@@ -352,9 +352,10 @@ export async function markCompleteAction(formData: FormData) {
 
 /**
  * Tech taps 'Send for Estimate' on a job they're working on. Moves the
- * job to ESTIMATE status so it appears in the cashier's pricing queue,
+ * job to ESTIMATE status so it appears in the advisor's pricing queue
+ * (KEY DECISION #5, rev. 2026-06-23 — advisor prices estimates now),
  * and shows a confirmation screen so the tech knows the handoff happened.
- * The tech keeps the claim — it stays 'their' job, just now the cashier
+ * The tech keeps the claim — it stays 'their' job, just now the advisor
  * has to set the price before any further work can happen.
  */
 export async function sendForEstimateAction(formData: FormData) {
@@ -365,8 +366,8 @@ export async function sendForEstimateAction(formData: FormData) {
     select: { id: true, status: true, claimedById: true },
   });
   if (!job) throw new Error("Job not found in this garage");
-  // Only the tech who claimed it (or a helper) can send to cashier — we
-  // check claimedById here; helpers are handled in the UI gate.
+  // Only the tech who claimed it (or a helper) can send for estimate —
+  // we check claimedById here; helpers are handled in the UI gate.
   if (job.claimedById !== user.id) {
     // Helper / unclaimed → reject by redirect, keep server-side simple.
     redirect(`/technician/jobs/${jobId}?error=notyours`);
@@ -394,7 +395,7 @@ export async function sendForEstimateAction(formData: FormData) {
   revalidatePath("/cashier");
   revalidatePath("/advisor");
   revalidatePath(`/advisor/jobs/${jobId}`);
-  redirect(`/technician/jobs/${jobId}/sent-to-cashier`);
+  redirect(`/technician/jobs/${jobId}/sent-to-advisor`);
 }
 
 // Tier 2 #4 — a second technician joins a claimed car as a helper.

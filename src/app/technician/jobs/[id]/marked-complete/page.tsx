@@ -10,7 +10,7 @@ export const dynamic ="force-dynamic";
 
 /**
   * Confirmation screen after the tech taps 'Mark complete'. Mirrors the
-  * sent-to-cashier handoff visual so the staff workflow always lands on
+  * sent-to-advisor handoff visual so the staff workflow always lands on
   * an explicit"this stage is done"page before moving on.
   */
 export default async function MarkedComplete({

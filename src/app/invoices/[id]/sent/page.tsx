@@ -9,7 +9,7 @@ export const dynamic ="force-dynamic";
 
 /**
   * Stage 8 confirmation screen — shown after the cashier taps 'Send
-  * invoice to customer'. Mirrors the existing handoff / sent-to-cashier
+  * invoice to customer'. Mirrors the existing handoff / sent-to-advisor
   * pages so every workflow handoff has the same"explicit you-did-this"
   * surface.
   */

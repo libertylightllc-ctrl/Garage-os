@@ -239,14 +239,15 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           through to the existing sections below, which already explain
           themselves contextually. */}
       {job.status ==="ESTIMATE"? (
-        // Tech sent for estimate; cashier owns the next step.
+        // Tech sent for estimate; advisor owns the next step
+        // (KEY DECISION #5, rev. 2026-06-23).
         <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
-          <div className="text-4xl">💸</div>
+          <div className="text-4xl">🧾</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
-            {t("sentToCashierTitle")}
+            {t("sentToAdvisorTitle")}
           </h2>
           <p className="mt-1 text-sm text-text">
-            {t("sentToCashierSubtitle")}
+            {t("sentToAdvisorSubtitle")}
           </p>
         </section>
       ) : job.status ==="APPROVED"|| job.status ==="REPAIR"? (
@@ -479,14 +480,15 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
 
         <p className="text-xs text-text-mute">📷 {t("photographDamaged")}</p>
 
-        {/* 'Send to Cashier for Estimate' button — Per spec, this appears
-            once the tech has at least one Required part listed. The button
-            fires sendForEstimateAction (NOT submitFindingsAction): no
-            findings text is required, status flips ARRIVED/INSPECTION →
-            ESTIMATE, sentForEstimateAt is stamped, and the tech is
-            redirected to the /sent-to-cashier confirmation page so they
-            see"Job sent to cashier for estimate"before going back to
-            the workshop list. Hidden once the job has already left the
+        {/* 'Send for Estimate' button — Per spec, this appears once the
+            tech has at least one Required part listed. The button fires
+            sendForEstimateAction (NOT submitFindingsAction): no findings
+            text is required, status flips ARRIVED/INSPECTION → ESTIMATE,
+            sentForEstimateAt is stamped, and the tech is redirected to
+            the /sent-to-advisor confirmation page so they see "Job sent
+            to advisor for estimate" before going back to the workshop
+            list. (KEY DECISION #5, rev. 2026-06-23 — advisor now prices
+            estimates.) Hidden once the job has already left the
             diagnosis stage, and for helpers (only the claimer can send). */}
         {requiredParts.length > 0 &&
         !amHelper &&

@@ -681,4 +681,44 @@ describe("tenant isolation — A and B cannot see each other's data", () => {
       expect(afterB?.email).toBe(beforeB?.email);
     });
   });
+
+  // ------------------------------------------------------------------
+  // Advisor estimates list — the new /advisor/estimates surface (Phase
+  // 4 of the workflow flip). The page uses the same jobCard.findMany
+  // pattern as the cashier dashboard, scoped on session.user.garageId
+  // and pulling the estimates relation inline. These tests assert the
+  // query never sweeps cross-garage rows, in either direction, even
+  // when both garages have estimates with the same shape.
+  // ------------------------------------------------------------------
+  describe("Advisor estimates list — garage scoping", () => {
+    it("jobCard.findMany scoped on A's garageId returns only A's job (+ estimates)", async () => {
+      const a = await prisma.jobCard.findMany({
+        where: { garageId: A.garageId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+        include: { estimates: { select: { id: true } } },
+      });
+      // A seed has exactly one jobCard with one estimate.
+      expect(a).toHaveLength(1);
+      expect(a[0].id).toBe(A.jobCardId);
+      expect(a[0].estimates[0]?.id).toBe(A.estimateId);
+      // B's job is NOT in the result set.
+      expect(a.some((j) => j.id === B.jobCardId)).toBe(false);
+      expect(
+        a.some((j) => j.estimates.some((e) => e.id === B.estimateId)),
+      ).toBe(false);
+    });
+
+    it("jobCard.findMany scoped on B's garageId returns only B's job (+ estimates)", async () => {
+      const b = await prisma.jobCard.findMany({
+        where: { garageId: B.garageId, status: { notIn: ["DELIVERED", "CANCELLED"] } },
+        include: { estimates: { select: { id: true } } },
+      });
+      expect(b).toHaveLength(1);
+      expect(b[0].id).toBe(B.jobCardId);
+      expect(b[0].estimates[0]?.id).toBe(B.estimateId);
+      expect(b.some((j) => j.id === A.jobCardId)).toBe(false);
+      expect(
+        b.some((j) => j.estimates.some((e) => e.id === A.estimateId)),
+      ).toBe(false);
+    });
+  });
 });

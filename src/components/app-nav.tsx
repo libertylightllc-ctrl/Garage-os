@@ -25,6 +25,7 @@ const NAV: Record<StaffRole, NavItem[]> = {
     ],
     ADVISOR: [
         { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+        { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
         { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
         { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
         { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },

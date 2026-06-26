@@ -63,9 +63,16 @@ function PartRow({
 // Shared screen: the Cashier sets prices here; the Advisor can view + send it.
 export default async function EstimateEditor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Both advisor + cashier can land on this page after KEY DECISION #5
+  // (rev. 2026-06-23): the ADVISOR creates + prices + sends the estimate,
+  // the CASHIER opens it to generate the invoice / record advance payment.
   const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER"]);
   const role = session.user.role as StaffRole;
-  const canPrice = role ==="CASHIER"|| role ==="OWNER"; // edit lines / invoice
+  // Split per KEY DECISION #5 (rev. 2026-06-23):
+  //   - canEditEstimate: edit line items + send to customer  → advisor + owner
+  //   - canInvoice:      generate invoice + advance payment  → cashier + owner
+  const canEditEstimate = role === "ADVISOR" || role === "OWNER";
+  const canInvoice = role === "CASHIER" || role === "OWNER";
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -142,8 +149,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   });
   const timelineEvents = await loadJobTimeline(est.jobCardId, session.user.garageId);
 
-  const editable = canPrice && est.status ==="DRAFT";
-  const canDecline = canPrice && !est.invoice; // skip lines until the invoice is cut
+  const editable = canEditEstimate && est.status ==="DRAFT";
+  const canDecline = canEditEstimate && !est.invoice; // skip lines until the invoice is cut
   const backHref = role ==="ADVISOR"? `/advisor/jobs/${est.jobCardId}` :"/cashier";
 
   return (
@@ -158,8 +165,8 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{""}
           <span className="font-medium">{est.status}</span>
         </p>
-        {!canPrice ? (
-          <p className="text-sm text-text-mute">{t("pricingByCashier")}</p>
+        {!canEditEstimate ? (
+          <p className="text-sm text-text-mute">{t("pricingByAdvisor")}</p>
         ) : null}
         {est.approvedAt ? (
           <p className="text-sm text-success-700 dark:text-success-500">
@@ -378,7 +385,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           like an overpayment) and the audit list of advances. The
           form is hidden once the balance reaches 0 — no further
           advances can be taken once the approved total is covered. */}
-      {canPrice && est.status ==="APPROVED"&& !est.invoice ? (
+      {canInvoice && est.status ==="APPROVED"&& !est.invoice ? (
         (() => {
           const approvedTotal = est.jobCard.estimates.reduce(
             (s, e) => s + Number(e.total),
@@ -488,7 +495,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             send action itself now only fires from
             /estimates/[id]/preview, so a typo noticed mid-edit can't
             slip into a one-tap send. */}
-        {canPrice && est.status ==="DRAFT"&& est.lines.length > 0 ? (
+        {canEditEstimate && est.status ==="DRAFT"&& est.lines.length > 0 ? (
           <Link
             href={`/estimates/${est.id}/preview`}
             className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -509,7 +516,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             tech taps Mark Complete the job flips to TECH_COMPLETE and
             the button reappears here AND in the cashier dashboard's
             'Awaiting final invoice' bucket. */}
-        {canPrice && est.status ==="APPROVED"&& !est.invoice && jobStatus ==="TECH_COMPLETE"? (
+        {canInvoice && est.status ==="APPROVED"&& !est.invoice && jobStatus ==="TECH_COMPLETE"? (
           <form action={generateInvoiceAction}>
             <input type="hidden" name="estimateId" value={est.id} />
             <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">

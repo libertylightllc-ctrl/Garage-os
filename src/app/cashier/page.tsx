@@ -10,7 +10,6 @@ import {
   ACCOUNTS,
 } from "@/lib/billing";
 import {
-  createEstimateAction,
   sendInvoiceToCustomerAction,
   recordPaymentAction,
 } from "@/app/actions/billing";
@@ -109,7 +108,6 @@ const VALID_TABS = new Set<string>([
 "estimates",
 "invoices",
 "payments",
-"customers",
 "reports",
 ]);
 
@@ -167,7 +165,7 @@ export default async function CashierHome({
   const { tab: rawTab, filter: rawFilter } = await searchParams;
   const currentTab = (
     rawTab && VALID_TABS.has(rawTab) ? rawTab :"estimates"
-  ) as"estimates"|"invoices"|"payments"|"customers"|"reports";
+  ) as"estimates"|"invoices"|"payments"|"reports";
   // Estimate-section filter — narrows the Estimates tab to a single
   // section so a counter tap actually feels like a drill-down. Only
   // honoured when currentTab === 'estimates'; on other tabs the value
@@ -425,11 +423,14 @@ export default async function CashierHome({
     ),
   ).length;
 
+  // Phase 5 (workflow-flip rev. 2026-06-23) — Pending Estimates /
+  // Pending Approval / Rejected counters were removed. Those are now
+  // advisor-owned states (see [[/advisor/estimates]] for the same
+  // buckets); leaving them on the cashier header would have advertised
+  // dead work the cashier can't act on. Approved + every invoice
+  // counter stay — those are still cashier-actionable signals.
   const counters = {
-    pendingEstimates: pendingEstimateJobs.length,
-    pendingApproval: awaitingApprovalJobs.length,
     approvedEstimates: approvedEstimateJobs.length,
-    rejectedEstimates: rejectedEstimateJobs.length,
     // 'Ready for Invoice' is the tech-marked-complete bucket — jobs
     // waiting for the cashier to generate the final invoice. Same
     // value as toInvoice.length, surfaced as a counter so the
@@ -446,7 +447,6 @@ export default async function CashierHome({
     estimates: t("cashierTabEstimates"),
     invoices: t("cashierTabInvoices"),
     payments: t("cashierTabPayments"),
-    customers: t("cashierTabCustomers"),
     reports: t("cashierTabReports"),
   };
 
@@ -471,32 +471,11 @@ export default async function CashierHome({
           now they group visually by meaning, not by author. */}
       <div className="flex flex-wrap items-center gap-2">
         <BadgeLink
-          tone="warning"
-          href="/cashier?tab=estimates&filter=pending_estimates"
-        >
-          {t("counterPendingEstimates")}{""}
-          <span className="tabular-nums font-semibold">{counters.pendingEstimates}</span>
-        </BadgeLink>
-        <BadgeLink
-          tone="warning"
-          href="/cashier?tab=estimates&filter=pending_approval"
-        >
-          {t("counterPendingApproval")}{""}
-          <span className="tabular-nums font-semibold">{counters.pendingApproval}</span>
-        </BadgeLink>
-        <BadgeLink
           tone="success"
           href="/cashier?tab=estimates&filter=approved"
         >
           {t("counterApprovedEstimates")}{""}
           <span className="tabular-nums font-semibold">{counters.approvedEstimates}</span>
-        </BadgeLink>
-        <BadgeLink
-          tone="danger"
-          href="/cashier?tab=estimates&filter=rejected"
-        >
-          {t("counterRejectedEstimates")}{""}
-          <span className="tabular-nums font-semibold">{counters.rejectedEstimates}</span>
         </BadgeLink>
         {/* Ready for Invoice — tech-marked-complete jobs awaiting the
             cashier. Info tone because it's an 'in progress / about to
@@ -559,16 +538,16 @@ export default async function CashierHome({
           <span>
             {t("cashierFilterActive")}:{""}
             <span className="font-semibold">
+              {/* Only 'approved' has a section to filter to on the
+                  cashier side after Phase 5 (advisor owns the other
+                  estimate states now). Other filter values are silently
+                  treated as 'no filter' upstream — `showSection` returns
+                  false for them, so this banner just shows a generic
+                  label rather than naming an absent section. */}
               {t(
-                (
-                  {
-                    pending_estimates:"jobsToPrice",
-                    pending_approval:"cashierAwaitingApprovalTitle",
-                    approved:"cashierApprovedEstimatesTitle",
-                    rejected:"cashierRejectedEstimatesTitle",
-                    revised:"cashierRevisedEstimatesTitle",
-                  } as const
-                )[estimateFilter],
+                estimateFilter === "approved"
+                  ? "cashierApprovedEstimatesTitle"
+                  : "cashierComingUpTitle",
               )}
             </span>
           </span>
@@ -581,69 +560,11 @@ export default async function CashierHome({
         </div>
       ) : null}
 
-      {/* Revised estimates — tech found extra work mid-job. Bubbles to the
-          top because the existing approved work is paused until the customer
-          says yes (or no) to the extra. */}
-      {currentTab ==="estimates"&& showSection("revised") && revisedEstimateJobs.length > 0 ? (
-        <div
-          id="revised-estimates"
-          data-filter-section
-          className="scroll-mt-20 target:rounded-lg target:ring-2 target:ring-rose-400 target:ring-offset-2"
-        >
-          <h2 className="mb-2 text-sm font-medium">
-            {t("cashierRevisedEstimatesTitle")} ({revisedEstimateJobs.length})
-          </h2>
-          <ul className="flex flex-col gap-1">
-            {revisedEstimateJobs.map((j) => {
-              // Latest estimate may be the originally approved one; the cashier
-              // needs to add a NEW estimate for the extra work. We deep-link
-              // into the existing-estimate page so they pick up the context.
-              const lastEst = j.estimates[0];
-              const href = lastEst?.id ? `/estimates/${lastEst.id}` :"/cashier";
-              return (
-                <li
-                  key={j.id}
-                  data-filter-row
-                  data-search={jobSearchTokens(j)}
-                  data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-xl border border-danger-500/40 bg-danger-50 p-4 text-sm dark:border-danger-500/30 dark:bg-danger-500/10"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">
-                        {j.vehicle.make} {j.vehicle.model}
-                      </span>
-                      <span className="ms-2 text-text-mute">
-                        {j.vehicle.plate} · {j.vehicle.customer.name}
-                      </span>
-                    </span>
-                    <FriendlyStatusBadge
-                      status="EXTRA_WORK_AWAITING_APPROVAL"
-                      t={t}
-                      size="sm"
-                    />
-                  </div>
-                  <JobTimings
-                    claimedAt={j.claimedAt}
-                    sentForEstimateAt={j.sentForEstimateAt}
-                    estimateSentAt={lastEst?.sentAt ?? null}
-                    now={now}
-                    t={t}
-                  />
-                  <div className="flex justify-end">
-                    <Link
-                      href={href}
-                      className={BTN_PRIMARY_MD}
-                    >
-                      {t("cashierPriceExtraWork")}
-                    </Link>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
+      {/* Phase 5: 'Revised estimates' section was here. The re-price
+          action belongs to the advisor under the post-2026-06-23
+          workflow flip — the cashier sees the same jobs in the
+          read-only 'Coming up' block further down. (Block deleted —
+          do not reintroduce.) */}
 
       {/* ─── INVOICES TAB ────────────────────────────────────────── */}
       {/* Invoice prepared but not yet sent — one-tap 'Send Invoice to
@@ -780,169 +701,16 @@ export default async function CashierHome({
         </div>
       ) : null}
 
-      {/* (1) Jobs to price — fresh handoff from tech, OR a DRAFT the
-          cashier is still assembling. REJECTED rows are NOT here — they
-          moved to their own 'Rejected estimates' section below so the
-          Rejected counter has a 1:1 landing place. */}
-      {currentTab ==="estimates"&& showSection("pending_estimates") ? (
-      <div
-        id="pending-estimates"
-        data-filter-section
-        className="scroll-mt-20 target:rounded-lg target:ring-2 target:ring-amber-400 target:ring-offset-2"
-      >
-        <h2 className="mb-2 text-sm font-medium">
-          {t("jobsToPrice")} ({pendingEstimateJobs.length})
-        </h2>
-        {pendingEstimateJobs.length === 0 ? (
-          <p className="text-sm text-text-mute">{t("noJobsToPrice")}</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {pendingEstimateJobs.map((j) => {
-              // DRAFT → 'Continue pricing' (deep-link to the in-progress
-              // estimate). null (no estimate yet) → 'Set price' button
-              // which fires createEstimateAction.
-              const latest = j.estimates[0];
-              const fs = friendlyStatus({
-                status: j.status as JobStatus,
-                claimedById: null,
-                latestEstimateStatus: (latest?.status ?? null) as
-                  |"DRAFT"
-                  |"SENT"
-                  |"APPROVED"
-                  |"REJECTED"
-                  | null,
-              });
-              return (
-                <li
-                  key={j.id}
-                  data-filter-row
-                  data-search={jobSearchTokens(j)}
-                  data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">
-                        {j.vehicle.make} {j.vehicle.model}
-                      </span>
-                      <span className="ms-2 text-text-mute">
-                        {j.vehicle.plate} · {j.vehicle.customer.name}
-                      </span>
-                    </span>
-                    <FriendlyStatusBadge status={fs} t={t} size="sm"/>
-                  </div>
-                  <JobTimings
-                    claimedAt={j.claimedAt}
-                    sentForEstimateAt={j.sentForEstimateAt}
-                    estimateSentAt={latest?.sentAt ?? null}
-                    now={now}
-                    t={t}
-                  />
-                  <div className="flex justify-end">
-                    {latest && latest.status ==="DRAFT"? (
-                      <ButtonLink
-                        href={`/estimates/${latest.id}`}
-                        size="sm"
-                      >
-                        {t("continuePricing")}
-                      </ButtonLink>
-                    ) : (
-                      <form action={createEstimateAction}>
-                        <input type="hidden" name="jobId" value={j.id} />
-                        <button className={BTN_PRIMARY_MD}>
-                          {t("setPrice")}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      ) : null}
+      {/* Phase 5: 'Jobs to price' section was here. Pricing belongs to
+          the advisor now — these jobs surface in the 'Coming up'
+          read-only block further down so the cashier still sees what's
+          queued. (Block deleted — do not reintroduce.) */}
 
-      {/* (2) Awaiting customer approval — estimate has been SENT to the
-          customer via WhatsApp; waiting for a reply. Cashier actions are
-          'View estimate' (jump into the editor) and 'Resend' (which links
-          to the preview where the existing send action lives — preserves
-          the cashier-reviews-before-send guard from earlier slices). */}
-      {currentTab ==="estimates"&& showSection("pending_approval") ? (
-      <div
-        id="awaiting-approval"
-        data-filter-section
-        className="scroll-mt-20 target:rounded-lg target:ring-2 target:ring-orange-400 target:ring-offset-2"
-      >
-        <h2 className="mb-2 text-sm font-medium">
-          {t("cashierAwaitingApprovalTitle")} ({awaitingApprovalJobs.length})
-        </h2>
-        {awaitingApprovalJobs.length === 0 ? (
-          <p className="text-sm text-text-mute">
-            {t("cashierAwaitingApprovalEmpty")}
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {awaitingApprovalJobs.map((j) => {
-              const est = j.estimates[0];
-              const fs = friendlyStatus({
-                status: j.status as JobStatus,
-                claimedById: null,
-                latestEstimateStatus:"SENT",
-              });
-              return (
-                <li
-                  key={j.id}
-                  data-filter-row
-                  data-search={jobSearchTokens(j)}
-                  data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-xl border border-warning-500/40 bg-warning-50 p-4 text-sm dark:border-warning-500/30 dark:bg-warning-500/10"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">
-                        {j.vehicle.make} {j.vehicle.model}
-                      </span>
-                      <span className="ms-2 text-text-mute">
-                        {j.vehicle.plate} · {j.vehicle.customer.name}
-                      </span>
-                    </span>
-                    <FriendlyStatusBadge status={fs} t={t} size="sm"/>
-                  </div>
-                  <JobTimings
-                    claimedAt={j.claimedAt}
-                    sentForEstimateAt={j.sentForEstimateAt}
-                    estimateSentAt={est?.sentAt ?? null}
-                    now={now}
-                    t={t}
-                  />
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {est ? (
-                      <>
-                        <ButtonLink href={`/estimates/${est.id}`} size="sm">
-                          {t("cashierViewEstimate")}
-                        </ButtonLink>
-                        {/* Resend goes via the preview gate (same as the
-                            estimate's own page) — the cashier reviews the
-                            customer-facing layout before the WhatsApp
-                            send fires, matching the slice-2 review-gate
-                            contract. */}
-                        <Link
-                          href={`/estimates/${est.id}/preview`}
-                          className={BTN_PRIMARY_MD}
-                        >
-                          {t("cashierResendEstimate")}
-                        </Link>
-                      </>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      ) : null}
+      {/* Phase 5: 'Awaiting customer approval' section was here. The
+          advisor sent the estimate and owns the customer conversation —
+          'View estimate' / 'Resend' both belong on the advisor side
+          now. These jobs surface in 'Coming up' below. (Block deleted —
+          do not reintroduce.) */}
 
       {/* (3) Approved estimates — covers everything from 'customer just
           said yes' to 'tech finished, ready for invoice'. Action button
@@ -1044,77 +812,99 @@ export default async function CashierHome({
       </div>
       ) : null}
 
-      {/* (4) Rejected estimates — customer turned it down. 'Revise
-          estimate' fires createEstimateAction → creates a fresh DRAFT;
-          the REJECTED row stays untouched as audit history. */}
-      {currentTab ==="estimates"&& showSection("rejected") ? (
-      <div
-        id="rejected-estimates"
-        data-filter-section
-        className="scroll-mt-20 target:rounded-lg target:ring-2 target:ring-rose-400 target:ring-offset-2"
-      >
-        <h2 className="mb-2 text-sm font-medium">
-          {t("cashierRejectedEstimatesTitle")} ({rejectedEstimateJobs.length})
-        </h2>
-        {rejectedEstimateJobs.length === 0 ? (
-          <p className="text-sm text-text-mute">
-            {t("cashierRejectedEstimatesEmpty")}
+      {/* Phase 5: 'Rejected estimates' section was here. Rejection is
+          an advisor re-price signal, not a cashier signal — removed
+          entirely from the cashier dashboard (advisor sees these on
+          [[/advisor/estimates]]'s Rejected section and can re-price).
+          (Block deleted — do not reintroduce.) */}
+
+      {/* (Phase 5) "Coming up" — read-only roll-up of jobs the advisor
+          is currently working on. The cashier sees what's queued for
+          them ('these will land on my plate once the customer approves
+          + tech completes') without any actionable button, since
+          pricing / sending / re-pricing all belong to the advisor.
+          One unified list keyed by job id; rows are not links and
+          have no buttons. We use the same status badge so the cashier
+          can tell at a glance whether the advisor is still pricing,
+          waiting on the customer, or pricing extra work mid-job.
+          Honours the ?filter= query param the same way the Approved
+          section above does — anything other than 'approved' shows
+          this Coming-up list as a fallback. */}
+      {currentTab === "estimates" ? (
+        <div data-filter-section className="scroll-mt-20">
+          <h2 className="mb-1 text-sm font-medium">
+            {t("cashierComingUpTitle")} (
+            {pendingEstimateJobs.length +
+              awaitingApprovalJobs.length +
+              revisedEstimateJobs.length}
+            )
+          </h2>
+          <p className="mb-2 text-xs text-text-mute">
+            {t("cashierComingUpHint")}
           </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {rejectedEstimateJobs.map((j) => {
-              const est = j.estimates[0];
-              const fs = friendlyStatus({
-                status: j.status as JobStatus,
-                claimedById: null,
-                latestEstimateStatus:"REJECTED",
-              });
-              return (
+          {pendingEstimateJobs.length +
+            awaitingApprovalJobs.length +
+            revisedEstimateJobs.length ===
+          0 ? (
+            <p className="text-sm text-text-mute">
+              {t("cashierComingUpEmpty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {[
+                ...pendingEstimateJobs.map((j) => {
+                  const latest = j.estimates[0];
+                  return {
+                    j,
+                    fs: friendlyStatus({
+                      status: j.status as JobStatus,
+                      claimedById: null,
+                      latestEstimateStatus: (latest?.status ?? null) as
+                        | "DRAFT"
+                        | "SENT"
+                        | "APPROVED"
+                        | "REJECTED"
+                        | null,
+                    }),
+                  };
+                }),
+                ...awaitingApprovalJobs.map((j) => ({
+                  j,
+                  fs: friendlyStatus({
+                    status: j.status as JobStatus,
+                    claimedById: null,
+                    latestEstimateStatus: "SENT" as const,
+                  }),
+                })),
+                ...revisedEstimateJobs.map((j) => ({
+                  j,
+                  fs: "EXTRA_WORK_AWAITING_APPROVAL" as const,
+                })),
+              ].map(({ j, fs }) => (
                 <li
                   key={j.id}
                   data-filter-row
                   data-search={jobSearchTokens(j)}
                   data-date={jobDateIso(j)}
-                  className="flex flex-col gap-2 rounded-xl border border-danger-500/40 bg-danger-50 p-4 text-sm dark:border-danger-500/30 dark:bg-danger-500/10"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface p-3 text-sm"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">
-                        {j.vehicle.make} {j.vehicle.model}
-                      </span>
+                  <span className="flex flex-col">
+                    <span className="font-medium">
+                      {j.vehicle.make} {j.vehicle.model}
                       <span className="ms-2 text-text-mute">
-                        {j.vehicle.plate} · {j.vehicle.customer.name}
+                        {j.vehicle.plate}
                       </span>
                     </span>
-                    {est ? (
-                      <span className="text-xs tabular-nums text-danger-700 dark:text-danger-500">
-                        AED {Number(est.total).toFixed(2)}
-                      </span>
-                    ) : null}
-                    <FriendlyStatusBadge status={fs} t={t} size="sm"/>
-                  </div>
-                  <p className="text-xs font-medium text-danger-700 dark:text-danger-500">
-                    ⚠️ {t("estimateRejectedRePriceNeeded")}
-                  </p>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {est ? (
-                      <ButtonLink href={`/estimates/${est.id}`} size="sm">
-                        {t("cashierViewEstimate")}
-                      </ButtonLink>
-                    ) : null}
-                    <form action={createEstimateAction}>
-                      <input type="hidden" name="jobId" value={j.id} />
-                      <button className={BTN_PRIMARY_MD}>
-                        {t("cashierReviseEstimate")}
-                      </button>
-                    </form>
-                  </div>
+                    <span className="text-xs text-text-mute">
+                      {j.vehicle.customer.name}
+                    </span>
+                  </span>
+                  <FriendlyStatusBadge status={fs} t={t} size="sm" />
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : null}
 
       {/* Tech is still diagnosing — cashier sees the job exists so they can
@@ -1397,17 +1187,10 @@ export default async function CashierHome({
         </div>
       ) : null}
 
-      {/* ─── CUSTOMERS TAB ──────────────────────────────────────── */}
-      {currentTab ==="customers"? (
-        <div className="rounded-xl border border-dashed border-border p-10 text-center">
-          <h2 className="text-lg font-semibold tracking-tight">
-            {t("cashierTabCustomersHeading")}
-          </h2>
-          <p className="mt-1 text-sm text-text-mute">
-            {t("cashierTabComingSoon")}
-          </p>
-        </div>
-      ) : null}
+      {/* Phase 5: 'Customers' tab + 'Coming soon' placeholder removed.
+          The tab itself was dropped from <CashierTabs> at the same
+          time; no entry point remains and ?tab=customers falls back
+          to the default 'estimates' tab via VALID_TABS. */}
 
       {/* ─── REPORTS TAB ────────────────────────────────────────── */}
       {/* The Accounts summary metrics live here now (relocated from the

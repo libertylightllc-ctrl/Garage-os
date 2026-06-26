@@ -50,9 +50,21 @@ Specs in `/docs` (read before deciding):
    deadline must be confirmed by a human or replied "let me confirm with the team."
    Frustrated/low-confidence → hand off to advisor with a notification. Never let AI state a
    final price/commitment unconfirmed. Every AI call writes an `AiEvent` row (incl. `model`).
-5. **Cashier/accounts sets prices, not the advisor.** Cashier has full invoice edit power
-   (add/remove/adjust lines, notes). VAT (UAE 5%) is added automatically, shown as a
-   separate line. Cashier records payment and marks paid.
+5. **Advisor prices estimates; cashier invoices + collects payment.** (Reversed
+   2026-06-23 after observing real pilot shops — the previous rule was "cashier sets
+   prices"; the workflow that actually plays out is: tech finishes diagnosis → ADVISOR
+   prices the estimate and sends it to the customer over WhatsApp → CASHIER takes over
+   on approval, generates the invoice and collects payment.) Concretely:
+   - **Advisor** creates + edits estimate lines, sets prices, sends the estimate to the
+     customer. Owns the customer relationship; never touches invoice or payment.
+   - **Cashier** has full invoice edit power (add/remove/adjust lines, notes, discount).
+     VAT (UAE 5%) is added automatically, shown as a separate line. Cashier records
+     payment and marks paid. Cashier sees Approved estimates ready to invoice but cannot
+     edit estimate lines.
+   - **Owner** is allowed on both sides as override for single-person shops.
+   - Permission rules in `src/lib/permissions.ts`: `ESTIMATE_CREATE_ROLES = [ADVISOR,
+     OWNER]` and `INVOICE_ROLES = [CASHIER, OWNER]`. Send-to-customer (`SEND_ROLES`)
+     stays open to both advisor + cashier.
 6. **Two approval points.** Approval #1 before any work; Approval #2 if extra problems found
    mid-repair (work auto-pauses until approved). Approval recorded against the job card with
    timestamp.

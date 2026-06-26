@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction, setBayAction } from "@/app/actions/jobs";
+import { createEstimateAction } from "@/app/actions/billing";
 import { scheduleRemindersAction } from "@/app/actions/reminders";
 import { recordDeliveryAction } from "@/app/actions/delivery";
 import { priorityMeta } from "@/lib/priority";
@@ -500,12 +501,49 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </form>
       ) : null}
 
-      {/* Estimates & invoicing — pricing is set by the cashier; the advisor sends. */}
+      {/* Estimates & invoicing — KEY DECISION #5 (rev. 2026-06-23): the
+          ADVISOR creates + prices the estimate after diagnosis hand-off,
+          the CASHIER invoices after customer approval. The action below
+          is idempotent — if a DRAFT already exists it routes there, and
+          if the last estimate was REJECTED it clones the lines into a
+          fresh DRAFT for re-pricing. Either way the advisor lands on
+          /estimates/[id] to edit lines. */}
       <div className="border-t border-border pt-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium">{t("estimates")}</h2>
-          <span className="text-xs text-text-mute">{t("pricingByCashier")}</span>
-        </div>
+        <h2 className="mb-2 text-sm font-medium">{t("estimates")}</h2>
+        {/* Advisor's "your turn to price" surface — only shown when the
+            advisor actually needs to act. job.estimates is orderBy
+            createdAt desc so [0] is the most recent.
+              - DRAFT: still editing → "Continue pricing"
+              - REJECTED or none: needs a fresh draft → "Create estimate"
+              - SENT (awaiting customer) or APPROVED (cashier's turn):
+                suppressed — nothing for the advisor to do here. */}
+        {job.status === "ESTIMATE" &&
+        (!job.estimates[0] ||
+          job.estimates[0].status === "DRAFT" ||
+          job.estimates[0].status === "REJECTED") ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-info-500/40 bg-info-50 p-3 dark:border-info-500/30 dark:bg-info-500/10">
+            <span className="text-xs text-info-600 dark:text-info-500">
+              {job.estimates[0]?.status === "DRAFT"
+                ? t("advisorDraftInProgress")
+                : t("advisorPleasePrice")}
+            </span>
+            {job.estimates[0]?.status === "DRAFT" ? (
+              <Link
+                href={`/estimates/${job.estimates[0].id}`}
+                className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+              >
+                {t("continuePricing")} →
+              </Link>
+            ) : (
+              <form action={createEstimateAction}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                  {t("createEstimate")}
+                </button>
+              </form>
+            )}
+          </div>
+        ) : null}
         {job.estimates.length === 0 ? (
           <p className="text-sm text-text-mute">{t("noEstimates")}</p>
         ) : (

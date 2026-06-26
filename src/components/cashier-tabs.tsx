@@ -15,14 +15,12 @@ export type CashierTab =
     | "estimates"
     | "invoices"
     | "payments"
-    | "customers"
     | "reports";
 
 export const CASHIER_TABS: CashierTab[] = [
     "estimates",
     "invoices",
     "payments",
-    "customers",
     "reports",
 ];
 
@@ -30,7 +28,6 @@ export interface CashierTabsLabels {
     estimates: string;
     invoices: string;
     payments: string;
-    customers: string;
     reports: string;
 }
 

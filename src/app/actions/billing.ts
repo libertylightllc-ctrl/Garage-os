@@ -22,7 +22,7 @@ import {
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
-import { PRICING_ROLES, SEND_ROLES } from "@/lib/permissions";
+import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
 
 // Defense-in-depth: even though every caller passes a jobCardId that's
 // already been garage-verified (via ownedEstimate / ownedInvoice / the
@@ -51,7 +51,7 @@ async function jobInGarage(jobId: string, garageId: string) {
 }
 
 export async function createEstimateAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const jobId = String(formData.get("jobId") ?? "");
   await jobInGarage(jobId, user.garageId);
 
@@ -165,7 +165,7 @@ async function ownedEstimate(estimateId: string, garageId: string) {
 }
 
 export async function addEstimateLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
   if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
@@ -193,7 +193,7 @@ export async function addEstimateLineAction(formData: FormData) {
 // One-click itemise: turn a technician part (required/used) into a priced PART line,
 // pre-filled with the catalog price when the part is catalog-linked.
 export async function addLineFromPartAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const jobPartId = String(formData.get("jobPartId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
@@ -224,7 +224,7 @@ export async function addLineFromPartAction(formData: FormData) {
 
 // Inline-edit a line's unit price (preserves the sign of discount lines).
 export async function updateEstimateLinePriceAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
@@ -243,7 +243,7 @@ export async function updateEstimateLinePriceAction(formData: FormData) {
 }
 
 export async function toggleEstimateLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   await ownedEstimate(estimateId, user.garageId);
@@ -259,7 +259,7 @@ export async function toggleEstimateLineAction(formData: FormData) {
 }
 
 export async function removeEstimateLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
@@ -279,7 +279,7 @@ export async function removeEstimateLineAction(formData: FormData) {
  * matches the UI gate).
  */
 export async function updateEstimateLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   const est = await ownedEstimate(estimateId, user.garageId);
@@ -387,7 +387,7 @@ export async function setEstimateStatusAction(formData: FormData) {
 }
 
 export async function generateInvoiceAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
   // Locate the clicked estimate just for jobCardId + invoice-exists check;
   // we then fan out and pull EVERY approved estimate for the same job so
@@ -679,7 +679,7 @@ async function recomputeInvoice(invoiceId: string, garageId: string) {
 }
 
 export async function addInvoiceLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   await ownedEditableInvoice(invoiceId, user.garageId);
 
@@ -711,7 +711,7 @@ export async function addInvoiceLineAction(formData: FormData) {
 }
 
 export async function updateInvoiceLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   await ownedEditableInvoice(invoiceId, user.garageId);
@@ -738,7 +738,7 @@ export async function updateInvoiceLineAction(formData: FormData) {
 }
 
 export async function removeInvoiceLineAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const lineId = String(formData.get("lineId") ?? "");
   await ownedEditableInvoice(invoiceId, user.garageId);
@@ -775,7 +775,7 @@ export async function removeInvoiceLineAction(formData: FormData) {
 const DISCOUNT_DESCRIPTION_MARKER = /^Discount \(/;
 
 export async function setInvoiceDiscountAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   await ownedEditableInvoice(invoiceId, user.garageId);
 
@@ -847,7 +847,7 @@ export async function setInvoiceDiscountAction(formData: FormData) {
  * knows the handoff happened.
  */
 export async function sendInvoiceToCustomerAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId: user.garageId },
@@ -892,7 +892,7 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
  *   - Keep the WhatsApp action untouched.
  */
 export async function emailInvoiceAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId: user.garageId },
@@ -920,7 +920,7 @@ export async function emailInvoiceAction(formData: FormData) {
 
 export async function recordPaymentAction(formData: FormData) {
   // Cashier or owner records payment (record-only: cash / card-POS).
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const amount = Math.max(0, Number(formData.get("amount") ?? 0));
   const method = String(formData.get("method") ?? "CASH");
@@ -993,7 +993,7 @@ export async function recordPaymentAction(formData: FormData) {
 // committing to an invoice number, hence AdvancePayment on the job.
 // ────────────────────────────────────────────────────────────────
 export async function recordAdvancePaymentAction(formData: FormData) {
-  const user = await requireAnyRole(PRICING_ROLES);
+  const user = await requireAnyRole(INVOICE_ROLES);
   const jobCardId = String(formData.get("jobCardId") ?? "");
   const amount = Math.max(0, Number(formData.get("amount") ?? 0));
   const method = String(formData.get("method") ?? "CASH");

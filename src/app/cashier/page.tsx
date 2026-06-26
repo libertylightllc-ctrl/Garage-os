@@ -131,6 +131,28 @@ const VALID_ESTIMATE_FILTERS = new Set<EstimateFilter>([
 "revised",
 ]);
 
+// Permitted Invoices-tab filter values. Mirrors the estimates pattern
+// above — the dashboard counters for Ready-for-Invoice, Unpaid,
+// Partially-Paid and Overdue all link to
+// /cashier?tab=invoices&filter=<one of these>, and the page narrows
+// the Invoices tab to just the matching section + row state.
+//   ready          → Section: Awaiting final invoice (TECH_COMPLETE jobs)
+//   unpaid         → Section: Receivables, all rows (DUE + PARTIAL + OVERDUE)
+//   partially_paid → Section: Receivables, rows where arState === PARTIAL
+//   overdue        → Section: Receivables, rows where arState === OVERDUE
+// Anything not in this set is silently treated as 'no filter'.
+type InvoiceFilter =
+  | "ready"
+  | "unpaid"
+  | "partially_paid"
+  | "overdue";
+const VALID_INVOICE_FILTERS = new Set<InvoiceFilter>([
+  "ready",
+  "unpaid",
+  "partially_paid",
+  "overdue",
+]);
+
 export default async function CashierHome({
   searchParams,
 }: {
@@ -160,6 +182,37 @@ export default async function CashierHome({
   // <section> blocks below stays declarative.
   const showSection = (f: EstimateFilter): boolean =>
     estimateFilter === null || estimateFilter === f;
+
+  // Invoices-tab counterpart. Same shape as estimateFilter — read from
+  // the same ?filter= query param but only honoured when currentTab
+  // === 'invoices', so the two filter namespaces don't collide.
+  const invoiceFilter: InvoiceFilter | null =
+    currentTab === "invoices" &&
+    rawFilter &&
+    VALID_INVOICE_FILTERS.has(rawFilter as InvoiceFilter)
+      ? (rawFilter as InvoiceFilter)
+      : null;
+  // Predicate for each Invoices-tab section. Maps each counter-driven
+  // filter to the section(s) it should reveal:
+  //   - 'ready'      → "Awaiting final invoice" only
+  //   - 'unpaid' / 'partially_paid' / 'overdue' → Receivables only
+  // With no filter, every section renders as before. Row-level
+  // filtering for the Receivables list happens inline below.
+  const showInvoiceSection = (
+    section: "to_send" | "to_invoice" | "receivables",
+  ): boolean => {
+    if (invoiceFilter === null) return true;
+    if (section === "to_invoice") return invoiceFilter === "ready";
+    if (section === "receivables")
+      return (
+        invoiceFilter === "unpaid" ||
+        invoiceFilter === "partially_paid" ||
+        invoiceFilter === "overdue"
+      );
+    // to_send (Stage 8 INVOICED-not-yet-sent) isn't backed by a counter
+    // — hide it during any filter drill-down to keep the page focused.
+    return false;
+  };
 
   const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
@@ -447,22 +500,25 @@ export default async function CashierHome({
         </BadgeLink>
         {/* Ready for Invoice — tech-marked-complete jobs awaiting the
             cashier. Info tone because it's an 'in progress / about to
-            happen' workflow signal, not a follow-up. */}
-        <BadgeLink tone="info" href="/cashier?tab=invoices">
+            happen' workflow signal, not a follow-up.
+            Each invoice counter now hands off via ?filter= so the tap
+            actually drills down to the matching section, mirroring the
+            estimates counters above. */}
+        <BadgeLink tone="info" href="/cashier?tab=invoices&filter=ready">
           {t("counterReadyForInvoice")}{""}
           <span className="tabular-nums font-semibold">{counters.readyForInvoice}</span>
         </BadgeLink>
-        <BadgeLink tone="warning" href="/cashier?tab=invoices">
+        <BadgeLink tone="warning" href="/cashier?tab=invoices&filter=unpaid">
           {t("counterUnpaidInvoices")}{""}
           <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
         </BadgeLink>
-        <BadgeLink tone="warning" href="/cashier?tab=invoices">
+        <BadgeLink tone="warning" href="/cashier?tab=invoices&filter=partially_paid">
           {t("counterPartiallyPaidInvoices")}{""}
           <span className="tabular-nums font-semibold">
             {counters.partiallyPaidInvoices}
           </span>
         </BadgeLink>
-        <BadgeLink tone="danger" href="/cashier?tab=invoices">
+        <BadgeLink tone="danger" href="/cashier?tab=invoices&filter=overdue">
           {t("counterOverdueInvoices")}{""}
           <span className="tabular-nums font-semibold">{counters.overdueInvoices}</span>
         </BadgeLink>
@@ -596,7 +652,7 @@ export default async function CashierHome({
           Bubbles to the very top of the action sections because it's the
           most-finished thing — only one button between here and the
           customer paying. */}
-      {currentTab ==="invoices"&& toSendInvoice.length > 0 ? (
+      {currentTab ==="invoices"&& showInvoiceSection("to_send") && toSendInvoice.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToSendInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -664,7 +720,7 @@ export default async function CashierHome({
 
       {/* Stage 8 — tech marked complete, awaiting invoice send by cashier.
           Lives under the Invoices tab. */}
-      {currentTab ==="invoices"&& toInvoice.length > 0 ? (
+      {currentTab ==="invoices"&& showInvoiceSection("to_invoice") && toInvoice.length > 0 ? (
         <div data-filter-section>
           <h2 className="mb-2 text-sm font-medium">{t("cashierToInvoiceTitle")}</h2>
           <ul className="flex flex-col gap-1">
@@ -1113,10 +1169,16 @@ export default async function CashierHome({
       {/* Receivables — UNPAID invoices only. Lives under the Invoices tab.
           Once an invoice is fully paid (arState === 'PAID') it leaves this
           section and lives under the Payments tab instead. */}
-      {currentTab ==="invoices"? (
+      {currentTab ==="invoices"&& showInvoiceSection("receivables") ? (
       <div data-filter-section>
         <h2 className="mb-2 text-sm font-medium">{t("receivables")}</h2>
         {(() => {
+          // Row-level filtering for the counter drill-downs:
+          //   - 'unpaid' (or no filter)   → all non-PAID rows
+          //   - 'partially_paid'           → PARTIAL only
+          //   - 'overdue'                  → OVERDUE only
+          // 'ready' never reaches this code path — showInvoiceSection
+          // returns false for receivables when filter === 'ready'.
           const unpaid = invoices
             .map((inv) => {
               const total = Number(inv.total);
@@ -1124,7 +1186,12 @@ export default async function CashierHome({
               const state = arState(total, paid, inv.dueDate, now);
               return { inv, total, paid, state };
             })
-            .filter((r) => r.state !=="PAID");
+            .filter((r) => r.state !=="PAID")
+            .filter((r) => {
+              if (invoiceFilter === "partially_paid") return r.state === "PARTIAL";
+              if (invoiceFilter === "overdue") return r.state === "OVERDUE";
+              return true;
+            });
           if (unpaid.length === 0) {
             return (
               <p className="text-sm text-text-mute">

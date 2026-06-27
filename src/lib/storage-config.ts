@@ -17,6 +17,18 @@ export function storageBucket(): string {
   return process.env.STORAGE_BUCKET ?? "garage-uploads";
 }
 
+/**
+ * Bucket name for garage LOGOS. Separate from the general uploads
+ * bucket because logos are PUBLIC-read (customer-facing on invoice +
+ * estimate links) and the general bucket is PRIVATE / signed-URL.
+ * Separating them keeps the public/private RLS distinction clear.
+ *
+ * The actual bucket must exist in Supabase with public-read enabled.
+ */
+export function logoBucket(): string {
+  return process.env.STORAGE_LOGO_BUCKET ?? "garage-logos";
+}
+
 /** Pick an extension from a filename, falling back to the MIME subtype. */
 export function pickExtension(filename: string, mime: string): string {
   const fromName = extname(filename);

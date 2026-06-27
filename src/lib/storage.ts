@@ -1,10 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { StorageClient } from "@supabase/storage-js";
 import {
   storageMode,
   storageBucket,
+  logoBucket,
   pickExtension,
   objectKey,
   SIGNED_URL_TTL_SECONDS,
@@ -89,3 +90,214 @@ export const CONTENT_TYPES: Record<string, string> = {
   ".ogg": "audio/ogg",
   ".m4a": "audio/mp4",
 };
+
+// ─── LOGO UPLOAD ─────────────────────────────────────────────────────
+// Per-garage logo upload (KEY DECISION: 2026-06-27). Public bucket,
+// magic-byte type sniff, 500 KB cap, PNG/JPEG/WEBP only. Distinct
+// surface from saveUpload() above because:
+//   1. Logos are PUBLIC (getPublicUrl), tech photos are PRIVATE (signed
+//      URL, 7-day TTL). A logo URL on a customer invoice link can't
+//      expire mid-flight.
+//   2. Logos go into the `garage-logos` bucket (logoBucket()), tech
+//      photos go into `garage-uploads` (storageBucket()) — keeps the
+//      public/private RLS distinction obvious.
+//   3. Logos run through validateLogoFile() before write; the legacy
+//      saveUpload() trusts its caller.
+
+/** Hard cap for a logo upload, in bytes. */
+export const LOGO_MAX_BYTES = 500 * 1024;
+
+/** Allowed logo MIME types. SVG is excluded for stored-XSS safety. */
+export const LOGO_ALLOWED_MIME = ["image/png", "image/jpeg", "image/webp"] as const;
+
+export class LogoValidationError extends Error {
+  constructor(public readonly code: string, message: string) {
+    super(message);
+    this.name = "LogoValidationError";
+  }
+}
+
+/**
+ * Magic-byte sniff — the file's first bytes must match the claimed
+ * MIME, otherwise a forged Content-Type can hide an arbitrary payload.
+ *   PNG:  89 50 4E 47 0D 0A 1A 0A
+ *   JPEG: FF D8 FF
+ *   WEBP: 'RIFF' .. .. .. .. 'WEBP'  (52 49 46 46 ?? ?? ?? ?? 57 45 42 50)
+ */
+function sniffImageType(head: Uint8Array): "image/png" | "image/jpeg" | "image/webp" | null {
+  if (
+    head.length >= 8 &&
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47 &&
+    head[4] === 0x0d &&
+    head[5] === 0x0a &&
+    head[6] === 0x1a &&
+    head[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    head.length >= 12 &&
+    head[0] === 0x52 &&
+    head[1] === 0x49 &&
+    head[2] === 0x46 &&
+    head[3] === 0x46 &&
+    head[8] === 0x57 &&
+    head[9] === 0x45 &&
+    head[10] === 0x42 &&
+    head[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+/**
+ * Validate a candidate logo file. Throws LogoValidationError on any
+ * failure so the server action can map to a user-facing message. Reads
+ * the first 12 bytes for the magic-byte check; full read happens later
+ * if validation passes.
+ *
+ * Exported for direct unit testing AND for re-use by the server action
+ * (which calls this BEFORE storing — never trust the client).
+ */
+export async function validateLogoFile(file: File): Promise<void> {
+  // 1. Size cap. file.size is reported by the runtime — trust but verify
+  //    again post-read in case the client lies.
+  if (file.size === 0) {
+    throw new LogoValidationError("EMPTY", "Logo file is empty.");
+  }
+  if (file.size > LOGO_MAX_BYTES) {
+    throw new LogoValidationError(
+      "TOO_LARGE",
+      `Logo must be ${LOGO_MAX_BYTES / 1024} KB or smaller (got ${Math.round(file.size / 1024)} KB).`,
+    );
+  }
+
+  // 2. MIME allowlist. The client controls this header; the magic-byte
+  //    check below is what actually protects us, but we may as well
+  //    short-circuit on obviously wrong types first.
+  if (!LOGO_ALLOWED_MIME.includes(file.type as (typeof LOGO_ALLOWED_MIME)[number])) {
+    throw new LogoValidationError(
+      "BAD_MIME",
+      `Logo must be PNG, JPEG, or WEBP (got "${file.type || "unknown"}").`,
+    );
+  }
+
+  // 3. Magic-byte sniff. Forbids "rename rootkit.exe to logo.png and
+  //    set Content-Type to image/png" attacks.
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const sniffed = sniffImageType(head);
+  if (sniffed === null) {
+    throw new LogoValidationError(
+      "BAD_MAGIC",
+      "Logo file content does not match its declared type.",
+    );
+  }
+  if (sniffed !== file.type) {
+    throw new LogoValidationError(
+      "MIME_MISMATCH",
+      `Logo declared "${file.type}" but actual content is "${sniffed}".`,
+    );
+  }
+}
+
+/**
+ * Upload a validated logo to the public garage-logos bucket and
+ * return the permanent public URL. Validates first (no escape hatch).
+ * In local mode (no Supabase env), falls back to writing under
+ * .uploads/logos/ and serving via /api/files/logos/{filename}.
+ *
+ * Garage scoping is enforced by objectKey() — the caller's garageId
+ * comes from the session, never from form input.
+ */
+export async function saveLogoUpload(file: File, garageId: string): Promise<string> {
+  await validateLogoFile(file);
+  const uniqueId = randomUUID();
+
+  if (storageMode() === "supabase") {
+    const bucket = logoBucket();
+    const key = objectKey(garageId, uniqueId, file.name, file.type);
+    const buf = Buffer.from(await file.arrayBuffer());
+
+    const { error: upErr } = await supabaseStorage()
+      .from(bucket)
+      .upload(key, buf, {
+        contentType: file.type,
+        upsert: false,
+      });
+    if (upErr) throw new Error(`Logo upload failed: ${upErr.message}`);
+
+    const { data } = supabaseStorage().from(bucket).getPublicUrl(key);
+    if (!data?.publicUrl) throw new Error("Logo upload: no public URL returned.");
+    return data.publicUrl;
+  }
+
+  // Local fallback — write to .uploads/logos/ + serve via /api/files.
+  const localDir = path.join(UPLOAD_DIR, "logos");
+  await mkdir(localDir, { recursive: true });
+  const filename = `${uniqueId}${guessExt(file.name, file.type)}`;
+  const buf = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(localDir, filename), buf);
+  return `/api/files/logos/${filename}`;
+}
+
+/**
+ * Parse a public logo URL back into a bucket key. Used by
+ * deleteLogoUpload to know which object to remove. Returns null if the
+ * URL doesn't match either backend shape (e.g. external CDN, legacy
+ * data) so the caller can no-op rather than throw.
+ *
+ * Supabase public URLs look like:
+ *   https://<project>.supabase.co/storage/v1/object/public/<bucket>/<key>
+ * Local URLs look like:
+ *   /api/files/logos/<filename>
+ */
+export function parseLogoUrl(
+  url: string,
+): { backend: "supabase"; bucket: string; key: string } | { backend: "local"; filename: string } | null {
+  // Local — straightforward path match.
+  const localMatch = url.match(/^\/api\/files\/logos\/([^/?#]+)$/);
+  if (localMatch) return { backend: "local", filename: localMatch[1] };
+
+  // Supabase public URL.
+  const supaMatch = url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+  if (supaMatch) return { backend: "supabase", bucket: supaMatch[1], key: supaMatch[2] };
+
+  return null;
+}
+
+/**
+ * Delete a previously-saved logo from storage. Safe to call with a URL
+ * we don't recognise (no-op) so a corrupted DB row can't crash the
+ * replace-logo flow. The DB write is the source of truth — this is
+ * cleanup, not the security boundary.
+ */
+export async function deleteLogoUpload(url: string): Promise<void> {
+  const parsed = parseLogoUrl(url);
+  if (!parsed) return;
+
+  if (parsed.backend === "supabase") {
+    const { error } = await supabaseStorage().from(parsed.bucket).remove([parsed.key]);
+    if (error) {
+      // Best-effort: log but don't throw. A stale object is wasted
+      // storage, not a correctness bug.
+      console.warn(`[storage] failed to delete logo ${parsed.key}: ${error.message}`);
+    }
+    return;
+  }
+
+  // Local: unlink, ignore ENOENT (already gone).
+  try {
+    await unlink(path.join(UPLOAD_DIR, "logos", parsed.filename));
+  } catch (e: unknown) {
+    if (!(typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "ENOENT")) {
+      console.warn(`[storage] failed to delete local logo ${parsed.filename}:`, e);
+    }
+  }
+}

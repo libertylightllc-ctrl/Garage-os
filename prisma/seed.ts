@@ -1,4 +1,20 @@
-import "dotenv/config";
+// Env precedence mirrors prisma.config.ts: .env.local (dev, localhost
+// DB) takes priority, .env (prod) is the explicit fallback for operator
+// seeding. Never let `npx tsx prisma/seed.ts` silently write to prod
+// just because the dev forgot to create .env.local.
+import fs from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
+const envLocal = path.resolve(".env.local");
+if (fs.existsSync(envLocal)) {
+  dotenv.config({ path: envLocal });
+} else {
+  dotenv.config();
+  process.stderr.write(
+    "[seed] .env.local not found — seeding into .env target (production)\n",
+  );
+}
+
 import bcrypt from "bcryptjs";
 import { PrismaClient, Role, Lang } from "../src/generated/prisma/client";
 import { makePgAdapter } from "../src/lib/pg-adapter";

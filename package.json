@@ -10,7 +10,9 @@
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:dev": "prisma dev --name garageos",
+    "db:dev": "prisma dev start garageos --detach",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset --force",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"

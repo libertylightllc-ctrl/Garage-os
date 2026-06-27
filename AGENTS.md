@@ -93,6 +93,44 @@ Specs in `/docs` (read before deciding):
 - Secrets in `.env` (git-ignored) — never in code, never committed.
 - Max 3 primary actions per screen. Mobile-first. Arabic + English (RTL correct).
 
+## Dev DB vs Prod DB — separated (2026-06-27)
+
+**Default:** local dev hits a local Postgres. Production is reached ONLY by
+explicit operator scripts. The 4 live shops' data is unreachable from `npm run
+dev` / `npm test`.
+
+Two env files:
+- `.env.local` — git-ignored. `DATABASE_URL` = `postgres://...@localhost:51214/...`
+  (the Prisma 7 bundled local Postgres). Loaded by:
+  - Next.js dev server (`npm run dev`) — native precedence
+  - `prisma.config.ts` (every `prisma` CLI command) — explicit shim
+  - `prisma/seed.ts` — explicit shim
+  - `vitest.setup.ts` (every test run) — explicit shim
+- `.env` — git-ignored. `DATABASE_URL` = the Supabase Singapore pooler.
+  Production credentials. Only loaded as a FALLBACK when `.env.local` is
+  absent. Each fallback prints a `[prisma.config] .env.local not found …
+  production target` warning to stderr so a missing-`.env.local` mistake
+  is loud.
+
+NPM scripts targeting the local DB (all read `.env.local`):
+- `npm run db:dev` — start the local Postgres (port 51214 + shadow 51215)
+- `npm run db:migrate` — `prisma migrate dev` against local
+- `npm run db:reset` — wipe local + reapply migrations (needs explicit consent)
+- `npm run db:seed` — populate local with Demo Garage + 4 demo users
+- `npm run db:studio` — Prisma Studio on local
+
+Production targets — explicit, intentional:
+- `npx prisma migrate deploy` — runs from the Vercel build step; manually
+  invoked locally with `.env.local` removed/renamed temporarily. Hand-write
+  the migration SQL when possible; do NOT use `prisma migrate dev` against
+  prod.
+- `scripts/create-garage.ts`, `scripts/delete-garage.mjs`, etc. — operator
+  one-offs. They use `import "dotenv/config"` directly (NOT the prisma.config
+  shim) so they always hit prod. Read the script + confirm DATABASE_URL host
+  in the comment header before running.
+- `db:push` is still in package.json but should NEVER target prod — schema
+  changes need a migration file.
+
 ## How we work
 1. I give you ONE focused task referencing a spec file.
 2. You PLAN first — show the plan, no code yet.

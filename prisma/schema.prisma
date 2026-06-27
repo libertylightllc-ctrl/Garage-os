@@ -185,6 +185,7 @@ model Garage {
   invoiceSeq   Int     @default(0) // per-garage gapless invoice counter
   jobSeq       Int     @default(0) // per-garage gapless Job Card No counter
   isPilot      Boolean @default(true) // pilots are NEVER charged (subscription billing)
+  logoUrl      String? // garage-uploaded brand logo (Supabase public URL); null = use default GarageOS brand. Set via uploadGarageLogoAction; appears on dashboard nav + invoice + estimate + customer-facing links.
 
   users        User[]
   customers    Customer[]

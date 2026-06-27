@@ -211,7 +211,11 @@ export async function validateLogoFile(file: File): Promise<void> {
  * Upload a validated logo to the public garage-logos bucket and
  * return the permanent public URL. Validates first (no escape hatch).
  * In local mode (no Supabase env), falls back to writing under
- * .uploads/logos/ and serving via /api/files/logos/{filename}.
+ * .uploads/ (flat, no subdir — the /api/files/[name] route is a
+ * single-segment dynamic route, not a catch-all) and serving via
+ * /api/files/{logo-<filename>}. The `logo-` filename prefix keeps
+ * logo uploads visually distinct from tech-photo uploads in the
+ * shared directory + makes parseLogoUrl's local match unambiguous.
  *
  * Garage scoping is enforced by objectKey() — the caller's garageId
  * comes from the session, never from form input.
@@ -238,13 +242,15 @@ export async function saveLogoUpload(file: File, garageId: string): Promise<stri
     return data.publicUrl;
   }
 
-  // Local fallback — write to .uploads/logos/ + serve via /api/files.
-  const localDir = path.join(UPLOAD_DIR, "logos");
-  await mkdir(localDir, { recursive: true });
-  const filename = `${uniqueId}${guessExt(file.name, file.type)}`;
+  // Local fallback — write FLAT to .uploads/ (no logos/ subdir; the
+  // /api/files/[name] route is single-segment dynamic, not catch-all)
+  // with a `logo-` filename prefix so parseLogoUrl can still tell
+  // logo files apart from tech-photo files in the shared directory.
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  const filename = `logo-${uniqueId}${guessExt(file.name, file.type)}`;
   const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(localDir, filename), buf);
-  return `/api/files/logos/${filename}`;
+  await writeFile(path.join(UPLOAD_DIR, filename), buf);
+  return `/api/files/${filename}`;
 }
 
 /**
@@ -256,13 +262,16 @@ export async function saveLogoUpload(file: File, garageId: string): Promise<stri
  * Supabase public URLs look like:
  *   https://<project>.supabase.co/storage/v1/object/public/<bucket>/<key>
  * Local URLs look like:
- *   /api/files/logos/<filename>
+ *   /api/files/logo-<uuid>.<ext>
+ * The `logo-` filename prefix is the disambiguator so a delete call
+ * here cannot wipe a tech-photo upload that shares the directory.
  */
 export function parseLogoUrl(
   url: string,
 ): { backend: "supabase"; bucket: string; key: string } | { backend: "local"; filename: string } | null {
-  // Local — straightforward path match.
-  const localMatch = url.match(/^\/api\/files\/logos\/([^/?#]+)$/);
+  // Local — single-segment match; the `logo-` prefix is required so
+  // parseLogoUrl never matches a tech-photo URL by accident.
+  const localMatch = url.match(/^\/api\/files\/(logo-[^/?#]+)$/);
   if (localMatch) return { backend: "local", filename: localMatch[1] };
 
   // Supabase public URL.
@@ -292,9 +301,10 @@ export async function deleteLogoUpload(url: string): Promise<void> {
     return;
   }
 
-  // Local: unlink, ignore ENOENT (already gone).
+  // Local: unlink, ignore ENOENT (already gone). Flat path under
+  // .uploads/ matching the write side in saveLogoUpload.
   try {
-    await unlink(path.join(UPLOAD_DIR, "logos", parsed.filename));
+    await unlink(path.join(UPLOAD_DIR, parsed.filename));
   } catch (e: unknown) {
     if (!(typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "ENOENT")) {
       console.warn(`[storage] failed to delete local logo ${parsed.filename}:`, e);

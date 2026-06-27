@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
 import { updateProfileNameAction, updateProfileEmailAction } from "@/app/actions/settings";
+import { removeGarageLogoAction } from "@/app/actions/garage-logo";
+import { GarageLogoForm } from "@/components/garage-logo-form";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { type StaffRole } from "@/lib/roles";
@@ -27,11 +29,21 @@ const ERR_KEY: Record<string, MessageKey> = {
   "email-current-wrong": "settingsErrEmailCurrentWrong",
   "email-taken": "settingsErrEmailTaken",
   "email-no-password": "settingsErrEmailNoPassword",
+  // Logo upload — LogoValidationError.code from saveLogoUpload comes
+  // through as `?error=logo-<code lowercased>` (see garage-logo.ts).
+  "logo-missing": "settingsErrLogoMissing",
+  "logo-empty": "settingsErrLogoEmpty",
+  "logo-too_large": "settingsErrLogoTooLarge",
+  "logo-bad_mime": "settingsErrLogoBadMime",
+  "logo-bad_magic": "settingsErrLogoBadMagic",
+  "logo-mime_mismatch": "settingsErrLogoMimeMismatch",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
   email: "settingsOkEmail",
   "email-unchanged": "settingsOkEmailUnchanged",
+  "logo-saved": "settingsOkLogoSaved",
+  "logo-removed": "settingsOkLogoRemoved",
 };
 
 export default async function SettingsPage({
@@ -55,6 +67,16 @@ export default async function SettingsPage({
 
   const role = session.user.role as StaffRole;
   const isOwner = role === "OWNER";
+
+  // Owners see the Garage details section, which currently surfaces the
+  // logoUrl. Reading conditionally so non-owners' page render doesn't
+  // hit the DB for a value they wouldn't see anyway.
+  const garage = isOwner
+    ? await prisma.garage.findUnique({
+        where: { id: session.user.garageId },
+        select: { logoUrl: true },
+      })
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -156,10 +178,41 @@ export default async function SettingsPage({
           owner-only actions independently verify role. */}
       {isOwner ? (
         <>
-          {/* Garage details (name / VAT TRN / logo) is intentionally
-              not rendered yet. It'll appear here when the matching
-              actions land — until then we hide the section entirely
-              rather than show a build-status note to the owner. */}
+          {/* Garage details — Phase C of the per-garage logo upload.
+              Only the logo is wired here for now; name + TRN edit
+              fields will land on this section in a later phase. */}
+          <section className="rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold">
+              {t("settingsSecGarageLogo")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-mute">
+              {t("settingsSecGarageLogoHint")}
+            </p>
+            <div className="mt-3">
+              <GarageLogoForm
+                currentLogoUrl={garage?.logoUrl ?? null}
+                labels={{
+                  pick: t("settingsLogoPick"),
+                  picked: t("settingsLogoPicked"),
+                  replace: t("settingsLogoReplace"),
+                  upload: t("settingsLogoUpload"),
+                  uploading: t("settingsLogoUploading"),
+                  errTooLarge: t("settingsErrLogoTooLarge"),
+                  errBadType: t("settingsErrLogoBadMime"),
+                }}
+              />
+              {garage?.logoUrl ? (
+                <form action={removeGarageLogoAction} className="mt-3">
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium text-danger-700 hover:bg-danger-50 dark:text-danger-500 dark:hover:bg-danger-500/10 transition-colors"
+                  >
+                    {t("settingsLogoRemove")}
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </section>
 
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">{t("settingsSecTeam")}</h2>

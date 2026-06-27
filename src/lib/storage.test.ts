@@ -126,10 +126,10 @@ describe("LogoValidationError", () => {
 });
 
 describe("parseLogoUrl", () => {
-  it("parses a local /api/files/logos/... URL", () => {
-    expect(parseLogoUrl("/api/files/logos/abc-123.png")).toEqual({
+  it("parses a local /api/files/logo-<uuid> URL", () => {
+    expect(parseLogoUrl("/api/files/logo-abc-123.png")).toEqual({
       backend: "local",
-      filename: "abc-123.png",
+      filename: "logo-abc-123.png",
     });
   });
 
@@ -151,7 +151,8 @@ describe("parseLogoUrl", () => {
     expect(parseLogoUrl("")).toBeNull();
   });
 
-  it("does NOT match a local URL outside the logos/ subdir (so a deleteLogoUpload call cannot wipe tech photos)", () => {
+  it("does NOT match a local URL without the `logo-` prefix (so a deleteLogoUpload call cannot wipe tech photos)", () => {
     expect(parseLogoUrl("/api/files/abc-123.png")).toBeNull();
+    expect(parseLogoUrl("/api/files/9d8bdfe4-tech-photo.png")).toBeNull();
   });
 });

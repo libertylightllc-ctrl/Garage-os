@@ -23,6 +23,7 @@ import { workflowStage } from "@/lib/workflow-stage";
 import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
+import { GarageBrand } from "@/components/garage-brand";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 
 export const dynamic ="force-dynamic";
@@ -86,6 +87,10 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         include: {
           vehicle: true,
           finding: true,
+          // Pulled for <GarageBrand> in the header — same garageId
+          // we're already scoping on, so no extra row, just the
+          // existing one joined with logoUrl in scope.
+          garage: { select: { logoUrl: true } },
           jobParts: { orderBy: { createdAt:"asc"} },
           // Slice 6b — show advances received against this job in the
           // UI block below. Ordered oldest-first so the audit list reads
@@ -160,6 +165,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
           {role ==="ADVISOR"? t("backJob") : t("accounts")}
         </Link>
+        {/* Garage's own brand. est.jobCard.garage was loaded with the
+            same garageId scope already enforced by the findFirst above
+            (where: jobCard: { garageId: session.user.garageId }), so
+            there's no cross-tenant logo risk here. */}
+        <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} className="my-2" />
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("estimate")}</h1>
         <p className="text-base text-text-mute">
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{""}

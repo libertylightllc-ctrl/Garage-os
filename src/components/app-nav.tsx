@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { type StaffRole } from "@/lib/roles";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { GarageBrand } from "@/components/garage-brand";
 
 interface NavItem {
     href: string;
@@ -45,24 +46,34 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
     const items = NAV[role];
     const t = await getT();
 
+    // Always fetch the signed-in garage's logoUrl (used by GarageBrand
+    // below) — one tiny query per page load. Skipping the auth call for
+    // non-signed surfaces would be wrong because AppNav only renders
+    // for staff who already passed requireRole, so a session always
+    // exists. We still null-guard for the type system.
+    const session = await auth();
+    const garage = session?.user?.garageId
+        ? await prisma.garage.findUnique({
+              where: { id: session.user.garageId },
+              select: { logoUrl: true },
+          })
+        : null;
+
     // Advisor: badge Chats (needs-human), Parts (open requests), Reminders (due now).
     let needsHuman = 0;
     let openParts = 0;
     let dueReminders = 0;
-    if (role === "ADVISOR") {
-        const session = await auth();
-        if (session?.user?.garageId) {
-            const gid = session.user.garageId;
-            [needsHuman, openParts, dueReminders] = await Promise.all([
-                prisma.whatsAppThread.count({ where: { garageId: gid, threadStatus: "NEEDS_HUMAN" } }),
-                prisma.partRequest.count({
-                    where: { garageId: gid, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
-                }),
-                prisma.reminder.count({
-                    where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },
-                }),
-            ]);
-        }
+    if (role === "ADVISOR" && session?.user?.garageId) {
+        const gid = session.user.garageId;
+        [needsHuman, openParts, dueReminders] = await Promise.all([
+            prisma.whatsAppThread.count({ where: { garageId: gid, threadStatus: "NEEDS_HUMAN" } }),
+            prisma.partRequest.count({
+                where: { garageId: gid, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
+            }),
+            prisma.reminder.count({
+                where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },
+            }),
+        ]);
     }
     // Header BREAKS OUT of the per-page main container so it spans the
     // full viewport width on every screen, not just the page max-w.
@@ -92,22 +103,23 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
                     className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"
                     aria-label="Garage Os"
                 >
-                    {/* Garage OS brand mark — calligraphic Go monogram.
-                        Plain <img> (not next/image) so the public SVG is
-                        served as-is, no build-time optimisation step.
-                        h-8 caps the height (32px) to fit the nav bar;
-                        w-auto preserves aspect ratio. dark:invert flips
-                        the #111 fill to white on dark backgrounds. */}
+                    {/* Garage brand mark. When the signed-in garage has
+                        uploaded a logoUrl, GarageBrand renders that. When
+                        null, GarageBrand falls back to the default
+                        Garage Os monogram (the same image that used to
+                        be hardcoded here). dark:invert + the "Garage Os"
+                        wordmark below stay attached only when the
+                        DEFAULT brand renders — for an uploaded shop
+                        logo, we drop the wordmark since the logo IS the
+                        wordmark, and we drop dark:invert since inverting
+                        a custom logo's colors would mangle them. */}
                     <div className="flex flex-col items-center gap-0.5 leading-none">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src="/brand/garageos-mark.png"
-                            alt=""
-                            className="h-8 w-auto dark:invert"
-                        />
-                        <span className="text-[11px] font-semibold tracking-wide">
-                            Garage Os
-                        </span>
+                        <GarageBrand size="mark" logoUrl={garage?.logoUrl ?? null} />
+                        {garage?.logoUrl ? null : (
+                            <span className="text-[11px] font-semibold tracking-wide">
+                                Garage Os
+                            </span>
+                        )}
                     </div>
                     <span className="hidden whitespace-nowrap font-normal text-text-mute sm:inline">
                         · {t(`role${role}` as MessageKey)}

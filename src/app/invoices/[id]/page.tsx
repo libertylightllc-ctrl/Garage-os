@@ -15,6 +15,7 @@ import {
   // on their own contextual surfaces.
 } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
+import { GarageBrand } from "@/components/garage-brand";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is"use server"and can only export async functions — exporting a
 // regexp from there broke the whole module under Turbopack on Vercel
@@ -217,6 +218,10 @@ export default async function InvoiceView({
 
       <div className="flex items-start justify-between">
         <div>
+          {/* Garage's own brand. Already-scoped via the invoice's
+              parent garage relation; cannot show another garage's logo
+              because inv.garage is the joined-by-id record. */}
+          <GarageBrand size="full" logoUrl={inv.garage.logoUrl} className="mb-2" />
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
             {/* Overdue pill — matches the row badge on /cashier?tab=

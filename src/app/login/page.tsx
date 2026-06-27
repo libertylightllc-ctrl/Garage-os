@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
+import { GarageBrand } from "@/components/garage-brand";
 
 async function loginAction(formData: FormData) {
 "use server";
@@ -29,12 +30,10 @@ export default async function LoginPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-8">
       <div className="flex flex-col items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/brand/garageos-logo.png"
-          alt="Garage Os"
-          className="h-24 w-auto dark:invert"
-        />
+        {/* No session at /login — GarageBrand falls back to the
+            default Garage Os wordmark. Per-garage branding kicks in
+            once the user signs in. */}
+        <GarageBrand size="full" logoUrl={null} className="h-24 max-w-none" />
         <h1 className="text-2xl font-semibold tracking-tight">{t("signInTitle")}</h1>
       </div>
 

@@ -4,6 +4,7 @@ import { formatInvoiceNo } from "@/lib/billing";
 import { verifyToken } from "@/lib/tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import { GarageBrand } from "@/components/garage-brand";
 
 export const dynamic ="force-dynamic";
 
@@ -36,13 +37,21 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
-      <div>
-        <p className="text-sm text-text-mute">{inv.garage.name}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("yourInvoice")}</h1>
-        <p className="text-sm text-text-mute">
-          {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())} ·{""}
-          {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model}
-        </p>
+      <div className="flex flex-col items-start gap-3">
+        {/* Garage's own brand — the priority site for this feature
+            (the shop asked specifically for their logo on the customer
+            invoice link). Scoped by construction: inv.garage is the
+            invoice's parent garage joined by id, so a different
+            garage's logoUrl can never appear here. */}
+        <GarageBrand size="full" logoUrl={inv.garage.logoUrl} />
+        <div>
+          <p className="text-sm text-text-mute">{inv.garage.name}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("yourInvoice")}</h1>
+          <p className="text-sm text-text-mute">
+            {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())} ·{""}
+            {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model}
+          </p>
+        </div>
       </div>
 
       <ul className="flex flex-col gap-1 text-sm">

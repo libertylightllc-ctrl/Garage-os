@@ -218,19 +218,50 @@ export default async function OwnerHome({
   const { q } = await searchParams;
 
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [rev, profit, cars, inv, trend, usage, acceptance, confirmMins, techWork] =
-    await Promise.all([
-      revenue(gids, monthFrom),
-      profitThisMonth(gids, now),
-      carsToday(gids, now),
-      inventoryHealth(gids),
-      weekTrend(gids, now),
-      aiUsage(gids, monthFrom),
-      intakeAcceptance(gids),
-      avgConfirmMinutes(gids),
-      technicianWork(gids),
-    ]);
-  const advisorWork = await advisorActivity(gids);
+  // Defensive parallel fetch — added after 2026-06-28 incident where a
+  // fresh Vercel build (cache miss → npm install resolved a floated
+  // transitive dep) broke ONE query and crashed the whole owner page,
+  // locking the shop out. allSettled returns successes + failures, and
+  // we substitute safe zero/empty fallbacks for any rejected slot. The
+  // owner always sees the dashboard skeleton + whatever data DID load,
+  // never a "Something went wrong" full-page error.
+  //
+  // metricsHadError surfaces a non-blocking banner so the owner knows
+  // some numbers may be missing — better than silent failures pretending
+  // everything is fine.
+  const settled = await Promise.allSettled([
+    revenue(gids, monthFrom),
+    profitThisMonth(gids, now),
+    carsToday(gids, now),
+    inventoryHealth(gids),
+    weekTrend(gids, now),
+    aiUsage(gids, monthFrom),
+    intakeAcceptance(gids),
+    avgConfirmMinutes(gids),
+    technicianWork(gids),
+  ]);
+  let metricsHadError = false;
+  const v = <T,>(idx: number, fb: T): T => {
+    const r = settled[idx];
+    if (r.status === "fulfilled") return r.value as T;
+    metricsHadError = true;
+    console.error(`[owner] metric query ${idx} failed:`, r.reason);
+    return fb;
+  };
+  const rev = v(0, 0);
+  const profit = v(1, 0);
+  const cars = v(2, 0);
+  const inv = v(3, { low: 0, total: 0 });
+  const trend = v(4, { thisWeek: 0, lastWeek: 0, delta: 0 });
+  const usage = v(5, { events: 0, costUsd: 0 });
+  const acceptance = v(6, { confirmed: 0, rejected: 0, rate: null as number | null });
+  const confirmMins = v(7, null as number | null);
+  const techWork = v(8, [] as Awaited<ReturnType<typeof technicianWork>>);
+  const advisorWork = await advisorActivity(gids).catch((e) => {
+    console.error("[owner] advisorActivity failed:", e);
+    metricsHadError = true;
+    return [] as Awaited<ReturnType<typeof advisorActivity>>;
+  });
 
   let answer: string | null = null;
   if (q && q.trim()) {
@@ -264,6 +295,12 @@ export default async function OwnerHome({
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="OWNER" active="dashboard"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("ownerDashboard")}</h1>
+
+      {metricsHadError ? (
+        <div className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          ⚠️ Some dashboard numbers couldn't load right now. Try again in a moment — the rest of the site still works.
+        </div>
+      ) : null}
 
       {/* Metric cards — equal heights via flex+grow so a longer label
           on one card doesn't make its neighbours shorter. text-2xl

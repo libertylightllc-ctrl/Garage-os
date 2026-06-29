@@ -1,0 +1,60 @@
+name: Nightly DB backup
+
+# pg_dump production → gzip → GPG-encrypt → upload to Backblaze B2.
+# Off-Supabase recovery story: even total loss of the Supabase project
+# is recoverable from the encrypted dumps sitting in B2 (where retention
+# is 90 days, managed by the bucket's lifecycle rule).
+#
+# Phase 3 of the backup feature: TRIGGER MANUALLY only, no schedule yet.
+# Once we've manually confirmed an encrypted file lands in B2 + the
+# Healthchecks.io ping fires, Phase 6 will add the nightly cron line
+# below.
+
+on:
+  # Manual trigger only for now. Click "Run workflow" in the Actions
+  # tab to test. Cron line stays commented until the manual run
+  # succeeds end-to-end.
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 22 * * *'   # 22:00 UTC nightly (02:00 UAE)
+
+# Belt-and-braces — minimum permissions. The runner does not need to
+# write to the repo, comment on PRs, or touch any GitHub resource.
+permissions:
+  contents: read
+
+# Don't fan out — one run at a time. If a previous run is still in
+# flight (manual + scheduled overlap, or someone double-clicks
+# "Run workflow"), the second waits.
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump, encrypt, upload
+    runs-on: ubuntu-latest
+    # If pg_dump hangs (DB unreachable, runner network issue), fail the
+    # job after 15 min rather than burning Actions minutes. Our DB at
+    # current size dumps in under 30 seconds; 15 min is ample headroom
+    # for growth + transient slowness.
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run backup script
+        # All 7 secrets piped in via env. The script itself uses `set
+        # +x` so values are never printed; GitHub Actions also auto-
+        # masks any token that matches a registered secret value as
+        # an extra defense layer.
+        env:
+          DATABASE_URL_READONLY: ${{ secrets.DATABASE_URL_READONLY }}
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY:    ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME:        ${{ secrets.B2_BUCKET_NAME }}
+          B2_ENDPOINT:           ${{ secrets.B2_ENDPOINT }}
+          GPG_PASSPHRASE:        ${{ secrets.GPG_PASSPHRASE }}
+          HEALTHCHECKS_URL:      ${{ secrets.HEALTHCHECKS_URL }}
+        run: bash scripts/backup-prod-db.sh

@@ -85,6 +85,19 @@ echo "[backup] starting at ${TS} (UTC)"
 # can always dump older server; never the reverse).
 #
 # Flags:
+#   --schema=public       : ONLY dump the public schema (our app's
+#                           tables). Supabase's internal schemas
+#                           (auth, storage, realtime, extensions,
+#                           graphql_public) are managed by Supabase
+#                           itself and would be re-provisioned on a
+#                           restore to a fresh project. Also: the
+#                           backup_reader role has SELECT only on
+#                           public — without this flag pg_dump tries
+#                           to LOCK every schema and fails with
+#                           "permission denied for schema auth". Our
+#                           application data is entirely in public, so
+#                           limiting scope is both correct AND avoids
+#                           the permission error.
 #   --no-owner            : strip OWNER TO clauses — the dump restores
 #                           regardless of which role exists on target
 #   --no-privileges       : strip GRANT/REVOKE — same reason
@@ -103,6 +116,7 @@ docker run --rm \
   -e PG_URL="$DATABASE_URL_READONLY" \
   postgres:17 \
   pg_dump \
+    --schema=public \
     --no-owner --no-privileges --no-comments \
     --quote-all-identifiers \
     --serializable-deferrable \

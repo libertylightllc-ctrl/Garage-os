@@ -77,10 +77,12 @@ trap 'rm -f "$DUMP_FILE" "$ENC_FILE" 2>/dev/null || true' EXIT
 echo "[backup] starting at ${TS} (UTC)"
 
 # ── 1. pg_dump → gzip ─────────────────────────────────────────────────
-# Use the postgres:16 docker image so we get a recent pg_dump that
-# can dump from Supabase (PG 15+) cleanly, without needing the apt
-# postgresql-client-NN package on the runner. Image is ~150MB but
-# cached after first run.
+# Use the postgres:17 docker image — its pg_dump version must be
+# >= the server's. Supabase is on PG 17.x as of 2026-06-29; using
+# postgres:16 here previously failed with "aborting because of
+# server version mismatch (server 17.6 > pg_dump 16.14)". If
+# Supabase upgrades again, bump this digit to match (newer client
+# can always dump older server; never the reverse).
 #
 # Flags:
 #   --no-owner            : strip OWNER TO clauses — the dump restores
@@ -99,7 +101,7 @@ echo "[backup] starting at ${TS} (UTC)"
 echo "[backup] running pg_dump …"
 docker run --rm \
   -e PG_URL="$DATABASE_URL_READONLY" \
-  postgres:16 \
+  postgres:17 \
   pg_dump \
     --no-owner --no-privileges --no-comments \
     --quote-all-identifiers \

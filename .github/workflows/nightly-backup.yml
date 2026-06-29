@@ -5,18 +5,18 @@ name: Nightly DB backup
 # is recoverable from the encrypted dumps sitting in B2 (where retention
 # is 90 days, managed by the bucket's lifecycle rule).
 #
-# Phase 3 of the backup feature: TRIGGER MANUALLY only, no schedule yet.
-# Once we've manually confirmed an encrypted file lands in B2 + the
-# Healthchecks.io ping fires, Phase 6 will add the nightly cron line
-# below.
+# Nightly cron enabled 2026-06-29 after the manual run at
+# 2026-06-29T12:52:47Z succeeded end-to-end (encrypted file in B2,
+# healthcheck ping fired) AND the restore drill proved that file decrypts
+# + restores cleanly. Runbook: docs/Disaster-Recovery.md.
 
 on:
-  # Manual trigger only for now. Click "Run workflow" in the Actions
-  # tab to test. Cron line stays commented until the manual run
-  # succeeds end-to-end.
-  workflow_dispatch:
-  # schedule:
-  #   - cron: '0 22 * * *'   # 22:00 UTC nightly (02:00 UAE)
+  workflow_dispatch:        # still allow ad-hoc runs from the UI
+  schedule:
+    # 22:00 UTC = 02:00 next-day UAE. Off-peak for the garages, off-peak
+    # for the Supabase pooler, and several hours before AR's morning so
+    # any failure ping arrives before the workday.
+    - cron: '0 22 * * *'
 
 # Belt-and-braces — minimum permissions. The runner does not need to
 # write to the repo, comment on PRs, or touch any GitHub resource.

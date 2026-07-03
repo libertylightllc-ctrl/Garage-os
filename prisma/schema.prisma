@@ -278,6 +278,12 @@ model User {
   deliveredJobs   JobCard[] @relation("DeliveredJobs")
   aiEvents        AiEvent[]
 
+  // Last successful sign-in for this staff user. Written by the
+  // baseProvider in src/auth.ts on every authorize() pass — best-effort,
+  // never blocks sign-in if it fails. Used by the admin per-shop detail
+  // page (Phase 3) to flag accounts that have gone quiet.
+  lastLoginAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -824,4 +830,50 @@ model AiEvent {
   createdAt DateTime @default(now())
 
   @@index([garageId, kind])
+}
+
+// ---------- Operator admin (separate from staff User) ----------
+// Operator-level access for the cross-garage admin panel. Intentionally
+// in its own table, with its own NextAuth provider, and NO garageId — an
+// admin is above garages. A regular User row can NEVER become an admin;
+// the only way to add admins is the scripts/create-admin.ts operator
+// script. The /admin/* surface is gated by requireAdmin() which checks
+// (1) JWT isAdmin marker, (2) row in this table, (3) not locked.
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  lastLoginAt  DateTime?
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+
+  auditLogs    AdminAuditLog[]
+}
+
+// Append-only audit trail of every admin interaction. Written by:
+//   - requireAdmin() on each PASS (action="page_view") and DENY (action="access_denied")
+//   - adminProvider.authorize() on login_failed / login_success
+//   - middleware via /api/admin-access-denied for anonymous probes of /admin/*
+// actorAdminId is nullable: anonymous denials + failed logins (where we
+// only have the attempted email, not a confirmed admin id) record null.
+// targetGarageId / targetType / targetId are convenience denormalisations
+// for the per-garage detail view (Phase 3 cross-garage filters).
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  actorAdminId   String?
+  actor          AdminUser? @relation(fields: [actorAdminId], references: [id])
+  action         String   // page_view | access_denied | login_success | login_failed | ...
+  targetType     String?  // Garage | User | AdminUser | ...
+  targetId       String?
+  targetGarageId String?
+  ip             String?
+  userAgent      String?
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  @@index([actorAdminId, createdAt])
+  @@index([targetGarageId, createdAt])
+  @@index([action, createdAt])
 }

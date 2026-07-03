@@ -284,6 +284,14 @@ model User {
   // page (Phase 3) to flag accounts that have gone quiet.
   lastLoginAt  DateTime?
 
+  // Brute-force lockout, mirroring AdminUser. failedLogins counts
+  // consecutive wrong-password attempts; once it crosses the threshold
+  // (src/lib/login-lockout.ts) lockedUntil is set to now + cooldown and
+  // sign-in is refused until it passes. Reset to 0 / null on any
+  // successful sign-in.
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { authenticateStaff, authenticateAdmin } from "@/lib/login-auth";
 
 // Dev-only "sign in as a role" bypass — double-gated so it cannot leak
 // to production:
@@ -25,36 +25,15 @@ const baseProvider = Credentials({
     email: { label: "Email", type: "email" },
     password: { label: "Password", type: "password" },
   },
-  authorize: async (credentials) => {
-    const email = String(credentials?.email ?? "").toLowerCase().trim();
-    const password = String(credentials?.password ?? "");
-    if (!email || !password) return null;
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user?.passwordHash) return null;
-
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return null;
-
-    // Best-effort lastLoginAt write. Phase 3 admin per-shop view uses
-    // this to flag accounts that have gone quiet. Don't block sign-in
-    // if the write fails — a missing log row is better than a refused
-    // login the user can't explain.
-    prisma.user
-      .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-      .catch(() => {});
-
-    // Explicitly omit isAdmin — staff sign-in can NEVER produce an
-    // operator-admin token. AdminUser is a separate table; the only
-    // code path that returns isAdmin:true is adminProvider below.
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      garageId: user.garageId,
-    };
-  },
+  // Credential verify + brute-force lockout live in authenticateStaff
+  // (src/lib/login-auth.ts) so the lockout path is directly testable.
+  // It returns the shaped user (NO isAdmin — staff can never mint an
+  // operator token) or null on bad email / wrong password / locked.
+  authorize: async (credentials) =>
+    authenticateStaff(
+      String(credentials?.email ?? ""),
+      String(credentials?.password ?? "")
+    ),
 });
 
 // Second provider: email-only, no password check. Only created when
@@ -91,76 +70,15 @@ const adminProvider = Credentials({
     email: { label: "Email", type: "email" },
     password: { label: "Password", type: "password" },
   },
-  authorize: async (credentials) => {
-    // Lazy import keeps src/lib/admin-audit out of the edge bundle the
-    // NextAuth middleware tree-shake would otherwise pull in.
-    const { logAdminAccess } = await import("@/lib/admin-audit");
-
-    const email = String(credentials?.email ?? "").toLowerCase().trim();
-    const password = String(credentials?.password ?? "");
-    if (!email || !password) {
-      await logAdminAccess({
-        actorAdminId: null,
-        action: "login_failed",
-        meta: { reason: "missing_credentials", email: email || null },
-      });
-      return null;
-    }
-
-    const admin = await prisma.adminUser.findUnique({ where: { email } });
-    if (!admin) {
-      await logAdminAccess({
-        actorAdminId: null,
-        action: "login_failed",
-        meta: { reason: "no_such_admin", email },
-      });
-      return null;
-    }
-
-    // Locked accounts cannot sign in even with the correct password.
-    // Phase 1 doesn't populate failedLogins/lockedUntil yet — that's
-    // Phase 2 hardening — but we honour the lock when set.
-    if (admin.lockedUntil && admin.lockedUntil > new Date()) {
-      await logAdminAccess({
-        actorAdminId: admin.id,
-        action: "login_failed",
-        meta: { reason: "locked", email },
-      });
-      return null;
-    }
-
-    const ok = await bcrypt.compare(password, admin.passwordHash);
-    if (!ok) {
-      await logAdminAccess({
-        actorAdminId: admin.id,
-        action: "login_failed",
-        meta: { reason: "wrong_password", email },
-      });
-      return null;
-    }
-
-    // Best-effort lastLoginAt write. Don't block sign-in on it.
-    prisma.adminUser
-      .update({
-        where: { id: admin.id },
-        data: { lastLoginAt: new Date(), failedLogins: 0 },
-      })
-      .catch(() => {});
-
-    await logAdminAccess({
-      actorAdminId: admin.id,
-      action: "login_success",
-      meta: { email },
-    });
-
-    // Shape: NO role, NO garageId. Admins sit above garages.
-    return {
-      id: admin.id,
-      email: admin.email,
-      name: admin.name,
-      isAdmin: true,
-    };
-  },
+  // Credential verify + brute-force lockout + audit logging all live in
+  // authenticateAdmin (src/lib/login-auth.ts) — testable in isolation.
+  // Returns the admin shape (NO role, NO garageId — admins sit above
+  // garages; isAdmin:true is set ONLY here) or null on any failure.
+  authorize: async (credentials) =>
+    authenticateAdmin(
+      String(credentials?.email ?? ""),
+      String(credentials?.password ?? "")
+    ),
 });
 
 // Staff-only auth: email + password, JWT sessions. Customers never log in.

@@ -272,3 +272,26 @@ These are the surprises we hit. Future-you should know.
   with our own User table, which IS in `public`). Customer auth is
   passwordless via WhatsApp — no auth state to restore.
 - **DNS / Vercel custom domain.** Live during recovery; nothing to restore.
+
+---
+
+## Deploy pipeline incident — 2026-07-04
+
+**Symptom:** for ~1 week (June 27 → July 4), pushes to `main` built
+successfully on Vercel but never went live on `www.garageos.shop`. The
+admin panel and several other commits appeared "stuck."
+
+**Root cause:** the production domain was pinned to a June-27 deployment
+via an **Instant Rollback** that was never cleared (`lastRollbackTarget`
+set on the Vercel project). While a rollback is active, new production
+builds go READY but the custom domain does NOT auto-assign to them.
+Every push since June 27 built fine and was simply never promoted.
+
+**Fix:** promote the desired deployment to production via the Vercel API
+(`POST /v10/projects/{id}/promote/{deploymentId}`), which clears the
+rollback pin. After clearing, `lastRollbackTarget` is `null` and the
+domains return to `(auto/latest)`, so normal auto-promotion resumes.
+
+**How to detect recurrence:** if a push builds but the live site doesn't
+change, check the Vercel project's `lastRollbackTarget` — if it's set,
+a rollback is pinning the domain.

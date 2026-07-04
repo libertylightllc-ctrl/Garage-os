@@ -10,14 +10,16 @@ export default defineConfig({
     // (local dev DB) wins over .env (prod) for tests that hit a real
     // DB. See vitest.setup.ts.
     setupFiles: ["./vitest.setup.ts"],
-    // Force forks (separate Node process per test file). The default
-    // `threads` pool shares globalThis across files — including the
-    // prisma singleton in src/lib/prisma.ts — and the Prisma pg adapter's
-    // prepared-statement cache races when concurrent test files
-    // hammer it ("bind message supplies N parameters, but prepared
-    // statement '' requires 0"). Forks isolate fully. ~100ms slower
-    // startup; flake gone.
+    // Force forks (separate Node process per test file) for isolation.
     pool: "forks",
+    // Run test FILES one at a time (no cross-file parallelism). Many
+    // suites hit the same local Postgres, and the Prisma pg adapter's
+    // unnamed-prepared-statement cache races when concurrent files
+    // hammer it ("bind message supplies N parameters, but prepared
+    // statement '' requires M"). Serial file execution removes the
+    // contention entirely — deterministic, at the cost of a slightly
+    // longer suite. Tests within a file still run in order.
+    fileParallelism: false,
   },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },

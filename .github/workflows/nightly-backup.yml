@@ -1,14 +1,21 @@
-name: Nightly DB backup
+name: Nightly backup (DB + files)
 
-# pg_dump production → gzip → GPG-encrypt → upload to Backblaze B2.
+# Two off-Supabase backups in one nightly run:
+#   1. pg_dump production → gzip → GPG-encrypt → Backblaze B2 (root)
+#   2. Supabase Storage files (garage-logos + garage-uploads) →
+#      tar → GPG-encrypt → Backblaze B2 (files/ prefix)
 # Off-Supabase recovery story: even total loss of the Supabase project
-# is recoverable from the encrypted dumps sitting in B2 (where retention
-# is 90 days, managed by the bucket's lifecycle rule).
+# is recoverable from the encrypted dumps + file archives in B2 (90-day
+# retention, managed by the bucket's lifecycle rule).
 #
-# Nightly cron enabled 2026-06-29 after the manual run at
-# 2026-06-29T12:52:47Z succeeded end-to-end (encrypted file in B2,
-# healthcheck ping fired) AND the restore drill proved that file decrypts
-# + restores cleanly. Runbook: docs/Disaster-Recovery.md.
+# Nightly cron enabled 2026-06-29 (DB) after the manual run + restore
+# drill proved recoverability. File backup added 2026-07-04 as a SEPARATE
+# step so a file-backup problem cannot harm the working DB backup.
+# Runbook: docs/Disaster-Recovery.md.
+#
+# ONE dead-man-switch: the Healthchecks ping is a final step gated on
+# success() — it fires only if BOTH the DB and files steps succeed. If
+# either fails, no ping → Healthchecks alerts.
 
 on:
   workflow_dispatch:        # still allow ad-hoc runs from the UI
@@ -32,23 +39,21 @@ concurrency:
 
 jobs:
   backup:
-    name: Dump, encrypt, upload
+    name: Dump + files, encrypt, upload
     runs-on: ubuntu-latest
-    # If pg_dump hangs (DB unreachable, runner network issue), fail the
-    # job after 15 min rather than burning Actions minutes. Our DB at
-    # current size dumps in under 30 seconds; 15 min is ample headroom
-    # for growth + transient slowness.
-    timeout-minutes: 15
+    # DB dumps in under 30s; file sync is near-empty today. 20 min is
+    # ample headroom for both + growth + transient slowness.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run backup script
-        # All 7 secrets piped in via env. The script itself uses `set
-        # +x` so values are never printed; GitHub Actions also auto-
-        # masks any token that matches a registered secret value as
-        # an extra defense layer.
+      - name: Run DB backup
+        # NOTE: HEALTHCHECKS_URL is intentionally NOT passed here. The DB
+        # script skips its own ping (prints a harmless WARN) so the ping
+        # happens ONCE at the end, only if the files step also succeeds.
+        # The DB dump/encrypt/upload is otherwise byte-for-byte unchanged.
         env:
           DATABASE_URL_READONLY: ${{ secrets.DATABASE_URL_READONLY }}
           B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
@@ -56,5 +61,38 @@ jobs:
           B2_BUCKET_NAME:        ${{ secrets.B2_BUCKET_NAME }}
           B2_ENDPOINT:           ${{ secrets.B2_ENDPOINT }}
           GPG_PASSPHRASE:        ${{ secrets.GPG_PASSPHRASE }}
-          HEALTHCHECKS_URL:      ${{ secrets.HEALTHCHECKS_URL }}
         run: bash scripts/backup-prod-db.sh
+
+      - name: Run files backup
+        # Separate step: a file-backup failure here does NOT undo or
+        # affect the DB backup above (its dump is already safe in B2).
+        # Reuses the same B2 bucket + GPG passphrase; adds the read-only
+        # Supabase Storage S3 key.
+        env:
+          SUPABASE_S3_ACCESS_KEY_ID:     ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          SUPABASE_S3_ENDPOINT:          ${{ secrets.SUPABASE_S3_ENDPOINT }}
+          SUPABASE_S3_REGION:            ${{ secrets.SUPABASE_S3_REGION }}
+          B2_APPLICATION_KEY_ID:         ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY:            ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET_NAME:                ${{ secrets.B2_BUCKET_NAME }}
+          B2_ENDPOINT:                   ${{ secrets.B2_ENDPOINT }}
+          GPG_PASSPHRASE:                ${{ secrets.GPG_PASSPHRASE }}
+        run: bash scripts/backup-prod-files.sh
+
+      - name: Dead-man-switch ping (both backups succeeded)
+        # Fires ONLY if every prior step succeeded. A failure in either
+        # backup step means this is skipped → no ping → Healthchecks.io
+        # raises the alarm. Non-fatal if the ping itself fails: the
+        # backups are already safe in B2 at this point.
+        if: success()
+        env:
+          HEALTHCHECKS_URL: ${{ secrets.HEALTHCHECKS_URL }}
+        run: |
+          if [ -n "${HEALTHCHECKS_URL:-}" ]; then
+            curl -fsS --retry 3 --max-time 10 "$HEALTHCHECKS_URL" >/dev/null \
+              && echo "[ping] healthcheck ok" \
+              || echo "[ping] WARN: healthcheck ping failed (backups still safe in B2)"
+          else
+            echo "[ping] HEALTHCHECKS_URL not set — skipping dead-man ping"
+          fi

@@ -214,6 +214,51 @@ Remove-Item backups\restore.log -Force -ErrorAction SilentlyContinue
 The encrypted `.gpg` file in `backups/` is fine to keep — it matches what's
 in B2 and `backups/` is gitignored. Or delete it; doesn't matter.
 
+## 5b. Restore FILES (Supabase Storage)
+
+The nightly job also backs up the Storage buckets (`garage-logos`,
+`garage-uploads`) as an encrypted tarball in B2 under the `files/`
+prefix — same bucket, same GPG passphrase, same 90-day retention as the
+DB dumps. Script: `scripts/backup-prod-files.sh`.
+
+### Download + decrypt + unpack
+```bash
+# latest file archive is the last item in a listing (timestamped name)
+aws s3 cp "s3://<B2_BUCKET>/files/garageos-files-<TS>.tar.gz.gpg" . \
+  --endpoint-url "<B2_ENDPOINT>"        # B2 creds in env, same as DB restore
+
+# decrypt with YOUR passphrase, then untar
+gpg --batch --pinentry-mode loopback --passphrase-fd 0 \
+  --decrypt --output files.tar.gz garageos-files-<TS>.tar.gz.gpg   # type passphrase
+tar xzf files.tar.gz
+# → yields ./garage-logos/…  and ./garage-uploads/…
+```
+
+### Re-upload to Storage (recovered or new Supabase project)
+```bash
+# Supabase S3 creds in env (the read-only backup key can READ but not
+# write — for restore you need a WRITE-capable key or the service role).
+aws s3 sync ./garage-logos   "s3://garage-logos" \
+  --endpoint-url "https://<ref>.storage.supabase.co/storage/v1/s3" --region ap-southeast-1
+aws s3 sync ./garage-uploads "s3://garage-uploads" \
+  --endpoint-url "https://<ref>.storage.supabase.co/storage/v1/s3" --region ap-southeast-1
+```
+
+### Two caveats (documented so a restore doesn't surprise you)
+1. **Bucket ACLs are NOT in the tarball** — only the objects. Before
+   re-uploading, re-create the buckets with the right visibility:
+   `garage-logos` = **public-read**, `garage-uploads` = **private**.
+   Getting this backwards would expose private inspection photos or
+   break public logo links.
+2. **URLs in the DB point at the original project ref.** If you restore
+   to a *new* Supabase project (different ref), the `logoUrl` on
+   `Garage` and the photo/voice URLs on `JobStep` still reference the
+   old `<ref>.supabase.co` host and must be rewritten. For a *same
+   project* recovery this is a non-issue — the refs match.
+3. **The backup key is read-only.** `backup-prod-files.sh` only ever
+   downloads. Restoring (writing back) needs a write-capable key, so
+   don't try to reuse the nightly backup key for the re-upload step.
+
 ## 6. Known gotchas (from the 2026-06-29 drill)
 
 These are the surprises we hit. Future-you should know.
@@ -267,7 +312,8 @@ These are the surprises we hit. Future-you should know.
   us during the outage. Re-do the Embedded Signup flow per garage after
   recovery.
 - **Supabase Storage objects** (uploaded photos, voice notes, garage logos).
-  Not covered by this backup. Phase 7 will add a Storage backup job.
+  ✅ NOW COVERED (Phase 7, 2026-07-04) — backed up nightly by
+  `scripts/backup-prod-files.sh` to B2 `files/`. Restore procedure: §5b.
 - **The Auth schema.** We don't use Supabase Auth for staff (we use NextAuth
   with our own User table, which IS in `public`). Customer auth is
   passwordless via WhatsApp — no auth state to restore.

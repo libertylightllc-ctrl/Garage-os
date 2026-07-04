@@ -28,10 +28,12 @@
 
 These are small, they protect what's already live, and they've been deferred.
 
-### ☐ 1. Confirm the file backup actually runs (2 min)
-File backup (photos/logos/voice notes) was built but its first real run is tonight's cron on never-executed code.
-- **Do:** manually trigger the backup workflow → confirm an encrypted archive lands in Backblaze under `files/`.
-- **Why:** an untested backup is a hope. Confirm it works in daylight, not at 2am.
+### ✅ 1. Confirm the file backup actually runs — DONE (2026-07-04)
+Manually dispatched; run succeeded end-to-end. Encrypted archive landed in
+B2 at `files/garageos-files-2026-07-04T13-50-52Z.tar.gz.gpg` (~57 MB,
+size-verified), DB backup step unaffected, Healthchecks ping fired. The
+first failure was a stale Supabase S3 key (`SignatureDoesNotMatch`) —
+fixed by rotating the key. Tonight's cron runs this exact, proven code.
 
 ### ☐ 2. Rotate the exposed credentials (10 min)
 Vercel token + DB password were exposed in chat.

@@ -643,6 +643,16 @@ model Part {
   cost      Decimal @db.Decimal(12, 2)
   price     Decimal @db.Decimal(12, 2)
 
+  // Inventory Phase 1 (2026-07-04). Both additive:
+  //   reorderLevel — per-part low-stock threshold; replaces the hardcoded
+  //     "5" in owner-metrics inventoryHealth(). Default 5 preserves the
+  //     old behaviour for existing rows.
+  //   active — soft-delete for discontinued parts. Kept out of pickers /
+  //     catalog when false; never hard-deleted so historical JobPart /
+  //     EstimateLine references stay intact.
+  reorderLevel Int     @default(5)
+  active       Boolean @default(true)
+
   movements     PartMovement[]
   estimateLines EstimateLine[]
   partRequests  PartRequest[]

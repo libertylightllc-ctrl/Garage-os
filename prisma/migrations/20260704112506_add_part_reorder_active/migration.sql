@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Part" ADD COLUMN     "active" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "reorderLevel" INTEGER NOT NULL DEFAULT 5;

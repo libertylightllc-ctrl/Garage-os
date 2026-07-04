@@ -87,18 +87,23 @@ echo "[files-backup] starting at ${TS} (UTC)"
 # aws s3 sync pulls every object in the bucket down to the local dir.
 # mkdir -p first so tar has a dir even when a bucket is empty.
 #
-# TWEAK POINT: the Supabase S3 endpoint is the line most likely to need
-# adjustment on the first real run. If sync errors with a signature or
-# addressing complaint, the usual fixes are path-style addressing
-# (AWS_S3_ADDRESSING_STYLE=path) or disabling the newer checksum
-# behaviour (AWS_REQUEST_CHECKSUM_CALCULATION=when_required). Don't
-# pre-add them — only if the manual run demands it.
+# CHECKSUM WORKAROUND (added 2026-07-04 after the first manual run
+# failed with SignatureDoesNotMatch): AWS CLI >= 2.23 enables "default
+# integrity protections" — extra x-amz-checksum headers on requests —
+# which Supabase's S3 gateway doesn't include in its signature
+# verification, so every call fails signature validation. Setting both
+# modes to when_required drops the new headers unless an operation
+# genuinely needs them. This is the documented fix for S3-compatible
+# providers. Applies only to the Supabase sync below; the B2 upload
+# further down has its own env and B2 handles the new defaults fine.
 for b in "${BUCKETS[@]}"; do
   echo "[files-backup] syncing bucket ${b} …"
   mkdir -p "${WORKDIR}/${b}"
   AWS_ACCESS_KEY_ID="$SUPABASE_S3_ACCESS_KEY_ID" \
   AWS_SECRET_ACCESS_KEY="$SUPABASE_S3_SECRET_ACCESS_KEY" \
   AWS_DEFAULT_REGION="$SUPABASE_S3_REGION" \
+  AWS_REQUEST_CHECKSUM_CALCULATION=when_required \
+  AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
   aws s3 sync "s3://${b}" "${WORKDIR}/${b}" \
     --endpoint-url "$SUPABASE_S3_ENDPOINT" \
     --no-progress \

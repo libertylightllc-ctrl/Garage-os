@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
@@ -81,9 +82,13 @@ export default async function OwnerInventoryPage({
               {parts.map((p) => {
                 const low = p.qtyOnHand <= p.reorderLevel;
                 return (
-                  <tr key={p.id}>
+                  <tr key={p.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3 font-mono text-xs">{p.sku}</td>
-                    <td className="px-4 py-3 font-medium">{p.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/owner/inventory/${p.id}`} className="hover:underline">
+                        {p.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {money(p.cost)}
                     </td>

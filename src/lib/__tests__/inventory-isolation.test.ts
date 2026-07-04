@@ -29,7 +29,9 @@ vi.mock("next/navigation", () => ({
 const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
-const { createPartAction } = await import("@/app/actions/inventory");
+const { createPartAction, updatePartAction, adjustStockAction } = await import(
+  "@/app/actions/inventory"
+);
 
 const TEST_PREFIX = "inv-iso-test-";
 const garageA = TEST_PREFIX + "garage-A";
@@ -58,6 +60,10 @@ async function callCreate(fd: FormData): Promise<string> {
 }
 
 async function cleanup() {
+  // Movements FK to Part — delete them first (adjustStockAction writes them).
+  await prisma.partMovement.deleteMany({
+    where: { part: { garageId: { startsWith: TEST_PREFIX } } },
+  });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: TEST_PREFIX } } });
 }
@@ -136,5 +142,120 @@ describe("createPartAction — tenant isolation + permissions", { retry: 3 }, ()
     expect(to).toBe("/owner/inventory"); // success — not a clash across garages
     expect((await prisma.part.findMany({ where: { garageId: garageA } })).length).toBe(1);
     expect((await prisma.part.findMany({ where: { garageId: garageB } })).length).toBe(1);
+  });
+});
+
+// ---- 1b: edit + manual stock adjustment ----
+
+async function seedPart(garageId: string, over: Partial<{ sku: string; qtyOnHand: number; reorderLevel: number }> = {}) {
+  return prisma.part.create({
+    data: {
+      garageId,
+      sku: over.sku ?? "SEED-1",
+      name: "Seed Part",
+      cost: "10",
+      price: "20",
+      qtyOnHand: over.qtyOnHand ?? 5,
+      reorderLevel: over.reorderLevel ?? 3,
+    },
+  });
+}
+
+async function callAction(action: (fd: FormData) => Promise<void>, fd: FormData): Promise<string> {
+  try {
+    await action(fd);
+    return "(no redirect)";
+  } catch (e) {
+    const m = (e as Error).message;
+    if (m.startsWith("REDIRECT:")) return m.slice("REDIRECT:".length);
+    throw e;
+  }
+}
+
+describe("updatePartAction — 1b edit", { retry: 3 }, () => {
+  it("edits a part in the caller's garage", async () => {
+    const p = await seedPart(garageA, { sku: "OLD" });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    const to = await callAction(updatePartAction, form({ partId: p.id, sku: "NEW", name: "Renamed", cost: "12", price: "25", reorderLevel: "7" }));
+    expect(to).toBe(`/owner/inventory/${p.id}`);
+    const row = await prisma.part.findUnique({ where: { id: p.id } });
+    expect(row?.sku).toBe("NEW");
+    expect(row?.name).toBe("Renamed");
+    expect(row?.reorderLevel).toBe(7);
+    expect(Number(row?.price)).toBe(25);
+  });
+
+  it("cannot edit another garage's part", async () => {
+    const pB = await seedPart(garageB, { sku: "B-PART" });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA)); // A tries to edit B's part
+    const to = await callAction(updatePartAction, form({ partId: pB.id, sku: "HACKED", name: "x", cost: "1", price: "1" }));
+    expect(to).toContain("/owner/inventory?error="); // "Part not found"
+    const row = await prisma.part.findUnique({ where: { id: pB.id } });
+    expect(row?.sku).toBe("B-PART"); // unchanged
+  });
+
+  it("rejects a non-owner", async () => {
+    const p = await seedPart(garageA);
+    mockAuth.mockResolvedValueOnce({ user: { id: "x", role: "ADVISOR", garageId: garageA, email: "x", name: "x" } });
+    await expect(updatePartAction(form({ partId: p.id, sku: "X", name: "Y", cost: "1", price: "1" }))).rejects.toThrow("Not authorized");
+  });
+});
+
+describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
+  it("adds stock, records a movement, and updates qty", async () => {
+    const p = await seedPart(garageA, { qtyOnHand: 5 });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "add", qty: "8", reason: "received" }));
+    expect(to).toBe(`/owner/inventory/${p.id}`);
+    const row = await prisma.part.findUnique({ where: { id: p.id } });
+    expect(row?.qtyOnHand).toBe(13);
+    const moves = await prisma.partMovement.findMany({ where: { partId: p.id } });
+    expect(moves.length).toBe(1);
+    expect(moves[0].delta).toBe(8);
+    expect(moves[0].reason).toBe("received");
+  });
+
+  it("removes stock (negative delta) and records it", async () => {
+    const p = await seedPart(garageA, { qtyOnHand: 5 });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    await callAction(adjustStockAction, form({ partId: p.id, direction: "remove", qty: "2", reason: "damaged" }));
+    const row = await prisma.part.findUnique({ where: { id: p.id } });
+    expect(row?.qtyOnHand).toBe(3);
+    const moves = await prisma.partMovement.findMany({ where: { partId: p.id } });
+    expect(moves[0].delta).toBe(-2);
+    expect(moves[0].reason).toBe("damaged");
+  });
+
+  it("refuses to drive stock negative", async () => {
+    const p = await seedPart(garageA, { qtyOnHand: 3 });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "remove", qty: "10", reason: "x" }));
+    expect(to).toContain("/owner/inventory/" + p.id + "?error=");
+    const row = await prisma.part.findUnique({ where: { id: p.id } });
+    expect(row?.qtyOnHand).toBe(3); // unchanged
+    expect((await prisma.partMovement.findMany({ where: { partId: p.id } })).length).toBe(0); // no movement written
+  });
+
+  it("requires a reason", async () => {
+    const p = await seedPart(garageA, { qtyOnHand: 5 });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "add", qty: "1", reason: "" }));
+    expect(to).toContain("?error=");
+    expect((await prisma.part.findUnique({ where: { id: p.id } }))?.qtyOnHand).toBe(5); // unchanged
+  });
+
+  it("cannot adjust another garage's part", async () => {
+    const pB = await seedPart(garageB, { qtyOnHand: 5 });
+    mockAuth.mockResolvedValueOnce(ownerSession(garageA)); // A tries to adjust B's part
+    await callAction(adjustStockAction, form({ partId: pB.id, direction: "add", qty: "99", reason: "hack" }));
+    const row = await prisma.part.findUnique({ where: { id: pB.id } });
+    expect(row?.qtyOnHand).toBe(5); // untouched
+    expect((await prisma.partMovement.findMany({ where: { partId: pB.id } })).length).toBe(0);
+  });
+
+  it("rejects a non-owner", async () => {
+    const p = await seedPart(garageA);
+    mockAuth.mockResolvedValueOnce({ user: { id: "x", role: "TECH", garageId: garageA, email: "x", name: "x" } });
+    await expect(adjustStockAction(form({ partId: p.id, direction: "add", qty: "1", reason: "x" }))).rejects.toThrow("Not authorized");
   });
 });

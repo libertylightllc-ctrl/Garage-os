@@ -106,6 +106,8 @@ export async function updatePartAction(formData: FormData) {
   const cost = parseMoney(String(formData.get("cost") ?? ""));
   const price = parseMoney(String(formData.get("price") ?? ""));
   const reorderLevel = parseCount(String(formData.get("reorderLevel") ?? ""), 5);
+  // OPTIONAL supplier link (1c). Blank = clear the link.
+  const supplierIdRaw = String(formData.get("supplierId") ?? "").trim();
 
   const back = `/owner/inventory/${partId}`;
   if (!partId) fail("Missing part.");
@@ -121,6 +123,18 @@ export async function updatePartAction(formData: FormData) {
   });
   if (!part) fail("Part not found.");
 
+  // Resolve the optional supplier link. A supplied id must belong to the
+  // caller's garage (prevents linking to another tenant's supplier); an
+  // unknown/foreign id is treated as "no supplier" rather than an error.
+  let supplierId: string | null = null;
+  if (supplierIdRaw) {
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: supplierIdRaw, garageId: user.garageId },
+      select: { id: true },
+    });
+    if (supplier) supplierId = supplier.id;
+  }
+
   // If the SKU changed, keep it unique within the garage.
   if (sku !== part.sku) {
     const clash = await prisma.part.findUnique({
@@ -132,7 +146,7 @@ export async function updatePartAction(formData: FormData) {
 
   await prisma.part.update({
     where: { id: part.id },
-    data: { sku, name, cost, price, reorderLevel },
+    data: { sku, name, cost, price, reorderLevel, supplierId },
   });
 
   revalidatePath(back);

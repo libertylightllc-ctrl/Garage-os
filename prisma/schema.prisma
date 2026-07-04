@@ -193,6 +193,7 @@ model Garage {
   jobCards     JobCard[]
   invoices     Invoice[]
   parts        Part[]
+  suppliers    Supplier[]
   partRequests PartRequest[]
   reminders    Reminder[]
   bays         Bay[]
@@ -653,6 +654,15 @@ model Part {
   reorderLevel Int     @default(5)
   active       Boolean @default(true)
 
+  // Inventory 1c (2026-07-04). OPTIONAL supplier link — a catalog part
+  // may record which supplier it "comes from". Nullable and additive: it
+  // does NOT change how parts are created/used in the existing job /
+  // estimate flow; a part with no supplier behaves exactly as before.
+  // Supplier is soft-deleted (active flag), never hard-deleted, so this
+  // reference is never left dangling.
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
   movements     PartMovement[]
   estimateLines EstimateLine[]
   partRequests  PartRequest[]
@@ -662,6 +672,32 @@ model Part {
   updatedAt DateTime @updatedAt
 
   @@unique([garageId, sku])
+  @@index([supplierId])
+}
+
+// Inventory 1c (2026-07-04) — supplier directory. OWNER-only, garage-scoped.
+// Purely a reference list the owner maintains (who they buy parts from);
+// Phase 2 Purchasing will reference these when raising purchase orders.
+// Deactivated (active=false) rather than hard-deleted so historical part
+// references and future PO history stay intact.
+model Supplier {
+  id            String  @id @default(cuid())
+  garageId      String
+  garage        Garage  @relation(fields: [garageId], references: [id])
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  trn           String? // supplier tax registration number (UAE TRN)
+  address       String?
+  active        Boolean @default(true)
+
+  parts Part[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId])
 }
 
 model PartMovement {

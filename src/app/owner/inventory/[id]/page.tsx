@@ -30,6 +30,22 @@ export default async function PartDetailPage({
   });
   if (!part) notFound();
 
+  // Active suppliers for the OPTIONAL "comes from" dropdown (1c). Only
+  // active ones are offered; if the part already points at a now-inactive
+  // supplier, it's added below so the current link still shows.
+  const suppliers = await prisma.supplier.findMany({
+    where: { garageId: session.user.garageId, active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  if (part.supplierId && !suppliers.some((s) => s.id === part.supplierId)) {
+    const current = await prisma.supplier.findFirst({
+      where: { id: part.supplierId, garageId: session.user.garageId },
+      select: { id: true, name: true },
+    });
+    if (current) suppliers.unshift(current);
+  }
+
   const movements = await prisma.partMovement.findMany({
     where: { partId: part.id },
     orderBy: { createdAt: "desc" },
@@ -77,6 +93,23 @@ export default async function PartDetailPage({
             <Field name="cost" label={t("partCost")} type="number" step="0.01" min="0" defaultValue={String(part.cost)} required />
             <Field name="price" label={t("partPrice")} type="number" step="0.01" min="0" defaultValue={String(part.price)} required />
             <Field name="reorderLevel" label={t("partReorderLevel")} type="number" min="0" defaultValue={String(part.reorderLevel)} />
+            <label className="col-span-2 flex flex-col gap-1 sm:col-span-3">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t("partSupplier")}
+              </span>
+              <select
+                name="supplierId"
+                defaultValue={part.supplierId ?? ""}
+                className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+              >
+                <option value="">{t("partSupplierNone")}</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="col-span-2 flex items-end sm:col-span-3">
               <Button type="submit">{t("saveChanges")}</Button>
             </div>

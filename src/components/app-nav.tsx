@@ -20,6 +20,7 @@ const NAV: Record<StaffRole, NavItem[]> = {
         { href: "/owner/bays", labelKey: "tabBays", key: "bays" },
         { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
         { href: "/owner/inventory", labelKey: "tabInventory", key: "inventory" },
+        { href: "/owner/suppliers", labelKey: "tabSuppliers", key: "suppliers" },
         { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
         { href: "/owner/ledger", labelKey: "tabLedger", key: "ledger" },
         { href: "/owner/analytics", labelKey: "tabAnalytics", key: "analytics" },

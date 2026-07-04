@@ -50,8 +50,8 @@ Vercel token + DB password were exposed in chat.
 
 ### ☐ Phase 1 — Catalog + Suppliers + Manual Stock
 - ✅ **1a** — Parts catalog (add/list/low-stock, owner-only) — **SHIPPED**
-- ☐ **1b** — Edit a part + manual stock adjustment (with reason)
-- ☐ **1c** — Suppliers (add/edit/deactivate)
+- ✅ **1b** — Edit a part + manual stock adjustment (with reason) — **SHIPPED**
+- ✅ **1c** — Suppliers (add/edit/deactivate; optional part→supplier link) — **built + verified local, awaiting push**
 - ☐ **1d** — Wire low-stock to the owner dashboard (real data, not a hint)
 
 ### ☐ Phase 2 — Purchasing

@@ -129,6 +129,17 @@ enum PartRequestStatus {
   CANCELLED
 }
 
+// Inventory Phase 2 — purchasing. A purchase order is raised to a supplier
+// (DRAFT), sent (ORDERED), then received (RECEIVED → stock increases, 2b),
+// or CANCELLED. Distinct from PartRequestStatus (the technician job-side
+// request loop) — this is the owner's stock-replenishment document.
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
 // Maintenance reminders (Workflow-Spec step 16). Interval is date-based; the
 // message asks the customer to check their own mileage.
 enum ReminderType {
@@ -192,10 +203,11 @@ model Garage {
   bookings     Booking[]
   jobCards     JobCard[]
   invoices     Invoice[]
-  parts        Part[]
-  suppliers    Supplier[]
-  partRequests PartRequest[]
-  reminders    Reminder[]
+  parts          Part[]
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  partRequests   PartRequest[]
+  reminders      Reminder[]
   bays         Bay[]
   ledgerEntries LedgerEntry[]
   advancePayments AdvancePayment[]
@@ -663,10 +675,11 @@ model Part {
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
 
-  movements     PartMovement[]
-  estimateLines EstimateLine[]
-  partRequests  PartRequest[]
-  jobParts      JobPart[]
+  movements          PartMovement[]
+  estimateLines      EstimateLine[]
+  partRequests       PartRequest[]
+  jobParts           JobPart[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -692,12 +705,52 @@ model Supplier {
   address       String?
   active        Boolean @default(true)
 
-  parts Part[]
+  parts          Part[]
+  purchaseOrders PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([garageId])
+}
+
+// Inventory Phase 2 (2026-07-04) — a stock-replenishment order to a supplier.
+// Owner-only, garage-scoped. Lines snapshot the ordered qty + unit cost; on
+// RECEIVED (2b) each line increments the part's stock via a PartMovement.
+model PurchaseOrder {
+  id         String              @id @default(cuid())
+  garageId   String
+  garage     Garage              @relation(fields: [garageId], references: [id])
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  status     PurchaseOrderStatus @default(DRAFT)
+  reference  String? // supplier quote / PO reference
+  note       String?
+  orderedAt  DateTime? // when marked ORDERED (sent to supplier)
+  receivedAt DateTime? // when stock was received (2b)
+
+  lines PurchaseOrderLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId, status])
+  @@index([supplierId])
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  partId          String
+  part            Part          @relation(fields: [partId], references: [id])
+  qty             Int
+  unitCost        Decimal       @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseOrderId])
 }
 
 model PartMovement {

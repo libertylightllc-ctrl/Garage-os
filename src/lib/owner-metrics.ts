@@ -51,11 +51,45 @@ export async function carsToday(garageId: Scope, now = new Date()): Promise<numb
 }
 
 export async function inventoryHealth(garageId: Scope): Promise<{ low: number; total: number }> {
-  const [low, total] = await Promise.all([
-    prisma.part.count({ where: { garageId: scopeWhere(garageId), qtyOnHand: { lte: 5 } } }),
-    prisma.part.count({ where: { garageId: scopeWhere(garageId) } }),
-  ]);
-  return { low, total };
+  // Low-stock is PER-PART: qtyOnHand at or below that part's own
+  // reorderLevel (Inventory 1a replaced the old hardcoded "5"). Prisma
+  // can't compare two columns in a count(), and discontinued parts aren't
+  // reordered, so tally the ACTIVE catalog's levels in memory. Catalogs
+  // are small (dozens of rows per garage).
+  const parts = await prisma.part.findMany({
+    where: { garageId: scopeWhere(garageId), active: true },
+    select: { qtyOnHand: true, reorderLevel: true },
+  });
+  const low = parts.filter((p) => p.qtyOnHand <= p.reorderLevel).length;
+  return { low, total: parts.length };
+}
+
+/**
+ * The reorder shortlist for the owner dashboard — the actual ACTIVE parts
+ * at or below their reorder level, most-urgent first (biggest shortfall,
+ * then lowest stock), capped at `limit`. Returns the items plus the full
+ * low count so the UI can show "+N more". Read-only + garage-scoped like
+ * every metric here.
+ */
+export async function lowStockParts(
+  garageId: Scope,
+  limit = 5,
+): Promise<{
+  items: { id: string; name: string; sku: string; qtyOnHand: number; reorderLevel: number }[];
+  low: number;
+}> {
+  const parts = await prisma.part.findMany({
+    where: { garageId: scopeWhere(garageId), active: true },
+    select: { id: true, name: true, sku: true, qtyOnHand: true, reorderLevel: true },
+  });
+  const lowAll = parts
+    .filter((p) => p.qtyOnHand <= p.reorderLevel)
+    .sort(
+      (a, b) =>
+        a.qtyOnHand - a.reorderLevel - (b.qtyOnHand - b.reorderLevel) ||
+        a.qtyOnHand - b.qtyOnHand,
+    );
+  return { items: lowAll.slice(0, limit), low: lowAll.length };
 }
 
 export async function weekTrend(

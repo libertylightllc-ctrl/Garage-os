@@ -147,6 +147,11 @@ const en = {
   deactivate: "Remove",
   partSupplier: "Supplier",
   partSupplierNone: "— none —",
+  // inventory 1d — dashboard low-stock reorder shortlist
+  lowStockHeading: "Low stock",
+  viewInventory: "View inventory",
+  lowStockNone: "All parts are above their reorder level.",
+  moreLowStock: "more below reorder",
   billing: "Billing & plan",
   statusLabel: "Status",
   renewsLabel: "renews",
@@ -1192,6 +1197,11 @@ const ar: typeof en = {
   deactivate: "إزالة",
   partSupplier: "المورد",
   partSupplierNone: "— بدون —",
+  // inventory 1d — dashboard low-stock reorder shortlist
+  lowStockHeading: "مخزون منخفض",
+  viewInventory: "عرض المخزون",
+  lowStockNone: "كل القطع أعلى من حد إعادة الطلب.",
+  moreLowStock: "أخرى تحت حد الطلب",
   billing: "الاشتراك والخطة",
   statusLabel: "الحالة",
   renewsLabel: "يتجدد",

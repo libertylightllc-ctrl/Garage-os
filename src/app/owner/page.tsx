@@ -11,6 +11,7 @@ import {
   profitThisMonth,
   carsToday,
   inventoryHealth,
+  lowStockParts,
   weekTrend,
   whoOwes,
   aiUsage,
@@ -239,6 +240,7 @@ export default async function OwnerHome({
     intakeAcceptance(gids),
     avgConfirmMinutes(gids),
     technicianWork(gids),
+    lowStockParts(gids),
   ]);
   let metricsHadError = false;
   const v = <T,>(idx: number, fb: T): T => {
@@ -257,6 +259,7 @@ export default async function OwnerHome({
   const acceptance = v(6, { confirmed: 0, rejected: 0, rate: null as number | null });
   const confirmMins = v(7, null as number | null);
   const techWork = v(8, [] as Awaited<ReturnType<typeof technicianWork>>);
+  const lowStock = v(9, { items: [], low: 0 } as Awaited<ReturnType<typeof lowStockParts>>);
   const advisorWork = await advisorActivity(gids).catch((e) => {
     console.error("[owner] advisorActivity failed:", e);
     metricsHadError = true;
@@ -323,6 +326,52 @@ export default async function OwnerHome({
         {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ?"+":""}
         {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
+
+      {/* Low stock — actionable reorder shortlist (Inventory 1d). Real
+          per-part reorderLevel data (not a static hint); each row links
+          straight to the part so the owner can act. Hidden entirely when
+          there are no active parts at all, so an empty catalog doesn't
+          show a stray panel. */}
+      {inv.total > 0 ? (
+        <div className="rounded-xl border border-border p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-medium">
+              📦 {t("lowStockHeading")}
+              {lowStock.low > 0 ? (
+                <span className="ms-2 rounded-full bg-danger-50 px-2 py-0.5 text-xs font-medium text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+                  {lowStock.low}
+                </span>
+              ) : null}
+            </h2>
+            <Link href="/owner/inventory" className="text-xs text-text-mute hover:underline">
+              {t("viewInventory")} →
+            </Link>
+          </div>
+          {lowStock.items.length === 0 ? (
+            <p className="text-sm text-text-mute">{t("lowStockNone")}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {lowStock.items.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <Link href={`/owner/inventory/${p.id}`} className="min-w-0 truncate font-medium hover:underline">
+                    {p.name}{" "}
+                    <span className="font-mono text-xs text-text-mute">{p.sku}</span>
+                  </Link>
+                  <span className="shrink-0 tabular-nums text-text-mute">
+                    <span className="font-semibold text-danger-700 dark:text-danger-500">{p.qtyOnHand}</span>
+                    {" "}/ {t("partReorderLevel").toLowerCase()} {p.reorderLevel}
+                  </span>
+                </li>
+              ))}
+              {lowStock.low > lowStock.items.length ? (
+                <li className="py-2 text-xs text-text-mute">
+                  + {lowStock.low - lowStock.items.length} {t("moreLowStock")}
+                </li>
+              ) : null}
+            </ul>
+          )}
+        </div>
+      ) : null}
 
       {/* Copilot + pilot metrics — stacked on phones, side-by-side on lg+
           so the desktop horizontal canvas isn't wasted on two small panels

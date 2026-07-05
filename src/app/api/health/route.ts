@@ -13,6 +13,10 @@ export async function GET() {
       tableCount: rows.length,
       tables: rows.map((r) => r.table_name),
       garageCount,
+      // Boolean status ONLY — never the key value. Lets us confirm whether
+      // vision OCR (Moulkia + the upcoming invoice import) runs for real in
+      // an environment, or silently falls back to mock data.
+      ocr: process.env.ANTHROPIC_API_KEY ? "configured" : "missing",
     });
   } catch (err) {
     return Response.json(

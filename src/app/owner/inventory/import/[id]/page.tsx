@@ -85,18 +85,18 @@ export default async function PartsImportReviewPage({
                   <table className="w-full min-w-[600px] table-fixed text-sm">
                     <colgroup>
                       <col className="w-14" />
+                      <col className="w-36" />
                       <col />
-                      <col className="w-32" />
                       <col className="w-20" />
                       <col className="w-28" />
                     </colgroup>
-                    <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <thead className="bg-muted/50 text-start text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-center">{t("importInclude")}</th>
-                        <th className="px-3 py-2">{t("partName")}</th>
-                        <th className="px-3 py-2">{t("partSku")}</th>
-                        <th className="px-3 py-2 text-right">{t("adjustQty")}</th>
-                        <th className="px-3 py-2 text-right">{t("poUnitCost")}</th>
+                        <th className="px-3 py-2 text-start">{t("importPartNo")}</th>
+                        <th className="px-3 py-2 text-start">{t("importDescription")}</th>
+                        <th className="px-3 py-2 text-end">{t("adjustQty")}</th>
+                        <th className="px-3 py-2 text-end">{t("poUnitCost")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -114,39 +114,50 @@ export default async function PartsImportReviewPage({
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <div className="flex items-center gap-1.5">
-                              {l.flagged ? (
-                                <span title={t("importFlaggedHint")} className="text-warning-600">⚠</span>
-                              ) : null}
-                              <input
-                                name={`name_${i}`}
-                                defaultValue={l.name}
-                                placeholder={t("importNamePlaceholder")}
-                                disabled={done}
-                                className="w-full rounded-md border border-border bg-transparent px-2 py-1.5"
-                              />
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">
                             <input
                               name={`sku_${i}`}
                               defaultValue={l.sku ?? ""}
                               placeholder={t("importSkuAuto")}
                               disabled={done}
                               className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 font-mono text-xs"
+                              aria-label={t("importPartNo")}
                             />
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-3 py-2">
+                            <div className="relative">
+                              <input
+                                name={`name_${i}`}
+                                defaultValue={l.name}
+                                placeholder={t("importNamePlaceholder")}
+                                disabled={done}
+                                title={l.flagged ? t("importFlaggedHint") : undefined}
+                                className={`w-full rounded-md border bg-transparent px-2 py-1.5 ${
+                                  l.flagged && !done ? "border-warning-500/60 pe-8" : "border-border"
+                                }`}
+                                aria-label={t("importDescription")}
+                              />
+                              {l.flagged && !done ? (
+                                <span
+                                  title={t("importFlaggedHint")}
+                                  className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-warning-600"
+                                >
+                                  ⚠
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-end">
                             <input
                               name={`qty_${i}`}
                               type="number"
                               min="0"
                               defaultValue={l.qty}
                               disabled={done}
-                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
+                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-end tabular-nums"
+                              aria-label={t("adjustQty")}
                             />
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-3 py-2 text-end">
                             <input
                               name={`unitCost_${i}`}
                               type="number"
@@ -154,7 +165,8 @@ export default async function PartsImportReviewPage({
                               min="0"
                               defaultValue={String(l.unitCost)}
                               disabled={done}
-                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
+                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-end tabular-nums"
+                              aria-label={t("poUnitCost")}
                             />
                           </td>
                         </tr>

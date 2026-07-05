@@ -43,6 +43,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# loose credential / secret files — NEVER commit (kept out of the repo entirely)
+garageos-backup keys.txt
+*keys*.txt
+*secret*.txt
+
 # local debug / live-deploy probe artifacts (curl outputs, cookie jars, scrapes)
 .cookies-*.txt
 .cookies-*.json

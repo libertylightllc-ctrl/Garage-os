@@ -207,6 +207,51 @@ export async function validateLogoFile(file: File): Promise<void> {
   }
 }
 
+// ─── INVOICE IMAGE (OCR import) ──────────────────────────────────────
+// A photographed supplier invoice for the parts-import OCR flow. Same
+// magic-byte + MIME discipline as the logo, but a phone-photo-sized cap
+// (invoices are 2–5 MB, not 500 KB) and stored PRIVATE via saveUpload()
+// (signed URL) since it's an internal audit-trail image, not public brand.
+
+/** Hard cap for an uploaded invoice photo, in bytes. */
+export const INVOICE_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Validate a candidate invoice image — reuses the logo's magic-byte sniff
+ * + MIME allowlist (PNG/JPEG/WEBP; SVG excluded) but with the larger
+ * phone-photo cap. Throws LogoValidationError (shared image-validation
+ * error type) with a stable .code on any failure. HEIC is not accepted by
+ * the vision API, so it's rejected here with a clear code.
+ */
+export async function validateInvoiceImage(file: File): Promise<void> {
+  if (file.size === 0) {
+    throw new LogoValidationError("EMPTY", "Invoice image is empty.");
+  }
+  if (file.size > INVOICE_MAX_BYTES) {
+    throw new LogoValidationError(
+      "TOO_LARGE",
+      `Invoice photo must be ${INVOICE_MAX_BYTES / (1024 * 1024)} MB or smaller (got ${Math.round(file.size / (1024 * 1024))} MB).`,
+    );
+  }
+  if (!LOGO_ALLOWED_MIME.includes(file.type as (typeof LOGO_ALLOWED_MIME)[number])) {
+    throw new LogoValidationError(
+      "BAD_MIME",
+      `Invoice photo must be PNG, JPEG, or WEBP (got "${file.type || "unknown"}"). If it's a HEIC iPhone photo, share it as JPEG.`,
+    );
+  }
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const sniffed = sniffImageType(head);
+  if (sniffed === null) {
+    throw new LogoValidationError("BAD_MAGIC", "Invoice image content does not match its declared type.");
+  }
+  if (sniffed !== file.type) {
+    throw new LogoValidationError(
+      "MIME_MISMATCH",
+      `Invoice photo declared "${file.type}" but actual content is "${sniffed}".`,
+    );
+  }
+}
+
 /**
  * Upload a validated logo to the public garage-logos bucket and
  * return the permanent public URL. Validates first (no escape hatch).

@@ -141,6 +141,16 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+// Inventory OCR import — a photographed supplier invoice, OCR'd into draft
+// parts lines that the OWNER reviews + corrects before any catalog write.
+// DRAFT = awaiting review; CONFIRMED = owner saved it to the catalog;
+// DISCARDED = owner threw it away. Nothing hits the catalog until CONFIRMED.
+enum PartsImportStatus {
+  DRAFT
+  CONFIRMED
+  DISCARDED
+}
+
 // Maintenance reminders (Workflow-Spec step 16). Interval is date-based; the
 // message asks the customer to check their own mileage.
 enum ReminderType {
@@ -207,6 +217,7 @@ model Garage {
   parts          Part[]
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
+  partsImports   PartsImport[]
   partRequests   PartRequest[]
   reminders      Reminder[]
   bays         Bay[]
@@ -288,6 +299,7 @@ model User {
   helperOf        JobHelper[] @relation("TechHelp")
   findings        JobFinding[] @relation("TechFindings")
   jobPartsCreated JobPart[] @relation("CreatedJobParts")
+  partsImports    PartsImport[] @relation("PartsImportedBy")
   qcJobs          JobCard[] @relation("QcJobs")
   deliveredJobs   JobCard[] @relation("DeliveredJobs")
   aiEvents        AiEvent[]
@@ -754,6 +766,46 @@ model PurchaseOrderLine {
   updatedAt DateTime @updatedAt
 
   @@index([purchaseOrderId])
+}
+
+// Inventory OCR import (2026-07-05). A photographed supplier invoice, OCR'd
+// into draft lines. OWNER-only, garage-scoped. imageUrl keeps the source
+// photo for the audit trail. Lines are a REVIEW BUFFER — nothing becomes a
+// catalog Part until the owner confirms. `flagged` = OCR was not confident
+// (blank/uncertain value) so the UI highlights it; `include` = the owner's
+// keep/skip checkbox.
+model PartsImport {
+  id           String            @id @default(cuid())
+  garageId     String
+  garage       Garage            @relation(fields: [garageId], references: [id])
+  imageUrl     String // stored invoice photo (audit trail)
+  supplierName String? // OCR'd header supplier name (informational)
+  status       PartsImportStatus @default(DRAFT)
+  createdById  String?
+  createdBy    User?             @relation("PartsImportedBy", fields: [createdById], references: [id])
+
+  lines PartsImportLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId, status])
+}
+
+model PartsImportLine {
+  id            String      @id @default(cuid())
+  partsImportId String
+  partsImport   PartsImport @relation(fields: [partsImportId], references: [id], onDelete: Cascade)
+  name          String // may be blank if OCR was unsure
+  sku           String?
+  qty           Int         @default(1)
+  unitCost      Decimal     @default(0) @db.Decimal(12, 2)
+  flagged       Boolean     @default(false) // low-confidence — UI highlights it
+  include       Boolean     @default(true) // owner's keep/skip checkbox
+
+  createdAt DateTime @default(now())
+
+  @@index([partsImportId])
 }
 
 model PartMovement {

@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
 import { createPartAction } from "@/app/actions/inventory";
+import { startPartsImportAction } from "@/app/actions/parts-import";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,11 @@ export const dynamic = "force-dynamic";
 export default async function OwnerInventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; imported?: string; skipped?: string }>;
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
-  const { error } = await searchParams;
+  const { error, imported, skipped } = await searchParams;
 
   const parts = await prisma.part.findMany({
     where: { garageId: session.user.garageId, active: true },
@@ -48,6 +49,34 @@ export default async function OwnerInventoryPage({
             {error}
           </p>
         ) : null}
+
+        {imported ? (
+          <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
+            {t("importCreated").replace("{n}", imported)}
+            {skipped ? ` ${t("importSkipped").replace("{n}", skipped)}` : ""}
+          </p>
+        ) : null}
+
+        {/* Import from invoice photo (OCR) */}
+        <form
+          action={startPartsImportAction}
+          className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">📷 {t("importFromPhoto")}</p>
+            <p className="text-xs text-muted-foreground">{t("importFromPhotoHint")}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              name="invoice"
+              accept="image/png,image/jpeg,image/webp"
+              required
+              className="max-w-[220px] text-xs file:mr-2 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-xs"
+            />
+            <Button type="submit" variant="ghost">{t("importScan")}</Button>
+          </div>
+        </form>
 
         {/* Add-part form */}
         <form

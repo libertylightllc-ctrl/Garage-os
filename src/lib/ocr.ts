@@ -53,6 +53,20 @@ export function ocrEnabled(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+/**
+ * Thrown when OCR is invoked in PRODUCTION but ANTHROPIC_API_KEY is unset.
+ * Mock OCR data is a dev/demo convenience only — silently handing a real
+ * user fake invoice/registration reads (with no error) is far worse than
+ * failing loudly, so production refuses to mock. Callers can catch this to
+ * show a clean "scanning unavailable" message.
+ */
+export class OcrDisabledError extends Error {
+  constructor() {
+    super("OCR unavailable: ANTHROPIC_API_KEY is not configured.");
+    this.name = "OcrDisabledError";
+  }
+}
+
 // Verified against https://platform.claude.com/docs (Models overview) on 2026-06-05:
 //   Sonnet 4.6: $3/$15 per Mtok, stronger OCR, vision-capable     ← PRIMARY
 //   Haiku  4.5: $1/$5  per Mtok, fastest, vision-capable          ← FALLBACK
@@ -219,6 +233,7 @@ async function callClaudeVision(
   userText: string,
   base64: string,
   mediaType: string,
+  maxTokens = 400,
 ): Promise<ClaudeRaw> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -229,7 +244,8 @@ async function callClaudeVision(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 400,
+      // Moulkia (~6 fields) fits in 400; a multi-line invoice needs more.
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [
         {
@@ -265,10 +281,11 @@ async function tryAttempt<T>(
   isEmpty: (t: T) => boolean,
   base64: string,
   mediaType: string,
+  maxTokens = 400,
 ): Promise<{ attempt: OcrAttempt; fields: T | null }> {
   const start = Date.now();
   try {
-    const r = await callClaudeVision(model, systemPrompt, userText, base64, mediaType);
+    const r = await callClaudeVision(model, systemPrompt, userText, base64, mediaType, maxTokens);
     const latencyMs = Date.now() - start;
     const fields = parser(r.text);
     if (isEmpty(fields)) {
@@ -310,17 +327,23 @@ async function extractWithFallback<T>(
   mockValue: T,
   base64: string,
   mediaType: string,
+  maxTokens = 400,
 ): Promise<OcrResult<T>> {
   if (!ocrEnabled()) {
+    // Mock is a DEV/demo convenience ONLY. In production a missing key must
+    // fail LOUDLY — never silently return fabricated OCR data to a real user.
+    if (process.env.NODE_ENV === "production") {
+      throw new OcrDisabledError();
+    }
     return { fields: mockValue, attempts: [{ model: "mock-ocr", tokensIn: 0, tokensOut: 0, latencyMs: 0 }] };
   }
   const attempts: OcrAttempt[] = [];
 
-  const primary = await tryAttempt(OCR_PRIMARY, systemPrompt, userText, parser, isEmpty, base64, mediaType);
+  const primary = await tryAttempt(OCR_PRIMARY, systemPrompt, userText, parser, isEmpty, base64, mediaType, maxTokens);
   attempts.push(primary.attempt);
   if (primary.fields) return { fields: primary.fields, attempts };
 
-  const fallback = await tryAttempt(OCR_FALLBACK, systemPrompt, userText, parser, isEmpty, base64, mediaType);
+  const fallback = await tryAttempt(OCR_FALLBACK, systemPrompt, userText, parser, isEmpty, base64, mediaType, maxTokens);
   attempts.push(fallback.attempt);
   if (fallback.fields) return { fields: fallback.fields, attempts };
 
@@ -352,6 +375,108 @@ export function extractMoulkiaBack(base64: string, mediaType: string): Promise<O
     mockMoulkiaBack(),
     base64,
     mediaType,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Supplier parts-invoice OCR (Inventory import). Multi-line, so max_tokens is
+// raised. The critical rule: the model must LEAVE A VALUE BLANK and mark the
+// line not-confident rather than guess — a wrong price/name that looks right
+// is worse than an obvious gap the owner fills in. `flagged` drives the
+// review UI's highlight; nothing is saved to the catalog until the owner
+// confirms.
+// ---------------------------------------------------------------------------
+
+export interface InvoiceLine {
+  name: string;
+  sku: string;
+  qty: number;
+  unitCost: number;
+  flagged: boolean; // OCR not confident, or a required value was blank
+}
+
+export interface InvoiceExtract {
+  supplierName: string;
+  lines: InvoiceLine[];
+}
+
+export const EMPTY_INVOICE: InvoiceExtract = { supplierName: "", lines: [] };
+
+/** Demo sample (no API key) so the import flow stays demoable. */
+export function mockInvoiceExtract(): InvoiceExtract {
+  return {
+    supplierName: "Gulf Auto Parts LLC",
+    lines: [
+      { name: "Oil Filter", sku: "OF-1042", qty: 12, unitCost: 8.5, flagged: false },
+      { name: "Brake Pad Set (Front)", sku: "", qty: 4, unitCost: 95, flagged: false },
+      { name: "", sku: "WPR-22", qty: 6, unitCost: 0, flagged: true }, // unreadable → flagged for the owner
+    ],
+  };
+}
+
+const INVOICE_SYSTEM_PROMPT =
+  "You read a photographed SUPPLIER PARTS INVOICE (a GCC auto-parts shop invoice, often bilingual Arabic/English, " +
+  "sometimes thermal-printed or handwritten) and reply with ONLY a JSON object: " +
+  '{"supplierName": string, "lines": [{"name": string, "sku": string, "qty": number, "unitCost": number, "confident": boolean}]}. ' +
+  "Each element of lines is ONE product row from the invoice's item table. " +
+  "name = the part description; sku = the part/item code if the row shows one (else empty string); " +
+  "qty = quantity ordered (a whole number); unitCost = price PER UNIT (not the line total). " +
+  "Read the Latin/English text; if a cell is only in Arabic, transliterate the part name but never invent digits. " +
+  "CRITICAL: if you are not sure of a value, leave it blank (empty string, or 0 for a number) and set \"confident\": false " +
+  "for that line. NEVER guess or invent a part name, code, quantity, or price. It is far better to flag a line for the " +
+  "human to fix than to fill in a plausible-looking wrong value. Set \"confident\": true only when the whole row is clearly legible. " +
+  "Skip header/subtotal/VAT/total rows — only real product lines. No prose, no markdown, no code fences — just the JSON object.";
+
+function toNum(v: unknown): number {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+function toQty(v: unknown): number {
+  const n = typeof v === "number" ? Math.round(v) : parseInt(String(v ?? "").replace(/[^\d]/g, ""), 10);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+export function parseInvoiceJson(raw: string): InvoiceExtract {
+  let obj: Record<string, unknown> = {};
+  try {
+    const a = raw.indexOf("{");
+    const b = raw.lastIndexOf("}");
+    if (a >= 0 && b > a) obj = JSON.parse(raw.slice(a, b + 1)) as Record<string, unknown>;
+  } catch {
+    obj = {};
+  }
+  const rawLines = Array.isArray(obj["lines"]) ? (obj["lines"] as unknown[]) : [];
+  const lines: InvoiceLine[] = rawLines.map((l) => {
+    const o = (l ?? {}) as Record<string, unknown>;
+    const name = String(o["name"] ?? "").trim();
+    const sku = String(o["sku"] ?? "").trim();
+    const qty = toQty(o["qty"]);
+    const unitCost = toNum(o["unitCost"]);
+    // Flag when the model was unsure OR a must-have value is missing, so the
+    // owner's review highlights exactly the rows that need a human eye.
+    const modelConfident = o["confident"] !== false;
+    const flagged = !modelConfident || name === "" || qty === 0 || unitCost === 0;
+    return { name, sku, qty: qty || 1, unitCost, flagged };
+  });
+  return { supplierName: String(obj["supplierName"] ?? "").trim(), lines };
+}
+
+export function isEmptyInvoice(e: InvoiceExtract): boolean {
+  return e.lines.length === 0;
+}
+
+/** OCR a supplier parts invoice into draft lines (multi-line → higher token budget). */
+export function extractPartsInvoice(base64: string, mediaType: string): Promise<OcrResult<InvoiceExtract>> {
+  return extractWithFallback(
+    INVOICE_SYSTEM_PROMPT,
+    "Extract the supplier name and every product line (name, sku, qty, unit cost) from this invoice as JSON.",
+    parseInvoiceJson,
+    isEmptyInvoice,
+    EMPTY_INVOICE,
+    mockInvoiceExtract(),
+    base64,
+    mediaType,
+    1600, // room for ~25 line items
   );
 }
 

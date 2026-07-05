@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseMoulkiaFrontJson,
   parseMoulkiaBackJson,
@@ -8,6 +8,8 @@ import {
   ocrCostUsd,
   extractMoulkiaFront,
   extractMoulkiaBack,
+  extractPartsInvoice,
+  OcrDisabledError,
   OCR_PRIMARY,
   OCR_FALLBACK,
   type MoulkiaFront,
@@ -228,6 +230,51 @@ const emptyBackPayload = {
   content: [{ text: '{"vin":"","make":"","model":"","year":0}' }],
   usage: { input_tokens: 80, output_tokens: 12 },
 };
+
+// Production hardening — mock OCR is a DEV-ONLY convenience. In production a
+// missing ANTHROPIC_API_KEY must fail LOUDLY (OcrDisabledError), never silently
+// hand a real user fabricated invoice/registration reads. One shared gate in
+// extractWithFallback covers BOTH surfaces, so we assert both.
+describe("production hardening — no key must ERROR, never mock", () => {
+  async function withProdNoKey(fn: () => Promise<void>) {
+    // vi.stubEnv handles NODE_ENV's readonly typing + auto-restores on unstub.
+    // "" is falsy → ocrEnabled() returns false, same as an unset key.
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      await fn();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it("invoice OCR throws OcrDisabledError in production with no key (no mock)", async () => {
+    await withProdNoKey(async () => {
+      await expect(extractPartsInvoice("xxx", "image/jpeg")).rejects.toBeInstanceOf(
+        OcrDisabledError,
+      );
+    });
+  });
+
+  it("Moulkia OCR throws OcrDisabledError in production with no key (no mock)", async () => {
+    await withProdNoKey(async () => {
+      await expect(extractMoulkiaFront("xxx", "image/jpeg")).rejects.toBeInstanceOf(
+        OcrDisabledError,
+      );
+    });
+  });
+
+  it("outside production, no key still returns mock (dev convenience preserved)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", ""); // NODE_ENV stays 'test'
+    try {
+      const r = await extractPartsInvoice("xxx", "image/jpeg");
+      expect(r.attempts[0].model).toBe("mock-ocr");
+      expect(r.fields.lines.length).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
 
 describe("extractMoulkiaFront — primary + fallback chain", () => {
   it("no API key → mock prefill, one mock attempt logged", async () => {

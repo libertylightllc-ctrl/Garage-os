@@ -49,10 +49,10 @@ export default async function PartsImportReviewPage({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("importReviewTitle")}</h1>
           <p className="text-sm text-muted-foreground">
             {imp.supplierName ? <>{imp.supplierName} · </> : null}
-            {imp.lines.length} {t("importDetected")}
+            {imp.lines.length} {t(imp.lines.length === 1 ? "importDetectedOne" : "importDetected")}
             {flaggedCount > 0 ? (
               <span className="ms-2 rounded-full bg-warning-50 px-2 py-0.5 text-xs font-medium text-warning-600 dark:bg-warning-500/10">
-                {flaggedCount} {t("importFlagged")}
+                {flaggedCount} {t(flaggedCount === 1 ? "importFlaggedOne" : "importFlagged")}
               </span>
             ) : null}
           </p>
@@ -81,8 +81,15 @@ export default async function PartsImportReviewPage({
               <form action={confirmPartsImportAction} className="space-y-4">
                 <input type="hidden" name="importId" value={imp.id} />
                 <input type="hidden" name="rowCount" value={imp.lines.length} />
-                <div className="overflow-hidden rounded-xl border border-border">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full min-w-[600px] table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-14" />
+                      <col />
+                      <col className="w-32" />
+                      <col className="w-20" />
+                      <col className="w-28" />
+                    </colgroup>
                     <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-center">{t("importInclude")}</th>
@@ -126,7 +133,7 @@ export default async function PartsImportReviewPage({
                               defaultValue={l.sku ?? ""}
                               placeholder={t("importSkuAuto")}
                               disabled={done}
-                              className="w-28 rounded-md border border-border bg-transparent px-2 py-1.5 font-mono text-xs"
+                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 font-mono text-xs"
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -136,7 +143,7 @@ export default async function PartsImportReviewPage({
                               min="0"
                               defaultValue={l.qty}
                               disabled={done}
-                              className="w-20 rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
+                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
                             />
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -147,7 +154,7 @@ export default async function PartsImportReviewPage({
                               min="0"
                               defaultValue={String(l.unitCost)}
                               disabled={done}
-                              className="w-24 rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
+                              className="w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
                             />
                           </td>
                         </tr>

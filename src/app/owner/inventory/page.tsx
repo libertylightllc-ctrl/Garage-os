@@ -52,7 +52,7 @@ export default async function OwnerInventoryPage({
 
         {imported ? (
           <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
-            {t("importCreated").replace("{n}", imported)}
+            {imported === "1" ? t("importCreatedOne") : t("importCreated").replace("{n}", imported)}
             {skipped ? ` ${t("importSkipped").replace("{n}", skipped)}` : ""}
           </p>
         ) : null}

@@ -142,6 +142,10 @@ const en = {
   importSourcePhoto: "Source photo",
   importCreated: "Imported {n} parts into the catalog.",
   importSkipped: "Skipped {n} (blank name or duplicate SKU).",
+  // singular forms (n === 1) — never show "1 parts" / "1 lines" / "1 need"
+  importDetectedOne: "line detected",
+  importFlaggedOne: "needs a check",
+  importCreatedOne: "Imported 1 part into the catalog.",
   importStatus_CONFIRMED: "This import was confirmed — the parts are in your catalog.",
   importStatus_DISCARDED: "This import was discarded.",
   // inventory 1c — supplier directory
@@ -1262,6 +1266,10 @@ const ar: typeof en = {
   importSourcePhoto: "الصورة المصدر",
   importCreated: "تم استيراد {n} قطعة إلى الكتالوج.",
   importSkipped: "تم تخطي {n} (اسم فارغ أو رمز مكرر).",
+  // singular forms (n === 1)
+  importDetectedOne: "بند مكتشف",
+  importFlaggedOne: "يحتاج تدقيق",
+  importCreatedOne: "تم استيراد قطعة واحدة إلى الكتالوج.",
   importStatus_CONFIRMED: "تم تأكيد هذا الاستيراد — القطع في كتالوجك.",
   importStatus_DISCARDED: "تم تجاهل هذا الاستيراد.",
   // inventory 1c — supplier directory

@@ -25,8 +25,13 @@ vi.mock("next/navigation", () => ({
 const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
-const { createPurchaseOrderAction, addPoLineAction, removePoLineAction, setPoStatusAction } =
-  await import("@/app/actions/purchasing");
+const {
+  createPurchaseOrderAction,
+  addPoLineAction,
+  removePoLineAction,
+  setPoStatusAction,
+  receivePurchaseOrderAction,
+} = await import("@/app/actions/purchasing");
 
 const P = "po-iso-test-";
 const gA = P + "garage-A";
@@ -58,6 +63,8 @@ const part = (garageId: string, sku: string) =>
 async function cleanup() {
   await prisma.purchaseOrderLine.deleteMany({ where: { purchaseOrder: { garageId: { startsWith: P } } } });
   await prisma.purchaseOrder.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Receiving writes PartMovements — clear them before their parts (FK).
+  await prisma.partMovement.deleteMany({ where: { part: { garageId: { startsWith: P } } } });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.supplier.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
@@ -183,5 +190,150 @@ describe("setPoStatusAction", { retry: 3 }, () => {
     mockAuth.mockResolvedValueOnce(owner(gA));
     await call(removePoLineAction, form({ poId: po.id, lineId: line.id }));
     expect((await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } })).length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b — PARTIAL receiving into stock. This is the stock-integrity slice.
+// ---------------------------------------------------------------------------
+let poSeq = 0;
+async function orderedPO(
+  garageId: string,
+  specs: { startStock: number; qty: number }[],
+) {
+  const s = await supplier(garageId);
+  const po = await prisma.purchaseOrder.create({
+    data: { garageId, supplierId: s.id, status: "ORDERED", reference: "PO-R" },
+  });
+  const lines = [];
+  for (const [i, spec] of specs.entries()) {
+    const p = await prisma.part.create({
+      data: { garageId, sku: `RCV-${poSeq++}-${i}`, name: "Recv " + i, cost: "5", price: "9", qtyOnHand: spec.startStock },
+    });
+    const line = await prisma.purchaseOrderLine.create({
+      data: { purchaseOrderId: po.id, partId: p.id, qty: spec.qty, unitCost: "5" },
+    });
+    lines.push({ line, part: p });
+  }
+  return { po, lines };
+}
+function receiveForm(poId: string, receipts: { lineId: string; qty: number }[]): FormData {
+  const fd = new FormData();
+  fd.set("poId", poId);
+  for (const r of receipts) fd.set(`recv_${r.lineId}`, String(r.qty));
+  return fd;
+}
+const qtyOf = async (partId: string) =>
+  (await prisma.part.findUnique({ where: { id: partId } }))?.qtyOnHand;
+const recvOf = async (lineId: string) =>
+  (await prisma.purchaseOrderLine.findUnique({ where: { id: lineId } }))?.receivedQty;
+const statusOf = async (poId: string) =>
+  (await prisma.purchaseOrder.findUnique({ where: { id: poId } }))?.status;
+const movesOf = async (partId: string) =>
+  prisma.partMovement.findMany({ where: { partId } });
+
+describe("receivePurchaseOrderAction — 2b PARTIAL receiving", { retry: 3 }, () => {
+  it("receive PART then the REST — stock adds each time, total exact, status flows", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 100, qty: 10 }]);
+    const L = lines[0];
+
+    // Receive 6 of 10.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 6 }]));
+    expect(await qtyOf(L.part.id)).toBe(106); // +6
+    expect(await recvOf(L.line.id)).toBe(6);
+    expect(await statusOf(po.id)).toBe("PARTIALLY_RECEIVED");
+
+    // Receive the remaining 4.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 4 }]));
+    expect(await qtyOf(L.part.id)).toBe(110); // +10 total, NEVER +20
+    expect(await recvOf(L.line.id)).toBe(10);
+    const poRow = await prisma.purchaseOrder.findUnique({ where: { id: po.id } });
+    expect(poRow?.status).toBe("RECEIVED");
+    expect(poRow?.receivedAt).not.toBeNull();
+    expect((await movesOf(L.part.id)).length).toBe(2); // one movement per receipt
+  });
+
+  it("BLOCKS receiving more than outstanding (up front AND after a partial)", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 0, qty: 10 }]);
+    const L = lines[0];
+
+    // 11 > 10 ordered → blocked, nothing applied.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to1 = await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 11 }]));
+    expect(to1).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(0);
+    expect(await recvOf(L.line.id)).toBe(0);
+
+    // Receive 6, then 5 (outstanding is only 4) → blocked.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 6 }]));
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to2 = await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 5 }]));
+    expect(to2).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(6); // still just the 6
+    expect(await recvOf(L.line.id)).toBe(6);
+  });
+
+  it("CONCURRENT double-submit of the full outstanding adds ONCE (no double-count)", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 0, qty: 10 }]);
+    const L = lines[0];
+    mockAuth.mockResolvedValue(owner(gA));
+    try {
+      const results = await Promise.allSettled([
+        call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 10 }])),
+        call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: L.line.id, qty: 10 }])),
+      ]);
+      expect(await qtyOf(L.part.id)).toBe(10); // once, not 20
+      expect(await recvOf(L.line.id)).toBe(10);
+      expect((await movesOf(L.part.id)).length).toBe(1);
+      const urls = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      expect(urls.some((u) => /error=/.test(u))).toBe(true); // the loser was blocked
+    } finally {
+      mockAuth.mockReset();
+    }
+  });
+
+  it("blocks receiving nothing (all zero)", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 5, qty: 10 }]);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: lines[0].line.id, qty: 0 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(lines[0].part.id)).toBe(5);
+  });
+
+  it("blocks receiving a cancelled PO", async () => {
+    const s = await supplier(gA);
+    const po = await prisma.purchaseOrder.create({ data: { garageId: gA, supplierId: s.id, status: "CANCELLED" } });
+    const p = await part(gA, "CAN");
+    const line = await prisma.purchaseOrderLine.create({ data: { purchaseOrderId: po.id, partId: p.id, qty: 5, unitCost: "1" } });
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: line.id, qty: 5 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(p.id)).toBe(0);
+  });
+
+  it("multi-line: one line partial + one line full → PO is PARTIALLY_RECEIVED", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 0, qty: 10 }, { startStock: 0, qty: 5 }]);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(
+      receivePurchaseOrderAction,
+      receiveForm(po.id, [
+        { lineId: lines[0].line.id, qty: 4 }, // 4/10 — partial
+        { lineId: lines[1].line.id, qty: 5 }, // 5/5 — full
+      ]),
+    );
+    expect(await qtyOf(lines[0].part.id)).toBe(4);
+    expect(await qtyOf(lines[1].part.id)).toBe(5);
+    expect(await statusOf(po.id)).toBe("PARTIALLY_RECEIVED");
+  });
+
+  it("cannot receive another garage's PO", async () => {
+    const { po, lines } = await orderedPO(gB, [{ startStock: 7, qty: 20 }]);
+    mockAuth.mockResolvedValueOnce(owner(gA)); // A tries to receive B's PO
+    await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: lines[0].line.id, qty: 5 }]));
+    expect(await qtyOf(lines[0].part.id)).toBe(7); // untouched
+    expect(await statusOf(po.id)).toBe("ORDERED");
   });
 });

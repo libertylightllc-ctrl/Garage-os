@@ -9,6 +9,7 @@ import {
   addPoLineAction,
   removePoLineAction,
   setPoStatusAction,
+  receivePurchaseOrderAction,
 } from "@/app/actions/purchasing";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,12 @@ export default async function PurchaseOrderDetailPage({
   if (!po) notFound();
 
   const isDraft = po.status === "DRAFT";
+  // Receiving surfaces once the PO has been sent. `showReceiving` reveals the
+  // received/outstanding columns; `canReceive` shows the receive form (still
+  // has outstanding qty to take in).
+  const showReceiving =
+    po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED" || po.status === "RECEIVED";
+  const canReceive = po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED";
 
   // Parts available to add (active, garage-scoped) for the line dropdown.
   const parts = isDraft
@@ -85,40 +92,65 @@ export default async function PurchaseOrderDetailPage({
           </p>
         ) : null}
 
+        {/* Fully received banner */}
+        {po.status === "RECEIVED" && po.receivedAt ? (
+          <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
+            {t("poReceivedBanner")} {po.receivedAt.toISOString().slice(0, 10)}
+          </p>
+        ) : null}
+
         {/* Lines */}
         <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">{t("partName")}</th>
-                <th className="px-4 py-3 text-right">{t("adjustQty")}</th>
+                <th className="px-4 py-3 text-right">{t("poOrdered")}</th>
+                {showReceiving ? <th className="px-4 py-3 text-right">{t("poReceived")}</th> : null}
+                {showReceiving ? <th className="px-4 py-3 text-right">{t("poOutstanding")}</th> : null}
                 <th className="px-4 py-3 text-right">{t("poUnitCost")}</th>
                 <th className="px-4 py-3 text-right">{t("poLineTotal")}</th>
                 {isDraft ? <th className="px-4 py-3" /> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {po.lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="px-4 py-3 font-medium">
-                    {l.part.name} <span className="font-mono text-xs text-muted-foreground">{l.part.sku}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{l.qty}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(Number(l.unitCost))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
-                  {isDraft ? (
-                    <td className="px-4 py-3 text-right">
-                      <form action={removePoLineAction}>
-                        <input type="hidden" name="poId" value={po.id} />
-                        <input type="hidden" name="lineId" value={l.id} />
-                        <button className="text-xs text-danger-700 hover:underline" type="submit">
-                          {t("remove")}
-                        </button>
-                      </form>
+              {po.lines.map((l) => {
+                const outstanding = l.qty - l.receivedQty;
+                return (
+                  <tr key={l.id}>
+                    <td className="px-4 py-3 font-medium">
+                      {l.part.name} <span className="font-mono text-xs text-muted-foreground">{l.part.sku}</span>
                     </td>
-                  ) : null}
-                </tr>
-              ))}
+                    <td className="px-4 py-3 text-right tabular-nums">{l.qty}</td>
+                    {showReceiving ? (
+                      <td className="px-4 py-3 text-right tabular-nums">{l.receivedQty}</td>
+                    ) : null}
+                    {showReceiving ? (
+                      <td
+                        className={
+                          "px-4 py-3 text-right tabular-nums " +
+                          (outstanding > 0 ? "font-medium text-warning-600" : "text-muted-foreground")
+                        }
+                      >
+                        {outstanding}
+                      </td>
+                    ) : null}
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(Number(l.unitCost))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
+                    {isDraft ? (
+                      <td className="px-4 py-3 text-right">
+                        <form action={removePoLineAction}>
+                          <input type="hidden" name="poId" value={po.id} />
+                          <input type="hidden" name="lineId" value={l.id} />
+                          <button className="text-xs text-danger-700 hover:underline" type="submit">
+                            {t("remove")}
+                          </button>
+                        </form>
+                      </td>
+                    ) : null}
+                  </tr>
+                );
+              })}
               {po.lines.length === 0 ? (
                 <tr>
                   <td colSpan={isDraft ? 5 : 4} className="px-4 py-8 text-center text-muted-foreground">
@@ -127,19 +159,52 @@ export default async function PurchaseOrderDetailPage({
                 </tr>
               ) : null}
             </tbody>
-            {po.lines.length > 0 ? (
-              <tfoot className="border-t border-border">
-                <tr>
-                  <td className="px-4 py-3 text-xs uppercase tracking-wide text-muted-foreground" colSpan={3}>
-                    {t("poTotal")}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{money(total)}</td>
-                  {isDraft ? <td /> : null}
-                </tr>
-              </tfoot>
-            ) : null}
           </table>
         </div>
+
+        {/* Receive delivery — PARTIAL receiving (2b). Enter how many of each
+            line arrived NOW (≤ outstanding). Defaults to the full outstanding
+            for a one-tap "everything arrived", but can be reduced for a
+            partial delivery; receive again later for the rest. */}
+        {canReceive ? (
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold tracking-tight">{t("poReceiveHeading")}</h2>
+            <p className="text-xs text-muted-foreground">{t("poReceiveHint")}</p>
+            <form action={receivePurchaseOrderAction} className="space-y-2">
+              <input type="hidden" name="poId" value={po.id} />
+              {po.lines.map((l) => {
+                const outstanding = l.qty - l.receivedQty;
+                return (
+                  <div key={l.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
+                    <span className="min-w-0 truncate text-sm">
+                      {l.part.name}
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        {l.receivedQty}/{l.qty} {t("poReceivedLower")}
+                        {outstanding > 0 ? <> · {outstanding} {t("poOutstandingLower")}</> : null}
+                      </span>
+                    </span>
+                    {outstanding > 0 ? (
+                      <input
+                        name={`recv_${l.id}`}
+                        type="number"
+                        min="0"
+                        max={outstanding}
+                        defaultValue={outstanding}
+                        aria-label={t("poReceiveNow")}
+                        className="w-20 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    ) : (
+                      <span className="shrink-0 text-xs font-medium text-success-700 dark:text-success-500">✓</span>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="pt-1">
+                <Button type="submit" variant="hero">{t("poReceiveButton")}</Button>
+              </div>
+            </form>
+          </section>
+        ) : null}
 
         {/* Add line — draft only */}
         {isDraft ? (
@@ -198,9 +263,6 @@ export default async function PurchaseOrderDetailPage({
               <input type="hidden" name="status" value="CANCELLED" />
               <Button type="submit" variant="ghost">{t("cancelPo")}</Button>
             </form>
-            {po.status === "ORDERED" ? (
-              <span className="text-xs text-muted-foreground">{t("poReceivingSoon")}</span>
-            ) : null}
           </section>
         ) : null}
       </main>

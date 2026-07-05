@@ -136,6 +136,7 @@ enum PartRequestStatus {
 enum PurchaseOrderStatus {
   DRAFT
   ORDERED
+  PARTIALLY_RECEIVED // some qty received, more still outstanding (2b partial receiving)
   RECEIVED
   CANCELLED
 }
@@ -744,7 +745,8 @@ model PurchaseOrderLine {
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   partId          String
   part            Part          @relation(fields: [partId], references: [id])
-  qty             Int
+  qty             Int // ordered quantity
+  receivedQty     Int           @default(0) // how much has been received so far (2b partial receiving; 0 ≤ receivedQty ≤ qty)
   unitCost        Decimal       @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())

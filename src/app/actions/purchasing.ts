@@ -175,11 +175,118 @@ export async function setPoStatusAction(formData: FormData) {
     });
   } else {
     if (po.status === "RECEIVED") fail("A received order can't be cancelled.", back);
+    if (po.status === "PARTIALLY_RECEIVED")
+      fail("This order has already been partly received — it can't be cancelled.", back);
     if (po.status === "CANCELLED") fail("Already cancelled.", back);
     await prisma.purchaseOrder.update({
       where: { id: po.id },
       data: { status: "CANCELLED" },
     });
+  }
+
+  revalidatePath(back);
+  revalidatePath("/owner/purchasing");
+  redirect(back);
+}
+
+/** Thrown inside the receive transaction when a line's atomic cap-check
+ *  fails (a concurrent receipt already consumed the outstanding qty). */
+class OverReceiveError extends Error {}
+
+/**
+ * Receive stock against an ORDERED (or already PARTIALLY_RECEIVED) purchase
+ * order — PARTIAL receiving (2b). The form carries a per-line "receive now"
+ * quantity (`recv_<lineId>`); each is 0..outstanding. For every line with a
+ * positive quantity we, in ONE transaction:
+ *   1. increment the line's receivedQty,
+ *   2. increment the part's qtyOnHand,
+ *   3. write a PartMovement (audit; reason carries the PO reference).
+ * Then the PO status is recomputed: all lines fully received → RECEIVED
+ * (stamped), otherwise PARTIALLY_RECEIVED. Receiving can happen over many
+ * days: 6 now, 4 later — each receipt adds only its own amount.
+ *
+ * STOCK INTEGRITY — never receive more than outstanding, never double-count:
+ * the per-line increment is a CONDITIONAL updateMany —
+ *   where: { receivedQty: { lte: qty - receiveNow } }
+ * i.e. only bump receivedQty if the result stays ≤ the ordered qty. Because
+ * `qty - receiveNow` is a constant, Postgres re-evaluates it on the locked
+ * row, so two concurrent receipts can't both push a line past its ordered
+ * quantity — the loser matches 0 rows and the whole transaction aborts
+ * (nothing applied). The pre-loop check below is a friendly early-out; THIS
+ * is the guarantee.
+ */
+export async function receivePurchaseOrderAction(formData: FormData) {
+  const user = await requireOwner();
+
+  const poId = String(formData.get("poId") ?? "").trim();
+  const back = `/owner/purchasing/${poId}`;
+  if (!poId) fail("Missing purchase order.");
+
+  const po = await prisma.purchaseOrder.findFirst({
+    where: { id: poId, garageId: user.garageId },
+    include: {
+      lines: { select: { id: true, partId: true, qty: true, receivedQty: true } },
+      supplier: { select: { name: true } },
+    },
+  });
+  if (!po) fail("Purchase order not found.");
+  if (po.status !== "ORDERED" && po.status !== "PARTIALLY_RECEIVED")
+    fail("Only an ordered order can be received.", back);
+
+  // Parse the per-line "receive now" quantities. Each must be a whole
+  // number between 0 and that line's outstanding (ordered − alreadyReceived).
+  const receipts: { lineId: string; partId: string; qty: number; receiveNow: number }[] = [];
+  for (const l of po.lines) {
+    const raw = String(formData.get(`recv_${l.id}`) ?? "").trim();
+    const n = raw === "" ? 0 : Number(raw);
+    if (!Number.isInteger(n) || n < 0) fail("Received quantity must be a whole number of 0 or more.", back);
+    const outstanding = l.qty - l.receivedQty;
+    if (n > outstanding) fail(`You can't receive more than the ${outstanding} still outstanding on a line.`, back);
+    if (n > 0) receipts.push({ lineId: l.id, partId: l.partId, qty: l.qty, receiveNow: n });
+  }
+  if (receipts.length === 0) fail("Enter a quantity to receive on at least one line.", back);
+
+  const reason = `Received PO${po.reference ? ` ${po.reference}` : ""} — ${po.supplier.name}`;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const r of receipts) {
+        // Atomic cap: bump receivedQty only if it stays ≤ ordered qty.
+        const cap = r.qty - r.receiveNow; // max current receivedQty that still allows this receipt
+        const claim = await tx.purchaseOrderLine.updateMany({
+          where: { id: r.lineId, purchaseOrderId: po.id, receivedQty: { lte: cap } },
+          data: { receivedQty: { increment: r.receiveNow } },
+        });
+        if (claim.count === 0) throw new OverReceiveError();
+
+        await tx.part.update({
+          where: { id: r.partId },
+          data: { qtyOnHand: { increment: r.receiveNow } },
+        });
+        await tx.partMovement.create({
+          data: { partId: r.partId, delta: r.receiveNow, reason },
+        });
+      }
+
+      // Recompute status from the fresh line state (inside the tx).
+      const fresh = await tx.purchaseOrderLine.findMany({
+        where: { purchaseOrderId: po.id },
+        select: { qty: true, receivedQty: true },
+      });
+      const allFull = fresh.every((f) => f.receivedQty >= f.qty);
+      await tx.purchaseOrder.update({
+        where: { id: po.id },
+        data: {
+          status: allFull ? "RECEIVED" : "PARTIALLY_RECEIVED",
+          receivedAt: allFull ? new Date() : null,
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof OverReceiveError) {
+      fail("Another receipt updated this order — reload and try again.", back);
+    }
+    throw e;
   }
 
   revalidatePath(back);

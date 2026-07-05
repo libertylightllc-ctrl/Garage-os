@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { companyGarageIds } from "@/lib/branches";
 import { ACCOUNTS } from "@/lib/billing";
 import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
 
 export const dynamic ="force-dynamic";
 
@@ -35,6 +36,18 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
 // The underlying ledger math (debit, credit, signed net) is unchanged
 // — only the Net column's DISPLAY is reformatted, so a non-accountant
 // owner doesn't read 'Sales Revenue −16,382.10' as a loss.
+// Localized display label per account. The ACCOUNTS constants are stored
+// RAW in the DB (they're the ledger row's `account` key), so we never
+// change them — we only map each to a translation key for display. An
+// unknown/future account falls back to its raw string.
+const ACCOUNT_LABEL_KEY: Record<string, MessageKey> = {
+  [ACCOUNTS.CASH]: "acctCashBank",
+  [ACCOUNTS.AR]: "acctAR",
+  [ACCOUNTS.VAT_PAYABLE]: "acctVatPayable",
+  [ACCOUNTS.SALES]: "acctSales",
+  [ACCOUNTS.DEPOSITS]: "acctDeposits",
+};
+
 const NATURAL_SIDE: Record<string, "DR" | "CR"> = {
   [ACCOUNTS.CASH]: "DR",
   [ACCOUNTS.AR]: "DR",
@@ -312,7 +325,9 @@ export default async function OwnerLedger({
                     (i % 2 === 1 ? "bg-surface-2/40" : "")
                   }
                 >
-                  <td className="py-2 pe-3 font-medium">{r.account}</td>
+                  <td className="py-2 pe-3 font-medium">
+                    {ACCOUNT_LABEL_KEY[r.account] ? t(ACCOUNT_LABEL_KEY[r.account]) : r.account}
+                  </td>
                   <td className="py-2 px-2 text-end tabular-nums">
                     {money(r.debit)}
                   </td>
@@ -382,11 +397,11 @@ export default async function OwnerLedger({
                   ) : (
                     <>
                       <span className="inline-flex items-center rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
-                        advance
+                        {t("ledgerAdvanceChip")}
                       </span>
                       {row.migrated ? (
                         <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-mute">
-                          migrated
+                          {t("ledgerMigratedChip")}
                         </span>
                       ) : null}
                     </>

@@ -4,6 +4,7 @@ import { AppNav } from "@/components/app-nav";
 import { addStaffAction, removeStaffAction } from "@/app/actions/onboarding";
 import { listBranches } from "@/lib/branches";
 import { getT } from "@/i18n/server";
+import type { MessageKey } from "@/i18n/config";
 import { Button } from "@/components/ui/button";
 
 export const dynamic ="force-dynamic";
@@ -54,7 +55,7 @@ export default async function StaffPage({
             <span>
               <span className="font-medium">{u.name}</span>{""}
               <span className="text-text-mute">
-                · {u.role} · {u.email}
+                · {t(`role${u.role}` as MessageKey)} · {u.email}
                 {multiBranch ? ` · ${branchName.get(u.garageId) ?? ""}` :""}
               </span>
             </span>

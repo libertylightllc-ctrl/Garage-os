@@ -293,3 +293,100 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   revalidatePath("/owner/purchasing");
   redirect(back);
 }
+
+/** Thrown inside the return transaction when a line's return-cap fails
+ *  (a concurrent return already consumed the received qty). */
+class OverReturnError extends Error {}
+/** Thrown when a return would drive a part's on-hand stock below zero. */
+class NegativeStockError extends Error {}
+
+/**
+ * Return received parts to the supplier (2c) — PARTIAL returns. The form
+ * carries a per-line "return now" quantity (`ret_<lineId>`); each is
+ * 0..(receivedQty − returnedQty). For every line with a positive quantity
+ * we, in ONE transaction:
+ *   1. increment the line's returnedQty,
+ *   2. DECREMENT the part's qtyOnHand,
+ *   3. write a NEGATIVE PartMovement (audit; reason carries the PO reference).
+ * The PO status is left as-is (a return doesn't un-receive the order); the
+ * returnedQty tracks how much went back. Returnable only on an order that
+ * has received stock (PARTIALLY_RECEIVED or RECEIVED).
+ *
+ * STOCK INTEGRITY — two atomic guards, both conditional updateMany:
+ *   - never return more than received: bump returnedQty only where
+ *     `returnedQty <= receivedQty - returnNow` (constant cap, re-checked on
+ *     the locked row) → a concurrent/over return matches 0 rows and aborts.
+ *   - never drive stock negative: decrement qtyOnHand only where
+ *     `qtyOnHand >= returnNow` → if stock isn't there, 0 rows → abort.
+ * Either miss rolls the whole transaction back (nothing applied).
+ */
+export async function returnPurchaseOrderAction(formData: FormData) {
+  const user = await requireOwner();
+
+  const poId = String(formData.get("poId") ?? "").trim();
+  const back = `/owner/purchasing/${poId}`;
+  if (!poId) fail("Missing purchase order.");
+
+  const po = await prisma.purchaseOrder.findFirst({
+    where: { id: poId, garageId: user.garageId },
+    include: {
+      lines: { select: { id: true, partId: true, receivedQty: true, returnedQty: true } },
+      supplier: { select: { name: true } },
+    },
+  });
+  if (!po) fail("Purchase order not found.");
+  if (po.status !== "RECEIVED" && po.status !== "PARTIALLY_RECEIVED")
+    fail("You can only return parts from a received order.", back);
+
+  // Parse the per-line "return now" quantities. Each must be a whole number
+  // between 0 and what's still returnable (receivedQty − alreadyReturned).
+  const returns: { lineId: string; partId: string; receivedQty: number; returnNow: number }[] = [];
+  for (const l of po.lines) {
+    const raw = String(formData.get(`ret_${l.id}`) ?? "").trim();
+    const n = raw === "" ? 0 : Number(raw);
+    if (!Number.isInteger(n) || n < 0) fail("Return quantity must be a whole number of 0 or more.", back);
+    const returnable = l.receivedQty - l.returnedQty;
+    if (n > returnable) fail(`You can't return more than the ${returnable} received on a line.`, back);
+    if (n > 0) returns.push({ lineId: l.id, partId: l.partId, receivedQty: l.receivedQty, returnNow: n });
+  }
+  if (returns.length === 0) fail("Enter a quantity to return on at least one line.", back);
+
+  const reason = `Returned to supplier PO${po.reference ? ` ${po.reference}` : ""} — ${po.supplier.name}`;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const r of returns) {
+        // Guard 1 — never return more than received.
+        const cap = r.receivedQty - r.returnNow; // max current returnedQty that still allows this return
+        const claimLine = await tx.purchaseOrderLine.updateMany({
+          where: { id: r.lineId, purchaseOrderId: po.id, returnedQty: { lte: cap } },
+          data: { returnedQty: { increment: r.returnNow } },
+        });
+        if (claimLine.count === 0) throw new OverReturnError();
+
+        // Guard 2 — never drive stock negative.
+        const claimStock = await tx.part.updateMany({
+          where: { id: r.partId, qtyOnHand: { gte: r.returnNow } },
+          data: { qtyOnHand: { decrement: r.returnNow } },
+        });
+        if (claimStock.count === 0) throw new NegativeStockError();
+
+        await tx.partMovement.create({
+          data: { partId: r.partId, delta: -r.returnNow, reason },
+        });
+      }
+    });
+  } catch (e) {
+    if (e instanceof OverReturnError) {
+      fail("Another return updated this order — reload and try again.", back);
+    }
+    if (e instanceof NegativeStockError) {
+      fail("That return would drive stock below zero — check the current stock first.", back);
+    }
+    throw e;
+  }
+
+  revalidatePath(back);
+  revalidatePath("/owner/purchasing");
+  redirect(back);
+}

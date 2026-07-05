@@ -31,6 +31,7 @@ const {
   removePoLineAction,
   setPoStatusAction,
   receivePurchaseOrderAction,
+  returnPurchaseOrderAction,
 } = await import("@/app/actions/purchasing");
 
 const P = "po-iso-test-";
@@ -335,5 +336,150 @@ describe("receivePurchaseOrderAction — 2b PARTIAL receiving", { retry: 3 }, ()
     await call(receivePurchaseOrderAction, receiveForm(po.id, [{ lineId: lines[0].line.id, qty: 5 }]));
     expect(await qtyOf(lines[0].part.id)).toBe(7); // untouched
     expect(await statusOf(po.id)).toBe("ORDERED");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2c — PURCHASE RETURNS. Stock-integrity slice: return received parts to the
+// supplier → stock DOWN, capped at received, never negative.
+// ---------------------------------------------------------------------------
+async function receivedPO(
+  garageId: string,
+  specs: { stock: number; ordered: number; received: number }[],
+  status: "RECEIVED" | "PARTIALLY_RECEIVED" = "RECEIVED",
+) {
+  const s = await supplier(garageId);
+  const po = await prisma.purchaseOrder.create({
+    data: { garageId, supplierId: s.id, status, reference: "PO-RET" },
+  });
+  const lines = [];
+  for (const [i, spec] of specs.entries()) {
+    const p = await prisma.part.create({
+      data: { garageId, sku: `RET-${poSeq++}-${i}`, name: "Ret " + i, cost: "5", price: "9", qtyOnHand: spec.stock },
+    });
+    const line = await prisma.purchaseOrderLine.create({
+      data: { purchaseOrderId: po.id, partId: p.id, qty: spec.ordered, receivedQty: spec.received, unitCost: "5" },
+    });
+    lines.push({ line, part: p });
+  }
+  return { po, lines };
+}
+function returnForm(poId: string, rets: { lineId: string; qty: number }[]): FormData {
+  const fd = new FormData();
+  fd.set("poId", poId);
+  for (const r of rets) fd.set(`ret_${r.lineId}`, String(r.qty));
+  return fd;
+}
+const returnedOf = async (lineId: string) =>
+  (await prisma.purchaseOrderLine.findUnique({ where: { id: lineId } }))?.returnedQty;
+
+describe("returnPurchaseOrderAction — 2c purchase returns", { retry: 3 }, () => {
+  it("returns WITHIN received — stock drops, returnedQty rises, movement logged", async () => {
+    const { po, lines } = await receivedPO(gA, [{ stock: 50, ordered: 10, received: 10 }]);
+    const L = lines[0];
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 4 }]));
+    expect(await qtyOf(L.part.id)).toBe(46); // 50 − 4
+    expect(await returnedOf(L.line.id)).toBe(4);
+    const moves = await movesOf(L.part.id);
+    expect(moves.length).toBe(1);
+    expect(moves[0].delta).toBe(-4); // negative — stock left
+    expect(moves[0].reason).toMatch(/Returned to supplier/);
+
+    // Return the remaining 6 → returnedQty 10, stock 40.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 6 }]));
+    expect(await qtyOf(L.part.id)).toBe(40); // −10 total
+    expect(await returnedOf(L.line.id)).toBe(10);
+  });
+
+  it("BLOCKS returning more than was received (up front AND after a partial return)", async () => {
+    const { po, lines } = await receivedPO(gA, [{ stock: 50, ordered: 10, received: 10 }]);
+    const L = lines[0];
+
+    // 11 > 10 received → blocked.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to1 = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 11 }]));
+    expect(to1).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(50);
+    expect(await returnedOf(L.line.id)).toBe(0);
+
+    // Return 6, then 5 (only 4 returnable) → blocked.
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 6 }]));
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to2 = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 5 }]));
+    expect(to2).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(44); // still just −6
+    expect(await returnedOf(L.line.id)).toBe(6);
+  });
+
+  it("BLOCKS a return that would drive stock negative (stock already used on jobs)", async () => {
+    // Received 10 but only 3 remain on hand (7 consumed elsewhere). Returning 5
+    // is within received but would take stock to −2 → blocked.
+    const { po, lines } = await receivedPO(gA, [{ stock: 3, ordered: 10, received: 10 }]);
+    const L = lines[0];
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 5 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(3); // untouched
+    expect(await returnedOf(L.line.id)).toBe(0);
+  });
+
+  it("CONCURRENT double-return of the full returnable decrements ONCE (no double)", async () => {
+    const { po, lines } = await receivedPO(gA, [{ stock: 50, ordered: 10, received: 10 }]);
+    const L = lines[0];
+    mockAuth.mockResolvedValue(owner(gA));
+    try {
+      const results = await Promise.allSettled([
+        call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 10 }])),
+        call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 10 }])),
+      ]);
+      expect(await qtyOf(L.part.id)).toBe(40); // −10 once, not −20
+      expect(await returnedOf(L.line.id)).toBe(10);
+      expect((await movesOf(L.part.id)).length).toBe(1);
+      const urls = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      expect(urls.some((u) => /error=/.test(u))).toBe(true);
+    } finally {
+      mockAuth.mockReset();
+    }
+  });
+
+  it("blocks returning nothing (all zero)", async () => {
+    const { po, lines } = await receivedPO(gA, [{ stock: 50, ordered: 10, received: 10 }]);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: lines[0].line.id, qty: 0 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(lines[0].part.id)).toBe(50);
+  });
+
+  it("won't return from an order with nothing received (ORDERED)", async () => {
+    const { po, lines } = await orderedPO(gA, [{ startStock: 20, qty: 10 }]); // ORDERED, receivedQty 0
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: lines[0].line.id, qty: 3 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(lines[0].part.id)).toBe(20);
+  });
+
+  it("allows a return from a PARTIALLY_RECEIVED order (up to what was received)", async () => {
+    const { po, lines } = await receivedPO(gA, [{ stock: 30, ordered: 10, received: 6 }], "PARTIALLY_RECEIVED");
+    const L = lines[0];
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 4 }]));
+    expect(await qtyOf(L.part.id)).toBe(26); // 30 − 4
+    expect(await returnedOf(L.line.id)).toBe(4);
+    // can't now return 3 (only 2 of the 6 received remain returnable)
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: L.line.id, qty: 3 }]));
+    expect(to).toContain("error=");
+    expect(await qtyOf(L.part.id)).toBe(26);
+  });
+
+  it("cannot return another garage's PO", async () => {
+    const { po, lines } = await receivedPO(gB, [{ stock: 40, ordered: 10, received: 10 }]);
+    mockAuth.mockResolvedValueOnce(owner(gA)); // A tries to return B's PO
+    await call(returnPurchaseOrderAction, returnForm(po.id, [{ lineId: lines[0].line.id, qty: 5 }]));
+    expect(await qtyOf(lines[0].part.id)).toBe(40); // untouched
+    expect(await returnedOf(lines[0].line.id)).toBe(0);
   });
 });

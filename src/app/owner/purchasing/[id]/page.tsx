@@ -10,6 +10,7 @@ import {
   removePoLineAction,
   setPoStatusAction,
   receivePurchaseOrderAction,
+  returnPurchaseOrderAction,
 } from "@/app/actions/purchasing";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,11 @@ export default async function PurchaseOrderDetailPage({
   const showReceiving =
     po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED" || po.status === "RECEIVED";
   const canReceive = po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED";
+  // Returns (2c) apply once stock has been received. `showReturned` reveals
+  // the Returned column; `canReturn` shows the return form (a line still has
+  // received stock that hasn't been returned).
+  const showReturned = po.status === "PARTIALLY_RECEIVED" || po.status === "RECEIVED";
+  const canReturn = showReturned && po.lines.some((l) => l.receivedQty - l.returnedQty > 0);
 
   // Parts available to add (active, garage-scoped) for the line dropdown.
   const parts = isDraft
@@ -108,6 +114,7 @@ export default async function PurchaseOrderDetailPage({
                 <th className="px-4 py-3 text-right">{t("poOrdered")}</th>
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poReceived")}</th> : null}
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poOutstanding")}</th> : null}
+                {showReturned ? <th className="px-4 py-3 text-right">{t("poReturned")}</th> : null}
                 <th className="px-4 py-3 text-right">{t("poUnitCost")}</th>
                 <th className="px-4 py-3 text-right">{t("poLineTotal")}</th>
                 {isDraft ? <th className="px-4 py-3" /> : null}
@@ -134,6 +141,9 @@ export default async function PurchaseOrderDetailPage({
                       >
                         {outstanding}
                       </td>
+                    ) : null}
+                    {showReturned ? (
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{l.returnedQty}</td>
                     ) : null}
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(Number(l.unitCost))}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
@@ -201,6 +211,51 @@ export default async function PurchaseOrderDetailPage({
               })}
               <div className="pt-1">
                 <Button type="submit" variant="hero">{t("poReceiveButton")}</Button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {/* Return to supplier — PARTIAL returns (2c). Enter how many of each
+            received line to send back; stock drops by that amount and the
+            line's returnedQty rises. Defaults to 0 (returns are the exception,
+            not the norm). Capped at what's still returnable (received − already
+            returned); the action also refuses to drive stock negative. */}
+        {canReturn ? (
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold tracking-tight">{t("poReturnHeading")}</h2>
+            <p className="text-xs text-muted-foreground">{t("poReturnHint")}</p>
+            <form action={returnPurchaseOrderAction} className="space-y-2">
+              <input type="hidden" name="poId" value={po.id} />
+              {po.lines.map((l) => {
+                const returnable = l.receivedQty - l.returnedQty;
+                return (
+                  <div key={l.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
+                    <span className="min-w-0 truncate text-sm">
+                      {l.part.name}
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        {l.returnedQty}/{l.receivedQty} {t("poReturnedLower")}
+                        {returnable > 0 ? <> · {returnable} {t("poReturnableLower")}</> : null}
+                      </span>
+                    </span>
+                    {returnable > 0 ? (
+                      <input
+                        name={`ret_${l.id}`}
+                        type="number"
+                        min="0"
+                        max={returnable}
+                        defaultValue="0"
+                        aria-label={t("poReturnNow")}
+                        className="w-20 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-right text-sm tabular-nums"
+                      />
+                    ) : (
+                      <span className="shrink-0 text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="pt-1">
+                <Button type="submit" variant="ghost">{t("poReturnButton")}</Button>
               </div>
             </form>
           </section>

@@ -155,20 +155,41 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.partRequest.update({
-      where: { id: req.id },
+    // Atomic claim: the transition only applies if the request is STILL in the
+    // status we read above. A concurrent duplicate (double-click, two tabs)
+    // matches 0 rows and fails cleanly instead of applying stock effects twice.
+    const claimed = await tx.partRequest.updateMany({
+      where: { id: req.id, status: req.status },
       data: { status: to, note: note ?? req.note },
     });
+    if (claimed.count === 0) {
+      throw new Error("This request was already updated — refresh to see its current state.");
+    }
 
     // Stock effects (catalog parts only): arrival adds, fulfilment consumes, a
     // wrong/late arrived part returned for re-order reverses the receipt.
     if (req.partId) {
       const delta = stockDelta(req.status as PartRequestStatus, to, req.qty);
-      if (delta !== 0) {
+      if (delta < 0) {
+        // Consuming stock: conditional decrement so qtyOnHand can never go
+        // below zero, even under concurrency (same guard as PO receive/return).
+        const dec = await tx.part.updateMany({
+          where: { id: req.partId, qtyOnHand: { gte: -delta } },
+          data: { qtyOnHand: { increment: delta } },
+        });
+        if (dec.count === 0) {
+          const p = await tx.part.findUnique({ where: { id: req.partId }, select: { qtyOnHand: true } });
+          throw new Error(
+            `Not enough stock: this needs ${-delta}, only ${p?.qtyOnHand ?? 0} on hand. Adjust stock or order the part first.`,
+          );
+        }
+      } else if (delta > 0) {
         await tx.part.update({
           where: { id: req.partId },
           data: { qtyOnHand: { increment: delta } },
         });
+      }
+      if (delta !== 0) {
         const reason =
           to === "ARRIVED" ? "Part order received" : to === "FULFILLED" ? "Used on job" : "Wrong/late part returned";
         await tx.partMovement.create({

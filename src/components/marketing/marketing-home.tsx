@@ -66,14 +66,24 @@ export function MarketingHome() {
           </div>
         </section>
 
-        {/* ── Product screenshot (placeholder) ──────────────── */}
+        {/* ── Product demo video ────────────────────────────── */}
+        {/* Autoplay requires muted; playsInline keeps mobile Safari from
+            going fullscreen. Poster shows before load / if playback fails.
+            Files live in /public: hero-demo.mp4 + hero-poster.jpg. */}
         <section id="product" className="mx-auto max-w-6xl px-6 pb-24">
           <div className="mx-auto aspect-[16/10] w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-surface-2 shadow-sm">
-            <div className="flex h-full items-center justify-center">
-              <span className="text-sm font-medium uppercase tracking-widest text-text-mute">
-                Product screenshot
-              </span>
-            </div>
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              poster="/hero-poster.jpg"
+              aria-label="GarageOS product demo"
+              className="h-full w-full object-cover"
+            >
+              <source src="/hero-demo.mp4" type="video/mp4" />
+            </video>
           </div>
         </section>
 

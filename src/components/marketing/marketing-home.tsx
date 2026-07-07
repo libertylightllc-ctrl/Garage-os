@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GarageBrand } from "@/components/garage-brand";
+import { HowItWorks } from "@/components/marketing/how-it-works";
 
 // Public marketing homepage (additive). Rendered by src/app/page.tsx ONLY
 // for anonymous visitors; logged-in staff are still redirected to their
@@ -86,6 +87,9 @@ export function MarketingHome() {
             </video>
           </div>
         </section>
+
+        {/* ── How it works (scroll-animated walkthrough) ────── */}
+        <HowItWorks demoHref={DEMO_MAILTO} />
 
         {/* ── Statement ─────────────────────────────────────── */}
         <section className="border-y border-border bg-surface-2/40">

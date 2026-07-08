@@ -14,5 +14,12 @@ export function makePgAdapter() {
   return new PrismaPg({
     connectionString: url,
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
+    // DEV-ONLY resilience: the local `prisma dev` proxy degrades over long
+    // sessions and silently kills pooled sockets (P1017 "Server has closed
+    // the connection" on every page until the dev server restarts). Recycle
+    // aggressively so the pool never reuses a stale socket: short idle
+    // timeout + bounded reuse + TCP keepalive. Prod (Supabase pooler) keeps
+    // the pg defaults.
+    ...(isLocal ? { idleTimeoutMillis: 5_000, maxUses: 200, keepAlive: true } : {}),
   });
 }

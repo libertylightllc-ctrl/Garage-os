@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
+import { stockOptionSuffix } from "@/lib/stock-label";
 import {
   addPoLineAction,
   removePoLineAction,
@@ -60,9 +61,16 @@ export default async function PurchaseOrderDetailPage({
     ? await prisma.part.findMany({
         where: { garageId: session.user.garageId, active: true },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, sku: true, cost: true },
+        select: { id: true, name: true, sku: true, cost: true, qtyOnHand: true, reorderLevel: true },
       })
     : [];
+  // 3a — read-only stock hint in the line picker (helps decide order qty).
+  const stockHint = (p: { qtyOnHand: number; reorderLevel: number }) =>
+    stockOptionSuffix(p.qtyOnHand, p.reorderLevel, {
+      inStock: t("inStockShort"),
+      low: t("lowStockTag"),
+      out: t("outOfStock"),
+    });
 
   const money = (v: number) =>
     new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED" }).format(v);
@@ -282,7 +290,7 @@ export default async function PurchaseOrderDetailPage({
                     <option value="" disabled>{t("choosePlaceholder")}</option>
                     {parts.map((p) => (
                       <option key={p.id} value={p.id} data-cost={String(p.cost)}>
-                        {p.name} ({p.sku})
+                        {p.name} ({p.sku}) · {stockHint(p)}
                       </option>
                     ))}
                   </select>

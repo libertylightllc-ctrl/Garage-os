@@ -43,6 +43,7 @@ import { PhotoCapture } from "@/components/photo-capture";
 import { Badge } from "@/components/ui/badge";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
+import { stockOptionSuffix } from "@/lib/stock-label";
 import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
@@ -185,6 +186,13 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     where: { garageId: session.user.garageId },
     orderBy: { name:"asc"},
   });
+  // 3a — read-only stock hint shown in every catalog picker below.
+  const stockHint = (p: { qtyOnHand: number; reorderLevel: number }) =>
+    stockOptionSuffix(p.qtyOnHand, p.reorderLevel, {
+      inStock: t("inStockShort"),
+      low: t("lowStockTag"),
+      out: t("outOfStock"),
+    });
 
   const bigBtn =
   "flex flex-col items-center justify-center gap-1 rounded-2xl border border-border p-6 text-center text-base font-medium hover:bg-surface-2 transition-colors";
@@ -448,7 +456,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <option value="">{t("catalogPartOptional")}</option>
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name} · {stockHint(p)}
                 </option>
               ))}
             </select>
@@ -692,7 +700,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   <option value="">{t("catalogPartOptional")}</option>
                   {parts.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}
+                      {p.name} · {stockHint(p)}
                     </option>
                   ))}
                 </select>
@@ -819,7 +827,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <option value="">{t("pickPart")}</option>
               {parts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} · {p.qtyOnHand} {t("inStockShort")}
+                  {p.name} · {stockHint(p)}
                 </option>
               ))}
             </select>

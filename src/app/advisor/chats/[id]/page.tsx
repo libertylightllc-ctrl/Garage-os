@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -17,7 +17,7 @@ export const dynamic ="force-dynamic";
 
 export default async function ChatThread({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   const thread = await prisma.whatsAppThread.findFirst({

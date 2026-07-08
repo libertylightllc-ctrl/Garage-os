@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { moulkiaFrontAction, plateLookupAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
@@ -43,7 +43,7 @@ export default async function NewJobCard({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const { error } = await searchParams;
 

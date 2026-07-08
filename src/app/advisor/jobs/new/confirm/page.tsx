@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { createCustomerVehicleJobAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
@@ -65,7 +65,7 @@ function CheckboxGroup({
 }
 
 export default async function ReceptionForm({ searchParams }: { searchParams: Promise<SP> }) {
-  await requireRole("ADVISOR");
+  await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const locale = await getLocale();
   const dictLabels = {

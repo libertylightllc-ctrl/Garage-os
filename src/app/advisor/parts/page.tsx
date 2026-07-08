@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 export const dynamic ="force-dynamic";
 
 export default async function PartsQueue() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   const requests = await prisma.partRequest.findMany({

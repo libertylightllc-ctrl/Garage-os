@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -8,7 +8,7 @@ import { startTestConversationAction } from "@/app/actions/chat";
 export const dynamic ="force-dynamic";
 
 export default async function ChatsInbox() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const garageId = session.user.garageId;
 
   const [threads, customers] = await Promise.all([

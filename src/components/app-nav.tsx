@@ -16,6 +16,10 @@ interface NavItem {
 const NAV: Record<StaffRole, NavItem[]> = {
     OWNER: [
         { href: "/owner", labelKey: "tabDashboard", key: "dashboard" },
+        // Solo-owner shops: the owner runs the job flow himself on the
+        // advisor screens (their guards admit OWNER). Staff stay optional.
+        { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+        { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
         { href: "/owner/branches", labelKey: "tabBranches", key: "branches" },
         { href: "/owner/bays", labelKey: "tabBays", key: "bays" },
         { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
@@ -45,8 +49,7 @@ const NAV: Record<StaffRole, NavItem[]> = {
 };
 
 /** Consistent staff top bar: brand + role, section tabs, sign out. */
-export async function AppNav({ role, active }: { role: StaffRole; active?: string }) {
-    const items = NAV[role];
+export async function AppNav({ role: pageRole, active }: { role: StaffRole; active?: string }) {
     const t = await getT();
 
     // Always fetch the signed-in garage's logoUrl (used by GarageBrand
@@ -55,6 +58,13 @@ export async function AppNav({ role, active }: { role: StaffRole; active?: strin
     // for staff who already passed requireRole, so a session always
     // exists. We still null-guard for the type system.
     const session = await auth();
+
+    // Render the SESSION role's nav, not the page's. An OWNER working a
+    // shared screen (advisor jobs, cashier queue — their guards admit
+    // OWNER for solo-owner shops) keeps the owner tabs and can always get
+    // back to the dashboard. For matching roles this is a no-op.
+    const role = (session?.user?.role as StaffRole | undefined) ?? pageRole;
+    const items = NAV[role] ?? NAV[pageRole];
     const garage = session?.user?.garageId
         ? await prisma.garage.findUnique({
               where: { id: session.user.garageId },

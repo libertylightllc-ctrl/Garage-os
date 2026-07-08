@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -24,7 +24,7 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
  * already cover for the existing cashier queries.
  */
 export default async function AdvisorEstimates() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const garageId = session.user.garageId;
 

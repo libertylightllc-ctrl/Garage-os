@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
 import { WhatsAppStatusPanel } from "@/components/whatsapp-status";
 import { getT } from "@/i18n/server";
@@ -19,7 +19,7 @@ export const dynamic ="force-dynamic";
   * footer of WhatsAppStatusPanel points there.
   */
 export default async function AdvisorWhatsApp() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   return (

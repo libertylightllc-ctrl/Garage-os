@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
@@ -46,7 +46,7 @@ export default async function VehicleHistory({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const locale = await getLocale();
 

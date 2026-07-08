@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey } from "@/i18n/config";
@@ -114,7 +114,7 @@ export default async function RemindersQueue({
 }: {
   searchParams: Promise<{ q?: string; month?: string }>;
 }) {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const locale = await getLocale();
   const now = new Date();

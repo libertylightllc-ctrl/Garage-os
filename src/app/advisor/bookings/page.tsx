@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { confirmBookingAction, rejectBookingAction } from "@/app/actions/intake";
@@ -8,7 +8,7 @@ import { getT } from "@/i18n/server";
 export const dynamic ="force-dynamic";
 
 export default async function BookingsInbox() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   const bookings = await prisma.booking.findMany({

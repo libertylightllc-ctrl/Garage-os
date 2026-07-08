@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { jobActionAction, skipToStageAction, reassignJobAction, checkInPhotoAction, setPriorityAction, setBayAction } from "@/app/actions/jobs";
 import { createEstimateAction } from "@/app/actions/billing";
@@ -34,7 +34,7 @@ export const dynamic ="force-dynamic";
 
 export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   const job = await prisma.jobCard.findFirst({

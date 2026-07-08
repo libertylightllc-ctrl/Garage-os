@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import {
@@ -156,7 +156,7 @@ export default async function CashierHome({
 }: {
   searchParams: Promise<{ tab?: string; filter?: string }>;
 }) {
-  const session = await requireRole("CASHIER");
+  const session = await requireAnyRole(["CASHIER", "OWNER"]);
   const t = await getT();
   const garageId = session.user.garageId;
 

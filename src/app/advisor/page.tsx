@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
@@ -12,7 +12,7 @@ import { ButtonLink } from "@/components/ui/button";
 export const dynamic ="force-dynamic";
 
 export default async function AdvisorHome() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   // Explicit select on JobCard to bypass the 'missing column in

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
 import { WhatsAppStatusPanel } from "@/components/whatsapp-status";
 import { getT } from "@/i18n/server";
@@ -17,7 +17,7 @@ export const dynamic ="force-dynamic";
   * Connect / disconnect remain owner-only (/owner/whatsapp).
   */
 export default async function CashierWhatsApp() {
-  const session = await requireRole("CASHIER");
+  const session = await requireAnyRole(["CASHIER", "OWNER"]);
   const t = await getT();
 
   return (

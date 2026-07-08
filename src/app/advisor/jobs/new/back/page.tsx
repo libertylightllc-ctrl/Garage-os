@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { moulkiaBackAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { PhotoCapture } from "@/components/photo-capture";
@@ -27,7 +27,7 @@ export default async function NewJobMoulkiaBack({
     assignedToId?: string;
   }>;
 }) {
-  await requireRole("ADVISOR");
+  await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
   const {
     ownerName ="",

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { eodBucket, EOD_BUCKETS, type EodBucket } from "@/lib/eod";
@@ -12,7 +12,7 @@ export const dynamic ="force-dynamic";
 const bucketKey = (b: EodBucket): MessageKey => (`eod_${b}` as MessageKey);
 
 export default async function EndOfDay() {
-  const session = await requireRole("ADVISOR");
+  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
   const t = await getT();
 
   const jobs = await prisma.jobCard.findMany({

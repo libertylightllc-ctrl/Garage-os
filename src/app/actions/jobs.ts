@@ -13,9 +13,12 @@ import { canJoinAsHelper } from "@/lib/claim";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
+// OWNER is allowed everywhere the advisor is (solo-owner shops run the whole
+// flow on one login; staff roles stay optional). requireTech below is
+// deliberately NOT widened — it guards the claim-lock + technician stats.
 async function requireAdvisor() {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADVISOR") {
+  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
     throw new Error("Not authorized");
   }
   return session.user;

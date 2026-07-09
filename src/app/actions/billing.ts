@@ -170,21 +170,44 @@ export async function addEstimateLineAction(formData: FormData) {
   const est = await ownedEstimate(estimateId, user.garageId);
   if (est.status !== "DRAFT") throw new Error("Estimate is not editable");
 
+  // 3b — OPTIONAL catalog link. If the advisor picked a part, it must belong
+  // to this garage; the line then stores partId so it "knows" which real part
+  // it is. Link + display only — stock is NOT moved here. No pick → free-text
+  // line, byte-identical to before.
+  const partIdRaw = String(formData.get("partId") ?? "").trim();
+  const linkedPart = partIdRaw
+    ? await prisma.part.findFirst({
+        where: { id: partIdRaw, garageId: user.garageId },
+        select: { id: true, name: true, sku: true },
+      })
+    : null;
+  if (partIdRaw && !linkedPart) throw new Error("Part not found in this garage");
+
   // "DISCOUNT" is a convenience: stored as a FEE line with a negative amount.
   const rawKind = String(formData.get("kind") ?? "LABOR");
-  const isDiscount = rawKind === "DISCOUNT";
-  const kind = (isDiscount ? "FEE" : rawKind) as LineKind;
+  const isDiscount = rawKind === "DISCOUNT" && !linkedPart;
+  // A catalog-linked line is by definition a PART line.
+  const kind = (linkedPart ? "PART" : isDiscount ? "FEE" : rawKind) as LineKind;
   // PART lines no longer embed "(Make Model)" in the snapshot — Make /
   // Model / Year live in their own table columns at every display
   // surface now. The description is exactly what the cashier typed.
   const description =
-    String(formData.get("description") ?? "").trim() || (isDiscount ? "Discount" : "Item");
+    String(formData.get("description") ?? "").trim() ||
+    (linkedPart ? `${linkedPart.name} (${linkedPart.sku})` : isDiscount ? "Discount" : "Item");
   const qty = Math.max(0, Number(formData.get("qty") ?? 1));
   const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
   await prisma.estimateLine.create({
-    data: { estimateId, kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
+    data: {
+      estimateId,
+      kind,
+      partId: linkedPart?.id ?? null,
+      description,
+      qty,
+      unitPrice,
+      lineTotal: lineTotal(qty, unitPrice),
+    },
   });
   await recomputeEstimate(estimateId);
   revalidatePath(`/estimates/${estimateId}`);

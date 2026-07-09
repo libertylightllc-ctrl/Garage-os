@@ -25,6 +25,8 @@ import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
 import { GarageBrand } from "@/components/garage-brand";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
+import { CatalogPartSelect } from "@/components/catalog-part-select";
+import { stockOptionSuffix } from "@/lib/stock-label";
 
 export const dynamic ="force-dynamic";
 
@@ -78,7 +80,12 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
     include: {
-      lines: { orderBy: { createdAt:"asc"} },
+      // 3b — include the linked catalog part (if any) so linked lines can
+      // show a SKU + stock hint in the editor. Display only.
+      lines: {
+        orderBy: { createdAt:"asc"},
+        include: { part: { select: { sku: true, qtyOnHand: true, reorderLevel: true } } },
+      },
       jobCard: {
         // jobCard.status is what gates 'Generate Invoice' per spec —
         // the cashier must NOT be able to invoice while the technician
@@ -156,6 +163,30 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
 
   const editable = canEditEstimate && est.status ==="DRAFT";
   const canDecline = canEditEstimate && !est.invoice; // skip lines until the invoice is cut
+
+  // 3b — read-only stock hint (reuses 3a's rules) + optional catalog picker
+  // options for the add-line form. Display/link only; no stock movement.
+  const stockHint = (p: { qtyOnHand: number; reorderLevel: number }) =>
+    stockOptionSuffix(p.qtyOnHand, p.reorderLevel, {
+      inStock: t("inStockShort"),
+      low: t("lowStockTag"),
+      out: t("outOfStock"),
+    });
+  const catalogOptions = editable
+    ? (
+        await prisma.part.findMany({
+          where: { garageId: session.user.garageId, active: true },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, sku: true, price: true, qtyOnHand: true, reorderLevel: true },
+        })
+      ).map((p) => ({
+        id: p.id,
+        label: `${p.name} (${p.sku}) · ${stockHint(p)}`,
+        name: p.name,
+        sku: p.sku,
+        price: String(p.price),
+      }))
+    : [];
   const backHref = role ==="ADVISOR"? `/advisor/jobs/${est.jobCardId}` :"/cashier";
 
   return (
@@ -264,7 +295,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   lineTotal: Number(l.lineTotal),
                   declined: l.declined,
                 }}
-                displayDescription={translateLineDescription(l.description, locale)}
+                displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.part.sku} · ${stockHint(l.part)}` : "")}
                 labels={{
                   edit: t("editLine"),
                   delete: t("deleteLine"),
@@ -326,7 +357,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       lineTotal: Number(l.lineTotal),
                       declined: l.declined,
                     }}
-                    displayDescription={translateLineDescription(l.description, locale)}
+                    displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.part.sku} · ${stockHint(l.part)}` : "")}
                     labels={{
                       edit: t("editLine"),
                       delete: t("deleteLine"),
@@ -368,6 +399,14 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       {editable ? (
         <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-xl border border-border p-4">
           <input type="hidden" name="estimateId" value={est.id} />
+          {/* 3b — optional catalog link: picking prefills description + price
+              (still editable); leaving it on the placeholder keeps the
+              free-text flow exactly as before. */}
+          <CatalogPartSelect
+            parts={catalogOptions}
+            placeholder={t("catalogPartOptional")}
+            className="h-10 w-full rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+          />
           <div className="flex flex-wrap gap-2">
             <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               <option value="LABOR">{t("labor")}</option>

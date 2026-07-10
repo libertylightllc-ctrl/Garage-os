@@ -295,7 +295,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   lineTotal: Number(l.lineTotal),
                   declined: l.declined,
                 }}
-                displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.part.sku} · ${stockHint(l.part)}` : "")}
+                displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.description.includes(l.part.sku) ? "" : `${l.part.sku} · `}${stockHint(l.part)}` : "")}
                 labels={{
                   edit: t("editLine"),
                   delete: t("deleteLine"),
@@ -357,7 +357,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       lineTotal: Number(l.lineTotal),
                       declined: l.declined,
                     }}
-                    displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.part.sku} · ${stockHint(l.part)}` : "")}
+                    displayDescription={translateLineDescription(l.description, locale) + (l.part ? ` — ${l.description.includes(l.part.sku) ? "" : `${l.part.sku} · `}${stockHint(l.part)}` : "")}
                     labels={{
                       edit: t("editLine"),
                       delete: t("deleteLine"),

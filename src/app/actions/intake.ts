@@ -55,9 +55,14 @@ export async function createBookingPublic(formData: FormData) {
   redirect(`/c/booking/${booking.id}`);
 }
 
+// OWNER is allowed everywhere the advisor is (solo-owner shops confirm
+// bookings on one login) — same widening as jobs.ts; this copy was missed
+// in the original solo-owner sweep.
 async function requireAdvisor() {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ADVISOR") throw new Error("Not authorized");
+  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
+    throw new Error("Not authorized");
+  }
   return session.user;
 }
 

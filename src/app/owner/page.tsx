@@ -350,19 +350,27 @@ export default async function OwnerHome({
       <div className="rounded-xl border border-border p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-sm font-medium">🔧 {t("wrenchTime")}</h2>
-          <div className="flex gap-1 text-xs">
+          <div className="flex items-center gap-2">
             <Link
-              href={`/owner?wrench=day${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-              className={`rounded-lg px-2 py-0.5 ${wrenchMode === "day" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
+              href="/owner/hours"
+              className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-mute hover:bg-surface-2 hover:text-text transition-colors"
             >
-              {t("wrenchDay")}
+              {t("techHoursLookupTitle")} →
             </Link>
-            <Link
-              href={`/owner?wrench=week${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-              className={`rounded-lg px-2 py-0.5 ${wrenchMode === "week" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
-            >
-              {t("wrenchWeek")}
-            </Link>
+            <div className="flex gap-1 text-xs">
+              <Link
+                href={`/owner?wrench=day${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                className={`rounded-lg px-2 py-0.5 ${wrenchMode === "day" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
+              >
+                {t("wrenchDay")}
+              </Link>
+              <Link
+                href={`/owner?wrench=week${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                className={`rounded-lg px-2 py-0.5 ${wrenchMode === "week" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
+              >
+                {t("wrenchWeek")}
+              </Link>
+            </div>
           </div>
         </div>
         {wrenchRows.length === 0 ? (

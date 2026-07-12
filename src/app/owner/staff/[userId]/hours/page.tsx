@@ -67,7 +67,7 @@ export default async function TechHoursPage({
 
       <div className="flex items-center gap-3">
         <Link href={backHref} className="text-sm text-text-mute hover:text-text">
-          {t("techHoursBack")}
+          <span className="inline-block rtl:-scale-x-100">←</span> {t("techHoursBack")}
         </Link>
       </div>
 
@@ -115,8 +115,8 @@ export default async function TechHoursPage({
               <div className="mb-3 flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">{day.date}</h2>
                 <span className="text-xs tabular-nums text-text-mute">
-                  {formatMin(day.totalMin)} · {day.carsTouched} {t("wrenchCars").toLowerCase()}
-                  {day.staleSessions > 0 ? ` · ⚠ ${day.staleSessions}` : ""}
+                  {formatMin(day.totalMin)} · {day.carsTouched} {day.carsTouched === 1 ? t("wrenchCar") : t("wrenchCars").toLowerCase()}
+                  {day.staleSessions > 0 ? ` · ⚠ ${t("wrenchStaleCount").replace("{n}", String(day.staleSessions))}` : ""}
                 </span>
               </div>
 
@@ -143,7 +143,7 @@ export default async function TechHoursPage({
                   <thead>
                     <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
                       <th className="py-1.5 pe-3 text-start font-semibold">{t("wrenchCars")}</th>
-                      <th className="py-1.5 px-2 text-start font-semibold">{t("techHoursJob").replace("{n}", "#")}</th>
+                      <th className="py-1.5 px-2 text-start font-semibold">{t("techHoursJobCol")}</th>
                       <th className="py-1.5 px-2 text-end font-semibold">{t("techHoursTotalTime")}</th>
                       <th className="py-1.5 ps-2 text-end font-semibold">⚠</th>
                     </tr>

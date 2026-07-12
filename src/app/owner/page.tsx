@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { FloorNow } from "@/components/floor-now";
 import { classifyIntent } from "@/lib/copilot";
 import { companyGarageIds } from "@/lib/branches";
 import { getT } from "@/i18n/server";
@@ -326,6 +327,10 @@ export default async function OwnerHome({
         {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ?"+":""}
         {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
+
+      {/* Tech-tracking slice 1 — the live floor: which tech is on which
+          car right now, and who's idle. Refreshes on page load. */}
+      <FloorNow garageIds={gids} jobHrefBase="/advisor/jobs" />
 
       {/* Low stock — actionable reorder shortlist (Inventory 1d). Real
           per-part reorderLevel data (not a static hint); each row links

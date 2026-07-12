@@ -304,6 +304,7 @@ model User {
   qcJobs          JobCard[] @relation("QcJobs")
   deliveredJobs   JobCard[] @relation("DeliveredJobs")
   aiEvents        AiEvent[]
+  workSessions    WorkSession[] @relation("TechWorkSessions")
 
   // Last successful sign-in for this staff user. Written by the
   // baseProvider in src/auth.ts on every authorize() pass — best-effort,
@@ -462,6 +463,7 @@ model JobCard {
   finding       JobFinding?
   jobParts      JobPart[]
   advancePayments AdvancePayment[]
+  workSessions  WorkSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -850,6 +852,30 @@ model PartRequest {
 
 // Tier 2 #4 — additional technicians (helpers) on one car, alongside the primary
 // claimer. Helpers may log work; the claimer keeps the claim/release.
+// Tech-tracking slice 1 — one row per continuous stretch of a technician
+// working ONE car. endedAt null = the tech is on this car right now; a
+// tech can have at most ONE open row, enforced by a hand-written partial
+// unique index in the migration:
+//   CREATE UNIQUE INDEX "WorkSession_one_open_per_tech"
+//     ON "WorkSession"("techId") WHERE "endedAt" IS NULL;
+// Prisma can't express partial indexes — do NOT let a future generated
+// migration drop it (we hand-write migrations anyway).
+model WorkSession {
+  id        String    @id @default(cuid())
+  garageId  String
+  jobCardId String
+  jobCard   JobCard   @relation(fields: [jobCardId], references: [id])
+  techId    String
+  tech      User      @relation("TechWorkSessions", fields: [techId], references: [id])
+  startedAt DateTime  @default(now())
+  endedAt   DateTime? // null = live segment
+  endReason String?   // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED
+
+  @@index([jobCardId])
+  @@index([techId, endedAt])
+  @@index([garageId, endedAt])
+}
+
 model JobHelper {
   id        String  @id @default(cuid())
   jobCardId String

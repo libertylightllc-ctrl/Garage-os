@@ -9,8 +9,9 @@ import { saveUpload } from "@/lib/storage";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { clampPriority } from "@/lib/priority";
-import { canJoinAsHelper } from "@/lib/claim";
+import { canJoinAsHelper, canLogWork } from "@/lib/claim";
 import { requireAdvisor, requireTech } from "@/lib/action-guards";
+import { startWorkSession, closeJobSessions } from "@/lib/work-session";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
@@ -85,6 +86,12 @@ export async function jobActionAction(formData: FormData) {
     data: { status: next.status, heldFrom: next.heldFrom, holdReason, holdNote },
   });
 
+  // Tech-tracking: a held or cancelled car is not being worked — stop
+  // every open timer on it. Best-effort, never blocks the transition.
+  if (next.status === "ON_HOLD" || next.status === "CANCELLED") {
+    await closeJobSessions(job.id, "JOB_CLOSED");
+  }
+
   revalidatePath(`/advisor/jobs/${job.id}`);
   revalidatePath("/advisor");
 }
@@ -115,10 +122,41 @@ export async function claimJobAction(formData: FormData) {
       where: { id: jobId, garageId: user.garageId, status: "ARRIVED" },
       data: { status: "INSPECTION" },
     });
+    // Tech-tracking: claiming a car IS "I'm on this car now". Runs AFTER
+    // the atomic claim (the CAS above is untouched), in its own
+    // transaction, and is best-effort — a session-write failure logs but
+    // never blocks the claim (see src/lib/work-session.ts contract).
+    await startWorkSession(user.garageId, jobId, user.id);
   }
   revalidatePath("/technician");
   revalidatePath("/advisor");
   if (res.count === 0) redirect("/technician?taken=1"); // already taken / not eligible
+}
+
+/**
+ * Tech-tracking slice 1 — the ONE tap: "I'm on this car now."
+ * Opens a WorkSession on this car and auto-closes the tech's previous
+ * open segment (any other car). Allowed for the claimer or a joined
+ * helper; tapping the car they're already on is a no-op.
+ */
+export async function startWorkAction(formData: FormData) {
+  const user = await requireTech();
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: {
+      id: jobId,
+      garageId: user.garageId,
+      status: { notIn: ["DELIVERED", "CANCELLED", "TECH_COMPLETE", "INVOICED"] },
+    },
+    select: { id: true, claimedById: true, helpers: { select: { techId: true } } },
+  });
+  if (!job) redirect("/technician?taken=1");
+  if (!canLogWork(job, user.id, job.helpers.map((h) => h.techId))) {
+    redirect("/technician?taken=1");
+  }
+  await startWorkSession(user.garageId, job.id, user.id);
+  revalidatePath("/technician");
+  revalidatePath("/owner");
 }
 
 /**
@@ -332,6 +370,9 @@ export async function markCompleteAction(formData: FormData) {
       holdNote: null,
     },
   });
+  // Tech-tracking: the car left active work — stop every timer on it
+  // (claimer + helpers). Best-effort, never blocks the completion.
+  await closeJobSessions(jobId, "COMPLETED");
   revalidatePath("/technician");
   revalidatePath("/cashier");
   revalidatePath("/advisor");
@@ -380,6 +421,8 @@ export async function sendForEstimateAction(formData: FormData) {
       holdNote: null,
     },
   });
+  // Tech-tracking: hand-off to the advisor pauses the wrench-time clock.
+  await closeJobSessions(jobId, "SENT_FOR_ESTIMATE");
   revalidatePath("/technician");
   revalidatePath("/cashier");
   revalidatePath("/advisor");
@@ -401,6 +444,9 @@ export async function joinJobAction(formData: FormData) {
     redirect("/technician?taken=1");
   }
   await prisma.jobHelper.create({ data: { jobCardId: job.id, techId: user.id } });
+  // Tech-tracking: joining as a helper is the helper's "I'm on this car
+  // now" — best-effort, never blocks the join.
+  await startWorkSession(user.garageId, job.id, user.id);
   revalidatePath("/technician");
   revalidatePath(`/technician/jobs/${job.id}`);
 }

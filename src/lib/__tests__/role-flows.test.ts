@@ -105,6 +105,7 @@ async function cleanup() {
   await prisma.estimate.deleteMany({ where: inGarage });
   await prisma.partRequest.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.jobStep.deleteMany({ where: inGarage });
+  await prisma.workSession.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
   // marking an estimate SENT opens a WhatsApp thread for the customer

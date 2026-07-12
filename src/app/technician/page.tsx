@@ -10,10 +10,13 @@ import {
   joinJobAction,
   sendForEstimateAction,
   sendForReestimateAction,
+  startWorkAction,
 } from "@/app/actions/jobs";
 import { friendlyStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
+import { openSessionFor } from "@/lib/work-session";
+import { FloorNow } from "@/components/floor-now";
 
 export const dynamic ="force-dynamic";
 
@@ -108,6 +111,9 @@ export default async function TechnicianHome({
     ),
   );
 
+  // Tech-tracking: which car am I on right now (null = idle)?
+  const mySession = await openSessionFor(me);
+
   const inProgress = mine.filter((j) => j.status !=="ON_HOLD");
   const paused = mine.filter((j) => j.status ==="ON_HOLD");
   const now = new Date();
@@ -129,6 +135,12 @@ export default async function TechnicianHome({
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="TECH" active="workshop"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("tabWorkshop")}</h1>
+
+      {/* Master runs the floor but can't see the owner dashboard — give
+          them the live who's-on-what board right here. */}
+      {session.user.role === "MASTER" ? (
+        <FloorNow garageIds={[garageId]} jobHrefBase="/technician/jobs" />
+      ) : null}
 
       {taken ? (
         <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
@@ -262,6 +274,21 @@ export default async function TechnicianHome({
                     t={t}
                   />
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Tech-tracking: ONE tap — "I'm on this car now".
+                        Tapping auto-closes the previous car's timer.
+                        Already on it → a quiet chip instead of a button. */}
+                    {mySession?.jobCardId === j.id ? (
+                      <span className="inline-flex h-10 items-center justify-center rounded-lg bg-success-50 px-4 text-sm font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
+                        ⏱ {t("onThisCarNow")}
+                      </span>
+                    ) : (
+                      <form action={startWorkAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                          {t("imOnThisCar")}
+                        </button>
+                      </form>
+                    )}
                     {showOpenButton ? (
                       <Link
                         href={`/technician/jobs/${j.id}`}

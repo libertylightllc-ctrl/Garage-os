@@ -353,6 +353,12 @@ const en = {
   estimatePrint: "🖨 Print estimate",
   estimateViewPrint: "View / print estimate",
   estimatePreviewSentBadge: "Sent to the customer",
+  imOnThisCar: "I'm on this car",
+  onThisCarNow: "On this car",
+  floorNow: "Floor right now",
+  floorNowEmpty: "No one is on a car right now.",
+  floorNowIdle: "Not on a car",
+  floorNowMin: "m",
   teamError: "Check the fields (password min 6).",
 
   // booking (customer)
@@ -1480,6 +1486,12 @@ const ar: typeof en = {
   estimatePrint: "🖨 طباعة عرض السعر",
   estimateViewPrint: "عرض / طباعة عرض السعر",
   estimatePreviewSentBadge: "أُرسل إلى العميل",
+  imOnThisCar: "أعمل على هذه السيارة",
+  onThisCarNow: "على هذه السيارة",
+  floorNow: "الورشة الآن",
+  floorNowEmpty: "لا أحد يعمل على سيارة الآن.",
+  floorNowIdle: "بدون سيارة",
+  floorNowMin: " د",
   teamError: "تحقق من الحقول (كلمة المرور 6+).",
 
   bookTitle: "احجز خدمة",

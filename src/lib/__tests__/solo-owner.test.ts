@@ -91,6 +91,7 @@ async function cleanup() {
   await prisma.estimateLine.deleteMany({ where: { estimate: where } });
   await prisma.estimate.deleteMany({ where });
   await prisma.jobStep.deleteMany({ where });
+  await prisma.workSession.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
   await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { setEstimateStatusAction } from "@/app/actions/billing";
+import { PrintButton } from "@/components/print-button";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 
@@ -38,7 +39,10 @@ export default async function EstimatePreview({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await requireAnyRole(["CASHIER","OWNER","MASTER"]);
+  // ADVISOR included per KEY DECISION #5 (advisor prices + SENDS the
+  // estimate) — it was missing here, so the editor's "Preview Estimate"
+  // button bounced advisors back to their dashboard.
+  const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER","MASTER"]);
   const t = await getT();
   const locale = await getLocale();
 
@@ -56,12 +60,11 @@ export default async function EstimatePreview({
   });
   if (!est) notFound();
 
-  // If the cashier somehow lands here on a non-DRAFT estimate, send
-  // them back to the edit page where the post-send status surface
-  // (View invoice link, etc.) already lives.
-  if (est.status !=="DRAFT") {
-    redirect(`/estimates/${est.id}`);
-  }
+  // The preview no longer redirects on non-DRAFT: after Send this page
+  // IS the permanent, printable customer-facing record of the estimate.
+  // The Send button below only renders for DRAFT, so back-button +
+  // re-tap can't re-fire the WhatsApp send.
+  const isDraft = est.status === "DRAFT";
 
   const customer = est.jobCard.vehicle.customer;
   const garage = est.jobCard.garage;
@@ -73,11 +76,12 @@ export default async function EstimatePreview({
   const total = Number(est.total);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:min-h-0 print:bg-white print:p-0">
       {/* White card surface so the preview reads as a discrete document
           even in dark mode — approximates the WhatsApp / PDF render
-          the customer will see. */}
-      <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none">
+          the customer will see. On print the card chrome drops away so
+          the paper copy is just the document. */}
+      <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -166,29 +170,49 @@ export default async function EstimatePreview({
         </div>
       </div>
 
-      {/* Bottom action bar — Go Back left, Send Estimate to Customer
-          right. Send is the ONLY surface in the app that fires
-          setEstimateStatusAction(SENT) on a DRAFT estimate now. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Link
-          href={`/estimates/${est.id}`}
-          className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-center text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-        >
-          {t("estimatePreviewGoBack")}
-        </Link>
-        <form action={setEstimateStatusAction}>
-          <input type="hidden" name="estimateId" value={est.id} />
-          <input type="hidden" name="status" value="SENT"/>
-          <button
-            type="submit"
-            className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+      {/* Bottom action bar — Go Back + Print always; Send only while
+          DRAFT (still the ONLY surface that fires
+          setEstimateStatusAction(SENT)). After Send this page stays
+          reachable as the printable record, with a sent badge instead
+          of the button. The whole bar hides on print. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Link
+            href={`/estimates/${est.id}`}
+            className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-center text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
           >
-            {t("estimateSendToCustomer")}
-          </button>
-        </form>
+            {t("estimatePreviewGoBack")}
+          </Link>
+          <PrintButton className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+            {t("estimatePrint")}
+          </PrintButton>
+        </div>
+        {isDraft ? (
+          <form action={setEstimateStatusAction}>
+            <input type="hidden" name="estimateId" value={est.id} />
+            <input type="hidden" name="status" value="SENT"/>
+            <button
+              type="submit"
+              className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+            >
+              {t("estimateSendToCustomer")}
+            </button>
+          </form>
+        ) : (
+          <span className="inline-flex h-12 items-center justify-center rounded-lg bg-success-50 px-5 text-base font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
+            ✓{" "}
+            {est.status === "SENT" && est.sentAt
+              ? `${t("estimatePreviewSentBadge")} · ${est.sentAt.toISOString().slice(0, 10)}`
+              : est.status === "SENT"
+                ? t("estimatePreviewSentBadge")
+                : est.status}
+          </span>
+        )}
       </div>
 
-      <p className="text-xs text-zinc-400">{t("estimatePreviewMockNote")}</p>
+      {isDraft ? (
+        <p className="text-xs text-zinc-400 print:hidden">{t("estimatePreviewMockNote")}</p>
+      ) : null}
     </main>
   );
 }

@@ -563,6 +563,17 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             {t("estimatePreviewButton")}
           </Link>
         ) : null}
+        {/* Once the estimate is past DRAFT, the preview stays reachable
+            as the permanent printable customer-facing record — for
+            every role allowed on this page. */}
+        {est.status !== "DRAFT" && est.lines.length > 0 ? (
+          <Link
+            href={`/estimates/${est.id}/preview`}
+            className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+          >
+            {t("estimateViewPrint")}
+          </Link>
+        ) : null}
         {est.status ==="SENT"? (
           <>
             <StatusButton estimateId={est.id} status="APPROVED" label={t("markApproved")} primary />

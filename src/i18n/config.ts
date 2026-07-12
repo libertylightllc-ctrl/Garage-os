@@ -350,6 +350,9 @@ const en = {
   optTechnician: "Technician",
   optCashier: "Cashier",
   optMaster: "Master Admin",
+  estimatePrint: "🖨 Print estimate",
+  estimateViewPrint: "View / print estimate",
+  estimatePreviewSentBadge: "Sent to the customer",
   teamError: "Check the fields (password min 6).",
 
   // booking (customer)
@@ -1474,6 +1477,9 @@ const ar: typeof en = {
   optTechnician: "فني",
   optCashier: "أمين الصندوق",
   optMaster: "المشرف العام",
+  estimatePrint: "🖨 طباعة عرض السعر",
+  estimateViewPrint: "عرض / طباعة عرض السعر",
+  estimatePreviewSentBadge: "أُرسل إلى العميل",
   teamError: "تحقق من الحقول (كلمة المرور 6+).",
 
   bookTitle: "احجز خدمة",

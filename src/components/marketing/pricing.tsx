@@ -13,15 +13,22 @@ export function Pricing({ demoHref }: { demoHref: string }) {
         </h2>
         <p className="mx-auto mt-6 max-w-xl text-balance text-lg text-text-mute">
           One flat monthly price per branch — every role, every feature, every
-          update included. No setup fee, no hardware, cancel anytime.
+          update included. No setup fee, no hardware, cancel anytime. Try it in
+          your own workshop first, on us.
         </p>
 
-        <div className="mt-10">
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <a
             href={demoHref}
             className="inline-flex h-12 items-center justify-center rounded-full bg-brand-900 px-8 text-base font-semibold text-white transition-colors hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
           >
-            Contact us for pricing
+            Start your free pilot
+          </a>
+          <a
+            href={demoHref}
+            className="inline-flex h-12 items-center justify-center px-2 text-base font-medium text-text-mute transition-colors hover:text-text"
+          >
+            or let&rsquo;s talk&nbsp;→
           </a>
         </div>
 

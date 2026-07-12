@@ -21,6 +21,7 @@ import {
   technicianWork,
   advisorActivity,
 } from "@/lib/owner-metrics";
+import { techWrenchTime, STALE_SESSION_MIN } from "@/lib/work-session-reports";
 
 export const dynamic ="force-dynamic";
 
@@ -209,7 +210,7 @@ async function answerCopilot(t: T, garageId: string | string[], question: string
 export default async function OwnerHome({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; wrench?: string }>;
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
@@ -217,7 +218,8 @@ export default async function OwnerHome({
   // Owner sees ALL branches aggregated (company root + its branches).
   const gids = await companyGarageIds(garageId);
   const now = new Date();
-  const { q } = await searchParams;
+  const { q, wrench } = await searchParams;
+  const wrenchMode = wrench === "week" ? "week" : "day";
 
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
   // Defensive parallel fetch — added after 2026-06-28 incident where a
@@ -261,11 +263,23 @@ export default async function OwnerHome({
   const confirmMins = v(7, null as number | null);
   const techWork = v(8, [] as Awaited<ReturnType<typeof technicianWork>>);
   const lowStock = v(9, { items: [], low: 0 } as Awaited<ReturnType<typeof lowStockParts>>);
-  const advisorWork = await advisorActivity(gids).catch((e) => {
-    console.error("[owner] advisorActivity failed:", e);
-    metricsHadError = true;
-    return [] as Awaited<ReturnType<typeof advisorActivity>>;
-  });
+  const wrenchFrom = wrenchMode === "week"
+    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
+    : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const wrenchTo = new Date(wrenchFrom.getTime() + (wrenchMode === "week" ? 7 : 1) * 86_400_000);
+
+  const [advisorWork, wrenchRows] = await Promise.all([
+    advisorActivity(gids).catch((e) => {
+      console.error("[owner] advisorActivity failed:", e);
+      metricsHadError = true;
+      return [] as Awaited<ReturnType<typeof advisorActivity>>;
+    }),
+    techWrenchTime(gids, { from: wrenchFrom, to: wrenchTo }).catch((e) => {
+      console.error("[owner] techWrenchTime failed:", e);
+      metricsHadError = true;
+      return [] as Awaited<ReturnType<typeof techWrenchTime>>;
+    }),
+  ]);
 
   let answer: string | null = null;
   if (q && q.trim()) {
@@ -331,6 +345,93 @@ export default async function OwnerHome({
       {/* Tech-tracking slice 1 — the live floor: which tech is on which
           car right now, and who's idle. Refreshes on page load. */}
       <FloorNow garageIds={gids} jobHrefBase="/advisor/jobs" />
+
+      {/* Wrench time — per-tech actual time on cars, day/week toggle */}
+      <div className="rounded-xl border border-border p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-medium">🔧 {t("wrenchTime")}</h2>
+          <div className="flex gap-1 text-xs">
+            <Link
+              href={`/owner?wrench=day${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+              className={`rounded-lg px-2 py-0.5 ${wrenchMode === "day" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
+            >
+              {t("wrenchDay")}
+            </Link>
+            <Link
+              href={`/owner?wrench=week${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+              className={`rounded-lg px-2 py-0.5 ${wrenchMode === "week" ? "bg-surface-2 font-semibold text-text" : "text-text-mute hover:text-text"}`}
+            >
+              {t("wrenchWeek")}
+            </Link>
+          </div>
+        </div>
+        {wrenchRows.length === 0 ? (
+          <p className="text-sm text-text-mute">{t("noTechActivity")}</p>
+        ) : (
+          <>
+          <ul className="flex flex-col gap-2 md:hidden">
+            {wrenchRows.map((wr) => (
+              <li key={wr.techId} className="rounded-xl border border-border p-3 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">{wr.techName}</span>
+                  <span className="tabular-nums text-xs text-text-mute">
+                    {formatMin(wr.totalMin)}
+                  </span>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-text-mute">
+                  <dt>{t("wrenchCars")}</dt>
+                  <dd className="text-end tabular-nums text-text">{wr.carsTouched}</dd>
+                  <dt>{t("wrenchAvg")}</dt>
+                  <dd className="text-end tabular-nums text-text">{formatMin(wr.avgPerCarMin)}</dd>
+                </dl>
+                {wr.staleSessions > 0 ? (
+                  <p className="mt-1 text-xs font-medium text-amber-600">
+                    ⚠ {t("wrenchStaleCount").replace("{n}", String(wr.staleSessions))}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
+                  <th className="py-2 pe-3 text-start font-semibold">{t("colTechnician")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("wrenchTime")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("wrenchCars")}</th>
+                  <th className="py-2 px-2 text-end font-semibold">{t("wrenchAvg")}</th>
+                  <th className="py-2 ps-2 text-end font-semibold">⚠</th>
+                </tr>
+              </thead>
+              <tbody>
+                {wrenchRows.map((wr, i) => (
+                  <tr
+                    key={wr.techId}
+                    className={
+                      "border-b border-border/60 " +
+                      (i % 2 === 1 ? "bg-surface-2/40" : "")
+                    }
+                  >
+                    <td className="py-2 pe-3 font-medium">{wr.techName}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{formatMin(wr.totalMin)}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{wr.carsTouched}</td>
+                    <td className="py-2 px-2 text-end tabular-nums">{formatMin(wr.avgPerCarMin)}</td>
+                    <td className="py-2 ps-2 text-end tabular-nums">
+                      {wr.staleSessions > 0 ? (
+                        <span className="text-amber-600" title={t("workshopTimeStale")}>
+                          {wr.staleSessions}
+                        </span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          </>
+        )}
+      </div>
 
       {/* Low stock — actionable reorder shortlist (Inventory 1d). Real
           per-part reorderLevel data (not a static hint); each row links

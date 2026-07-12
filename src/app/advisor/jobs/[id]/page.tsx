@@ -29,6 +29,8 @@ import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
+import { jobTimeSummary } from "@/lib/work-session-reports";
+import { JobTimePanel } from "@/components/job-time-panel";
 
 export const dynamic ="force-dynamic";
 
@@ -103,7 +105,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     latestEstimateStatus,
     invoicePaid,
   });
-  const timelineEvents = await loadJobTimeline(job.id, session.user.garageId);
+  const [timelineEvents, jobTime] = await Promise.all([
+    loadJobTimeline(job.id, session.user.garageId),
+    jobTimeSummary(job.id),
+  ]);
 
   const status = job.status as JobStatus;
   const heldFrom = (job.heldFrom ?? null) as JobStatus | null;
@@ -612,6 +617,8 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       ) : null}
 
       <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+
+      <JobTimePanel summary={jobTime} t={t} />
 
       {/* Technician activity — the live link from the workshop into this job */}
       {job.steps.length > 0 ? (

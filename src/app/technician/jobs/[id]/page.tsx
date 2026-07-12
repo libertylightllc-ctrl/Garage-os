@@ -48,6 +48,8 @@ import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
+import { jobTimeSummary } from "@/lib/work-session-reports";
+import { JobTimePanel } from "@/components/job-time-panel";
 
 export const dynamic ="force-dynamic";
 
@@ -126,7 +128,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     latestEstimateStatus: latestEstimate?.status ?? null,
     invoicePaid,
   });
-  const timelineEvents = await loadJobTimeline(job.id, session.user.garageId);
+  const [timelineEvents, jobTime] = await Promise.all([
+    loadJobTimeline(job.id, session.user.garageId),
+    jobTimeSummary(job.id),
+  ]);
 
   // Per spec: finished jobs are not the technician's concern. If the
   // job has moved past TECH_COMPLETE — INVOICED, DELIVERED, or
@@ -234,6 +239,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
       </div>
 
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
+
+      <JobTimePanel summary={jobTime} t={t} />
 
       {/* Status banner — reads LIVE job.status and tells the technician
           where the job is in the workflow at this moment, with the

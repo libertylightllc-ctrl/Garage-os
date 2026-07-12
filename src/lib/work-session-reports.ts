@@ -142,6 +142,168 @@ export function computeTechWrenchTime(
     .sort((a, b) => b.totalMin - a.totalMin);
 }
 
+// ---------------------------------------------------------------------------
+// Slice 3 — per-tech daily work history (read-only analytics)
+// ---------------------------------------------------------------------------
+
+export type CarEntry = {
+  jobCardId: string;
+  jobNumber: number;
+  vehicleMake: string;
+  vehiclePlate: string;
+  totalMin: number;
+  stale: boolean;
+};
+
+export type DayRow = {
+  date: string; // YYYY-MM-DD (in the supplied tz offset)
+  totalMin: number;
+  carsTouched: number;
+  cars: CarEntry[];
+  staleSessions: number;
+};
+
+export type TechDailyHistory = {
+  days: DayRow[];
+  totalMin: number;
+  totalCars: number;
+  totalDays: number;
+  avgPerDayMin: number;
+  staleSessions: number;
+};
+
+type HistorySession = {
+  jobCardId: string;
+  jobNumber: number;
+  vehicleMake: string;
+  vehiclePlate: string;
+  startedAt: Date;
+  endedAt: Date | null;
+};
+
+/**
+ * Group one tech's sessions into calendar days. `tzOffsetMin` is the
+ * minutes-ahead-of-UTC for the garage's timezone (UAE = +240). Day
+ * boundaries use this offset so "today" means the garage's today, not UTC.
+ */
+export function computeTechDailyHistory(
+  sessions: HistorySession[],
+  now: Date = new Date(),
+  tzOffsetMin: number = 240, // UAE +4h default
+): TechDailyHistory {
+  if (sessions.length === 0) {
+    return { days: [], totalMin: 0, totalCars: 0, totalDays: 0, avgPerDayMin: 0, staleSessions: 0 };
+  }
+
+  const dayKey = (d: Date): string => {
+    const shifted = new Date(d.getTime() + tzOffsetMin * 60_000);
+    return shifted.toISOString().slice(0, 10);
+  };
+
+  const dayMap = new Map<string, {
+    carMap: Map<string, { jobNumber: number; make: string; plate: string; totalMin: number; stale: boolean }>;
+    totalMin: number;
+    staleSessions: number;
+  }>();
+
+  const allCars = new Set<string>();
+  let totalStale = 0;
+
+  for (const s of sessions) {
+    const mins = sessionMinutes(s, now);
+    const isStale = mins >= STALE_SESSION_MIN;
+    if (isStale) totalStale++;
+    const key = dayKey(s.startedAt);
+    allCars.add(s.jobCardId);
+
+    let day = dayMap.get(key);
+    if (!day) {
+      day = { carMap: new Map(), totalMin: 0, staleSessions: 0 };
+      dayMap.set(key, day);
+    }
+    day.totalMin += mins;
+    if (isStale) day.staleSessions++;
+
+    const car = day.carMap.get(s.jobCardId);
+    if (car) {
+      car.totalMin += mins;
+      if (isStale) car.stale = true;
+    } else {
+      day.carMap.set(s.jobCardId, {
+        jobNumber: s.jobNumber,
+        make: s.vehicleMake,
+        plate: s.vehiclePlate,
+        totalMin: mins,
+        stale: isStale,
+      });
+    }
+  }
+
+  const days: DayRow[] = Array.from(dayMap.entries())
+    .sort((a, b) => b[0].localeCompare(a[0])) // newest first
+    .map(([date, d]) => ({
+      date,
+      totalMin: d.totalMin,
+      carsTouched: d.carMap.size,
+      cars: Array.from(d.carMap.entries())
+        .map(([jobCardId, c]) => ({
+          jobCardId,
+          jobNumber: c.jobNumber,
+          vehicleMake: c.make,
+          vehiclePlate: c.plate,
+          totalMin: c.totalMin,
+          stale: c.stale,
+        }))
+        .sort((a, b) => b.totalMin - a.totalMin),
+      staleSessions: d.staleSessions,
+    }));
+
+  const totalMin = days.reduce((s, d) => s + d.totalMin, 0);
+  const totalDays = days.length;
+
+  return {
+    days,
+    totalMin,
+    totalCars: allCars.size,
+    totalDays,
+    avgPerDayMin: totalDays > 0 ? totalMin / totalDays : 0,
+    staleSessions: totalStale,
+  };
+}
+
+export async function techDailyHistory(
+  techId: string,
+  garageIds: string[],
+  range: { from: Date; to: Date },
+  tzOffsetMin: number = 240,
+): Promise<TechDailyHistory> {
+  const rows = await prisma.workSession.findMany({
+    where: {
+      techId,
+      garageId: { in: garageIds },
+      startedAt: { gte: range.from, lt: range.to },
+    },
+    select: {
+      jobCardId: true,
+      jobCard: { select: { number: true, vehicle: { select: { make: true, plate: true } } } },
+      startedAt: true,
+      endedAt: true,
+    },
+    orderBy: { startedAt: "asc" },
+  });
+
+  const sessions: HistorySession[] = rows.map((r) => ({
+    jobCardId: r.jobCardId,
+    jobNumber: r.jobCard.number ?? 0,
+    vehicleMake: r.jobCard.vehicle.make,
+    vehiclePlate: r.jobCard.vehicle.plate,
+    startedAt: r.startedAt,
+    endedAt: r.endedAt,
+  }));
+
+  return computeTechDailyHistory(sessions, new Date(), tzOffsetMin);
+}
+
 export async function techWrenchTime(
   garageIds: string[],
   range: { from: Date; to: Date },

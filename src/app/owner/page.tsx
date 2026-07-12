@@ -373,7 +373,7 @@ export default async function OwnerHome({
             {wrenchRows.map((wr) => (
               <li key={wr.techId} className="rounded-xl border border-border p-3 text-sm">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium">{wr.techName}</span>
+                  <Link href={`/owner/staff/${wr.techId}/hours`} className="font-medium hover:underline">{wr.techName}</Link>
                   <span className="tabular-nums text-xs text-text-mute">
                     {formatMin(wr.totalMin)}
                   </span>
@@ -413,7 +413,7 @@ export default async function OwnerHome({
                       (i % 2 === 1 ? "bg-surface-2/40" : "")
                     }
                   >
-                    <td className="py-2 pe-3 font-medium">{wr.techName}</td>
+                    <td className="py-2 pe-3 font-medium"><Link href={`/owner/staff/${wr.techId}/hours`} className="hover:underline">{wr.techName}</Link></td>
                     <td className="py-2 px-2 text-end tabular-nums">{formatMin(wr.totalMin)}</td>
                     <td className="py-2 px-2 text-end tabular-nums">{wr.carsTouched}</td>
                     <td className="py-2 px-2 text-end tabular-nums">{formatMin(wr.avgPerCarMin)}</td>

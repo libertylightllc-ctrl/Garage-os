@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeJobTimeSummary,
   computeTechWrenchTime,
+  computeTechDailyHistory,
   STALE_SESSION_MIN,
 } from "@/lib/work-session-reports";
 
@@ -130,5 +131,128 @@ describe("computeTechWrenchTime", () => {
 
   it("empty sessions = empty result", () => {
     expect(computeTechWrenchTime([], now)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slice 3 — computeTechDailyHistory
+// ---------------------------------------------------------------------------
+
+describe("computeTechDailyHistory", () => {
+  // UAE +4h offset = 240 minutes
+  const TZ = 240;
+  // "now" is 2026-07-13 12:00 UTC = 2026-07-13 16:00 UAE
+  const hSession = (
+    jobCardId: string, jobNumber: number, make: string, plate: string,
+    startMinAgo: number, endMinAgo: number | null,
+  ) => ({
+    jobCardId, jobNumber, vehicleMake: make, vehiclePlate: plate,
+    startedAt: ago(startMinAgo),
+    endedAt: endMinAgo === null ? null : ago(endMinAgo),
+  });
+
+  it("same car on 2 different days: shows under both, correct per-day time", () => {
+    // Day 1 (yesterday UAE): session 1440m ago → 1400m ago = 40m
+    // Day 2 (today UAE):     session 60m ago → 20m ago = 40m
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 1440, 1400),
+      hSession("j1", 1, "Toyota", "A 123", 60, 20),
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+
+    expect(result.days).toHaveLength(2);
+    expect(result.totalMin).toBe(80);
+    expect(result.totalCars).toBe(1); // same car, 1 distinct
+    expect(result.totalDays).toBe(2);
+    expect(result.avgPerDayMin).toBe(40);
+
+    // Each day has the car with 40m
+    for (const day of result.days) {
+      expect(day.carsTouched).toBe(1);
+      expect(day.cars[0].jobCardId).toBe("j1");
+      expect(day.cars[0].totalMin).toBe(40);
+    }
+  });
+
+  it("multi-day range totals: 3 days, 2 cars", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 2 * 1440, 2 * 1440 - 60),     // 2 days ago, 60m
+      hSession("j2", 2, "Nissan", "B 456", 1440, 1440 - 30),              // 1 day ago, 30m
+      hSession("j1", 1, "Toyota", "A 123", 1440 - 30, 1440 - 60),         // 1 day ago, 30m (same day as j2)
+      hSession("j2", 2, "Nissan", "B 456", 120, 60),                       // today, 60m
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+
+    expect(result.totalDays).toBe(3);
+    expect(result.totalMin).toBe(180);
+    expect(result.totalCars).toBe(2);
+    expect(result.avgPerDayMin).toBe(60);
+  });
+
+  it("stale session flagged per-day and in totals", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", STALE_SESSION_MIN + 10, 0), // stale: 190m
+      hSession("j2", 2, "Nissan", "B 456", 30, 10),                      // normal: 20m
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+
+    expect(result.staleSessions).toBe(1);
+    const dayWithStale = result.days.find((d) => d.staleSessions > 0)!;
+    expect(dayWithStale).toBeDefined();
+    expect(dayWithStale.staleSessions).toBe(1);
+    const staleCar = dayWithStale.cars.find((c) => c.jobCardId === "j1")!;
+    expect(staleCar.stale).toBe(true);
+  });
+
+  it("empty range = zero everything", () => {
+    const result = computeTechDailyHistory([], now, TZ);
+    expect(result.days).toHaveLength(0);
+    expect(result.totalMin).toBe(0);
+    expect(result.totalCars).toBe(0);
+    expect(result.totalDays).toBe(0);
+    expect(result.avgPerDayMin).toBe(0);
+    expect(result.staleSessions).toBe(0);
+  });
+
+  it("open session counts up to now", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 45, null), // 45m open
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+    expect(result.totalMin).toBe(45);
+    expect(result.days).toHaveLength(1);
+    expect(result.days[0].cars[0].totalMin).toBe(45);
+  });
+
+  it("day grouping uses tz offset: session at 23:00 UTC = next day in +4", () => {
+    // 23:00 UTC on Jul 12 = 03:00 Jul 13 in UAE (+4)
+    // So this should land on Jul 13 in UAE timezone
+    const s = {
+      jobCardId: "j1", jobNumber: 1, vehicleMake: "Toyota", vehiclePlate: "A 123",
+      startedAt: new Date("2026-07-12T23:00:00Z"),
+      endedAt: new Date("2026-07-12T23:30:00Z"),
+    };
+    const result = computeTechDailyHistory([s], now, TZ);
+    expect(result.days).toHaveLength(1);
+    expect(result.days[0].date).toBe("2026-07-13");
+  });
+
+  it("cars sorted by time descending within each day", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 120, 100),  // 20m
+      hSession("j2", 2, "Nissan", "B 456", 100, 40),   // 60m
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+    expect(result.days[0].cars[0].jobCardId).toBe("j2"); // 60m first
+    expect(result.days[0].cars[1].jobCardId).toBe("j1"); // 20m second
+  });
+
+  it("days sorted newest first", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 1440 + 60, 1440),  // yesterday
+      hSession("j2", 2, "Nissan", "B 456", 60, 30),             // today
+    ];
+    const result = computeTechDailyHistory(sessions, now, TZ);
+    expect(result.days[0].date > result.days[1].date).toBe(true);
   });
 });

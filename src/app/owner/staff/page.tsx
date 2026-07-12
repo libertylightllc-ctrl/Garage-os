@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
@@ -60,10 +61,15 @@ export default async function StaffPage({
               </span>
             </span>
             {u.role !=="OWNER"? (
-              <form action={removeStaffAction}>
-                <input type="hidden" name="userId" value={u.id} />
-                <button className="text-xs text-danger-700 hover:underline">{t("remove")}</button>
-              </form>
+              <span className="flex items-center gap-3">
+                {(u.role === "TECH" || u.role === "MASTER") ? (
+                  <Link href={`/owner/staff/${u.id}/hours`} className="text-xs text-text-mute hover:text-text hover:underline">{t("viewHours")}</Link>
+                ) : null}
+                <form action={removeStaffAction}>
+                  <input type="hidden" name="userId" value={u.id} />
+                  <button className="text-xs text-danger-700 hover:underline">{t("remove")}</button>
+                </form>
+              </span>
             ) : (
               <span className="text-xs text-text-mute">{t("ownerTag")}</span>
             )}

@@ -12,12 +12,8 @@ import {
   type PartRequestStatus,
 } from "@/lib/partrequest";
 import { canLogWork } from "@/lib/claim";
+import { requireAnyRole, requireTech } from "@/lib/action-guards";
 
-async function requireRoleAny(roles: string[]) {
-  const session = await auth();
-  if (!session?.user || !roles.includes(session.user.role)) throw new Error("Not authorized");
-  return session.user;
-}
 
 // Stages a job may be auto-paused from (linear, non-terminal, not already held).
 function isPausable(status: string): boolean {
@@ -52,9 +48,7 @@ async function maybeResumeJob(jobCardId: string, garageId: string) {
 
 // ---------- Technician: request a part ----------
 export async function requestPartAction(formData: FormData) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
-  const user = session.user;
+  const user = await requireTech();
 
   const jobId = String(formData.get("jobId") ?? "");
   const partId = String(formData.get("partId") ?? "").trim() || null;
@@ -142,7 +136,7 @@ export async function requestPartAction(formData: FormData) {
 
 // ---------- Advisor / parts person: move a request along ----------
 async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: string) {
-  const user = await requireRoleAny(["ADVISOR", "OWNER"]);
+  const user = await requireAnyRole(["ADVISOR", "OWNER"]);
   const requestId = String(formData.get("requestId") ?? "");
 
   const req = await prisma.partRequest.findFirst({
@@ -255,9 +249,7 @@ export async function cancelPartRequestAction(formData: FormData) {
  * waiting for this part — same release path the advisor cancel uses.
  */
 export async function cancelOwnPartRequestAction(formData: FormData) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
-  const user = session.user;
+  const user = await requireTech();
 
   const requestId = String(formData.get("requestId") ?? "");
   const req = await prisma.partRequest.findFirst({

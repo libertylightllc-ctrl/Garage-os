@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { runIntake } from "@/lib/intake";
 import { saveUpload } from "@/lib/storage";
+import { requireAdvisor } from "@/lib/action-guards";
 
 // PUBLIC — customer booking (no auth; this is the WhatsApp/web booking surface).
 export async function createBookingPublic(formData: FormData) {
@@ -55,16 +56,6 @@ export async function createBookingPublic(formData: FormData) {
   redirect(`/c/booking/${booking.id}`);
 }
 
-// OWNER is allowed everywhere the advisor is (solo-owner shops confirm
-// bookings on one login) — same widening as jobs.ts; this copy was missed
-// in the original solo-owner sweep.
-async function requireAdvisor() {
-  const session = await auth();
-  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 export async function confirmBookingAction(formData: FormData) {
   const user = await requireAdvisor();

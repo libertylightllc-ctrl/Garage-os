@@ -6,12 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId, verifyToken } from "@/lib/tokens";
 import { canRecordDelivery, cleanMileage } from "@/lib/delivery";
+import { requireAnyRole } from "@/lib/action-guards";
 
-async function requireAnyRole(roles: string[]) {
-  const session = await auth();
-  if (!session?.user || !roles.includes(session.user.role)) throw new Error("Not authorized");
-  return session.user;
-}
 
 // Advisor + Cashier (per Job-Card-Data-Model.md) record the vehicle delivery:
 // mileage out + who delivered + when. Status advances INVOICED -> DELIVERED, and the

@@ -5,12 +5,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { saveUpload } from "@/lib/storage";
 import { canLogWork } from "@/lib/claim";
+import { requireTech } from "@/lib/action-guards";
 
-async function requireTech() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
-  return session.user;
-}
 
 // Single action for all workshop buttons; the submit button's `type` value selects behavior.
 export async function addStepAction(formData: FormData) {

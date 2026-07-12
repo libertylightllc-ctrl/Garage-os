@@ -21,18 +21,8 @@ import {
   INTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
 } from "@/lib/jobcard-fields";
+import { requireAdvisor } from "@/lib/action-guards";
 
-// OWNER is allowed everywhere the advisor is (solo-owner shops run intake on
-// one login) — same widening as jobs.ts. This copy was MISSED in the original
-// solo-owner sweep: owners could open the reception form but the submit threw
-// "Not authorized" (prod incident ref 3426515655).
-async function requireAdvisor() {
-  const session = await auth();
-  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 function buildQuery(params: Record<string, string>): string {
   const q = new URLSearchParams();

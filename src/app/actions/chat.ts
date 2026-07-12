@@ -6,14 +6,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsApp } from "@/lib/whatsapp";
 import { handleInbound } from "@/lib/receptionist-engine";
+import { requireAdvisor } from "@/lib/action-guards";
 
-async function requireStaff() {
-  const session = await auth();
-  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 async function ownedThread(threadId: string, garageId: string) {
   const thread = await prisma.whatsAppThread.findFirst({
@@ -25,7 +19,7 @@ async function ownedThread(threadId: string, garageId: string) {
 }
 
 export async function takeOverAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const thread = await ownedThread(String(formData.get("threadId") ?? ""), user.garageId);
   await prisma.whatsAppThread.update({
     where: { id: thread.id },
@@ -35,14 +29,14 @@ export async function takeOverAction(formData: FormData) {
 }
 
 export async function releaseAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const thread = await ownedThread(String(formData.get("threadId") ?? ""), user.garageId);
   await prisma.whatsAppThread.update({ where: { id: thread.id }, data: { mode: "BOT" } });
   revalidatePath(`/advisor/chats/${thread.id}`);
 }
 
 export async function approveDraftAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const messageId = String(formData.get("messageId") ?? "");
   const msg = await prisma.whatsAppMessage.findFirst({
     where: { id: messageId, state: "PENDING_APPROVAL", thread: { garageId: user.garageId } },
@@ -62,7 +56,7 @@ export async function approveDraftAction(formData: FormData) {
 }
 
 export async function discardDraftAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const messageId = String(formData.get("messageId") ?? "");
   await prisma.whatsAppMessage.deleteMany({
     where: { id: messageId, state: "PENDING_APPROVAL", thread: { garageId: user.garageId } },
@@ -71,7 +65,7 @@ export async function discardDraftAction(formData: FormData) {
 }
 
 export async function sendManualAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const thread = await ownedThread(String(formData.get("threadId") ?? ""), user.garageId);
   const body = String(formData.get("body") ?? "").trim();
   if (body) {
@@ -88,7 +82,7 @@ export async function sendManualAction(formData: FormData) {
 
 // Dev/testing without Meta: pick a customer and inject their first message → routes via AI.
 export async function startTestConversationAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const customerId = String(formData.get("customerId") ?? "");
   const body = String(formData.get("body") ?? "").trim() || "is my car ready?";
   const customer = await prisma.customer.findFirst({
@@ -108,7 +102,7 @@ export async function startTestConversationAction(formData: FormData) {
 
 // Dev/testing without Meta: inject a customer message and run the AI engine.
 export async function simulateInboundAction(formData: FormData) {
-  const user = await requireStaff();
+  const user = await requireAdvisor();
   const thread = await ownedThread(String(formData.get("threadId") ?? ""), user.garageId);
   const body = String(formData.get("body") ?? "").trim();
   if (body) {

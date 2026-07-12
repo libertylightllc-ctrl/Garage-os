@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { validateInvoiceImage, saveUpload, LogoValidationError } from "@/lib/storage";
 import { extractPartsInvoice, ocrCostUsd, OcrDisabledError, type OcrAttempt } from "@/lib/ocr";
+import { requireOwner } from "@/lib/action-guards";
 
 // Inventory OCR import — photograph a supplier parts invoice → OCR into a
 // DRAFT PartsImport the OWNER reviews before anything hits the catalog.
@@ -14,13 +15,6 @@ import { extractPartsInvoice, ocrCostUsd, OcrDisabledError, type OcrAttempt } fr
 // catalog Part until confirmPartsImportAction runs on the owner's confirmed
 // rows.
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 function fail(msg: string, path = "/owner/inventory"): never {
   redirect(`${path}?error=${encodeURIComponent(msg)}`);

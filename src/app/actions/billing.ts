@@ -23,6 +23,7 @@ import {
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
+import { requireAnyRole } from "@/lib/action-guards";
 
 // Defense-in-depth: even though every caller passes a jobCardId that's
 // already been garage-verified (via ownedEstimate / ownedInvoice / the
@@ -38,11 +39,6 @@ async function customerForJob(jobCardId: string, garageId: string) {
   return j?.vehicle.customer ?? null;
 }
 
-async function requireAnyRole(roles: string[]) {
-  const session = await auth();
-  if (!session?.user || !roles.includes(session.user.role)) throw new Error("Not authorized");
-  return session.user;
-}
 
 async function jobInGarage(jobId: string, garageId: string) {
   const job = await prisma.jobCard.findFirst({ where: { id: jobId, garageId }, select: { id: true } });

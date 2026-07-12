@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOwner } from "@/lib/action-guards";
 
 // Inventory Phase 1 — parts catalog management. Kept in its own action
 // file, deliberately separate from the live parts.ts (the technician
@@ -14,13 +15,6 @@ import { prisma } from "@/lib/prisma";
 // All actions are OWNER-only and garage-scoped: garageId always comes
 // from the session, never from form input.
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 /**
  * Parse a money string into a value Prisma's Decimal accepts. Rejects

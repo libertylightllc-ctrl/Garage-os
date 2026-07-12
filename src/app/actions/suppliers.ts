@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOwner } from "@/lib/action-guards";
 
 // Inventory 1c — supplier directory. OWNER-only, garage-scoped: garageId
 // always comes from the session, never from form input. Deactivate is a
@@ -13,13 +14,6 @@ import { prisma } from "@/lib/prisma";
 // This file is deliberately separate from inventory.ts (parts catalog).
 // It does NOT touch the job / estimate / part-request flow.
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 function fail(msg: string, path = "/owner/suppliers"): never {
   redirect(`${path}?error=${encodeURIComponent(msg)}`);

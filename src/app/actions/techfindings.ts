@@ -6,12 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { canLogWork } from "@/lib/claim";
 import { canSubmitFindings, nextStatusAfterFindings, cleanQty } from "@/lib/jobfindings";
 import { sanitizeChoices, QC_CHECKS } from "@/lib/jobcard-fields";
+import { requireTech } from "@/lib/action-guards";
 
-async function requireTech() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
-  return session.user;
-}
 
 // Load a job the technician may work on (claimer or helper); auto-claims if in the pool.
 async function workableJob(jobId: string, garageId: string, userId: string) {

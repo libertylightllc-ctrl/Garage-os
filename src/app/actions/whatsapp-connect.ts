@@ -5,12 +5,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
+import { requireOwner } from "@/lib/action-guards";
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") throw new Error("Not authorized");
-  return session.user;
-}
 
 // Real flow: Meta Embedded Signup popup returns a code → exchange for the WABA + phone
 // number id + a long-lived token. Here (no BSP creds) we simulate a successful connect so

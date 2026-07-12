@@ -10,25 +10,11 @@ import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { clampPriority } from "@/lib/priority";
 import { canJoinAsHelper } from "@/lib/claim";
+import { requireAdvisor, requireTech } from "@/lib/action-guards";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
 
-// OWNER is allowed everywhere the advisor is (solo-owner shops run the whole
-// flow on one login; staff roles stay optional). requireTech below is
-// deliberately NOT widened — it guards the claim-lock + technician stats.
-async function requireAdvisor() {
-  const session = await auth();
-  if (!session?.user || !["ADVISOR", "OWNER"].includes(session.user.role)) {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
-async function requireTech() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "TECH") throw new Error("Not authorized");
-  return session.user;
-}
 
 export async function createJobCardAction(formData: FormData) {
   const user = await requireAdvisor();

@@ -6,15 +6,11 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { companyGarageIds } from "@/lib/branches";
+import { requireOwner } from "@/lib/action-guards";
 
 // Garage creation is operator-only — see scripts/create-garage.ts and
 // the shared src/lib/create-garage.ts. There is no public signup action.
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") throw new Error("Not authorized");
-  return session.user;
-}
 
 const STAFF_ROLES = ["ADVISOR", "TECH", "CASHIER"] as const;
 

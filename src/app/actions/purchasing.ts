@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOwner } from "@/lib/action-guards";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -14,13 +15,6 @@ import { prisma } from "@/lib/prisma";
 // receivePurchaseOrderAction there. Nothing here touches the live
 // job / estimate flow.
 
-async function requireOwner() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "OWNER") {
-    throw new Error("Not authorized");
-  }
-  return session.user;
-}
 
 function fail(msg: string, path = "/owner/purchasing"): never {
   redirect(`${path}?error=${encodeURIComponent(msg)}`);

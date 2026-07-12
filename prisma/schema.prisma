@@ -16,6 +16,7 @@ enum Role {
   ADVISOR
   TECH
   CASHIER
+  MASTER
 }
 
 enum Lang {

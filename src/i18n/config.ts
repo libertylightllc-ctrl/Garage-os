@@ -69,6 +69,7 @@ const en = {
   roleADVISOR: "Service Advisor",
   roleTECH: "Technician",
   roleCASHIER: "Cashier",
+  roleMASTER: "Master Admin",
   tabDashboard: "Dashboard",
   tabTeam: "Team",
   tabJobs: "Jobs",
@@ -348,6 +349,7 @@ const en = {
   optAdvisor: "Advisor",
   optTechnician: "Technician",
   optCashier: "Cashier",
+  optMaster: "Master Admin",
   teamError: "Check the fields (password min 6).",
 
   // booking (customer)
@@ -1196,6 +1198,7 @@ const ar: typeof en = {
   roleADVISOR: "مستشار الخدمة",
   roleTECH: "الفني",
   roleCASHIER: "أمين الصندوق",
+  roleMASTER: "المشرف العام",
   tabDashboard: "لوحة التحكم",
   tabTeam: "الفريق",
   tabJobs: "المهام",
@@ -1470,6 +1473,7 @@ const ar: typeof en = {
   optAdvisor: "مستشار",
   optTechnician: "فني",
   optCashier: "أمين الصندوق",
+  optMaster: "المشرف العام",
   teamError: "تحقق من الحقول (كلمة المرور 6+).",
 
   bookTitle: "احجز خدمة",

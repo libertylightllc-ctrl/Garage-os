@@ -79,6 +79,7 @@ export default async function StaffPage({
             <option value="ADVISOR">{t("optAdvisor")}</option>
             <option value="TECH">{t("optTechnician")}</option>
             <option value="CASHIER">{t("optCashier")}</option>
+            <option value="MASTER">{t("optMaster")}</option>
           </select>
           {multiBranch ? (
             <select name="branchId" className={field} defaultValue={branches[0]?.id}>

@@ -17,7 +17,7 @@ export const dynamic ="force-dynamic";
   * Connect / disconnect remain owner-only (/owner/whatsapp).
   */
 export default async function CashierWhatsApp() {
-  const session = await requireAnyRole(["CASHIER", "OWNER"]);
+  const session = await requireAnyRole(["CASHIER", "OWNER", "MASTER"]);
   const t = await getT();
 
   return (

@@ -38,7 +38,7 @@ export default async function EstimatePreview({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await requireAnyRole(["CASHIER","OWNER"]);
+  const session = await requireAnyRole(["CASHIER","OWNER","MASTER"]);
   const t = await getT();
   const locale = await getLocale();
 

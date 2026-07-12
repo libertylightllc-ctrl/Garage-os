@@ -46,7 +46,7 @@ export default async function VehicleHistory({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
 

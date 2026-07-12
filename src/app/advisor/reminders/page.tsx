@@ -114,7 +114,7 @@ export default async function RemindersQueue({
 }: {
   searchParams: Promise<{ q?: string; month?: string }>;
 }) {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
   const now = new Date();

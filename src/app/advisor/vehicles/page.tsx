@@ -26,7 +26,7 @@ export default async function AdvisorVehicleSearch({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const { q: rawQ } = await searchParams;
   const q = (rawQ ?? "").trim();

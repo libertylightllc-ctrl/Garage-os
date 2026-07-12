@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 export const dynamic ="force-dynamic";
 
 export default async function PartsQueue() {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
 
   const requests = await prisma.partRequest.findMany({

@@ -69,7 +69,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   // Both advisor + cashier can land on this page after KEY DECISION #5
   // (rev. 2026-06-23): the ADVISOR creates + prices + sends the estimate,
   // the CASHIER opens it to generate the invoice / record advance payment.
-  const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER"]);
+  const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER","MASTER"]);
   const role = session.user.role as StaffRole;
   // Split per KEY DECISION #5 (rev. 2026-06-23):
   //   - canEditEstimate: edit line items + send to customer  → advisor + owner

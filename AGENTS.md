@@ -63,8 +63,8 @@ Specs in `/docs` (read before deciding):
      edit estimate lines.
    - **Owner** is allowed on both sides as override for single-person shops.
    - Permission rules in `src/lib/permissions.ts`: `ESTIMATE_CREATE_ROLES = [ADVISOR,
-     OWNER]` and `INVOICE_ROLES = [CASHIER, OWNER]`. Send-to-customer (`SEND_ROLES`)
-     stays open to both advisor + cashier.
+     OWNER, MASTER]` and `INVOICE_ROLES = [CASHIER, OWNER, MASTER]`. Send-to-customer
+     (`SEND_ROLES`) stays open to advisor + cashier (+ owner/master).
 6. **Two approval points.** Approval #1 before any work; Approval #2 if extra problems found
    mid-repair (work auto-pauses until approved). Approval recorded against the job card with
    timestamp.
@@ -72,11 +72,17 @@ Specs in `/docs` (read before deciding):
    model, year. Repeat → plate lookup auto-fills from record. Vehicle sold → advisor can
    edit owner name + mobile. Capture consent at onboarding; store only extracted fields;
    legal review before launch.
-8. **Four roles, per branch:** Owner (all branches, billing, reports), Advisor (creates
-   jobs/assigns, prices estimates, sends to customer — owns customer relationship),
-   Technician (claim + workshop mode, no pricing), Cashier (invoice + VAT + payment
-   record only — does NOT price estimates anymore; see Key Decision #5). Billing is per branch;
-   each branch has own staff/WhatsApp/queue; owner sees branches aggregated.
+8. **Four roles, per branch (+ MASTER, added 2026-07-12):** Owner (all branches, billing,
+   reports), Advisor (creates jobs/assigns, prices estimates, sends to customer — owns
+   customer relationship), Technician (claim + workshop mode, no pricing), Cashier
+   (invoice + VAT + payment record only — does NOT price estimates anymore; see Key
+   Decision #5). Billing is per branch; each branch has own staff/WhatsApp/queue; owner
+   sees branches aggregated.
+   **MASTER** is an owner-created do-everything operational login: advisor + technician +
+   cashier work under one account (full flow intake → estimate → invoice → payment), but
+   NEVER the owner dashboard/financials. It lives in every operational guard
+   (`requireAdvisor`, `requireTech`, the money arrays in `permissions.ts`) and is
+   deliberately absent from `requireOwner` and all `/owner/*` pages. Home = `/advisor`.
 
 ## Rules
 - Work in SMALL steps. After each: it runs, it's committed, it has a test.

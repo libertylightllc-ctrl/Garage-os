@@ -136,7 +136,7 @@ export async function requestPartAction(formData: FormData) {
 
 // ---------- Advisor / parts person: move a request along ----------
 async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: string) {
-  const user = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const user = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const requestId = String(formData.get("requestId") ?? "");
 
   const req = await prisma.partRequest.findFirst({

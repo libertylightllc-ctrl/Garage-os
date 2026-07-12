@@ -156,7 +156,7 @@ export default async function CashierHome({
 }: {
   searchParams: Promise<{ tab?: string; filter?: string }>;
 }) {
-  const session = await requireAnyRole(["CASHIER", "OWNER"]);
+  const session = await requireAnyRole(["CASHIER", "OWNER", "MASTER"]);
   const t = await getT();
   const garageId = session.user.garageId;
 

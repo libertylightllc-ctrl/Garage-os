@@ -13,7 +13,7 @@ import { requireAnyRole } from "@/lib/action-guards";
 // mileage out + who delivered + when. Status advances INVOICED -> DELIVERED, and the
 // customer gets a WhatsApp link to confirm collection (signature equivalent).
 export async function recordDeliveryAction(formData: FormData) {
-  const user = await requireAnyRole(["ADVISOR", "CASHIER", "OWNER"]);
+  const user = await requireAnyRole(["ADVISOR", "CASHIER", "OWNER", "MASTER"]);
   const jobId = String(formData.get("jobId") ?? "");
   const mileageOut = cleanMileage(Number(formData.get("mileageOut") ?? NaN));
   if (mileageOut === null) throw new Error("Enter a valid mileage out.");

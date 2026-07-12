@@ -43,7 +43,7 @@ export default async function NewJobCard({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const { error } = await searchParams;
 

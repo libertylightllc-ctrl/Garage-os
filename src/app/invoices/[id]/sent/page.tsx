@@ -18,7 +18,7 @@ export default async function InvoiceSent({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await requireAnyRole(["CASHIER","OWNER","ADVISOR"]);
+  const session = await requireAnyRole(["CASHIER","OWNER","ADVISOR","MASTER"]);
   const t = await getT();
   const { id } = await params;
 

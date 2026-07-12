@@ -35,21 +35,29 @@ export async function requireAnyRole(roles: string[]): Promise<SessionUser> {
 /**
  * Advisor-side work: create jobs, intake, bookings, chats. OWNER is included
  * everywhere the advisor is (solo-owner shops run the whole flow on one
- * login; staff stay optional).
+ * login; staff stay optional). MASTER is the owner-created do-everything
+ * operational role (advisor + tech + cashier under one login) — it belongs
+ * in every operational guard, never in requireOwner.
  */
 export function requireAdvisor(): Promise<SessionUser> {
-  return requireAnyRole(["ADVISOR", "OWNER"]);
+  return requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
 }
 
 /**
- * Technician-only work: claim, findings, steps, part requests. Deliberately
- * NOT widened to OWNER — the claim-lock and technician stats stay meaningful.
+ * Technician work: claim, findings, steps, part requests. Deliberately
+ * NOT widened to OWNER — the claim-lock and technician stats stay
+ * meaningful. MASTER is included: it covers the tech seat in shops that
+ * run the whole floor on one operational login.
  */
 export function requireTech(): Promise<SessionUser> {
-  return requireAnyRole(["TECH"]);
+  return requireAnyRole(["TECH", "MASTER"]);
 }
 
-/** Owner-only work: inventory, purchasing, suppliers, onboarding, WhatsApp. */
+/**
+ * Owner-only work: inventory, purchasing, suppliers, onboarding, WhatsApp.
+ * MASTER is deliberately excluded — the owner dashboard and financials
+ * stay owner-only.
+ */
 export function requireOwner(): Promise<SessionUser> {
   return requireAnyRole(["OWNER"]);
 }

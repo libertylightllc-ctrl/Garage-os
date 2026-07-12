@@ -46,6 +46,22 @@ const NAV: Record<StaffRole, NavItem[]> = {
         { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
         { href: "/cashier/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
     ],
+    // MASTER: the full operational floor under one login — advisor tabs +
+    // workshop + cashier accounts. Deliberately NO owner tabs (dashboard,
+    // billing, ledger, analytics stay owner-only).
+    MASTER: [
+        { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+        { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
+        { href: "/technician", labelKey: "tabWorkshop", key: "workshop" },
+        { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
+        { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
+        { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
+        { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
+        { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
+        { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
+        { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
+        { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+    ],
 };
 
 /** Consistent staff top bar: brand + role, section tabs, sign out. */
@@ -76,7 +92,7 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
     let needsHuman = 0;
     let openParts = 0;
     let dueReminders = 0;
-    if (role === "ADVISOR" && session?.user?.garageId) {
+    if ((role === "ADVISOR" || role === "MASTER") && session?.user?.garageId) {
         const gid = session.user.garageId;
         [needsHuman, openParts, dueReminders] = await Promise.all([
             prisma.whatsAppThread.count({ where: { garageId: gid, threadStatus: "NEEDS_HUMAN" } }),

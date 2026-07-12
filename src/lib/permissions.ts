@@ -24,14 +24,18 @@
 // but their submits 403. (Cashier's invoice + payment work is completely
 // unaffected — they remain in INVOICE_ROLES.)
 
+// MASTER (added 2026-07-12) is the owner-created do-everything operational
+// role: advisor + tech + cashier under one login. It appears in every
+// operational bucket below but never gains owner dashboard/financials.
+
 /** Roles that may create + edit estimate lines / prices. */
-export const ESTIMATE_CREATE_ROLES: string[] = ["ADVISOR", "OWNER"];
+export const ESTIMATE_CREATE_ROLES: string[] = ["ADVISOR", "OWNER", "MASTER"];
 
 /** Roles that may generate / edit invoices, record payment, and take advance payments. */
-export const INVOICE_ROLES: string[] = ["CASHIER", "OWNER"];
+export const INVOICE_ROLES: string[] = ["CASHIER", "OWNER", "MASTER"];
 
 /** Roles that may send an estimate to the customer / record the customer decision. */
-export const SEND_ROLES: string[] = ["ADVISOR", "CASHIER", "OWNER"];
+export const SEND_ROLES: string[] = ["ADVISOR", "CASHIER", "OWNER", "MASTER"];
 
 /** Can this role create + edit estimate prices? Cashiers explicitly cannot anymore. */
 export function canEditEstimate(role: string | null | undefined): boolean {

@@ -19,7 +19,7 @@ export const dynamic ="force-dynamic";
   * footer of WhatsAppStatusPanel points there.
   */
 export default async function AdvisorWhatsApp() {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
 
   return (

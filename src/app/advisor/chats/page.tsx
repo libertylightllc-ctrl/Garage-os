@@ -8,7 +8,7 @@ import { startTestConversationAction } from "@/app/actions/chat";
 export const dynamic ="force-dynamic";
 
 export default async function ChatsInbox() {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const garageId = session.user.garageId;
 
   const [threads, customers] = await Promise.all([

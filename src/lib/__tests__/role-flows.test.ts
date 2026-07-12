@@ -13,6 +13,10 @@
  *             cannot create jobs or price estimates.
  *   TECH    — claim → free-text part request → send for estimate; still
  *             cannot create jobs or estimates.
+ *   MASTER  — the owner-created do-everything operational role: the WHOLE
+ *             flow under one login (intake → claim → estimate → price →
+ *             approve → invoice → payment), but BLOCKED from owner-only
+ *             work and redirected away from the owner dashboard.
  *
  * Cleanup by garage-id prefix.
  */
@@ -41,6 +45,8 @@ const {
   recordPaymentAction,
 } = await import("@/app/actions/billing");
 const { requestPartAction } = await import("@/app/actions/parts");
+const { addBayAction } = await import("@/app/actions/onboarding");
+const { requireRole: requirePageRole } = await import("@/lib/guard");
 
 const P = "role-flow-test-";
 const gA = P + "garage-A";
@@ -79,7 +85,7 @@ async function call(action: (fd: FormData) => Promise<void>, fd: FormData): Prom
 
 async function setup() {
   await prisma.garage.upsert({ where: { id: gA }, update: {}, create: { id: gA, name: gA } });
-  for (const role of ["OWNER", "ADVISOR", "TECH", "CASHIER"]) {
+  for (const role of ["OWNER", "ADVISOR", "TECH", "CASHIER", "MASTER"]) {
     const id = P + "u-" + role.toLowerCase();
     await prisma.user.upsert({
       where: { id },
@@ -192,6 +198,34 @@ describe("per-role end-to-end flows", () => {
     await expect(
       call(addEstimateLineAction, form({ estimateId: estId, kind: "LABOR", description: "x", qty: "1", unitPrice: "1" })),
     ).rejects.toThrow(/Not authorized/);
+  });
+
+  it("MASTER: the whole operational flow on one login; blocked from owner work", async () => {
+    mockAuth.mockResolvedValue(as("MASTER"));
+
+    // advisor seat: intake
+    const jobId = await intakeJob("MASTER");
+    // tech seat: claim the car
+    await call(claimJobAction, form({ jobId }));
+    const job = await prisma.jobCard.findUnique({ where: { id: jobId } });
+    expect(job!.claimedById).toBe(P + "u-master");
+    // advisor seat: estimate + price
+    const estId = await priceEstimate(jobId);
+    // customer approves…
+    await prisma.estimate.update({ where: { id: estId }, data: { status: "APPROVED" } });
+    // cashier seat: invoice + payment
+    const invUrl = await call(generateInvoiceAction, form({ estimateId: estId }));
+    const invId = invUrl.split("/").pop()!;
+    await call(recordPaymentAction, form({ invoiceId: invId, method: "CASH", amount: "420" }));
+    const inv = await prisma.invoice.findUnique({ where: { id: invId }, include: { payments: true } });
+    expect(inv!.payments).toHaveLength(1);
+    expect(String(inv!.total)).toBe("420"); // 400 + 5% VAT
+
+    // owner boundary holds BOTH ways:
+    // 1. owner-only ACTIONS throw
+    await expect(call(addBayAction, form({ name: "Bay X" }))).rejects.toThrow(/Not authorized/);
+    // 2. the owner DASHBOARD page guard redirects MASTER to its own home
+    await expect(requirePageRole("OWNER")).rejects.toThrow("REDIRECT:/advisor");
   });
 
   it("TECH: claim → part request → send for estimate; cannot create jobs or estimates", async () => {

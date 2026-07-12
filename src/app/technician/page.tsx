@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -22,7 +22,7 @@ export default async function TechnicianHome({
 }: {
   searchParams: Promise<{ taken?: string }>;
 }) {
-  const session = await requireRole("TECH");
+  const session = await requireAnyRole(["TECH", "MASTER"]);
   const t = await getT();
   const { taken } = await searchParams;
   const me = session.user.id;

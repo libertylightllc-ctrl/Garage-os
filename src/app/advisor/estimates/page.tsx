@@ -24,7 +24,7 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
  * already cover for the existing cashier queries.
  */
 export default async function AdvisorEstimates() {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const garageId = session.user.garageId;
 

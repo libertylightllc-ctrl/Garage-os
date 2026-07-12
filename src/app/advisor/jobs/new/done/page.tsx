@@ -25,7 +25,7 @@ export default async function HandoffDone({
 }: {
   searchParams: Promise<{ jobId?: string }>;
 }) {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const { jobId } = await searchParams;
   if (!jobId) notFound();

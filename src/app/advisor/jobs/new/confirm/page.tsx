@@ -65,7 +65,7 @@ function CheckboxGroup({
 }
 
 export default async function ReceptionForm({ searchParams }: { searchParams: Promise<SP> }) {
-  await requireAnyRole(["ADVISOR", "OWNER"]);
+  await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
   const dictLabels = {

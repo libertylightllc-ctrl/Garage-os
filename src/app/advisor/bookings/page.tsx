@@ -8,7 +8,7 @@ import { getT } from "@/i18n/server";
 export const dynamic ="force-dynamic";
 
 export default async function BookingsInbox() {
-  const session = await requireAnyRole(["ADVISOR", "OWNER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
 
   const bookings = await prisma.booking.findMany({

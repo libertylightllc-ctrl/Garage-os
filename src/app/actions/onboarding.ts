@@ -12,7 +12,10 @@ import { requireOwner } from "@/lib/action-guards";
 // the shared src/lib/create-garage.ts. There is no public signup action.
 
 
-const STAFF_ROLES = ["ADVISOR", "TECH", "CASHIER"] as const;
+// Roles the owner may create from the Team screen. MASTER is the
+// do-everything operational role (advisor + tech + cashier, no owner
+// dashboard) — created like any other staff member.
+const STAFF_ROLES = ["ADVISOR", "TECH", "CASHIER", "MASTER"] as const;
 
 // Owner adds a branch (a child Garage under the company root).
 export async function addBranchAction(formData: FormData) {

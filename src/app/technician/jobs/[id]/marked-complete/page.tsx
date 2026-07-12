@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -18,7 +18,7 @@ export default async function MarkedComplete({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await requireRole("TECH");
+  const session = await requireAnyRole(["TECH", "MASTER"]);
   const t = await getT();
   const { id } = await params;
 

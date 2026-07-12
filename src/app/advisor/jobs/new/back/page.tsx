@@ -27,7 +27,7 @@ export default async function NewJobMoulkiaBack({
     assignedToId?: string;
   }>;
 }) {
-  await requireAnyRole(["ADVISOR", "OWNER"]);
+  await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const {
     ownerName ="",

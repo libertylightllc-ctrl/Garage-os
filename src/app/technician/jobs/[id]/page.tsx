@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { requestPartAction, cancelOwnPartRequestAction } from "@/app/actions/parts";
@@ -60,7 +60,7 @@ const STEP_ICON: Record<string, string> = {
 
 export default async function Workshop({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireRole("TECH");
+  const session = await requireAnyRole(["TECH", "MASTER"]);
 
   const t = await getT();
   const locale = await getLocale();

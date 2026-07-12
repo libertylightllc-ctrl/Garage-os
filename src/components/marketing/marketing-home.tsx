@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GarageBrand } from "@/components/garage-brand";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { MotionHero } from "@/components/marketing/motion-hero";
+import { Pricing } from "@/components/marketing/pricing";
 
 // Public marketing homepage (additive). Rendered by src/app/page.tsx ONLY
 // for anonymous visitors; logged-in staff are still redirected to their
@@ -30,7 +31,7 @@ export function MarketingHome() {
             <a href="#product" className="hidden text-text-mute hover:text-text sm:inline">
               Product
             </a>
-            <a href="#pilot" className="hidden text-text-mute hover:text-text sm:inline">
+            <a href="#pricing" className="hidden text-text-mute hover:text-text sm:inline">
               Pricing
             </a>
             <Link
@@ -107,6 +108,9 @@ export function MarketingHome() {
             />
           </div>
         </section>
+
+        {/* ── Pricing ───────────────────────────────────────── */}
+        <Pricing demoHref={DEMO_MAILTO} />
 
         {/* ── Closing CTA ───────────────────────────────────── */}
         <section id="pilot" className="border-t border-border">

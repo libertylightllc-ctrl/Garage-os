@@ -15,6 +15,10 @@ import {
   recordAdvancePaymentAction,
 } from "@/app/actions/billing";
 import { balanceDue } from "@/lib/billing";
+import {
+  canEditEstimate as roleCanEditEstimate,
+  canEditInvoice as roleCanEditInvoice,
+} from "@/lib/permissions";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { EstimateLineRow } from "@/components/estimate-line-row";
 import { EstimateLineCard } from "@/components/estimate-line-card";
@@ -72,10 +76,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER","MASTER"]);
   const role = session.user.role as StaffRole;
   // Split per KEY DECISION #5 (rev. 2026-06-23):
-  //   - canEditEstimate: edit line items + send to customer  → advisor + owner
-  //   - canInvoice:      generate invoice + advance payment  → cashier + owner
-  const canEditEstimate = role === "ADVISOR" || role === "OWNER";
-  const canInvoice = role === "CASHIER" || role === "OWNER";
+  //   - canEditEstimate: edit line items + send to customer  → ESTIMATE_CREATE_ROLES
+  //   - canInvoice:      generate invoice + advance payment  → INVOICE_ROLES
+  // Read from the SHARED permissions helpers, never a local role list —
+  // a private copy here is exactly how MASTER shipped without an
+  // estimate editor (and how incident ref 3426515655 happened server-side).
+  const canEditEstimate = roleCanEditEstimate(role);
+  const canInvoice = roleCanEditInvoice(role);
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -187,14 +194,18 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         price: String(p.price),
       }))
     : [];
-  const backHref = role ==="ADVISOR"? `/advisor/jobs/${est.jobCardId}` :"/cashier";
+  // MASTER works the estimate from the job like an advisor, so it gets the
+  // same back-to-job link; cashier (and owner arriving from accounts) goes
+  // back to the accounts board.
+  const jobSide = role === "ADVISOR" || role === "MASTER";
+  const backHref = jobSide ? `/advisor/jobs/${est.jobCardId}` : "/cashier";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
-      <AppNav role={role} active={role ==="ADVISOR"?"jobs":"accounts"} />
+      <AppNav role={role} active={jobSide ? "jobs" : "accounts"} />
       <div>
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
-          {role ==="ADVISOR"? t("backJob") : t("accounts")}
+          {jobSide ? t("backJob") : t("accounts")}
         </Link>
         {/* Garage's own brand. est.jobCard.garage was loaded with the
             same garageId scope already enforced by the findFirst above

@@ -24,6 +24,7 @@ import { GarageBrand } from "@/components/garage-brand";
 // triggering the server-action export check.
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
+import { canEditInvoice } from "@/lib/permissions";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { WorkflowStepper } from "@/components/workflow-stepper";
@@ -101,7 +102,7 @@ export default async function InvoiceView({
   // back to the existing read-only render (matches what the server-
   // side ownedEditableInvoice helper enforces).
   const canEditLines =
-    ["CASHIER","OWNER"].includes(session.user.role) && !inv.jobCard.invoiceSentAt;
+    canEditInvoice(session.user.role) && !inv.jobCard.invoiceSentAt;
 
   // Pull the discount line out of the main line array so the table
   // shows only real work + the totals area shows the discount as a
@@ -185,7 +186,7 @@ export default async function InvoiceView({
             🧾 {t("invoicePrintReceipt")}
           </Link>
         ) : null}
-        {["CASHIER","OWNER"].includes(session.user.role) ? (
+        {canEditInvoice(session.user.role) ? (
           customer.email ? (
             <form action={emailInvoiceAction} className="contents">
               <input type="hidden" name="invoiceId" value={inv.id} />
@@ -651,7 +652,7 @@ export default async function InvoiceView({
           ToCustomerAction now only fires from /invoices/[id]/preview,
           which means typo'd line items can't reach the customer in
           one accidental click. */}
-      {["CASHIER","OWNER"].includes(session.user.role) &&
+      {canEditInvoice(session.user.role) &&
       !inv.jobCard.invoiceSentAt ? (
         <Link
           href={`/invoices/${inv.id}/preview`}

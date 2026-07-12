@@ -7,6 +7,7 @@ import { balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { getT, getLocale } from "@/i18n/server";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import { canEditInvoice } from "@/lib/permissions";
 
 export const dynamic ="force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function InvoicePreview({
   if (!session?.user) redirect("/login");
   // Same role gate as the send action itself — preview is only
   // useful for the staff who can actually send.
-  if (!["CASHIER","OWNER"].includes(session.user.role)) {
+  if (!canEditInvoice(session.user.role)) {
     redirect(`/invoices/${id}`);
   }
 

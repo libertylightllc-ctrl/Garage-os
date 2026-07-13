@@ -57,6 +57,7 @@ export async function saveFindingsAction(formData: FormData) {
 
   const job = await workableJob(jobId, user.garageId, user.id);
   assertNotSubmitted(job);
+  assertRepairOpen(job);
 
   await prisma.jobFinding.upsert({
     where: { jobCardId: jobId },

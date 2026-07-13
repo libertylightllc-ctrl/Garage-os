@@ -67,11 +67,12 @@ export async function requestPartAction(formData: FormData) {
   });
   if (!job) throw new Error("Job not found in this garage");
 
-  // No work while waiting for customer approval of a revised quote.
+  if (job.status === "TECH_COMPLETE" || job.status === "INVOICED" || job.status === "DELIVERED" || job.status === "CANCELLED") {
+    throw new Error("This job is no longer open for work.");
+  }
   if (job.status === "ON_HOLD" && job.holdReason === "AWAITING_APPROVAL") {
     throw new Error("Waiting for customer approval before any further work.");
   }
-  // The primary claimer OR a helper may log work; an unclaimed car auto-claims.
   if (!canLogWork(job, user.id, job.helpers.map((h) => h.techId))) {
     throw new Error("This car is being handled by another technician.");
   }

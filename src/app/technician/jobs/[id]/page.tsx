@@ -150,6 +150,8 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   const me = session.user.id;
   const amHelper = job.claimedById !== null && job.claimedById !== me && job.helpers.some((h) => h.techId === me);
   const submitted = Boolean(job.finding?.submittedAt);
+  const workComplete = Boolean(job.workCompletedAt);
+  const findingsLocked = submitted || workComplete;
   const requiredParts = job.jobParts.filter((p) => p.kind ==="REQUIRED");
   const usedParts = job.jobParts.filter((p) => p.kind ==="USED");
   const extraParts = job.jobParts.filter((p) => p.kind ==="EXTRA");
@@ -366,7 +368,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           ) : null}
         </div>
 
-        {submitted ? (
+        {findingsLocked ? (
           <div className="text-sm">
             <p>{job.finding?.findings}</p>
             {job.finding?.diagnosis ? (
@@ -418,7 +420,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
                   <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                   <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
-                  {!submitted ? <th className="px-2 py-1.5"></th> : null}
+                  {!findingsLocked ? <th className="px-2 py-1.5"></th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -429,7 +431,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                     <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
                     <td className="px-2 py-1.5">{p.description}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
-                    {!submitted ? (
+                    {!findingsLocked ? (
                       <td className="px-2 py-1.5 text-right">
                         <form action={removeJobPartAction}>
                           <input type="hidden" name="jobId" value={job.id} />
@@ -802,8 +804,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      {/* Big-button, no-typing actions */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Big-button, no-typing actions — hidden once work is marked
+          complete so the tech can't upload photos or request parts on
+          a finished job (the action guards also block it server-side). */}
+      {!workComplete ? <div className="grid grid-cols-2 gap-3">
         <form action={addStepAction} className="contents">
           <input type="hidden" name="jobId" value={job.id} />
           <input type="hidden" name="type" value="PHOTO"/>
@@ -865,7 +869,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             mirrored in the workflow section below) and fires
             markCompleteAction so the job actually flips to
             TECH_COMPLETE. */}
-      </div>
+      </div> : null}
 
       {/* Part requests + live status. Each row carries the vehicle spec
           inline so the technician (and whoever they hand the phone to:

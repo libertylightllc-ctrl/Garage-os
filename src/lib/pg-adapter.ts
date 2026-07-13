@@ -14,13 +14,12 @@ export function makePgAdapter() {
   return new PrismaPg({
     connectionString: url,
     ssl: isLocal ? undefined : { rejectUnauthorized: false },
-    // DEV-ONLY: the local `prisma dev` proxy drops sockets under bursts of
-    // concurrent connection handshakes and after long sessions (P1017
-    // "Server has closed the connection"). A SMALL pool serializes the
-    // handshake bursts (queries queue instead of opening 8+ sockets at
-    // once) and a short idle timeout recycles sockets before the proxy
-    // kills them — the banner's "idle timeout at the smallest positive
-    // value" advice. Prod (Supabase pooler) keeps pg defaults.
-    ...(isLocal ? { max: 4, idleTimeoutMillis: 1_000, keepAlive: true } : {}),
+    // Both the local `prisma dev` proxy AND Supabase's PgBouncer pooler
+    // drop idle sockets (P1017 "Server has closed the connection").
+    // Small pool + short idle timeout + keepAlive prevents stale
+    // connections from causing "Something went wrong" errors.
+    max: isLocal ? 4 : 3,
+    idleTimeoutMillis: isLocal ? 1_000 : 10_000,
+    keepAlive: true,
   });
 }

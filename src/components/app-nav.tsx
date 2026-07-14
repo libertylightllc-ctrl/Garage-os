@@ -20,6 +20,8 @@ const USE_APP_SHELL: Partial<Record<StaffRole, boolean>> = {
     MASTER: true,
     TECH: true,
     CASHIER: true,
+    ADVISOR: true,
+    OWNER: true,
 };
 
 /**

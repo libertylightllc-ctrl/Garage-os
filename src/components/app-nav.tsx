@@ -18,6 +18,8 @@ import { AppShell } from "@/components/nav-shell/AppShell";
  */
 const USE_APP_SHELL: Partial<Record<StaffRole, boolean>> = {
     MASTER: true,
+    TECH: true,
+    CASHIER: true,
 };
 
 /**

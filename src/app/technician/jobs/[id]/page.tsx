@@ -412,12 +412,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <p className="text-sm text-text-mute">{t("noPartsRequired")}</p>
         ) : (
           <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[520px] text-sm">
+            <table className="w-full min-w-[280px] text-sm sm:min-w-[520px]">
               <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
-                  <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
-                  <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                  <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colMake")}</th>
+                  <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colModel")}</th>
+                  <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colYear")}</th>
                   <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                   <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                   {!findingsLocked ? <th className="px-2 py-1.5"></th> : null}
@@ -426,9 +426,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               <tbody>
                 {requiredParts.map((p) => (
                   <tr key={p.id} className="border-t border-border align-top">
-                    <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
-                    <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
-                    <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                    <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.make ?? "—"}</td>
+                    <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.model ?? "—"}</td>
+                    <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.year ?? "—"}</td>
                     <td className="px-2 py-1.5">{p.description}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                     {!findingsLocked ? (
@@ -541,12 +541,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border border-danger-500/30 bg-surface">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[280px] text-sm sm:min-w-[520px]">
                 <thead className="bg-danger-50 text-xs uppercase tracking-wide text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
                   <tr>
-                    <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
-                    <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
-                    <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colMake")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colModel")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colYear")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                     <th className="px-2 py-1.5"></th>
@@ -555,9 +555,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {extraParts.map((p) => (
                     <tr key={p.id} className="border-t border-danger-500/20 align-top">
-                      <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
-                      <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
-                      <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.make ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.model ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.year ?? "—"}</td>
                       <td className="px-2 py-1.5">{p.description}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                       <td className="px-2 py-1.5 text-right">
@@ -661,12 +661,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <p className="text-sm text-text-mute">{t("noPartsUsed")}</p>
           ) : (
             <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[280px] text-sm sm:min-w-[520px]">
                 <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                   <tr>
-                    <th className="px-2 py-1.5 text-left">{t("colMake")}</th>
-                    <th className="px-2 py-1.5 text-left">{t("colModel")}</th>
-                    <th className="px-2 py-1.5 text-left">{t("colYear")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colMake")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colModel")}</th>
+                    <th className="hidden px-2 py-1.5 text-left sm:table-cell">{t("colYear")}</th>
                     <th className="px-2 py-1.5 text-left">{t("colPart")}</th>
                     <th className="px-2 py-1.5 text-right">{t("colQty")}</th>
                     {repairOpen ? <th className="px-2 py-1.5"></th> : null}
@@ -675,9 +675,9 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {usedParts.map((p) => (
                     <tr key={p.id} className="border-t border-border align-top">
-                      <td className="px-2 py-1.5">{job.vehicle.make ?? "—"}</td>
-                      <td className="px-2 py-1.5">{job.vehicle.model ?? "—"}</td>
-                      <td className="px-2 py-1.5">{job.vehicle.year ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.make ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.model ?? "—"}</td>
+                      <td className="hidden px-2 py-1.5 sm:table-cell">{job.vehicle.year ?? "—"}</td>
                       <td className="px-2 py-1.5">{p.description}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{p.qty}</td>
                       {repairOpen ? (

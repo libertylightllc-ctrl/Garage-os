@@ -7,6 +7,7 @@ import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { GarageBrand } from "@/components/garage-brand";
 import { NavMore, type MoreItem } from "@/components/nav-more";
+import { cookies } from "next/headers";
 import { AppShell } from "@/components/nav-shell/AppShell";
 
 /**
@@ -18,6 +19,18 @@ import { AppShell } from "@/components/nav-shell/AppShell";
 const USE_APP_SHELL: Partial<Record<StaffRole, boolean>> = {
     MASTER: true,
 };
+
+/**
+ * Preview-only opt-in: the `nav-preview=1` cookie (set by
+ * /api/nav-preview?on) forces the new shell for any signed-in role.
+ * Lets a phone tester see the new nav on a Vercel preview URL without
+ * needing a MASTER account in prod. Removed alongside USE_APP_SHELL
+ * during slice-plan cleanup.
+ */
+async function shouldForceAppShell(): Promise<boolean> {
+    const c = await cookies();
+    return c.get("nav-preview")?.value === "1";
+}
 
 interface NavItem {
     href: string;
@@ -128,8 +141,10 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
     // Per-role delegation to the new AppShell. Keep the fall-through
     // legacy path fully intact until every role is migrated (slice
     // plan) — reverting the migration for any role means removing
-    // its entry from USE_APP_SHELL and nothing else.
-    if (USE_APP_SHELL[role]) {
+    // its entry from USE_APP_SHELL and nothing else. The preview
+    // cookie also forces the shell for any role, so a phone tester
+    // on a Vercel preview URL can see the new nav as themselves.
+    if (USE_APP_SHELL[role] || (await shouldForceAppShell())) {
         return <AppShell role={pageRole} active={active} />;
     }
 

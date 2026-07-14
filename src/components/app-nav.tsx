@@ -6,6 +6,18 @@ import { type StaffRole } from "@/lib/roles";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { GarageBrand } from "@/components/garage-brand";
+import { NavMore, type MoreItem } from "@/components/nav-more";
+import { AppShell } from "@/components/nav-shell/AppShell";
+
+/**
+ * Per-role migration gate for the new bottom-bar + More-sheet AppShell.
+ * Roles listed here render AppShell; others still render the legacy
+ * horizontal-strip nav below. Migrate one role at a time per the
+ * slice plan (slice 1: MASTER only, slice 2: + TECH + CASHIER, etc.).
+ */
+const USE_APP_SHELL: Partial<Record<StaffRole, boolean>> = {
+    MASTER: true,
+};
 
 interface NavItem {
     href: string;
@@ -13,57 +25,87 @@ interface NavItem {
     key: string;
 }
 
-const NAV: Record<StaffRole, NavItem[]> = {
-    OWNER: [
-        { href: "/owner", labelKey: "tabDashboard", key: "dashboard" },
-        // Solo-owner shops: the owner runs the job flow himself on the
-        // advisor screens (their guards admit OWNER). Staff stay optional.
-        { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
-        { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
-        { href: "/owner/branches", labelKey: "tabBranches", key: "branches" },
-        { href: "/owner/bays", labelKey: "tabBays", key: "bays" },
-        { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
-        { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
-        { href: "/owner/inventory", labelKey: "tabInventory", key: "inventory" },
-        { href: "/owner/suppliers", labelKey: "tabSuppliers", key: "suppliers" },
-        { href: "/owner/purchasing", labelKey: "tabPurchasing", key: "purchasing" },
-        { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
-        { href: "/owner/ledger", labelKey: "tabLedger", key: "ledger" },
-        { href: "/owner/analytics", labelKey: "tabAnalytics", key: "analytics" },
-        { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
-    ],
-    ADVISOR: [
-        { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
-        { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
-        { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
-        { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
-        { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
-        { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
-        { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
-        { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
-    ],
-    TECH: [{ href: "/technician", labelKey: "tabWorkshop", key: "workshop" }],
-    CASHIER: [
-        { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
-        { href: "/cashier/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
-    ],
-    // MASTER: the full operational floor under one login — advisor tabs +
-    // workshop + cashier accounts. Deliberately NO owner tabs (dashboard,
-    // billing, ledger, analytics stay owner-only).
-    MASTER: [
-        { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
-        { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
-        { href: "/technician", labelKey: "tabWorkshop", key: "workshop" },
-        { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
-        { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
-        { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
-        { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
-        { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
-        { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
-        { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
-        { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
-        { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
-    ],
+/**
+ * Per-role top-bar tabs, split into `primary` (always visible inline) and
+ * `more` (tucked under a "More ▾" overflow menu). Roles with a long tab
+ * list — OWNER, MASTER, ADVISOR — would otherwise become an unwieldy
+ * horizontal scroll on a phone; keeping ~5 core tabs inline and the rest
+ * in the menu keeps the header tidy on every screen. TECH/CASHIER have so
+ * few tabs they need no overflow (empty `more`).
+ */
+type RoleNav = { primary: NavItem[]; more: NavItem[] };
+
+const NAV: Record<StaffRole, RoleNav> = {
+    OWNER: {
+        primary: [
+            { href: "/owner", labelKey: "tabDashboard", key: "dashboard" },
+            // Solo-owner shops: the owner runs the job flow himself on the
+            // advisor screens (their guards admit OWNER). Staff stay optional.
+            { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+            { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
+            { href: "/owner/inventory", labelKey: "tabInventory", key: "inventory" },
+            { href: "/owner/analytics", labelKey: "tabAnalytics", key: "analytics" },
+        ],
+        more: [
+            { href: "/owner/branches", labelKey: "tabBranches", key: "branches" },
+            { href: "/owner/bays", labelKey: "tabBays", key: "bays" },
+            { href: "/owner/staff", labelKey: "tabTeam", key: "team" },
+            { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
+            { href: "/owner/suppliers", labelKey: "tabSuppliers", key: "suppliers" },
+            { href: "/owner/purchasing", labelKey: "tabPurchasing", key: "purchasing" },
+            { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
+            { href: "/owner/ledger", labelKey: "tabLedger", key: "ledger" },
+            { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+        ],
+    },
+    ADVISOR: {
+        primary: [
+            { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+            { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
+            { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
+            { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
+            { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
+        ],
+        more: [
+            { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
+            { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
+            { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+        ],
+    },
+    TECH: {
+        primary: [{ href: "/technician", labelKey: "tabWorkshop", key: "workshop" }],
+        more: [],
+    },
+    CASHIER: {
+        primary: [
+            { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
+            { href: "/cashier/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+        ],
+        more: [],
+    },
+    // MASTER: the full operational floor under one login — the core
+    // intake → estimate → cashier flow stays inline; secondary lookups
+    // (hours, vehicles, bookings, parts, reminders, chats, whatsapp) go
+    // under More. Deliberately NO owner tabs (dashboard, billing, ledger,
+    // analytics stay owner-only).
+    MASTER: {
+        primary: [
+            { href: "/advisor", labelKey: "tabJobs", key: "jobs" },
+            { href: "/advisor/jobs/new", labelKey: "tabIntake", key: "intake" },
+            { href: "/technician", labelKey: "tabWorkshop", key: "workshop" },
+            { href: "/advisor/estimates", labelKey: "tabEstimates", key: "estimates" },
+            { href: "/cashier", labelKey: "tabAccounts", key: "accounts" },
+        ],
+        more: [
+            { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
+            { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
+            { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
+            { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },
+            { href: "/advisor/reminders", labelKey: "tabReminders", key: "reminders" },
+            { href: "/advisor/chats", labelKey: "tabChats", key: "chats" },
+            { href: "/advisor/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
+        ],
+    },
 };
 
 /** Consistent staff top bar: brand + role, section tabs, sign out. */
@@ -82,7 +124,16 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
     // OWNER for solo-owner shops) keeps the owner tabs and can always get
     // back to the dashboard. For matching roles this is a no-op.
     const role = (session?.user?.role as StaffRole | undefined) ?? pageRole;
-    const items = NAV[role] ?? NAV[pageRole];
+
+    // Per-role delegation to the new AppShell. Keep the fall-through
+    // legacy path fully intact until every role is migrated (slice
+    // plan) — reverting the migration for any role means removing
+    // its entry from USE_APP_SHELL and nothing else.
+    if (USE_APP_SHELL[role]) {
+        return <AppShell role={pageRole} active={active} />;
+    }
+
+    const roleNav = NAV[role] ?? NAV[pageRole];
     const garage = session?.user?.garageId
         ? await prisma.garage.findUnique({
               where: { id: session.user.garageId },
@@ -106,6 +157,31 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
             }),
         ]);
     }
+
+    // Resolve the badge (count + colour) for a given tab key, or null.
+    function badgeFor(key: string): { count: number; className: string } | null {
+        if (key === "chats" && needsHuman > 0)
+            return { count: needsHuman, className: "bg-danger-500" };
+        if (key === "parts" && openParts > 0)
+            return { count: openParts, className: "bg-warning-500" };
+        if (key === "reminders" && dueReminders > 0)
+            return { count: dueReminders, className: "bg-info-500" };
+        return null;
+    }
+
+    // Pre-resolve the overflow items into serializable props for the
+    // client NavMore component (labels + badges resolved server-side).
+    const moreItems: MoreItem[] = roleNav.more.map((it) => {
+        const badge = badgeFor(it.key);
+        return {
+            href: it.href,
+            label: t(it.labelKey),
+            key: it.key,
+            badge: badge?.count,
+            badgeClass: badge?.className,
+        };
+    });
+
     // Header BREAKS OUT of the per-page main container so it spans the
     // full viewport width on every screen, not just the page max-w.
     // `marginLeft: calc(50% - 50vw)` on each side is the classic
@@ -130,7 +206,7 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
         >
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-3">
                 <Link
-                    href={items[0].href}
+                    href={roleNav.primary[0].href}
                     className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight"
                     aria-label="Garage Os"
                 >
@@ -158,39 +234,36 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
                 </Link>
 
                 <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-                    {items.map((it) => {
+                    {roleNav.primary.map((it) => {
                         const isActive = active === it.key;
+                        const badge = badgeFor(it.key);
                         return (
                             <Link
                                 key={it.key}
                                 href={it.href}
                                 aria-current={isActive ? "page" : undefined}
                                 className={
-                                    "whitespace-nowrap rounded-full px-3 py-1 text-sm " +
+                                    "inline-flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3 py-2 text-sm " +
                                     (isActive
                                         ? "bg-brand-900 text-white dark:bg-white dark:text-brand-900"
                                         : "text-text-mute hover:bg-surface-2")
                                 }
                             >
                                 {t(it.labelKey)}
-                                {it.key === "chats" && needsHuman > 0 ? (
-                                    <span className="ms-1 rounded-full bg-danger-500 px-1.5 text-xs text-white">
-                                        {needsHuman}
-                                    </span>
-                                ) : null}
-                                {it.key === "parts" && openParts > 0 ? (
-                                    <span className="ms-1 rounded-full bg-warning-500 px-1.5 text-xs text-white">
-                                        {openParts}
-                                    </span>
-                                ) : null}
-                                {it.key === "reminders" && dueReminders > 0 ? (
-                                    <span className="ms-1 rounded-full bg-info-500 px-1.5 text-xs text-white">
-                                        {dueReminders}
+                                {badge ? (
+                                    <span
+                                        className={
+                                            "ms-1 rounded-full px-1.5 text-xs text-white " +
+                                            badge.className
+                                        }
+                                    >
+                                        {badge.count}
                                     </span>
                                 ) : null}
                             </Link>
                         );
                     })}
+                    <NavMore label={t("tabMore")} items={moreItems} activeKey={active} />
                 </nav>
 
                 {/* Account action — Sign out lives OUTSIDE the scrolling
@@ -204,12 +277,12 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
                 <div className="shrink-0 flex items-center gap-1 border-s border-border ps-3">
                     <Link
                         href="/settings"
-                        className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                        className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3 py-2 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                     >
                         {t("settings")}
                     </Link>
                     <form action={signOutAction}>
-                        <button className="whitespace-nowrap rounded-full px-3 py-1 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                        <button className="inline-flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3 py-2 text-sm text-text-mute hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
                             {t("signOut")}
                         </button>
                     </form>

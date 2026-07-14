@@ -89,7 +89,14 @@ export async function addRequiredPartAction(formData: FormData) {
       description = description || part.name;
     }
   }
-  if (!description) throw new Error("A part description is required.");
+  // Silent no-op on empty description. The client-side form has
+  // `required` on the description input so the browser normally
+  // blocks empty submits with a friendly prompt — this path only
+  // fires if the client validation is bypassed (JS off, edited DOM,
+  // curl). Throwing here surfaces as the generic "Something went
+  // wrong" page + a 500 in the logs (prod digest 1013687292); a
+  // clean return keeps the user on the form with nothing added.
+  if (!description) return;
 
   await prisma.jobPart.create({
     data: {
@@ -206,7 +213,9 @@ export async function addUsedPartAction(formData: FormData) {
       description = description || part.name;
     }
   }
-  if (!description) throw new Error("A part description is required.");
+  // Silent no-op on empty description — same rationale as
+  // addRequiredPartAction above.
+  if (!description) return;
 
   await prisma.jobPart.create({
     data: { jobCardId: jobId, kind: "USED", partId, partNo, description, qty, createdById: user.id },

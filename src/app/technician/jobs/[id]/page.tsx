@@ -479,6 +479,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               labels={dictLabels}
               name="description"
               placeholder={t("colDescription")}
+              required
               className="flex-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
             />
             <input
@@ -723,6 +724,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                   labels={dictLabels}
                   name="description"
                   placeholder={t("colDescription")}
+                  required
                   className="flex-1 rounded-lg border border-border bg-transparent px-2 py-1 text-sm"
                 />
                 <input

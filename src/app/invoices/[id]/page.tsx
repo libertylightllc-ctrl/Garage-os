@@ -16,6 +16,10 @@ import {
 } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
 import { GarageBrand } from "@/components/garage-brand";
+import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
+import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
+import { invoiceMessage } from "@/lib/wa-templates";
+import { appUrl } from "@/lib/whatsapp";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is"use server"and can only export async functions — exporting a
 // regexp from there broke the whole module under Turbopack on Vercel
@@ -167,12 +171,33 @@ export default async function InvoiceView({
         <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
       </div>
 
-      {/* Action bar — Print Invoice / Print Receipt (when paid) /
-          Email Invoice. All three hidden from the print output so
-          the document the customer sees is just the invoice itself.
-          The WhatsApp send button on /invoices/[id]/preview stays
-          where it was — per spec, this slice doesn't touch it. */}
+      {/* Action bar — Send via WhatsApp / Print Invoice / Print
+          Receipt (when paid) / Email Invoice. All hidden from the
+          print output so the document the customer sees is just the
+          invoice itself. */}
       <div className="flex flex-wrap gap-2 print:hidden">
+        {/* wa.me "Send via WhatsApp" — opens the staff's WhatsApp with
+            the customer's number + a drafted message + a link to the
+            customer-facing /c/invoice/{id} page. Staff hits Send from
+            their own WhatsApp; this is the interim path until the
+            shop connects the Cloud API (future upgrade, see wa.ts). */}
+        {(() => {
+          const phone = normalizeToE164(customer.waId ?? customer.phone);
+          const msg = invoiceMessage({
+            customer: { name: customer.name, lang: customer.lang },
+            vehicle: { make: inv.jobCard.vehicle.make, model: inv.jobCard.vehicle.model },
+            invoice: { total, number: inv.number },
+            appUrl: appUrl(),
+            invoiceId: inv.id,
+          });
+          return (
+            <SendViaWhatsAppButton
+              href={phone ? buildWaMeUrl(phone, msg) : null}
+              label={t("waSend")}
+              disabledReason={t("waSendDisabled")}
+            />
+          );
+        })()}
         <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
           🖨️ {t("invoicePrintInvoice")}
         </PrintButton>

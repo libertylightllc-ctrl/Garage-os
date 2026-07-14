@@ -494,6 +494,9 @@ const en = {
   markedCompleteTitle: "Marked complete — sent to cashier",
   markedCompleteSubtitle: "The cashier will finalise the invoice and send it to the customer.",
   markedCompleteCompletedAt: "Completed at",
+  // "Send via WhatsApp" wa.me button (invoice + estimate + reminder etc)
+  waSend: "Send via WhatsApp",
+  waSendDisabled: "Customer phone number is missing or invalid",
   // Cashier 'Send invoice to customer' button + confirmation screen (Stage 8)
   sendInvoiceToCustomer: "Send to Customer →",
   invoiceSentTitle: "Invoice sent to customer",
@@ -1652,6 +1655,8 @@ const ar: typeof en = {
   markedCompleteTitle: "تم تحديدها كمكتملة — أُرسلت إلى أمين الصندوق",
   markedCompleteSubtitle: "سيقوم أمين الصندوق بإعداد الفاتورة وإرسالها للعميل.",
   markedCompleteCompletedAt: "اكتملت في",
+  waSend: "إرسال عبر واتساب",
+  waSendDisabled: "رقم هاتف العميل غير متوفر أو غير صحيح",
   sendInvoiceToCustomer: "إرسال للعميل ←",
   invoicePreviewNote: "راجع الفاتورة كما يراها العميل قبل الإرسال.",
   invoicePreviewButton: "معاينة ←",

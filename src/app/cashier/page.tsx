@@ -978,7 +978,15 @@ export default async function CashierHome({
             })
             .filter((r) => r.state !=="PAID")
             .filter((r) => {
-              if (invoiceFilter === "partially_paid") return r.state === "PARTIAL";
+              // 'Partially Paid' matches the counter's date-independent
+              // definition — 0 < paid < total — so an invoice that is
+              // both partial-paid AND past-due (state === "OVERDUE"
+              // with a positive `paid`) still shows in the drill-down.
+              // Previously this used `r.state === "PARTIAL"` which
+              // silently hid every overdue-partial row: counter said 5,
+              // list said "everything cleared." Cashier could not chase
+              // the missing balance on those invoices.
+              if (invoiceFilter === "partially_paid") return isPartiallyPaid(r.total, r.paid);
               if (invoiceFilter === "overdue") return r.state === "OVERDUE";
               return true;
             });

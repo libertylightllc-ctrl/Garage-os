@@ -5,14 +5,11 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsApp } from "@/lib/whatsapp";
 import { dueDateFor, reminderBody, REMINDER_TYPES, type ReminderType } from "@/lib/reminders";
-import { requireAnyRole } from "@/lib/action-guards";
-
-
-const STAFF = ["ADVISOR", "OWNER"];
+import { requireAdvisor } from "@/lib/action-guards";
 
 // ---------- Advisor: schedule reminders when a job completes ----------
 export async function scheduleRemindersAction(formData: FormData) {
-  const user = await requireAnyRole(STAFF);
+  const user = await requireAdvisor();
   const jobId = String(formData.get("jobId") ?? "");
   const types = formData
     .getAll("types")
@@ -82,7 +79,7 @@ async function sendOne(reminderId: string, garageId: string) {
 }
 
 export async function sendReminderAction(formData: FormData) {
-  const user = await requireAnyRole(STAFF);
+  const user = await requireAdvisor();
   const reminderId = String(formData.get("reminderId") ?? "");
   await sendOne(reminderId, user.garageId);
   revalidatePath("/advisor/reminders");
@@ -90,7 +87,7 @@ export async function sendReminderAction(formData: FormData) {
 
 /** Stand-in for a scheduled Cron: send every reminder that's due now. */
 export async function sendDueRemindersAction() {
-  const user = await requireAnyRole(STAFF);
+  const user = await requireAdvisor();
   const due = await prisma.reminder.findMany({
     where: { garageId: user.garageId, status: "SCHEDULED", dueAt: { lte: new Date() } },
     select: { id: true },
@@ -100,7 +97,7 @@ export async function sendDueRemindersAction() {
 }
 
 export async function cancelReminderAction(formData: FormData) {
-  const user = await requireAnyRole(STAFF);
+  const user = await requireAdvisor();
   const reminderId = String(formData.get("reminderId") ?? "");
   await prisma.reminder.updateMany({
     where: { id: reminderId, garageId: user.garageId, status: "SCHEDULED" },

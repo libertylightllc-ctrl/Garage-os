@@ -73,7 +73,9 @@ export default async function TechnicianHome({
         estimates: {
           orderBy: { createdAt:"desc"},
           take: 1,
-          select: { status: true, sentAt: true },
+          // id needed for the workshop Open button's deep-link to the
+          // estimate editor when the job is in ESTIMATE state.
+          select: { id: true, status: true, sentAt: true },
         },
         invoices: {
           orderBy: { issuedAt:"desc"},

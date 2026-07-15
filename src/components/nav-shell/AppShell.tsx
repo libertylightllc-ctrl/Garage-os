@@ -146,12 +146,13 @@ export async function AppShell({
                 signOutLabel={signOutLabel}
                 hasOverflowBadge={hasOverflowBadge}
             />
-            {/* Spacer so page content isn't hidden behind the fixed
-                bottom tab bar on mobile. Desktop side nav is fixed but
-                we don't push content on md+ because most page containers
-                are max-w-* centered — the side nav overlays the
-                letterboxing rather than intruding on the content. */}
-            <div aria-hidden className="h-16 md:hidden" />
+            {/*  Bottom-bar clearance for mobile is applied via body's
+                 pb-[calc(4rem+env(safe-area-inset-bottom))] in
+                 src/app/layout.tsx — a spacer here would sit at the
+                 top of the page (since AppNav renders as the first
+                 child of <main>), not the bottom, and did nothing to
+                 clear the last row's actions on the cashier
+                 Receivables list. */}
         </>
     );
 }

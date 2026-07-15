@@ -79,6 +79,20 @@ export function workflowStage(input: WorkflowInput): WorkflowState {
       // quote (estimate DRAFT) AND while the customer reviews it
       // (estimate SENT). Split the two on the estimate's own status.
       // REJECTED bounces back to DRAFT prep → ESTIMATE step.
+      //
+      // Data-desync safety: setEstimateStatusAction / approve
+      // EstimatePublic both flip jobCard.status to "APPROVED" when
+      // the customer approves. If those didn't run in transaction
+      // together with the estimate.status flip (older code path,
+      // manual DB edit, partial failure), we can end up with an
+      // estimate that is APPROVED but a job stuck at ESTIMATE.
+      // The stepper should reflect the world the user sees — an
+      // approved estimate means the workflow is past ESTIMATE.
+      // Advance to REPAIR (stage 4) so the stepper doesn't lie.
+      if (latestEstimateStatus === "APPROVED") {
+        currentIndex = 4; // REPAIR
+        break;
+      }
       currentIndex = latestEstimateStatus === "SENT" ? 3 /* APPROVAL */ : 2 /* ESTIMATE */;
       break;
     case "EXTRA_WORK_AWAITING_APPROVAL":

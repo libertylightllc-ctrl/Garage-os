@@ -36,6 +36,21 @@ describe("workflowStage", () => {
     ).toBe(2);
   });
 
+  it("ESTIMATE + APPROVED → REPAIR step (4) — desync fallback", () => {
+    // Normally setEstimateStatusAction / approveEstimatePublic flip
+    // jobCard.status to "APPROVED" in the same transaction that flips
+    // estimate.status. If those got out of sync (older code path,
+    // manual DB edit, partial failure) the stepper used to stay on
+    // ESTIMATE (step 2) even though the estimate was approved and the
+    // tech was already working — misleading. The fallback advances
+    // to REPAIR so the stepper matches the world the user sees on
+    // the estimate page's "APPROVED" banner + advance-payment box.
+    expect(
+      workflowStage({ status: "ESTIMATE", latestEstimateStatus: "APPROVED" })
+        .currentIndex,
+    ).toBe(4);
+  });
+
   it("EXTRA_WORK_AWAITING_APPROVAL → APPROVAL step (3)", () => {
     // Tech found extras mid-repair; a revised quote is awaiting customer
     // sign-off — same UX as the original APPROVAL stage.

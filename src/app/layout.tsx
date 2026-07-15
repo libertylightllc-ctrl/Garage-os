@@ -39,7 +39,7 @@ export default async function RootLayout({
            list — sits under the bar and its "Mark as Paid" action
            can't be tapped. Zero effect on md+ where the bottom bar
            is hidden. */}
-      <body className="min-h-full flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+      <body className="min-h-full flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:ps-[220px]">
         <LangSwitcher locale={locale} />
         {children}
       </body>

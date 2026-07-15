@@ -497,6 +497,10 @@ const en = {
   // "Send via WhatsApp" wa.me button (invoice + estimate + reminder etc)
   waSend: "Send via WhatsApp",
   waSendDisabled: "Customer phone number is missing or invalid",
+  // MASTER-only label for the advisor jobs entry point. MASTER wears
+  // three hats (advisor + tech + cashier) so the tab is labelled by
+  // role rather than "Jobs" (which is what non-MASTER advisors see).
+  tabAdvisor: "Advisor",
   // Cashier 'Send invoice to customer' button + confirmation screen (Stage 8)
   sendInvoiceToCustomer: "Send to Customer →",
   invoiceSentTitle: "Invoice sent to customer",
@@ -1656,6 +1660,7 @@ const ar: typeof en = {
   markedCompleteSubtitle: "سيقوم أمين الصندوق بإعداد الفاتورة وإرسالها للعميل.",
   markedCompleteCompletedAt: "اكتملت في",
   waSend: "إرسال عبر واتساب",
+  tabAdvisor: "استشاري",
   waSendDisabled: "رقم هاتف العميل غير متوفر أو غير صحيح",
   sendInvoiceToCustomer: "إرسال للعميل ←",
   invoicePreviewNote: "راجع الفاتورة كما يراها العميل قبل الإرسال.",

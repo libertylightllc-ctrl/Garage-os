@@ -109,7 +109,11 @@ export const NAV: Record<StaffRole, RoleNav> = {
   // tabs (dashboard/billing/ledger/analytics stay owner-only).
   MASTER: {
     primary: [
-      { key: "jobs", href: "/advisor", labelKey: "tabJobs", icon: ClipboardList },
+      // MASTER wears three hats — labelling the advisor entry point
+      // "Advisor" (rather than the shared "Jobs" label the ADVISOR
+      // role sees) makes the hat explicit alongside Workshop (tech)
+      // and Accounts (cashier). Same destination as tabJobs.
+      { key: "jobs", href: "/advisor", labelKey: "tabAdvisor", icon: ClipboardList },
       { key: "intake", href: "/advisor/jobs/new", labelKey: "tabIntake", icon: FilePlus },
       { key: "workshop", href: "/technician", labelKey: "tabWorkshop", icon: Wrench },
       { key: "estimates", href: "/advisor/estimates", labelKey: "tabEstimates", icon: Calculator },

@@ -10,6 +10,7 @@ import { priorityMeta } from "@/lib/priority";
 import { formatJobNo } from "@/lib/jobcard-fields";
 import { canRecordDelivery, deliveryStatus } from "@/lib/delivery";
 import { PhotoCapture } from "@/components/photo-capture";
+import { DeliveryForm } from "@/components/delivery-form";
 import { REMINDER_TYPES } from "@/lib/reminders";
 import { AppNav } from "@/components/app-nav";
 import { reminderTypeKey, reminderStatusKey } from "@/i18n/config";
@@ -73,7 +74,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     },
     orderBy: { dueAt:"asc"},
   });
-  const canScheduleReminders = job.status ==="INVOICED"|| job.status ==="DELIVERED";
+  // Post-delivery reminder scheduling stays available so the advisor can
+  // add more reminders after the fact. INVOICED reminders are handled
+  // inside DeliveryForm now (gated so delivery cannot happen without one).
+  const canScheduleReminders = job.status ==="DELIVERED";
   const today = new Date().toISOString().slice(0, 10);
 
   // Bays/ramps (Tier 2 #7) — assign this car to a physical bay.
@@ -346,25 +350,27 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </p>
       ) : null}
 
-      {/* Delivery — form when INVOICED, read-only summary once delivered */}
+      {/* Delivery — combined form when INVOICED (reminder + mileage,
+          gated per Workflow-Spec step 16), read-only summary once
+          delivered. */}
       {canRecordDelivery(status) ? (
-        <form action={recordDeliveryAction} className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm">
-          <input type="hidden" name="jobId" value={job.id} />
-          <h2 className="text-sm font-medium">{t("jcDelivery")}</h2>
-          <label className="text-xs text-text-mute">
-            {t("mileageOutLabel")}
-            <input
-              name="mileageOut"
-              type="number"
-              min="0"
-              required
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm"
-            />
-          </label>
-          <button className="self-start inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-            {t("markDelivered")}
-          </button>
-        </form>
+        <DeliveryForm
+          jobId={job.id}
+          today={today}
+          reminderTypes={REMINDER_TYPES.map((rt) => ({
+            key: rt,
+            label: t(reminderTypeKey(rt)),
+          }))}
+          action={recordDeliveryAction}
+          labels={{
+            heading: t("jcDelivery"),
+            remindersLabel: t("scheduleReminders"),
+            serviceDateLabel: t("serviceDateLabel"),
+            mileageOutLabel: t("mileageOutLabel"),
+            markDelivered: t("markDelivered"),
+            disabledHelp: t("deliveryReminderGateHelp"),
+          }}
+        />
       ) : job.deliveredAt ? (
         <div className="rounded-xl border border-border p-4 text-sm">
           <h2 className="mb-1 text-sm font-medium">{t("jcDelivery")}</h2>

@@ -610,6 +610,20 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           {t("estimateApprovedSentToTech")}
         </p>
       ) : null}
+      {/* Continue to Workshop — shortcut for MASTER (advisor + tech + cashier
+          under one login). Once the estimate is approved and the tech hasn't
+          marked complete yet, MASTER often wants to switch hats and go do the
+          repair. The tech page's guard is ["TECH","MASTER"], so ADVISOR /
+          CASHIER / OWNER wouldn't be able to reach it — button hidden for
+          those roles. */}
+      {role === "MASTER" && est.status === "APPROVED" && !est.invoice && workNotComplete ? (
+        <Link
+          href={`/technician/jobs/${est.jobCardId}`}
+          className="inline-flex h-12 items-center justify-center rounded-lg bg-brand-900 px-5 text-base font-semibold text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+        >
+          {t("continueToWorkshop")}
+        </Link>
+      ) : null}
       <p className="text-xs text-text-mute">
         (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>

@@ -255,9 +255,18 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           INSPECTION, EXTRA_WORK_AWAITING_APPROVAL, INVOICED…) falls
           through to the existing sections below, which already explain
           themselves contextually. */}
-      {job.status ==="ESTIMATE"? (
+      {job.status ==="ESTIMATE"&& !hasApprovedEstimate ? (
         // Tech sent for estimate; advisor owns the next step
         // (KEY DECISION #5, rev. 2026-06-23).
+        //
+        // Desync guard: the second clause protects against the case
+        // where the estimate row was flipped to APPROVED but
+        // jobCard.status didn't catch up (older code path, partial
+        // txn failure, manual DB edit). Without it, the tech sees
+        // this "Sent to Advisor" banner forever and cannot log
+        // work notes, add used parts, or Mark Complete — same class
+        // of desync the workflow-stage helper already handles for
+        // the stepper display.
         <section className="rounded-xl border border-info-500/40 bg-info-50 p-6 text-center dark:border-info-500/30 dark:bg-info-500/10">
           <div className="text-4xl">🧾</div>
           <h2 className="mt-2 text-xl font-semibold tracking-tight">
@@ -267,7 +276,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             {t("sentToAdvisorSubtitle")}
           </p>
         </section>
-      ) : job.status ==="APPROVED"|| job.status ==="REPAIR"? (
+      ) : job.status ==="APPROVED"|| job.status ==="REPAIR"|| hasApprovedEstimate ? (
         // Customer approved → tech does the actual work. CTA: Mark
         // Complete, BUT only after the tech has actually started
         // working — at least one photo, voice note, or finding edit

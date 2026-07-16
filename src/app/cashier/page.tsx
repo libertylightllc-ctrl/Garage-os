@@ -22,6 +22,8 @@ import { CashierFilterBar } from "@/components/cashier-filter-bar";
 import { BadgeLink } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { CashierTabs } from "@/components/cashier-tabs";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic ="force-dynamic";
 
@@ -154,7 +156,15 @@ const VALID_INVOICE_FILTERS = new Set<InvoiceFilter>([
 export default async function CashierHome({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; filter?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    filter?: string;
+    // Payments-tab pagination. Estimates + Invoices tabs are NOT yet
+    // paginated — see TODO(pagination) markers below. Only the Payments
+    // section reads these two params.
+    page?: string;
+    per?: string;
+  }>;
 }) {
   const session = await requireAnyRole(["CASHIER", "OWNER", "MASTER"]);
   const t = await getT();
@@ -162,7 +172,7 @@ export default async function CashierHome({
 
   // URL-driven tabs. Default = 'estimates' so refreshing the canonical
   // /cashier URL always lands on the working tab.
-  const { tab: rawTab, filter: rawFilter } = await searchParams;
+  const { tab: rawTab, filter: rawFilter, page: rawPage, per: rawPer } = await searchParams;
   const currentTab = (
     rawTab && VALID_TABS.has(rawTab) ? rawTab :"estimates"
   ) as"estimates"|"invoices"|"payments"|"reports";
@@ -456,6 +466,104 @@ export default async function CashierHome({
     return m ??"—";
   };
 
+  // ── Payments tab — server-side pagination ──────────────────────
+  // Gated on `currentTab === "payments"` so other tabs never pay for
+  // this. Uses raw SQL because "fully paid" is defined as
+  // SUM(payment.amount) >= invoice.total, which Prisma cannot express
+  // natively in a where clause. The shared fan-out (invoices query at
+  // ~line 215) stays intact — it still feeds the counters that need
+  // the FULL shop-wide paid/unpaid split.
+  //
+  // Order: MAX(paidAt) DESC — the same "latest payment first" ordering
+  // paidRows uses today. Backed by Payment(paidAt) — new index below.
+  //
+  // Count line honesty: the FilterBar is still 100% client-side DOM
+  // manipulation (see cashier-filter-bar.tsx). This count reflects
+  // the SHOP-WIDE paid total. When the user types into the filter, the
+  // Paginator component hides the "Showing X-Y of Z" line so we never
+  // show a lying count.
+  //
+  // TODO(pagination): Estimates + Invoices tabs share the fan-out and
+  // fan out into multiple sections per tab. Server-side pagination for
+  // those is a follow-up — needs a filter-bar refactor to URL params
+  // too before "filtered count" is honest across all four surfaces.
+  let paymentsPageRows: typeof paidRows = [];
+  let paymentsWindow: ReturnType<typeof computeWindow> | null = null;
+  if (currentTab === "payments") {
+    const totalRows = await prisma.$queryRaw<
+      { n: bigint }[]
+    >`SELECT COUNT(*)::bigint AS n FROM (
+      SELECT i.id
+      FROM "Invoice" i
+      LEFT JOIN "Payment" p ON p."invoiceId" = i.id
+      WHERE i."garageId" = ${garageId}
+      GROUP BY i.id, i.total
+      HAVING COALESCE(SUM(p.amount), 0) >= i.total
+    ) t`;
+    const totalCount = Number(totalRows[0]?.n ?? 0);
+    paymentsWindow = computeWindow({
+      rawPage,
+      rawPer,
+      totalCount,
+    });
+    if (totalCount > 0) {
+      const idRows = await prisma.$queryRaw<
+        { id: string }[]
+      >`SELECT i.id
+        FROM "Invoice" i
+        LEFT JOIN "Payment" p ON p."invoiceId" = i.id
+        WHERE i."garageId" = ${garageId}
+        GROUP BY i.id, i.total
+        HAVING COALESCE(SUM(p.amount), 0) >= i.total
+        ORDER BY MAX(p."paidAt") DESC NULLS LAST
+        LIMIT ${paymentsWindow.take} OFFSET ${paymentsWindow.skip}`;
+      const ids = idRows.map((r) => r.id);
+      const rows = ids.length
+        ? await prisma.invoice.findMany({
+            where: { id: { in: ids }, garageId },
+            include: {
+              payments: true,
+              jobCard: {
+                include: { vehicle: { include: { customer: true } } },
+              },
+            },
+          })
+        : [];
+      // Preserve the paidAt-desc order from the SQL — findMany doesn't
+      // guarantee it back.
+      const orderIx = new Map(ids.map((id, i) => [id, i]));
+      const rowsOrdered = rows.sort(
+        (a, b) => (orderIx.get(a.id) ?? 0) - (orderIx.get(b.id) ?? 0),
+      );
+      paymentsPageRows = rowsOrdered.map((inv) => {
+        const total = Number(inv.total);
+        const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
+        const sortedPayments = [...inv.payments].sort(
+          (a, b) => b.paidAt.getTime() - a.paidAt.getTime(),
+        );
+        const latestPayment = sortedPayments[0];
+        return {
+          inv,
+          total,
+          vat: Number(inv.vatAmount),
+          state: arState(total, paid, inv.dueDate, now),
+          paidAt: latestPayment?.paidAt ?? null,
+          method: latestPayment?.method ?? null,
+        };
+      });
+    }
+  }
+
+  // Preserve every non-pagination query param so pagination links land
+  // back on the same tab / filter. The Paginator itself rewrites page +
+  // per; everything else is threaded through unchanged.
+  const paginatorSearchParams = (() => {
+    const p = new URLSearchParams();
+    if (rawTab) p.set("tab", rawTab);
+    if (rawFilter) p.set("filter", rawFilter);
+    return p.toString();
+  })();
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="CASHIER" active="accounts"/>
@@ -514,7 +622,13 @@ export default async function CashierHome({
       <CashierTabs currentTab={currentTab} labels={tabLabels} />
 
       {/* Filter bar — only shown on tabs that actually have row data.
-          Customers and Reports placeholders don't need it. */}
+          Customers and Reports placeholders don't need it.
+
+          TODO(pagination): Estimates + Invoices tabs are NOT yet paginated
+          — the multi-section shapes on those tabs share the fan-out
+          query above and need a filter-bar rewrite (client-side DOM →
+          URL params) before server-side pagination + filtered count can
+          land honestly. Payments-only pagination is a first slice. */}
       {currentTab ==="estimates"||
       currentTab ==="invoices"||
       currentTab ==="payments"? (
@@ -1096,7 +1210,7 @@ export default async function CashierHome({
           /cashier/paid URL still resolves for any existing bookmarks. */}
       {currentTab ==="payments"? (
         <div data-filter-section>
-          {paidRows.length === 0 ? (
+          {paymentsWindow && paymentsWindow.totalCount === 0 ? (
             <p className="text-sm text-text-mute">
               {t("paidInvoicesEmpty")}
             </p>
@@ -1104,7 +1218,7 @@ export default async function CashierHome({
             <>
               {/* Phone fallback: stacked card list. */}
               <ul className="flex flex-col gap-2 sm:hidden">
-                {paidRows.map(({ inv, total, vat, paidAt, method }) => (
+                {paymentsPageRows.map(({ inv, total, vat, paidAt, method }) => (
                   <li
                     key={inv.id}
                     data-filter-row
@@ -1153,7 +1267,7 @@ export default async function CashierHome({
                     </tr>
                   </thead>
                   <tbody>
-                    {paidRows.map(({ inv, total, vat, paidAt, method }) => (
+                    {paymentsPageRows.map(({ inv, total, vat, paidAt, method }) => (
                       <tr
                         key={inv.id}
                         data-filter-row
@@ -1190,6 +1304,25 @@ export default async function CashierHome({
                   </tbody>
                 </table>
               </div>
+              {paymentsWindow ? (
+                <Paginator
+                  currentPath="/cashier"
+                  currentSearchParams={paginatorSearchParams}
+                  page={paymentsWindow.page}
+                  perPage={paymentsWindow.perPage}
+                  pageCount={paymentsWindow.pageCount}
+                  from={paymentsWindow.from}
+                  to={paymentsWindow.to}
+                  total={paymentsWindow.totalCount}
+                  perPageOptions={PER_PAGE_OPTIONS}
+                  labels={{
+                    showing: t("paginationShowing"),
+                    rowsPerPage: t("paginationRowsPerPage"),
+                    prev: t("paginationPrev"),
+                    next: t("paginationNext"),
+                  }}
+                />
+              ) : null}
             </>
           )}
         </div>

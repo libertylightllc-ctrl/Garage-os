@@ -626,6 +626,8 @@ model Payment {
   updatedAt DateTime @updatedAt
 
   @@index([invoiceId])
+  // Cashier Payments tab sorts by MAX(paidAt) DESC across the shop.
+  @@index([paidAt])
 }
 
 // Advance payments — slice 6b. Stored on the JOB so the customer can pay

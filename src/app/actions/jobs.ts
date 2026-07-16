@@ -347,6 +347,11 @@ export async function markCompleteAction(formData: FormData) {
       status: true,
       claimedById: true,
       helpers: { where: { techId: user.id }, select: { techId: true } },
+      estimates: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { status: true },
+      },
     },
   });
   if (!job) throw new Error("Job not found in this garage");
@@ -357,7 +362,17 @@ export async function markCompleteAction(formData: FormData) {
   }
   // Stage 7 covers APPROVED (work just started) and REPAIR (actively
   // working). Anywhere else Mark-complete makes no sense.
-  if (job.status !== "APPROVED" && job.status !== "REPAIR") {
+  //
+  // Desync safety: if the latest estimate is APPROVED but the jobCard
+  // status never advanced past ESTIMATE (older code path / manual DB edit
+  // / partial failure), still permit Mark Complete. The update below
+  // writes TECH_COMPLETE which also repairs the desynced status column.
+  const hasApprovedEstimate = job.estimates?.[0]?.status === "APPROVED";
+  const canComplete =
+    job.status === "APPROVED" ||
+    job.status === "REPAIR" ||
+    (job.status === "ESTIMATE" && hasApprovedEstimate);
+  if (!canComplete) {
     redirect(`/technician/jobs/${jobId}?error=cannotcomplete`);
   }
   await prisma.jobCard.update({

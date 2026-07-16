@@ -6,6 +6,7 @@ import { getT } from "@/i18n/server";
 import { type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
 import {
+  cancelJobAction,
   claimJobAction,
   joinJobAction,
   sendForEstimateAction,
@@ -17,6 +18,7 @@ import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
 import { openSessionFor } from "@/lib/work-session";
 import { FloorNow } from "@/components/floor-now";
+import { CancelJobButton } from "@/components/cancel-job-button";
 
 export const dynamic ="force-dynamic";
 
@@ -327,6 +329,14 @@ export default async function TechnicianHome({
                     {/* Release-claim button removed per workflow spec — the
                         tech who claims a job sees it through. To unclaim a
                         car they can release it via the job detail page. */}
+                    {session.user.role === "MASTER" ? (
+                      <CancelJobButton
+                        jobId={j.id}
+                        label={t("cancelJob")}
+                        confirmMessage={t("confirmCancelJob")}
+                        action={cancelJobAction}
+                      />
+                    ) : null}
                   </div>
                 </li>
               );

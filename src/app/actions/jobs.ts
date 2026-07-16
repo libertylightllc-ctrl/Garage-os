@@ -10,7 +10,7 @@ import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { clampPriority } from "@/lib/priority";
 import { canJoinAsHelper, canLogWork } from "@/lib/claim";
-import { requireAdvisor, requireTech } from "@/lib/action-guards";
+import { requireAdvisor, requireAnyRole, requireTech } from "@/lib/action-guards";
 import { startWorkSession, closeJobSessions } from "@/lib/work-session";
 
 const HOLD_REASONS = ["AWAITING_PART", "AWAITING_CUSTOMER", "OTHER"] as const;
@@ -393,6 +393,40 @@ export async function markCompleteAction(formData: FormData) {
   revalidatePath("/advisor");
   revalidatePath(`/advisor/jobs/${jobId}`);
   redirect(`/technician/jobs/${jobId}/marked-complete`);
+}
+
+/**
+ * Cancel a job — MASTER/OWNER only. Flips jobCard.status to CANCELLED so
+ * the row drops off every list view (workshop, advisor queue, cashier
+ * queue) but stays in the DB for audit. Best-effort closes any open
+ * work sessions on the job. Used to prune stale demo/test jobs; also
+ * usable when a real customer walks away pre-approval.
+ */
+export async function cancelJobAction(formData: FormData) {
+  const user = await requireAnyRole(["OWNER", "MASTER"]);
+  const jobId = String(formData.get("jobId") ?? "");
+  const job = await prisma.jobCard.findFirst({
+    where: { id: jobId, garageId: user.garageId },
+    select: { id: true, status: true },
+  });
+  if (!job) throw new Error("Job not found in this garage");
+  // Already terminal — nothing to do. Silent no-op so the button is safe
+  // to double-tap.
+  if (job.status === "CANCELLED" || job.status === "DELIVERED") return;
+  await prisma.jobCard.update({
+    where: { id: jobId },
+    data: {
+      status: "CANCELLED",
+      heldFrom: null,
+      holdReason: null,
+      holdNote: null,
+    },
+  });
+  await closeJobSessions(jobId, "JOB_CLOSED");
+  revalidatePath("/technician");
+  revalidatePath("/cashier");
+  revalidatePath("/advisor");
+  revalidatePath(`/advisor/jobs/${jobId}`);
 }
 
 /**

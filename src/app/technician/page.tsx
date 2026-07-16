@@ -73,9 +73,7 @@ export default async function TechnicianHome({
         estimates: {
           orderBy: { createdAt:"desc"},
           take: 1,
-          // id needed for the workshop Open button's deep-link to the
-          // estimate editor when the job is in ESTIMATE state.
-          select: { id: true, status: true, sentAt: true },
+          select: { status: true, sentAt: true },
         },
         invoices: {
           orderBy: { issuedAt:"desc"},
@@ -220,19 +218,6 @@ export default async function TechnicianHome({
               // when we're at the diagnosis stage AND the tech has already
               // added parts (in which case Send-for-Estimate replaces it).
               const showOpenButton = !(isDiagnosing && requiredCount > 0);
-              // Deep-link Open into the pricing editor once the tech has
-              // handed off — the job is in the advisor's hands and the
-              // /technician/jobs page has nothing further to do until
-              // approval. Master Admin (who runs both hats under one
-              // login) taps Open and lands on the estimate they need
-              // to price / send. Guard on estimates[0]?.id so a stale
-              // ESTIMATE-status job without an estimate row still opens
-              // the job page rather than crashing on undefined.
-              const latestEstimateId = j.estimates?.[0]?.id ?? null;
-              const openHref =
-                j.status ==="ESTIMATE"&& latestEstimateId
-                  ? `/estimates/${latestEstimateId}`
-                  : `/technician/jobs/${j.id}`;
               // 'Mark complete' replaces it once the customer has approved
               // and work is happening (Stage 7). Helpers can also tap
               // (sometimes they finish the car while the primary's on lunch).
@@ -306,7 +291,7 @@ export default async function TechnicianHome({
                     )}
                     {showOpenButton ? (
                       <Link
-                        href={openHref}
+                        href={`/technician/jobs/${j.id}`}
                         className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                       >
                         {t("open")}

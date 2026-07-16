@@ -661,6 +661,9 @@ model AdvancePayment {
 
   @@index([jobCardId])
   @@index([garageId])
+  // Owner ledger UNION with Payment sorts by receivedAt DESC across all
+  // shop advances. Mirror of Payment @@index([paidAt]).
+  @@index([receivedAt])
 }
 
 // ---------- Inventory ----------
@@ -704,6 +707,9 @@ model Part {
 
   @@unique([garageId, sku])
   @@index([supplierId])
+  // Owner inventory table sorts by (garageId, name) — pagination is
+  // server-side once shops grow past ~2k parts.
+  @@index([garageId, name])
 }
 
 // Inventory 1c (2026-07-04) — supplier directory. OWNER-only, garage-scoped.

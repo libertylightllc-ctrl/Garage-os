@@ -6,6 +6,9 @@ import { companyGarageIds } from "@/lib/branches";
 import { ACCOUNTS } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
+import { runLedgerFeedUnion } from "@/lib/ledger-feed-query";
 
 export const dynamic ="force-dynamic";
 
@@ -81,13 +84,13 @@ interface AccountRow {
 export default async function OwnerLedger({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; page?: string; per?: string }>;
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
   const gids = await companyGarageIds(session.user.garageId);
   const now = new Date();
-  const { from: rawFrom, to: rawTo } = await searchParams;
+  const { from: rawFrom, to: rawTo, page: rawPage, per: rawPer } = await searchParams;
 
   // Date window: explicit ?from / ?to override the defaults. Defaults
   // are start-of-month → now so the page opens with 'this month' data.
@@ -100,48 +103,43 @@ export default async function OwnerLedger({
     return new Date(p.getTime() + 24 * 60 * 60 * 1000 - 1);
   })();
 
-  // Pull the data set ONCE for the window. Aggregate in JS so the
-  // filter UI can drive any date range without per-account queries.
-  const [ledger, payments, advances] = await Promise.all([
+  // Two queries: the account rollup (ledgerEntry only) and the paginated
+  // Individual-payments feed (Payment UNION AdvancePayment via raw SQL).
+  // The balance table depends ONLY on ledgerEntry — payments/advances
+  // never fed it — so this restructure leaves the balance table untouched.
+  //
+  // Ordering parity with the old JS merge is asserted by
+  // src/lib/__tests__/ledger-feed-union-parity.test.ts. If the UNION ever
+  // drifts, tests break loudly instead of silently misordering money.
+  //
+  // First cheap COUNT gives us the total for pagination clamp; then the
+  // paginated fetch pulls only the current page slice.
+  const feedCountRes = await runLedgerFeedUnion({
+    garageIds: gids,
+    from: fromD,
+    to: toD,
+    skip: 0,
+    take: 0,
+  });
+  const feedWindow = computeWindow({
+    rawPage,
+    rawPer,
+    totalCount: feedCountRes.totalCount,
+  });
+  const [ledger, feedPageRes] = await Promise.all([
     prisma.ledgerEntry.findMany({
       where: { garageId: { in: gids }, createdAt: { gte: fromD, lte: toD } },
       select: { account: true, debit: true, credit: true },
     }),
-    prisma.payment.findMany({
-      where: {
-        invoice: { garageId: { in: gids } },
-        paidAt: { gte: fromD, lte: toD },
-      },
-      orderBy: { paidAt:"desc"},
-      select: {
-        id: true,
-        amount: true,
-        method: true,
-        paidAt: true,
-        invoice: {
-          select: {
-            number: true,
-            jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
-          },
-        },
-      },
-    }),
-    prisma.advancePayment.findMany({
-      where: {
-        garageId: { in: gids },
-        receivedAt: { gte: fromD, lte: toD },
-      },
-      orderBy: { receivedAt:"desc"},
-      select: {
-        id: true,
-        amount: true,
-        method: true,
-        receivedAt: true,
-        migratedAt: true,
-        jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
-      },
+    runLedgerFeedUnion({
+      garageIds: gids,
+      from: fromD,
+      to: toD,
+      skip: feedWindow.skip,
+      take: feedWindow.take,
     }),
   ]);
+  const feedPage = feedPageRes.rows;
 
   // Per-account rollup. Order matters for readability — list assets
   // (Cash, AR) before liabilities (Deposits, VAT) before revenue
@@ -189,48 +187,18 @@ export default async function OwnerLedger({
   const totalCredit = accountRows.reduce((s, r) => s + r.credit, 0);
   const balanced = Math.round((totalDebit - totalCredit) * 100) === 0;
 
-  // Merge Payment + AdvancePayment into a single time-sorted feed so
-  // the owner reads cash movement as one stream. Advance rows display
-  // a small 'advance' chip; Payment rows show the invoice number.
-  const feed: Array<
-    | {
-        kind:"PAYMENT";
-        id: string;
-        at: Date;
-        amount: number;
-        method: string;
-        customer: string;
-        invoiceNumber: number;
-      }
-    | {
-        kind:"ADVANCE";
-        id: string;
-        at: Date;
-        amount: number;
-        method: string;
-        customer: string;
-        migrated: boolean;
-      }
-  > = [
-    ...payments.map((p) => ({
-      kind:"PAYMENT"as const,
-      id: p.id,
-      at: p.paidAt,
-      amount: Number(p.amount),
-      method: p.method,
-      customer: p.invoice.jobCard.vehicle.customer.name,
-      invoiceNumber: p.invoice.number,
-    })),
-    ...advances.map((a) => ({
-      kind:"ADVANCE"as const,
-      id: a.id,
-      at: a.receivedAt,
-      amount: Number(a.amount),
-      method: a.method,
-      customer: a.jobCard.vehicle.customer.name,
-      migrated: a.migratedAt !== null,
-    })),
-  ].sort((x, y) => y.at.getTime() - x.at.getTime());
+  // Feed rows for the current page come pre-shaped from runLedgerFeedUnion.
+  // The ordering + tie-break rules are asserted against the old JS merge
+  // in src/lib/__tests__/ledger-feed-union-parity.test.ts.
+
+  // Preserve every non-pagination param so the paginator links land back
+  // on the same date window. Paginator itself rewrites page + per.
+  const paginatorSearchParams = (() => {
+    const p = new URLSearchParams();
+    if (rawFrom) p.set("from", rawFrom);
+    if (rawTo) p.set("to", rawTo);
+    return p.toString();
+  })();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
@@ -371,53 +339,72 @@ export default async function OwnerLedger({
         <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
           {t("ledgerPayments")}
           <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold tabular-nums text-text-mute">
-            {feed.length}
+            {feedWindow.totalCount}
           </span>
         </h2>
-        {feed.length === 0 ? (
+        {feedWindow.totalCount === 0 ? (
           <p className="text-sm text-text-mute">
             {t("ledgerPaymentsEmpty")}
           </p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {feed.map((row) => (
-              <li
-                key={`${row.kind}:${row.id}`}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              >
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="tabular-nums text-xs text-text-mute">
-                    {row.at.toISOString().slice(0, 16).replace("T","")}
-                  </span>
-                  <span className="font-medium">{row.customer}</span>
-                  {row.kind ==="PAYMENT"? (
-                    <span className="inline-flex items-center rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-700 dark:bg-success-500/10 dark:text-success-500">
-                      INV-{String(row.invoiceNumber).padStart(4,"0")}
+          <>
+            <ul className="flex flex-col gap-1.5">
+              {feedPage.map((row) => (
+                <li
+                  key={`${row.kind}:${row.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                >
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="tabular-nums text-xs text-text-mute">
+                      {row.at.toISOString().slice(0, 16).replace("T","")}
                     </span>
-                  ) : (
-                    <>
-                      <span className="inline-flex items-center rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
-                        {t("ledgerAdvanceChip")}
+                    <span className="font-medium">{row.customer}</span>
+                    {row.kind ==="PAYMENT"? (
+                      <span className="inline-flex items-center rounded-full bg-success-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-700 dark:bg-success-500/10 dark:text-success-500">
+                        INV-{String(row.invoiceNumber).padStart(4,"0")}
                       </span>
-                      {row.migrated ? (
-                        <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-mute">
-                          {t("ledgerMigratedChip")}
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center rounded-full bg-warning-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
+                          {t("ledgerAdvanceChip")}
                         </span>
-                      ) : null}
-                    </>
-                  )}
-                  <span className="text-xs text-text-mute">
-                    {row.method ==="CASH"
-                      ? t("methodCash")
-                      : row.method ==="CARD_POS"
-                        ? t("methodCardPos")
-                        : row.method}
+                        {row.migrated ? (
+                          <span className="inline-flex items-center rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-mute">
+                            {t("ledgerMigratedChip")}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                    <span className="text-xs text-text-mute">
+                      {row.method ==="CASH"
+                        ? t("methodCash")
+                        : row.method ==="CARD_POS"
+                          ? t("methodCardPos")
+                          : row.method}
+                    </span>
                   </span>
-                </span>
-                <span className="tabular-nums font-semibold">{money(row.amount)}</span>
-              </li>
-            ))}
-          </ul>
+                  <span className="tabular-nums font-semibold">{money(row.amount)}</span>
+                </li>
+              ))}
+            </ul>
+            <Paginator
+              currentPath="/owner/ledger"
+              currentSearchParams={paginatorSearchParams}
+              page={feedWindow.page}
+              perPage={feedWindow.perPage}
+              pageCount={feedWindow.pageCount}
+              from={feedWindow.from}
+              to={feedWindow.to}
+              total={feedWindow.totalCount}
+              perPageOptions={PER_PAGE_OPTIONS}
+              labels={{
+                showing: t("paginationShowing"),
+                rowsPerPage: t("paginationRowsPerPage"),
+                prev: t("paginationPrev"),
+                next: t("paginationNext"),
+              }}
+            />
+          </>
         )}
       </div>
     </main>

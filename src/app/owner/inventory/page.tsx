@@ -6,6 +6,8 @@ import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
 import { createPartAction } from "@/app/actions/inventory";
 import { startPartsImportAction } from "@/app/actions/parts-import";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +17,36 @@ export const dynamic = "force-dynamic";
 export default async function OwnerInventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; imported?: string; skipped?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    imported?: string;
+    skipped?: string;
+    page?: string;
+    per?: string;
+  }>;
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
-  const { error, imported, skipped } = await searchParams;
+  const { error, imported, skipped, page: rawPage, per: rawPer } = await searchParams;
 
+  const partsWhere = {
+    garageId: session.user.garageId,
+    active: true,
+  } as const;
+  const totalCount = await prisma.part.count({ where: partsWhere });
+  const partsWindow = computeWindow({ rawPage, rawPer, totalCount });
   const parts = await prisma.part.findMany({
-    where: { garageId: session.user.garageId, active: true },
+    where: partsWhere,
     orderBy: [{ name: "asc" }],
+    skip: partsWindow.skip,
+    take: partsWindow.take,
   });
+  const partsSearchParams = (() => {
+    const p = new URLSearchParams();
+    if (imported) p.set("imported", imported);
+    if (skipped) p.set("skipped", skipped);
+    return p.toString();
+  })();
 
   const money = (v: unknown) =>
     new Intl.NumberFormat("en-AE", {
@@ -146,6 +168,25 @@ export default async function OwnerInventoryPage({
             </tbody>
           </table>
         </div>
+        {partsWindow.totalCount > 0 ? (
+          <Paginator
+            currentPath="/owner/inventory"
+            currentSearchParams={partsSearchParams}
+            page={partsWindow.page}
+            perPage={partsWindow.perPage}
+            pageCount={partsWindow.pageCount}
+            from={partsWindow.from}
+            to={partsWindow.to}
+            total={partsWindow.totalCount}
+            perPageOptions={PER_PAGE_OPTIONS}
+            labels={{
+              showing: t("paginationShowing"),
+              rowsPerPage: t("paginationRowsPerPage"),
+              prev: t("paginationPrev"),
+              next: t("paginationNext"),
+            }}
+          />
+        ) : null}
       </main>
     </div>
   );

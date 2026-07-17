@@ -5,8 +5,17 @@ import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
 import { createSupplierAction } from "@/app/actions/suppliers";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
+
+// Cap on the "Removed" (soft-deleted) section. Kept as a historical
+// breadcrumb so old references still resolve; NOT a working list, so it
+// gets a hard ceiling + a "showing first N of M" caption rather than its
+// own paginator. If a shop ever crosses this cap, the truncation is
+// loud, not silent.
+const INACTIVE_CAP = 50;
 
 // Inventory 1c — supplier directory: add + list. OWNER-only, garage-scoped.
 // Reads/creates Supplier rows only; does NOT touch the job / estimate /
@@ -16,20 +25,41 @@ export const dynamic = "force-dynamic";
 export default async function OwnerSuppliersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; page?: string; per?: string }>;
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
-  const { error } = await searchParams;
+  const { error, page: rawPage, per: rawPer } = await searchParams;
+  const garageId = session.user.garageId;
 
-  const suppliers = await prisma.supplier.findMany({
-    where: { garageId: session.user.garageId },
-    orderBy: [{ active: "desc" }, { name: "asc" }],
+  // Active suppliers — paginated. Count first so the paginator can clamp
+  // ?page / ?per to a valid window before we fetch a slice.
+  const activeWhere = { garageId, active: true } as const;
+  const activeTotal = await prisma.supplier.count({ where: activeWhere });
+  const activeWindow = computeWindow({
+    rawPage,
+    rawPer,
+    totalCount: activeTotal,
+  });
+  const active = await prisma.supplier.findMany({
+    where: activeWhere,
+    orderBy: [{ name: "asc" }],
+    skip: activeWindow.skip,
+    take: activeWindow.take,
     include: { _count: { select: { parts: true } } },
   });
 
-  const active = suppliers.filter((s) => s.active);
-  const inactive = suppliers.filter((s) => !s.active);
+  // Inactive suppliers — the archive. Hard cap at INACTIVE_CAP; if a
+  // shop ever crosses it, the caption says so instead of silently hiding
+  // rows. The count query is O(index) so cheap either way.
+  const inactiveWhere = { garageId, active: false } as const;
+  const inactiveTotal = await prisma.supplier.count({ where: inactiveWhere });
+  const inactive = await prisma.supplier.findMany({
+    where: inactiveWhere,
+    orderBy: [{ name: "asc" }],
+    take: INACTIVE_CAP,
+    include: { _count: { select: { parts: true } } },
+  });
 
   return (
     <div>
@@ -100,8 +130,28 @@ export default async function OwnerSuppliersPage({
             </tbody>
           </table>
         </div>
+        {activeTotal > 0 ? (
+          <Paginator
+            currentPath="/owner/suppliers"
+            currentSearchParams=""
+            page={activeWindow.page}
+            perPage={activeWindow.perPage}
+            pageCount={activeWindow.pageCount}
+            from={activeWindow.from}
+            to={activeWindow.to}
+            total={activeWindow.totalCount}
+            perPageOptions={PER_PAGE_OPTIONS}
+            labels={{
+              showing: t("paginationShowing"),
+              rowsPerPage: t("paginationRowsPerPage"),
+              prev: t("paginationPrev"),
+              next: t("paginationNext"),
+            }}
+          />
+        ) : null}
 
-        {/* Deactivated suppliers — kept for history, muted */}
+        {/* Deactivated suppliers — kept for history, muted. Hard-capped
+            at INACTIVE_CAP; caption is louder than silent truncation. */}
         {inactive.length > 0 ? (
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -125,6 +175,13 @@ export default async function OwnerSuppliersPage({
                 </tbody>
               </table>
             </div>
+            {inactiveTotal > INACTIVE_CAP ? (
+              <p className="text-xs text-muted-foreground">
+                {t("suppliersInactiveCap")
+                  .replace("{shown}", String(INACTIVE_CAP))
+                  .replace("{total}", String(inactiveTotal))}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </main>

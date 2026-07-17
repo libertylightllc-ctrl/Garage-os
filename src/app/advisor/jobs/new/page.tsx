@@ -6,6 +6,8 @@ import { AppNav } from "@/components/app-nav";
 import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic ="force-dynamic";
 
@@ -41,24 +43,42 @@ function TechSelect({
 export default async function NewJobCard({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; page?: string; per?: string }>;
 }) {
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
-  const { error } = await searchParams;
+  const { error, page: rawPage, per: rawPer } = await searchParams;
+  const garageId = session.user.garageId;
 
-  const [vehicles, techs] = await Promise.all([
-    prisma.vehicle.findMany({
-      where: { customer: { garageId: session.user.garageId } },
-      include: { customer: true },
-      orderBy: { createdAt:"desc"},
-    }),
+  // Vehicle picker is paginated — the "Or pick an existing vehicle" list
+  // is unbounded otherwise, and even at ~10 rows today it grows with every
+  // intake. Count first so ?page / ?per can clamp before the slice fetch.
+  // Scope filter is relation-through (`customer.garageId`), reused verbatim
+  // for both queries. No status/enum field on Vehicle, so nothing can
+  // silently vanish from this list.
+  const vehicleWhere = {
+    customer: { garageId },
+  };
+  const [vehicleTotal, techs] = await Promise.all([
+    prisma.vehicle.count({ where: vehicleWhere }),
     prisma.user.findMany({
-      where: { garageId: session.user.garageId, role:"TECH"},
+      where: { garageId, role:"TECH"},
       orderBy: { name:"asc"},
       select: { id: true, name: true },
     }),
   ]);
+  const vehicleWindow = computeWindow({
+    rawPage,
+    rawPer,
+    totalCount: vehicleTotal,
+  });
+  const vehicles = await prisma.vehicle.findMany({
+    where: vehicleWhere,
+    include: { customer: true },
+    orderBy: { createdAt:"desc"},
+    skip: vehicleWindow.skip,
+    take: vehicleWindow.take,
+  });
 
   const field = FIELD;
 
@@ -134,7 +154,7 @@ export default async function NewJobCard({
       </section>
 
       {/* Or pick an existing vehicle — also goes through the Reception form (prefilled) */}
-      {vehicles.length > 0 ? (
+      {vehicleTotal > 0 ? (
         <div>
           <h2 className="mb-2 text-sm font-medium">{t("orPickExisting")}</h2>
           <ul className="flex flex-col gap-2">
@@ -170,6 +190,29 @@ export default async function NewJobCard({
               );
             })}
           </ul>
+          <Paginator
+            currentPath="/advisor/jobs/new"
+            // Round-trip the effective `per` so page-number / Prev / Next
+            // clicks don't silently reset rows-per-page back to the default.
+            // The Paginator's hrefWith() rebuilds URLs from
+            // currentSearchParams and only overrides the field being
+            // changed; without this, per=20 would drop off the next-page
+            // link.
+            currentSearchParams={`per=${vehicleWindow.perPage}`}
+            page={vehicleWindow.page}
+            perPage={vehicleWindow.perPage}
+            pageCount={vehicleWindow.pageCount}
+            from={vehicleWindow.from}
+            to={vehicleWindow.to}
+            total={vehicleWindow.totalCount}
+            perPageOptions={PER_PAGE_OPTIONS}
+            labels={{
+              showing: t("paginationShowing"),
+              rowsPerPage: t("paginationRowsPerPage"),
+              prev: t("paginationPrev"),
+              next: t("paginationNext"),
+            }}
+          />
         </div>
       ) : null}
     </main>

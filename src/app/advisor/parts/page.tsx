@@ -13,21 +13,44 @@ import {
   cancelPartRequestAction,
 } from "@/app/actions/parts";
 import { Button } from "@/components/ui/button";
+import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
+import { Paginator } from "@/components/paginator";
+import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic ="force-dynamic";
 
-export default async function PartsQueue() {
+export default async function PartsQueue({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; per?: string }>;
+}) {
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
+  const { page: rawPage, per: rawPer } = await searchParams;
+  const garageId = session.user.garageId;
+
+  // The "OPEN" definition is shared with the AppShell nav badge via
+  // PART_REQUEST_OPEN_STATUSES so the two cannot drift when the enum
+  // grows. Count first so the paginator can clamp ?page / ?per to a valid
+  // window before we fetch a slice — a stale ?page=99 after rows were
+  // fulfilled lands on the last real page instead of an empty one.
+  const openWhere = {
+    garageId,
+    status: { in: [...PART_REQUEST_OPEN_STATUSES] },
+  };
+  const totalCount = await prisma.partRequest.count({ where: openWhere });
+  const pageWindow = computeWindow({ rawPage, rawPer, totalCount });
 
   const requests = await prisma.partRequest.findMany({
-    where: { garageId: session.user.garageId, status: { in: ["REQUESTED","ORDERED","ARRIVED"] } },
+    where: openWhere,
     include: {
       part: true,
       requestedBy: { select: { name: true } },
       jobCard: { include: { vehicle: true } },
     },
     orderBy: { createdAt:"asc"},
+    skip: pageWindow.skip,
+    take: pageWindow.take,
   });
 
   return (
@@ -129,6 +152,25 @@ export default async function PartsQueue() {
           })}
         </ul>
       )}
+      {totalCount > 0 ? (
+        <Paginator
+          currentPath="/advisor/parts"
+          currentSearchParams=""
+          page={pageWindow.page}
+          perPage={pageWindow.perPage}
+          pageCount={pageWindow.pageCount}
+          from={pageWindow.from}
+          to={pageWindow.to}
+          total={pageWindow.totalCount}
+          perPageOptions={PER_PAGE_OPTIONS}
+          labels={{
+            showing: t("paginationShowing"),
+            rowsPerPage: t("paginationRowsPerPage"),
+            prev: t("paginationPrev"),
+            next: t("paginationNext"),
+          }}
+        />
+      ) : null}
     </main>
   );
 }

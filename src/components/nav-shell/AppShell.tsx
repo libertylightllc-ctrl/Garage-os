@@ -4,6 +4,7 @@ import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { type StaffRole } from "@/lib/roles";
 import { NAV, type NavItem } from "@/config/nav";
+import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
 import { MobileTopStrip } from "./MobileTopStrip";
 import { DesktopSideNav } from "./DesktopSideNav";
 import { MobileNavClient } from "./MobileNavClient";
@@ -54,7 +55,10 @@ export async function AppShell({
                 where: { garageId: gid, threadStatus: "NEEDS_HUMAN" },
             }),
             prisma.partRequest.count({
-                where: { garageId: gid, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
+                where: {
+                    garageId: gid,
+                    status: { in: [...PART_REQUEST_OPEN_STATUSES] },
+                },
             }),
             prisma.reminder.count({
                 where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },

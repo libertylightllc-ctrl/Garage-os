@@ -11,6 +11,7 @@ import {
   canResumeFromParts,
   type PartRequestStatus,
 } from "@/lib/partrequest";
+import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
 import { canLogWork } from "@/lib/claim";
 import { requireAnyRole, requireTech } from "@/lib/action-guards";
 
@@ -35,8 +36,17 @@ async function maybeResumeJob(jobCardId: string, garageId: string) {
     select: { id: true, status: true, holdReason: true, heldFrom: true },
   });
   if (!job) return;
+  // Auto-resume gate: "any part still outstanding on this job?" A literal
+  // status array here was a real hazard — if a new enum value (e.g.
+  // BACKORDERED) shipped later, this count would treat it as CLOSED and
+  // the job would auto-resume with parts still outstanding. Sourced from
+  // the same exhaustive helper the queue page + nav badges use so all
+  // three surfaces agree on what "OPEN" means.
   const openCount = await prisma.partRequest.count({
-    where: { jobCardId, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
+    where: {
+      jobCardId,
+      status: { in: [...PART_REQUEST_OPEN_STATUSES] },
+    },
   });
   if (job.status === "ON_HOLD" && canResumeFromParts(job.holdReason, openCount)) {
     await prisma.jobCard.update({

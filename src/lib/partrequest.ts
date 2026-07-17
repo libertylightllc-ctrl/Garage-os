@@ -1,14 +1,20 @@
 // Part-request loop (Tier 1 #3) — pure, dependency-free rules so the lifecycle
 // is exhaustively testable. The DB actions apply these; the state lives in Prisma.
 
-export type PartRequestStatus = "REQUESTED" | "ORDERED" | "ARRIVED" | "FULFILLED" | "CANCELLED";
+// Single source of truth for the enum: the Prisma-generated
+// `PartRequestStatus`. This used to be a hand-written string union that
+// could silently drift from the schema (add BACKORDERED to Prisma and
+// this file would happily ignore it). Re-export the Prisma type so
+// existing importers keep working.
+import { PartRequestStatus } from "@/generated/prisma/client";
+import { PART_REQUEST_OPEN_STATUSES } from "./part-request-open";
+export { PartRequestStatus };
 
-// Open states still block the job; closed states release it.
-const OPEN: PartRequestStatus[] = ["REQUESTED", "ORDERED", "ARRIVED"];
-
-/** Is this request still outstanding (and therefore blocking the job)? */
+/** Is this request still outstanding (and therefore blocking the job)?
+ *  Reads the same OPEN/TERMINAL routing helper the queue page + nav
+ *  badges do, so `isOpen` cannot disagree with them. */
 export function isOpen(status: PartRequestStatus): boolean {
-  return OPEN.includes(status);
+  return (PART_REQUEST_OPEN_STATUSES as readonly PartRequestStatus[]).includes(status);
 }
 
 /** A catalog part is available now if it has enough quantity on hand. */

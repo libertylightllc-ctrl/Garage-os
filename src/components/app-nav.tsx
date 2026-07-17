@@ -9,6 +9,7 @@ import { GarageBrand } from "@/components/garage-brand";
 import { NavMore, type MoreItem } from "@/components/nav-more";
 import { cookies } from "next/headers";
 import { AppShell } from "@/components/nav-shell/AppShell";
+import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
 
 /**
  * Per-role migration gate for the new bottom-bar + More-sheet AppShell.
@@ -169,7 +170,10 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
         [needsHuman, openParts, dueReminders] = await Promise.all([
             prisma.whatsAppThread.count({ where: { garageId: gid, threadStatus: "NEEDS_HUMAN" } }),
             prisma.partRequest.count({
-                where: { garageId: gid, status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
+                where: {
+                    garageId: gid,
+                    status: { in: [...PART_REQUEST_OPEN_STATUSES] },
+                },
             }),
             prisma.reminder.count({
                 where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },

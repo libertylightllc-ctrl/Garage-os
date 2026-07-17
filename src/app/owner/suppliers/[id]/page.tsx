@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -23,7 +23,7 @@ export default async function SupplierDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
-  const session = await requireRole("OWNER");
+  const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
   const { id } = await params;
   const { error } = await searchParams;

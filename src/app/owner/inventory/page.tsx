@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
@@ -25,7 +25,7 @@ export default async function OwnerInventoryPage({
     per?: string;
   }>;
 }) {
-  const session = await requireRole("OWNER");
+  const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
   const { error, imported, skipped, page: rawPage, per: rawPer } = await searchParams;
 

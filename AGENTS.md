@@ -79,10 +79,21 @@ Specs in `/docs` (read before deciding):
    Decision #5). Billing is per branch; each branch has own staff/WhatsApp/queue; owner
    sees branches aggregated.
    **MASTER** is an owner-created do-everything operational login: advisor + technician +
-   cashier work under one account (full flow intake → estimate → invoice → payment), but
-   NEVER the owner dashboard/financials. It lives in every operational guard
-   (`requireAdvisor`, `requireTech`, the money arrays in `permissions.ts`) and is
-   deliberately absent from `requireOwner` and all `/owner/*` pages. Home = `/advisor`.
+   cashier work under one account (full flow intake → estimate → invoice → payment). It
+   lives in every operational guard (`requireAdvisor`, `requireTech`, the money arrays in
+   `permissions.ts`). Home = `/advisor`.
+   MASTER's `/owner/*` access is split by concern:
+   - **Permitted (operational):** `/owner/bays`, `/owner/suppliers`,
+     `/owner/purchasing`, `/owner/inventory`, `/owner/hours` and their child routes.
+     Guards use `requireAnyRole(["OWNER", "MASTER"])`. MASTER runs the shop and needs
+     to see stock, chase POs, know which bay a car is in, and read tech hours.
+   - **Barred (financial + reporting + admin):** `/owner` (dashboard), `/owner/analytics`,
+     `/owner/billing`, `/owner/ledger`, `/owner/branches`, `/owner/whatsapp`,
+     `/owner/staff` (index). Guards stay strict `requireRole("OWNER")`.
+   The MASTER vs OWNER boundary is pinned by tests at
+   `src/lib/__tests__/master-owner-boundary.test.ts` (source-inspects each guard) and
+   `src/config/__tests__/nav.test.ts` (pins the exact set of nav hrefs per role).
+   A silent widening or narrowing of either surface fires those tests.
 
 ## Rules
 - Work in SMALL steps. After each: it runs, it's committed, it has a test.

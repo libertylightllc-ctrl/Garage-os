@@ -1,4 +1,4 @@
-import { requireRole } from "@/lib/guard";
+import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { addBayAction, removeBayAction } from "@/app/actions/onboarding";
@@ -14,7 +14,7 @@ export default async function BaysPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const session = await requireRole("OWNER");
+  const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
   const { error } = await searchParams;
   const garageId = session.user.garageId;

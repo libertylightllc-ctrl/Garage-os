@@ -105,8 +105,13 @@ export const NAV: Record<StaffRole, RoleNav> = {
   },
   // MASTER runs the whole floor. The primary five are the full
   // intake → workshop → estimate → payment journey. Everything else
-  // (lookups, comms, reports) is overflow. Deliberately NO owner-only
-  // tabs (dashboard/billing/ledger/analytics stay owner-only).
+  // (lookups, comms, reports) is overflow.
+  //
+  // MASTER is permitted on operational /owner/* surfaces (bays,
+  // suppliers, purchasing, inventory, hours + their child routes) —
+  // MASTER runs the shop, so needs to see stock, chase POs, know
+  // which bay a car is in. Barred from owner dashboard / analytics
+  // / billing / ledger (financial + reporting), which stay OWNER-only.
   MASTER: {
     primary: [
       // MASTER wears three hats — labelling the advisor entry point
@@ -125,6 +130,10 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "parts", href: "/advisor/parts", labelKey: "tabParts", icon: Package, badge: "openParts" },
       { key: "reminders", href: "/advisor/reminders", labelKey: "tabReminders", icon: Bell, badge: "dueReminders" },
       { key: "chats", href: "/advisor/chats", labelKey: "tabChats", icon: MessageCircle, badge: "needsHuman" },
+      { key: "bays", href: "/owner/bays", labelKey: "tabBays", icon: Warehouse },
+      { key: "suppliers", href: "/owner/suppliers", labelKey: "tabSuppliers", icon: Truck },
+      { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
+      { key: "inventory", href: "/owner/inventory", labelKey: "tabInventory", icon: Boxes },
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
       { key: "whatsapp", href: "/advisor/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],

@@ -36,12 +36,21 @@ export async function AppShell({
     const role = (session?.user?.role as StaffRole | undefined) ?? pageRole;
     const roleNav = NAV[role] ?? NAV[pageRole];
 
-    const garage = session?.user?.garageId
-        ? await prisma.garage.findUnique({
-              where: { id: session.user.garageId },
-              select: { logoUrl: true },
-          })
-        : null;
+    // Nav shell must render even when the DB flakes — otherwise the
+    // whole app renders "Something went wrong" for a transient
+    // Prisma glitch. Both queries below fall back to safe defaults on
+    // failure; the shell still shows tabs + sign-out.
+    let garage: { logoUrl: string | null } | null = null;
+    if (session?.user?.garageId) {
+        try {
+            garage = await prisma.garage.findUnique({
+                where: { id: session.user.garageId },
+                select: { logoUrl: true },
+            });
+        } catch (e) {
+            console.error("[AppShell] garage logo fetch failed:", e);
+        }
+    }
 
     // Advisor + Master: badge chats (needs-human), parts (open),
     // reminders (due). Same counters as legacy AppNav.
@@ -50,20 +59,25 @@ export async function AppShell({
     let dueReminders = 0;
     if ((role === "ADVISOR" || role === "MASTER") && session?.user?.garageId) {
         const gid = session.user.garageId;
-        [needsHuman, openParts, dueReminders] = await Promise.all([
-            prisma.whatsAppThread.count({
-                where: { garageId: gid, threadStatus: "NEEDS_HUMAN" },
-            }),
-            prisma.partRequest.count({
-                where: {
-                    garageId: gid,
-                    status: { in: [...PART_REQUEST_OPEN_STATUSES] },
-                },
-            }),
-            prisma.reminder.count({
-                where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },
-            }),
-        ]);
+        try {
+            [needsHuman, openParts, dueReminders] = await Promise.all([
+                prisma.whatsAppThread.count({
+                    where: { garageId: gid, threadStatus: "NEEDS_HUMAN" },
+                }),
+                prisma.partRequest.count({
+                    where: {
+                        garageId: gid,
+                        status: { in: [...PART_REQUEST_OPEN_STATUSES] },
+                    },
+                }),
+                prisma.reminder.count({
+                    where: { garageId: gid, status: "SCHEDULED", dueAt: { lte: new Date() } },
+                }),
+            ]);
+        } catch (e) {
+            console.error("[AppShell] nav badge counts failed:", e);
+            // fall through with zeros already assigned
+        }
     }
 
     function badgeFor(item: NavItem): { count: number; className: string } | null {

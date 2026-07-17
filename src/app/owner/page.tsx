@@ -215,9 +215,20 @@ export default async function OwnerHome({
   const session = await requireRole("OWNER");
   const t = await getT();
   const garageId = session.user.garageId;
-  // Owner sees ALL branches aggregated (company root + its branches).
-  const gids = await companyGarageIds(garageId);
   const now = new Date();
+  // Owner sees ALL branches aggregated (company root + its branches).
+  // If this call fails (transient DB flake), fall back to the owner's
+  // own garageId — better a solo-view dashboard than a full page error.
+  // The `metricsHadError` banner surfaces the degradation to the owner.
+  let metricsHadError = false;
+  let gids: string[];
+  try {
+    gids = await companyGarageIds(garageId);
+  } catch (e) {
+    console.error("[owner] companyGarageIds failed — falling back to solo garage view:", e);
+    metricsHadError = true;
+    gids = [garageId];
+  }
   const { q, wrench } = await searchParams;
   const wrenchMode = wrench === "week" ? "week" : "day";
 
@@ -245,7 +256,6 @@ export default async function OwnerHome({
     technicianWork(gids),
     lowStockParts(gids),
   ]);
-  let metricsHadError = false;
   const v = <T,>(idx: number, fb: T): T => {
     const r = settled[idx];
     if (r.status === "fulfilled") return r.value as T;
@@ -324,8 +334,11 @@ export default async function OwnerHome({
           on one card doesn't make its neighbours shorter. text-2xl
           icon sized uniformly across all 5 cards. Value uses tabular-
           nums so digit widths line up between adjacent cards (e.g.
-          revenue + profit decimals stack). */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          revenue + profit decimals stack).
+          Grid: 2 cols on small phones, 5 across from md (768px) up.
+          `sm:grid-cols-5` used to kick in at 640px which crushed each
+          tile to ~116px and wrapped "AED 14500.00" to two lines. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {metrics.map((m) => (
           <div
             key={m.key}
@@ -333,13 +346,13 @@ export default async function OwnerHome({
           >
             <div className="text-2xl leading-none" aria-hidden="true">{m.icon}</div>
             <div className="mt-2 text-xs font-medium text-text-mute">{t(m.key)}</div>
-            <div className="mt-auto pt-1 text-lg font-semibold tabular-nums">{m.value}</div>
+            <div className="mt-auto whitespace-nowrap pt-1 text-lg font-semibold tabular-nums">{m.value}</div>
           </div>
         ))}
       </div>
       <p className="-mt-3 text-xs text-text-mute">
-        {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ?"+":""}
-        {money(trend.delta)} {t("vsLastWeek")}). {t("satisfactionSoon")}
+        {t("thisWeek")}: {money(trend.thisWeek)} ({trend.delta >= 0 ? "+" : "−"}
+        {money(Math.abs(trend.delta))} {t("vsLastWeek")}). {t("satisfactionSoon")}
       </p>
 
       {/* Tech-tracking slice 1 — the live floor: which tech is on which

@@ -19,7 +19,21 @@ export async function FloorNow({
   jobHrefBase: "/advisor/jobs" | "/technician/jobs";
 }) {
   const t = await getT();
-  const { working, idle } = await floorNow(garageIds);
+  // Every other query on the owner dashboard degrades gracefully via
+  // Promise.allSettled — this one used to throw and kill the whole page
+  // when the DB flaked. Wrap the call so a transient failure renders an
+  // empty board with a soft caption rather than a full error boundary.
+  let working: Awaited<ReturnType<typeof floorNow>>["working"] = [];
+  let idle: Awaited<ReturnType<typeof floorNow>>["idle"] = [];
+  let failed = false;
+  try {
+    const res = await floorNow(garageIds);
+    working = res.working;
+    idle = res.idle;
+  } catch (e) {
+    console.error("[FloorNow] query failed — degrading to empty board:", e);
+    failed = true;
+  }
   const now = Date.now();
   const mins = (d: Date) => Math.max(1, Math.round((now - d.getTime()) / 60000));
 
@@ -28,7 +42,9 @@ export async function FloorNow({
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">🔧 {t("floorNow")}</h2>
       </div>
-      {working.length === 0 ? (
+      {failed ? (
+        <p className="mt-3 text-sm text-text-mute">{t("floorNowUnavailable")}</p>
+      ) : working.length === 0 ? (
         <p className="mt-3 text-sm text-text-mute">{t("floorNowEmpty")}</p>
       ) : (
         <ul className="mt-3 flex flex-col gap-2">

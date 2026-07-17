@@ -320,9 +320,7 @@ function BarChart({
                 height={Math.max(0, h)}
                 className={palette.bar}
               >
-                <title>
-                  {s.label} · {format(s.value)}
-                </title>
+                <title>{`${s.label} · ${format(s.value)}`}</title>
               </rect>
             </g>
           );

@@ -20,44 +20,86 @@ export default async function AdvisorHome() {
   // Only the fields the page render actually reads are listed —
   // ANY column in the Prisma schema that isn't in the live DB no
   // longer takes this page down.
-  const [jobs, pendingBookings, techs] = await Promise.all([
-    prisma.jobCard.findMany({
-      where: {
-        garageId: session.user.garageId,
-        status: { notIn: ["DELIVERED","CANCELLED"] },
-      },
-      select: {
-        id: true,
-        status: true,
-        priority: true,
-        claimedById: true,
-        claimedAt: true,
-        assignedToId: true,
-        sentForEstimateAt: true,
-        holdReason: true,
-        vehicle: { select: { make: true, model: true, plate: true, customer: { select: { name: true } } } },
-        estimates: {
-          orderBy: { createdAt:"desc"},
-          take: 1,
-          select: { status: true, sentAt: true, createdAt: true },
+  //
+  // Resilience: this is the ADVISOR + MASTER landing page (MASTER's
+  // roleHome is also `/advisor`). A single Prisma glitch here — dev
+  // proxy P1017 or the Supabase pooler dropping a socket in prod —
+  // used to take the whole page down with "Something went wrong",
+  // stranding both roles at their home. Owner's dashboard already
+  // has this treatment; matching it here. Fallbacks show the empty
+  // state + a non-blocking banner so the user knows data is stale.
+  let jobs: Awaited<ReturnType<typeof prisma.jobCard.findMany<{
+    select: {
+      id: true;
+      status: true;
+      priority: true;
+      claimedById: true;
+      claimedAt: true;
+      assignedToId: true;
+      sentForEstimateAt: true;
+      holdReason: true;
+      vehicle: { select: { make: true; model: true; plate: true; customer: { select: { name: true } } } };
+      estimates: {
+        orderBy: { createdAt: "desc" };
+        take: 1;
+        select: { status: true; sentAt: true; createdAt: true };
+      };
+      invoices: {
+        orderBy: { issuedAt: "desc" };
+        take: 1;
+        select: {
+          total: true;
+          payments: { select: { amount: true } };
+        };
+      };
+    };
+  }>>> = [];
+  let pendingBookings = 0;
+  let techs: { id: string; name: string }[] = [];
+  let hadError = false;
+  try {
+    [jobs, pendingBookings, techs] = await Promise.all([
+      prisma.jobCard.findMany({
+        where: {
+          garageId: session.user.garageId,
+          status: { notIn: ["DELIVERED","CANCELLED"] },
         },
-        invoices: {
-          orderBy: { issuedAt:"desc"},
-          take: 1,
-          select: {
-            total: true,
-            payments: { select: { amount: true } },
+        select: {
+          id: true,
+          status: true,
+          priority: true,
+          claimedById: true,
+          claimedAt: true,
+          assignedToId: true,
+          sentForEstimateAt: true,
+          holdReason: true,
+          vehicle: { select: { make: true, model: true, plate: true, customer: { select: { name: true } } } },
+          estimates: {
+            orderBy: { createdAt:"desc"},
+            take: 1,
+            select: { status: true, sentAt: true, createdAt: true },
+          },
+          invoices: {
+            orderBy: { issuedAt:"desc"},
+            take: 1,
+            select: {
+              total: true,
+              payments: { select: { amount: true } },
+            },
           },
         },
-      },
-      orderBy: [{ priority:"desc"}, { updatedAt:"desc"}],
-    }),
-    prisma.booking.count({ where: { garageId: session.user.garageId, status:"PROPOSED"} }),
-    prisma.user.findMany({
-      where: { garageId: session.user.garageId, role:"TECH"},
-      select: { id: true, name: true },
-    }),
-  ]);
+        orderBy: [{ priority:"desc"}, { updatedAt:"desc"}],
+      }),
+      prisma.booking.count({ where: { garageId: session.user.garageId, status:"PROPOSED"} }),
+      prisma.user.findMany({
+        where: { garageId: session.user.garageId, role:"TECH"},
+        select: { id: true, name: true },
+      }),
+    ]);
+  } catch (e) {
+    console.error("[advisor] jobs/bookings/techs fan-out failed — degrading:", e);
+    hadError = true;
+  }
   const techName = (uid: string | null) => techs.find((x) => x.id === uid)?.name;
   // Server-side 'now' for the in-progress duration captions (no client clock
   // — every row reads from the same wall time on render).
@@ -76,6 +118,12 @@ export default async function AdvisorHome() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="jobs"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("activeJobs")}</h1>
+
+      {hadError ? (
+        <div className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          ⚠️ Couldn&apos;t load the job list right now. Try again in a moment — the rest of the site still works.
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {/* HERO — the advisor's primary action on this overview screen */}

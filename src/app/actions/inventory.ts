@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireOwner } from "@/lib/action-guards";
+import { requireOperational } from "@/lib/action-guards";
 
 // Inventory Phase 1 — parts catalog management. Kept in its own action
 // file, deliberately separate from the live parts.ts (the technician
@@ -47,7 +47,7 @@ function fail(msg: string, path = "/owner/inventory"): never {
  * sku])). Opening stock + reorder level are optional (default 0 / 5).
  */
 export async function createPartAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const sku = String(formData.get("sku") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -92,7 +92,7 @@ export async function createPartAction(formData: FormData) {
  * Garage-scoped: the part must belong to the caller's garage.
  */
 export async function updatePartAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const partId = String(formData.get("partId") ?? "").trim();
   const sku = String(formData.get("sku") ?? "").trim();
@@ -159,7 +159,7 @@ export async function updatePartAction(formData: FormData) {
  * inventory area's own stock accounting (Phase 3 wires job consumption).
  */
 export async function adjustStockAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const partId = String(formData.get("partId") ?? "").trim();
   const direction = String(formData.get("direction") ?? "").trim(); // add | remove

@@ -47,6 +47,60 @@ const OWNER_ONLY: readonly string[] = [
   "src/app/owner/staff/page.tsx",
 ];
 
+// The 15 server actions behind the MASTER-opened pages. Opening a page
+// to MASTER without also swapping its action guards makes the page a
+// trap — form loads, submit throws "Not authorized". Every action name
+// here must sit under `requireOperational()` in the file listed.
+//
+// Owner-only action files (onboarding, whatsapp-connect) must NOT
+// route through requireOperational — they touch finance / onboarding
+// and stay OWNER-only.
+interface ActionSite {
+  file: string;
+  action: string;
+}
+const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
+  { file: "src/app/actions/purchasing.ts", action: "createPurchaseOrderAction" },
+  { file: "src/app/actions/purchasing.ts", action: "addPoLineAction" },
+  { file: "src/app/actions/purchasing.ts", action: "removePoLineAction" },
+  { file: "src/app/actions/purchasing.ts", action: "setPoStatusAction" },
+  { file: "src/app/actions/purchasing.ts", action: "receivePurchaseOrderAction" },
+  { file: "src/app/actions/purchasing.ts", action: "returnPurchaseOrderAction" },
+  { file: "src/app/actions/suppliers.ts", action: "createSupplierAction" },
+  { file: "src/app/actions/suppliers.ts", action: "updateSupplierAction" },
+  { file: "src/app/actions/suppliers.ts", action: "setSupplierActiveAction" },
+  { file: "src/app/actions/inventory.ts", action: "createPartAction" },
+  { file: "src/app/actions/inventory.ts", action: "updatePartAction" },
+  { file: "src/app/actions/inventory.ts", action: "adjustStockAction" },
+  { file: "src/app/actions/parts-import.ts", action: "startPartsImportAction" },
+  { file: "src/app/actions/parts-import.ts", action: "confirmPartsImportAction" },
+  { file: "src/app/actions/parts-import.ts", action: "discardPartsImportAction" },
+];
+
+// One action per owner-only file to pin the negative case — MASTER
+// must STILL be denied on these. If someone later swaps one of these
+// to requireOperational the test fires.
+const OWNER_ONLY_ACTIONS: readonly ActionSite[] = [
+  { file: "src/app/actions/onboarding.ts", action: "addBranchAction" },
+  { file: "src/app/actions/whatsapp-connect.ts", action: "connectWhatsAppAction" },
+];
+
+// Extract the source of a single top-level exported action function.
+// Returns everything from `export async function <name>` up to the
+// next `export ` (or EOF), so we can pattern-match its guard call in
+// isolation. If the name isn't found we return the whole file — the
+// name assertion below will fail loudly and tell the reader which
+// action drifted.
+function extractActionBody(src: string, action: string): string {
+  const start = src.indexOf(`export async function ${action}`);
+  if (start === -1) return src;
+  const rest = src.slice(start + 1);
+  const nextExport = rest.indexOf("\nexport ");
+  return nextExport === -1
+    ? src.slice(start)
+    : src.slice(start, start + 1 + nextExport);
+}
+
 function read(path: string): string {
   return readFileSync(join(REPO_ROOT, path), "utf-8");
 }
@@ -89,5 +143,40 @@ describe("MASTER vs OWNER boundary on /owner/*", () => {
   it("the two lists are disjoint", () => {
     const inter = OPEN_TO_MASTER.filter((p) => OWNER_ONLY.includes(p));
     expect(inter).toEqual([]);
+  });
+
+  // ── Actions ────────────────────────────────────────────────────
+  //
+  // Page guard and action guard must match, or the page becomes a
+  // trap. This block is the test that would have caught the 15-action
+  // gap shipped in commit f86c97c (this session).
+  describe("MASTER allowed — actions", () => {
+    it.each(OPERATIONAL_ACTIONS)(
+      "$file → $action guards with requireOperational()",
+      ({ file, action }) => {
+        const body = extractActionBody(read(file), action);
+        // The action must exist by that exact name.
+        expect(body).toMatch(new RegExp(`export async function ${action}\\b`));
+        // The guard call must be requireOperational — NOT requireOwner
+        // (the previous shape) and NOT an inline requireAnyRole that
+        // could accidentally leave MASTER out.
+        expect(body).toMatch(/\brequireOperational\s*\(\s*\)/);
+        expect(body).not.toMatch(/\brequireOwner\s*\(/);
+      },
+    );
+  });
+
+  describe("MASTER denied — actions", () => {
+    it.each(OWNER_ONLY_ACTIONS)(
+      "$file → $action stays behind requireOwner()",
+      ({ file, action }) => {
+        const body = extractActionBody(read(file), action);
+        expect(body).toMatch(new RegExp(`export async function ${action}\\b`));
+        expect(body).toMatch(/\brequireOwner\s*\(\s*\)/);
+        // Guarding an owner-only action with requireOperational would
+        // silently widen finance / onboarding to MASTER — pin it out.
+        expect(body).not.toMatch(/\brequireOperational\s*\(/);
+      },
+    );
   });
 });

@@ -54,10 +54,28 @@ export function requireTech(): Promise<SessionUser> {
 }
 
 /**
- * Owner-only work: inventory, purchasing, suppliers, onboarding, WhatsApp.
- * MASTER is deliberately excluded — the owner dashboard and financials
- * stay owner-only.
+ * Owner-only work: onboarding, WhatsApp connect, anything that touches
+ * billing / finance / cross-branch ownership. MASTER is deliberately
+ * excluded — the owner dashboard and financials stay owner-only.
+ *
+ * DO NOT use this for the operational shop surfaces (inventory,
+ * purchasing, suppliers). Those are open to MASTER — use
+ * requireOperational() instead. Guarding an operational action with
+ * requireOwner() turns the MASTER-opened page into a trap: the page
+ * loads, the form renders, and every submit throws "Not authorized".
  */
 export function requireOwner(): Promise<SessionUser> {
   return requireAnyRole(["OWNER"]);
+}
+
+/**
+ * Operational shop work: inventory, purchasing, suppliers, parts imports.
+ * OWNER + MASTER. Pair this with the matching page guard
+ * (`requireAnyRole(["OWNER", "MASTER"])` in src/lib/guard.ts) — opening a
+ * page to MASTER without also swapping its action guards silently breaks
+ * every submit. See AGENTS.md "Opening pages to MASTER" and the boundary
+ * test at src/lib/__tests__/master-owner-boundary.test.ts.
+ */
+export function requireOperational(): Promise<SessionUser> {
+  return requireAnyRole(["OWNER", "MASTER"]);
 }

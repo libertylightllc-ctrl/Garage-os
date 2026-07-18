@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireOwner } from "@/lib/action-guards";
+import { requireOperational } from "@/lib/action-guards";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -46,7 +46,7 @@ function parsePositiveInt(raw: string): number | null {
  * detail page. The supplier must be active and in the caller's garage.
  */
 export async function createPurchaseOrderAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const supplierId = String(formData.get("supplierId") ?? "").trim();
   if (!supplierId) fail("Choose a supplier.", "/owner/purchasing/new");
@@ -85,7 +85,7 @@ async function ownedPO(poId: string, garageId: string) {
  * garage. Unit cost defaults are handled by the form; here we validate.
  */
 export async function addPoLineAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
   const partId = String(formData.get("partId") ?? "").trim();
@@ -118,7 +118,7 @@ export async function addPoLineAction(formData: FormData) {
 
 /** Remove a line from a DRAFT purchase order (both scoped to the garage). */
 export async function removePoLineAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
   const lineId = String(formData.get("lineId") ?? "").trim();
@@ -146,7 +146,7 @@ export async function removePoLineAction(formData: FormData) {
  * RECEIVED is a separate action (2b) because it mutates stock.
  */
 export async function setPoStatusAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
   const next = String(formData.get("status") ?? "").trim();
@@ -210,7 +210,7 @@ class OverReceiveError extends Error {}
  * is the guarantee.
  */
 export async function receivePurchaseOrderAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
   const back = `/owner/purchasing/${poId}`;
@@ -315,7 +315,7 @@ class NegativeStockError extends Error {}
  * Either miss rolls the whole transaction back (nothing applied).
  */
 export async function returnPurchaseOrderAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
   const back = `/owner/purchasing/${poId}`;

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireOwner } from "@/lib/action-guards";
+import { requireOperational } from "@/lib/action-guards";
 
 // Inventory 1c — supplier directory. OWNER-only, garage-scoped: garageId
 // always comes from the session, never from form input. Deactivate is a
@@ -35,7 +35,7 @@ function validEmail(s: string): boolean {
  * email, TRN and address are optional. New suppliers are active.
  */
 export async function createSupplierAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const name = String(formData.get("name") ?? "").trim();
   const email = optional(formData.get("email"));
@@ -65,7 +65,7 @@ export async function createSupplierAction(formData: FormData) {
  * action so a stray edit can't silently reactivate a supplier).
  */
 export async function updateSupplierAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const supplierId = String(formData.get("supplierId") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -106,7 +106,7 @@ export async function updateSupplierAction(formData: FormData) {
  * intact. Garage-scoped.
  */
 export async function setSupplierActiveAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const supplierId = String(formData.get("supplierId") ?? "").trim();
   const active = String(formData.get("active") ?? "") === "true";

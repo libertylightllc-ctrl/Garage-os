@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { validateInvoiceImage, saveUpload, LogoValidationError } from "@/lib/storage";
 import { extractPartsInvoice, ocrCostUsd, OcrDisabledError, type OcrAttempt } from "@/lib/ocr";
-import { requireOwner } from "@/lib/action-guards";
+import { requireOperational } from "@/lib/action-guards";
 
 // Inventory OCR import — photograph a supplier parts invoice → OCR into a
 // DRAFT PartsImport the OWNER reviews before anything hits the catalog.
@@ -46,7 +46,7 @@ async function logAttempts(attempts: OcrAttempt[], garageId: string, userId: str
  * owner lands on a page (never a dead error) where they can discard.
  */
 export async function startPartsImportAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const file = formData.get("invoice");
   if (!(file instanceof File) || file.size === 0) {
@@ -132,7 +132,7 @@ function randomSku(): string {
  * Garage-scoped; nothing here trusts a form garageId.
  */
 export async function confirmPartsImportAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
 
   const importId = String(formData.get("importId") ?? "").trim();
   const back = `/owner/inventory/import/${importId}`;
@@ -207,7 +207,7 @@ export async function confirmPartsImportAction(formData: FormData) {
 
 /** Discard a draft import (keeps the image for the audit trail). Garage-scoped. */
 export async function discardPartsImportAction(formData: FormData) {
-  const user = await requireOwner();
+  const user = await requireOperational();
   const importId = String(formData.get("importId") ?? "").trim();
   if (!importId) fail("Missing import.");
 

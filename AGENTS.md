@@ -95,6 +95,24 @@ Specs in `/docs` (read before deciding):
    `src/config/__tests__/nav.test.ts` (pins the exact set of nav hrefs per role).
    A silent widening or narrowing of either surface fires those tests.
 
+   **Opening a page to a role means opening its actions too.** A page guard
+   and its action guards must match — every form on the page submits to
+   an action, and if the page loads for a role the action rejects, the
+   page becomes a TRAP: renders fine, throws "Not authorized" on every
+   submit (shipped once as the 15-action gap on the MASTER-operational
+   surfaces; caught only by human click, never by tests). Rule for the
+   next MASTER page:
+   1. Swap the page guard to `requireAnyRole(["OWNER", "MASTER"])` (in
+      `src/lib/guard.ts`).
+   2. Swap EVERY action the page's forms submit to from `requireOwner()`
+      to `requireOperational()` (in `src/lib/action-guards.ts`).
+   3. Extend `master-owner-boundary.test.ts` with the new action names
+      in `OPERATIONAL_ACTIONS`, so a later revert fires the test.
+   The three guard helpers today: `requireOwner()` (owner-only: finance,
+   onboarding, WhatsApp connect), `requireOperational()` (OWNER + MASTER:
+   inventory, purchasing, suppliers, parts imports), `requireAdvisor()` /
+   `requireTech()` (already include MASTER).
+
 ## Rules
 - Work in SMALL steps. After each: it runs, it's committed, it has a test.
 - Never invent a different library when the spec names one.

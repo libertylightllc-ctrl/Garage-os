@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOperational } from "@/lib/action-guards";
+import {
+  pickEstimateForConversion,
+  filterConvertibleLines,
+} from "@/lib/estimate-to-po";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -383,4 +387,147 @@ export async function returnPurchaseOrderAction(formData: FormData) {
   revalidatePath(back);
   revalidatePath("/owner/purchasing");
   redirect(back);
+}
+
+
+/**
+ * Convert an advisor's estimate into a DRAFT PO for a single supplier.
+ *
+ * Estimate line prices are IGNORED — that's the customer charge, not the
+ * supplier cost. Each PO line's unitCost comes from the owner's editable
+ * value in the form (prefilled on render from Part.cost). Qty likewise:
+ * form value, prefilled from EstimateLine.qty (ceil'd since PO qty is
+ * Int and estimate qty is Decimal).
+ *
+ * Guarded with requireOperational (OWNER + MASTER). Pinned by
+ * master-owner-boundary.test.ts.
+ *
+ * Every id is re-verified against the caller's garage before use — the
+ * form is a UI convenience, not a permission source. See
+ * docs/Estimate-to-PO-Spec.md for the locked design decisions.
+ */
+export async function createPoFromEstimateAction(formData: FormData) {
+  const user = await requireOperational();
+
+  const jobCardId = String(formData.get("jobCardId") ?? "").trim();
+  const estimateId = String(formData.get("estimateId") ?? "").trim();
+  const supplierId = String(formData.get("supplierId") ?? "").trim();
+
+  // For the error redirect, we need a URL the owner can retry from.
+  // The from-estimate page keys on ?jobNumber= — try to send them back
+  // there. If we can look up the job's number cheaply, use it; if not,
+  // land them on the empty search screen.
+  async function retryPath(): Promise<string> {
+    if (!jobCardId) return "/owner/purchasing/from-estimate";
+    const jc = await prisma.jobCard.findFirst({
+      where: { id: jobCardId, garageId: user.garageId },
+      select: { number: true },
+    });
+    return jc?.number
+      ? `/owner/purchasing/from-estimate?jobNumber=${jc.number}`
+      : "/owner/purchasing/from-estimate";
+  }
+
+  if (!jobCardId) fail("Missing job card.", "/owner/purchasing/from-estimate");
+  if (!estimateId) fail("Missing estimate.", await retryPath());
+  if (!supplierId) fail("Choose a supplier.", await retryPath());
+
+  // Verify the job card exists in this garage. A missing/foreign id is
+  // either stale form data or a tampered submission — treat identically.
+  const jobCard = await prisma.jobCard.findFirst({
+    where: { id: jobCardId, garageId: user.garageId },
+    select: { id: true },
+  });
+  if (!jobCard) fail("Job card not found.", "/owner/purchasing/from-estimate");
+
+  // Verify the estimate belongs to this job (and by inheritance, this
+  // garage). Load lines so we can re-check them against the submitted
+  // include[] set — form data can lie; the DB is truth.
+  const estimate = await prisma.estimate.findFirst({
+    where: { id: estimateId, jobCardId: jobCard.id },
+    select: {
+      id: true,
+      lines: {
+        select: { id: true, kind: true, partId: true, declined: true },
+      },
+    },
+  });
+  if (!estimate) fail("Estimate not found on this job.", await retryPath());
+
+  // Same convertibility filter the UI shows — anything the form claimed
+  // to include must be in this set. A line that's since been declined or
+  // unlinked (rare, but possible if the advisor edits mid-flow) drops
+  // out here rather than sneaking into the PO.
+  const { convertible } = filterConvertibleLines(estimate.lines);
+  const convertibleIds = new Set(convertible.map((l) => l.id));
+
+  const includedIds = formData
+    .getAll("include")
+    .map(String)
+    .filter((s) => s.length > 0);
+  const validIncludedIds = includedIds.filter((id) => convertibleIds.has(id));
+
+  if (validIncludedIds.length === 0) {
+    fail("Choose at least one part.", await retryPath());
+  }
+
+  // Supplier — must be active + in this garage. Matches every other PO
+  // action so the same picker semantics apply.
+  const supplier = await prisma.supplier.findFirst({
+    where: { id: supplierId, garageId: user.garageId, active: true },
+    select: { id: true },
+  });
+  if (!supplier) fail("Supplier not found.", await retryPath());
+
+  // Build PO lines. Each line's qty and unitCost come from the form (the
+  // owner may have edited both from the prefill). We look up the Part on
+  // each so we can (a) verify it exists in this garage and (b) pull the
+  // partId cleanly — we already know it's non-null because the line was
+  // in `convertible`.
+  interface LineToCreate {
+    partId: string;
+    qty: number;
+    unitCost: string; // Prisma Decimal accepts numeric strings
+  }
+  const linesToCreate: LineToCreate[] = [];
+  for (const lineId of validIncludedIds) {
+    const line = convertible.find((l) => l.id === lineId);
+    if (!line || line.partId === null) continue; // already filtered, defensive
+    const qty = parsePositiveInt(String(formData.get(`qty_${lineId}`) ?? ""));
+    if (qty === null) fail("Invalid quantity.", await retryPath());
+    const cost = parseMoney(String(formData.get(`cost_${lineId}`) ?? ""));
+    if (cost === null) fail("Invalid unit cost.", await retryPath());
+    // Verify the Part is still in this garage (protects against a part
+    // being deleted between page render and submit — rare but real).
+    const part = await prisma.part.findFirst({
+      where: { id: line.partId, garageId: user.garageId },
+      select: { id: true },
+    });
+    if (!part) fail("Part not found — reload and try again.", await retryPath());
+    linesToCreate.push({ partId: part.id, qty, unitCost: cost });
+  }
+
+  // Create the PO + its lines atomically. Nested writes give us that
+  // for free without an explicit $transaction call. The PO is DRAFT so
+  // the owner can still edit / send it via the existing detail page —
+  // reuses everything downstream (Mark ordered, Receive, Return).
+  const po = await prisma.purchaseOrder.create({
+    data: {
+      garageId: user.garageId,
+      supplierId: supplier.id,
+      reference: optional(formData.get("reference")),
+      note: optional(formData.get("note")),
+      lines: {
+        create: linesToCreate.map((l) => ({
+          partId: l.partId,
+          qty: l.qty,
+          unitCost: l.unitCost,
+        })),
+      },
+    },
+    select: { id: true },
+  });
+
+  revalidatePath("/owner/purchasing");
+  redirect(`/owner/purchasing/${po.id}`);
 }

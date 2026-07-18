@@ -75,6 +75,9 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/parts-import.ts", action: "startPartsImportAction" },
   { file: "src/app/actions/parts-import.ts", action: "confirmPartsImportAction" },
   { file: "src/app/actions/parts-import.ts", action: "discardPartsImportAction" },
+  // Estimate → PO conversion (docs/Estimate-to-PO-Spec.md). MASTER runs
+  // the operational floor and owns the from-estimate flow end-to-end.
+  { file: "src/app/actions/purchasing.ts", action: "createPoFromEstimateAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER

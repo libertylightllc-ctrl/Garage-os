@@ -105,9 +105,14 @@ export default async function PurchasingPage({
               {t("purchasingSubtitle")}
             </p>
           </div>
-          <ButtonLink href="/owner/purchasing/new">
-            {t("newPurchaseOrder")}
-          </ButtonLink>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <ButtonLink href="/owner/purchasing/from-estimate" variant="ghost">
+              {t("convertFromEstimate")}
+            </ButtonLink>
+            <ButtonLink href="/owner/purchasing/new">
+              {t("newPurchaseOrder")}
+            </ButtonLink>
+          </div>
         </header>
 
         {error ? (

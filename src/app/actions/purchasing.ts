@@ -120,6 +120,48 @@ export async function addPoLineAction(formData: FormData) {
   redirect(back);
 }
 
+/**
+ * Edit qty + unitCost on an existing PO line. DRAFT-only (matches add /
+ * remove) — non-DRAFT edits would desync the receiving math: qty is the
+ * cap for `outstanding = qty - receivedQty` in receivePurchaseOrderAction,
+ * and both the atomic cap-check and the RECEIVED status recompute read
+ * from qty. Editing after ORDERED / PARTIALLY_RECEIVED / RECEIVED would
+ * either break receipt caps or rewrite a paid-supplier audit trail; the
+ * server rejects, not just the UI. Name/description editing is NOT part
+ * of this action — those come from the linked Part and stay read-only.
+ */
+export async function editPoLineAction(formData: FormData) {
+  const user = await requireOperational();
+
+  const poId = String(formData.get("poId") ?? "").trim();
+  const lineId = String(formData.get("lineId") ?? "").trim();
+  const qty = parsePositiveInt(String(formData.get("qty") ?? ""));
+  const unitCost = parseMoney(String(formData.get("unitCost") ?? ""));
+
+  const back = `/owner/purchasing/${poId}`;
+  if (!poId || !lineId) fail("Missing line.", back);
+
+  const po = await ownedPO(poId, user.garageId);
+  if (!po) fail("Purchase order not found.");
+  if (po.status !== "DRAFT") fail("Lines can only be changed on a draft order.", back);
+  if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
+  if (unitCost === null) fail("Unit cost must be a non-negative number.", back);
+
+  // Scope the update through the owned PO so a foreign lineId can't match.
+  // updateMany returns { count } — a count of 0 means the line wasn't on
+  // this PO (or was deleted between page render and submit). Silently
+  // succeeding on a no-op edit would look like it worked but mutate
+  // nothing; make it loud.
+  const claim = await prisma.purchaseOrderLine.updateMany({
+    where: { id: lineId, purchaseOrderId: po.id },
+    data: { qty, unitCost },
+  });
+  if (claim.count === 0) fail("Line not found — reload and try again.", back);
+
+  revalidatePath(back);
+  redirect(back);
+}
+
 /** Remove a line from a DRAFT purchase order (both scoped to the garage). */
 export async function removePoLineAction(formData: FormData) {
   const user = await requireOperational();

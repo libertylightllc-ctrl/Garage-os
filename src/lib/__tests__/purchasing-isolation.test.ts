@@ -28,6 +28,7 @@ vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 const {
   createPurchaseOrderAction,
   addPoLineAction,
+  editPoLineAction,
   removePoLineAction,
   setPoStatusAction,
   receivePurchaseOrderAction,
@@ -191,6 +192,153 @@ describe("setPoStatusAction", { retry: 3 }, () => {
     mockAuth.mockResolvedValueOnce(owner(gA));
     await call(removePoLineAction, form({ poId: po.id, lineId: line.id }));
     expect((await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } })).length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// editPoLineAction — qty + unitCost editing on a DRAFT line. The DRAFT-only
+// guard is the invariant that protects the receiving math: qty is the cap
+// for `outstanding = qty - receivedQty` in receivePurchaseOrderAction, and
+// both the atomic cap-check and the RECEIVED status recompute read from
+// qty. If a non-DRAFT edit slipped through, receiving would over- or
+// under-book. Every non-DRAFT status is pinned individually, not just one.
+// ---------------------------------------------------------------------------
+describe("editPoLineAction", { retry: 3 }, () => {
+  async function draftPoWithLine(garageId: string, tag: string) {
+    const po = await draftPO(garageId);
+    const p = await part(garageId, tag);
+    const line = await prisma.purchaseOrderLine.create({
+      data: { purchaseOrderId: po.id, partId: p.id, qty: 2, unitCost: "10.00" },
+    });
+    return { po, line };
+  }
+
+  it("edits qty + unitCost on a DRAFT line", async () => {
+    const { po, line } = await draftPoWithLine(gA, "E1");
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "7", unitCost: "12.34" }));
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(row?.qty).toBe(7);
+    expect(Number(row?.unitCost)).toBe(12.34);
+  });
+
+  it("cannot edit a line on another garage's PO", async () => {
+    const { po, line } = await draftPoWithLine(gB, "E2");
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "99", unitCost: "99.99" }));
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(row?.qty).toBe(2); // unchanged
+    expect(Number(row?.unitCost)).toBe(10.0);
+  });
+
+  it("cannot edit a lineId that belongs to a different PO in the same garage", async () => {
+    // Two DRAFT POs in gA. Try to edit poA1's lineId while claiming poA2.
+    const a1 = await draftPoWithLine(gA, "E3a");
+    const a2 = await draftPO(gA);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(editPoLineAction, form({ poId: a2.id, lineId: a1.line.id, qty: "99", unitCost: "99" }));
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: a1.line.id } });
+    expect(row?.qty).toBe(2); // unchanged
+  });
+
+  // qty validation
+  it.each([
+    ["0", "zero"],
+    ["-1", "negative"],
+    ["1.5", "non-integer"],
+    ["abc", "not-a-number"],
+    ["", "empty"],
+  ])("rejects qty %s (%s)", async (badQty) => {
+    const { po, line } = await draftPoWithLine(gA, `q-${badQty || "empty"}`);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(
+      editPoLineAction,
+      form({ poId: po.id, lineId: line.id, qty: badQty, unitCost: "5" }),
+    );
+    expect(to).toContain("error=");
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(row?.qty).toBe(2); // unchanged
+    expect(Number(row?.unitCost)).toBe(10.0);
+  });
+
+  // unitCost validation
+  it.each([
+    ["-0.01", "negative-cent"],
+    ["-5", "negative"],
+    ["abc", "not-a-number"],
+    ["", "empty"],
+  ])("rejects unitCost %s (%s)", async (badCost) => {
+    const { po, line } = await draftPoWithLine(gA, `c-${badCost || "empty"}`);
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(
+      editPoLineAction,
+      form({ poId: po.id, lineId: line.id, qty: "3", unitCost: badCost }),
+    );
+    expect(to).toContain("error=");
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(row?.qty).toBe(2); // unchanged
+  });
+
+  it("accepts unitCost of 0 (free stock counts as a real transaction)", async () => {
+    const { po, line } = await draftPoWithLine(gA, "E-zero");
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "1", unitCost: "0" }));
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(Number(row?.unitCost)).toBe(0);
+  });
+
+  // DRAFT-only guard — pin every non-DRAFT state, not just one. This is
+  // the load-bearing invariant for the receiving math.
+  //
+  // Note: ORDERED needs orderedAt to be non-null in the schema semantics,
+  // but the schema doesn't enforce it. We set the status directly and
+  // don't seed receivedQty for ORDERED / CANCELLED (both have received
+  // nothing). For PARTIALLY_RECEIVED and RECEIVED we do seed receivedQty
+  // > 0 so the fixture is realistic.
+  it.each([
+    ["ORDERED", 0],
+    ["PARTIALLY_RECEIVED", 1],
+    ["RECEIVED", 2],
+    ["CANCELLED", 0],
+  ] as const)("rejects edit on %s status", async (status, receivedQty) => {
+    const { po, line } = await draftPoWithLine(gA, `s-${status}`);
+    // Move to the target non-DRAFT status.
+    await prisma.purchaseOrder.update({
+      where: { id: po.id },
+      data: {
+        status,
+        orderedAt: status === "ORDERED" || status === "PARTIALLY_RECEIVED" || status === "RECEIVED" ? new Date() : null,
+        receivedAt: status === "RECEIVED" ? new Date() : null,
+      },
+    });
+    if (receivedQty > 0) {
+      await prisma.purchaseOrderLine.update({
+        where: { id: line.id },
+        data: { receivedQty },
+      });
+    }
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const to = await call(
+      editPoLineAction,
+      form({ poId: po.id, lineId: line.id, qty: "99", unitCost: "99" }),
+    );
+    expect(to).toContain("error=");
+    const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    // Original qty and unitCost — unchanged. If we let the edit through
+    // on PARTIALLY_RECEIVED the receiving math would break; this is what
+    // that assertion protects.
+    expect(row?.qty).toBe(2);
+    expect(Number(row?.unitCost)).toBe(10.0);
+  });
+
+  it("rejects a non-owner-family role", async () => {
+    const { po, line } = await draftPoWithLine(gA, "E-role");
+    mockAuth.mockResolvedValueOnce({
+      user: { id: "x", role: "ADVISOR", garageId: gA, email: "x", name: "x" },
+    });
+    await expect(
+      editPoLineAction(form({ poId: po.id, lineId: line.id, qty: "3", unitCost: "5" })),
+    ).rejects.toThrow("Not authorized");
   });
 });
 

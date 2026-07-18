@@ -62,6 +62,7 @@ interface ActionSite {
 const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/purchasing.ts", action: "createPurchaseOrderAction" },
   { file: "src/app/actions/purchasing.ts", action: "addPoLineAction" },
+  { file: "src/app/actions/purchasing.ts", action: "editPoLineAction" },
   { file: "src/app/actions/purchasing.ts", action: "removePoLineAction" },
   { file: "src/app/actions/purchasing.ts", action: "setPoStatusAction" },
   { file: "src/app/actions/purchasing.ts", action: "receivePurchaseOrderAction" },

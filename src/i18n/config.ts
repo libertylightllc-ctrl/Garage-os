@@ -112,6 +112,7 @@ const en = {
   // inventory 1b — edit part + manual stock adjustment
   editPart: "Edit part",
   saveChanges: "Save changes",
+  save: "Save",
   backToInventory: "← Inventory",
   adjustStock: "Adjust stock",
   currentStock: "Current stock",
@@ -1322,6 +1323,7 @@ const ar: typeof en = {
   // inventory 1b — edit part + manual stock adjustment
   editPart: "تعديل القطعة",
   saveChanges: "حفظ التغييرات",
+  save: "حفظ",
   backToInventory: "← المخزون",
   adjustStock: "تعديل المخزون",
   currentStock: "المخزون الحالي",

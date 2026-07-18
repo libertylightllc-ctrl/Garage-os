@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
 import {
   addPoLineAction,
+  editPoLineAction,
   removePoLineAction,
   setPoStatusAction,
   receivePurchaseOrderAction,
@@ -131,12 +132,35 @@ export default async function PurchaseOrderDetailPage({
             <tbody className="divide-y divide-border">
               {po.lines.map((l) => {
                 const outstanding = l.qty - l.receivedQty;
+                // DRAFT lines are editable in place. HTML5 `form=` lets
+                // the qty + unitCost inputs live in their normal cells
+                // while being form-associated with the edit <form> in
+                // the actions cell — otherwise a <form> spanning
+                // multiple <td>s wouldn't be valid HTML. Non-DRAFT rows
+                // stay read-only; server-side guard also rejects.
+                const editFormId = `edit-po-line-${l.id}`;
                 return (
                   <tr key={l.id}>
                     <td className="px-4 py-3 font-medium">
                       {l.part.name} <span className="font-mono text-xs text-muted-foreground">{l.part.sku}</span>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{l.qty}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {isDraft ? (
+                        <input
+                          type="number"
+                          name="qty"
+                          min="1"
+                          step="1"
+                          required
+                          defaultValue={l.qty}
+                          form={editFormId}
+                          aria-label={t("colQty")}
+                          className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
+                        />
+                      ) : (
+                        l.qty
+                      )}
+                    </td>
                     {showReceiving ? (
                       <td className="px-4 py-3 text-right tabular-nums">{l.receivedQty}</td>
                     ) : null}
@@ -153,17 +177,46 @@ export default async function PurchaseOrderDetailPage({
                     {showReturned ? (
                       <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{l.returnedQty}</td>
                     ) : null}
-                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{money(Number(l.unitCost))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                      {isDraft ? (
+                        <input
+                          type="number"
+                          name="unitCost"
+                          min="0"
+                          step="0.01"
+                          required
+                          defaultValue={Number(l.unitCost).toFixed(2)}
+                          form={editFormId}
+                          aria-label={t("poUnitCost")}
+                          className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
+                        />
+                      ) : (
+                        money(Number(l.unitCost))
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
                     {isDraft ? (
                       <td className="px-4 py-3 text-right">
-                        <form action={removePoLineAction}>
-                          <input type="hidden" name="poId" value={po.id} />
-                          <input type="hidden" name="lineId" value={l.id} />
-                          <button className="text-xs text-danger-700 hover:underline" type="submit">
-                            {t("remove")}
-                          </button>
-                        </form>
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Edit form — inputs live in the cells above,
+                              associated by the `form=` attribute.
+                              hidden poId+lineId + Save button live here. */}
+                          <form id={editFormId} action={editPoLineAction} className="inline-flex">
+                            <input type="hidden" name="poId" value={po.id} />
+                            <input type="hidden" name="lineId" value={l.id} />
+                            <button className="text-xs text-brand-900 hover:underline dark:text-white" type="submit">
+                              {t("save")}
+                            </button>
+                          </form>
+                          <span aria-hidden="true" className="text-muted-foreground">·</span>
+                          <form action={removePoLineAction} className="inline-flex">
+                            <input type="hidden" name="poId" value={po.id} />
+                            <input type="hidden" name="lineId" value={l.id} />
+                            <button className="text-xs text-danger-700 hover:underline" type="submit">
+                              {t("remove")}
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     ) : null}
                   </tr>

@@ -41,6 +41,13 @@ export function DesktopSideNav({
     return (
         <aside
             aria-label="Primary"
+            // data-app-shell is the marker that lets globals.css add the
+            // 220px inline-start padding to <body> ONLY when this side
+            // nav is in the DOM. Do NOT rename or remove this attribute —
+            // the layout centring of every public + login + customer
+            // page depends on it staying absent from their DOM.
+            // Pinned by src/components/nav-shell/__tests__/shell-padding-markers.test.ts.
+            data-app-shell="1"
             className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-border bg-surface md:flex"
         >
             {/* Brand block */}

@@ -156,3 +156,24 @@ body > main { width: 100%; }
    `overflow-x: clip` on html absorbs that few-pixel overflow without
    touching vertical scroll or sticky positioning of children. */
 html, body { overflow-x: hidden; }
+
+/* AppShell reservations — keyed on the shell's OWN DOM markers so the
+   padding is applied ONLY on pages that render the shell. Public,
+   login, and customer (/c/*) pages don't render either marker and
+   therefore stay centred inside <body> instead of being pushed off
+   centre by phantom side-nav / bottom-bar reservations.
+
+   The markers are data attributes (data-app-shell / data-mobile-tab-bar)
+   set on the actual DOM nodes in
+   src/components/nav-shell/DesktopSideNav.tsx and
+   src/components/nav-shell/BottomTabBar.tsx. Changing the marker names
+   fires src/components/nav-shell/__tests__/shell-padding-markers.test.ts.
+
+   `:has()` support: Chrome 105+, Safari 15.4+, Firefox 121+ (Baseline
+   2023) — covers every browser this app targets. */
+@media (min-width: 768px) {
+  body:has([data-app-shell]) { padding-inline-start: 220px; }
+}
+body:has([data-mobile-tab-bar]) {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+}

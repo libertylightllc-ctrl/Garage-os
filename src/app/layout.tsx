@@ -32,14 +32,14 @@ export default async function RootLayout({
       dir={isRtl(locale) ?"rtl":"ltr"}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      {/*  Bottom padding on mobile clears the fixed bottom tab bar
-           (BottomTabBar min-h [56px] + safe-area-inset-bottom, up to
-           ~34px on iOS with a home indicator). Without this the last
-           row of any list — most visibly the cashier Receivables
-           list — sits under the bar and its "Mark as Paid" action
-           can't be tapped. Zero effect on md+ where the bottom bar
-           is hidden. */}
-      <body className="min-h-full flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 md:ps-[220px]">
+      {/*  Shell reservations (220px inline-start on md+, bottom-bar
+           clearance on mobile) live in globals.css keyed on the shell's
+           own DOM markers — `body:has([data-app-shell])` and
+           `body:has([data-mobile-tab-bar])`. That way public + login +
+           customer pages (which don't render the shell) stay centred
+           and don't reserve space for a bar or side nav that isn't
+           there. See src/app/globals.css. */}
+      <body className="min-h-full flex flex-col">
         <LangSwitcher locale={locale} />
         {children}
       </body>

@@ -41,6 +41,12 @@ export function BottomTabBar({
     return (
         <nav
             aria-label="Primary"
+            // data-mobile-tab-bar is the marker that lets globals.css add
+            // the bottom padding on <body> ONLY when this bar renders.
+            // Do NOT rename or remove — public + customer pages must not
+            // reserve space for a bar they don't render.
+            // Pinned by src/components/nav-shell/__tests__/shell-padding-markers.test.ts.
+            data-mobile-tab-bar="1"
             className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur md:hidden"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >

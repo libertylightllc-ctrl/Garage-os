@@ -8,6 +8,7 @@ import { getT, getLocale } from "@/i18n/server";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { canEditInvoice } from "@/lib/permissions";
+import { JobNumberBadge } from "@/components/job-number-badge";
 
 export const dynamic ="force-dynamic";
 
@@ -111,6 +112,9 @@ export default async function InvoicePreview({
             <div className="text-zinc-500">
               {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} ·{""}
               {inv.jobCard.vehicle.plate}
+              {inv.jobCard.number ? (
+                <> · <JobNumberBadge jobCard={inv.jobCard} className="tabular-nums" /></>
+              ) : null}
             </div>
           </div>
           <div className="text-right text-zinc-500">

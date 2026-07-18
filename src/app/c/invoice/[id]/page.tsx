@@ -5,6 +5,7 @@ import { verifyToken } from "@/lib/tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { GarageBrand } from "@/components/garage-brand";
+import { JobNumberBadge } from "@/components/job-number-badge";
 
 export const dynamic ="force-dynamic";
 
@@ -50,6 +51,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           <p className="text-sm text-text-mute">
             {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())} ·{""}
             {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model}
+            {inv.jobCard.number ? (
+              <> · <JobNumberBadge jobCard={inv.jobCard} className="tabular-nums" /></>
+            ) : null}
           </p>
         </div>
       </div>

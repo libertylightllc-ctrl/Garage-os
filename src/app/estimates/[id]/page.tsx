@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { type StaffRole } from "@/lib/roles";
 import { getLocale, getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
@@ -212,7 +213,12 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             (where: jobCard: { garageId: session.user.garageId }), so
             there's no cross-tenant logo risk here. */}
         <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} className="my-2" />
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("estimate")}</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          {t("estimate")}
+          {est.jobCard.number ? (
+            <> · <JobNumberBadge jobCard={est.jobCard} className="text-base font-normal tabular-nums text-text-mute" /></>
+          ) : null}
+        </h1>
         <p className="text-base text-text-mute">
           {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{""}
           <span className="font-medium">{est.status}</span>

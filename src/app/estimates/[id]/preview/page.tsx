@@ -4,6 +4,7 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { setEstimateStatusAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 
@@ -90,6 +91,9 @@ export default async function EstimatePreview({
             <p className="text-sm text-zinc-500">
               {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} ·{""}
               {est.jobCard.vehicle.plate}
+              {est.jobCard.number ? (
+                <> · <JobNumberBadge jobCard={est.jobCard} className="tabular-nums" /></>
+              ) : null}
             </p>
           </div>
           <div className="text-right text-sm">

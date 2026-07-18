@@ -7,6 +7,7 @@ import { translateLineDescription } from "@/lib/line-item-translations";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
 import { Button } from "@/components/ui/button";
 import { GarageBrand } from "@/components/garage-brand";
+import { JobNumberBadge } from "@/components/job-number-badge";
 
 export const dynamic ="force-dynamic";
 
@@ -52,6 +53,9 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
           <h1 className="text-2xl font-semibold tracking-tight">{t("yourEstimate")}</h1>
           <p className="text-sm text-text-mute">
             {v.make} {v.model} · {v.plate}
+            {est.jobCard.number ? (
+              <> · <JobNumberBadge jobCard={est.jobCard} className="tabular-nums" /></>
+            ) : null}
           </p>
         </div>
       </div>

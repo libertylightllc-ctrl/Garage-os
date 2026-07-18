@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
 import { getT } from "@/i18n/server";
 import { AutoPrint } from "@/components/auto-print";
+import { JobNumberBadge } from "@/components/job-number-badge";
 
 export const dynamic ="force-dynamic";
 
@@ -98,6 +99,15 @@ export default async function InvoiceReceipt({
         <dd className="tabular-nums">
           {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
         </dd>
+
+        {inv.jobCard.number ? (
+          <>
+            <dt className="text-zinc-500">{t("handoffJobNo")}</dt>
+            <dd className="tabular-nums">
+              <JobNumberBadge jobCard={inv.jobCard} />
+            </dd>
+          </>
+        ) : null}
 
         <dt className="text-zinc-500">{t("invoiceReceiptAmountPaid")}</dt>
         <dd className="tabular-nums font-semibold">

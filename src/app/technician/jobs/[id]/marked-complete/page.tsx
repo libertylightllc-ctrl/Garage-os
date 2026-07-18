@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { getT } from "@/i18n/server";
 import { durationBetween } from "@/lib/duration";
 
@@ -60,7 +61,10 @@ export default async function MarkedComplete({
           <dt className="text-sm font-medium text-text-mute">
             {t("handoffJobNo")}
           </dt>
-          <dd className="font-semibold tabular-nums">#{job.number ??"—"}</dd>
+          <dd className="font-semibold tabular-nums">
+            <JobNumberBadge jobCard={job} />
+            {job.number ? null : "—"}
+          </dd>
 
           <dt className="text-sm font-medium text-text-mute">
             {t("secVehicle")}

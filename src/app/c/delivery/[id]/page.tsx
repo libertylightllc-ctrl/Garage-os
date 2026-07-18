@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { confirmCollectionPublic } from "@/app/actions/delivery";
 import { verifyToken } from "@/lib/tokens";
 import { getT } from "@/i18n/server";
+import { JobNumberBadge } from "@/components/job-number-badge";
 
 export const dynamic ="force-dynamic";
 
@@ -31,6 +32,9 @@ export default async function CustomerCollection({
         <h1 className="text-2xl font-semibold tracking-tight">{t("collectionTitle")}</h1>
         <p className="text-sm text-text-mute">
           {job.vehicle.make} {job.vehicle.model} · {job.vehicle.plate}
+          {job.number ? (
+            <> · <JobNumberBadge jobCard={job} className="tabular-nums" /></>
+          ) : null}
         </p>
       </div>
 

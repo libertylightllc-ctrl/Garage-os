@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
 import { GarageBrand } from "@/components/garage-brand";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
 import { invoiceMessage } from "@/lib/wa-templates";
@@ -293,6 +294,9 @@ export default async function InvoiceView({
           <div className="text-text-mute">{customer.phone}</div>
           <div className="text-text-mute">
             {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} · {inv.jobCard.vehicle.plate}
+            {inv.jobCard.number ? (
+              <> · <JobNumberBadge jobCard={inv.jobCard} className="tabular-nums" /></>
+            ) : null}
           </div>
         </div>
         <div className="text-right text-text-mute">

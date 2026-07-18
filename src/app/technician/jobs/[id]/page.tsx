@@ -35,6 +35,7 @@ import {
 import { repairUnlocked } from "@/lib/jobfindings";
 import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields";
 import { AppNav } from "@/components/app-nav";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { getLocale, getT } from "@/i18n/server";
 import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
@@ -214,7 +215,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           {job.vehicle.make} {job.vehicle.model}
         </h1>
-        <p className="text-sm text-text-mute">{job.vehicle.plate}</p>
+        <p className="text-sm text-text-mute">
+          {job.vehicle.plate}
+          {job.number ? (
+            <> · <JobNumberBadge jobCard={job} className="tabular-nums" /></>
+          ) : null}
+        </p>
         {/* Full vehicle spec one-liner — "Toyota Prado 2014 · 2.7 · Petrol".
             Lets the technician glance at the right part-spec without
             digging into the job card. The same line repeats below next

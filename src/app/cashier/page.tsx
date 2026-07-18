@@ -17,6 +17,7 @@ import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
+import { JobNumberBadge } from "@/components/job-number-badge";
 import { JobTimings } from "@/components/job-timings";
 import { CashierFilterBar } from "@/components/cashier-filter-bar";
 import { BadgeLink } from "@/components/ui/badge";
@@ -782,7 +783,7 @@ export default async function CashierHome({
                         {j.number != null ? (
                           <>
                             {""}
-                            · <span className="tabular-nums">#{j.number}</span>
+                            · <JobNumberBadge jobCard={j} className="tabular-nums" />
                           </>
                         ) : null}
                       </span>

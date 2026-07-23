@@ -127,6 +127,12 @@ Specs in `/docs` (read before deciding):
 - Copilot is read-only and ALWAYS scoped to the owner's `garageId` — no raw SQL.
 - Secrets in `.env` (git-ignored) — never in code, never committed.
 - Max 3 primary actions per screen. Mobile-first. Arabic + English (RTL correct).
+- Never weaken, skip, or delete a test to force a pass. Fix the real cause.
+- Regression halt: a previously-passing test going red outranks the current task. Stop and report.
+- Inspection is not verification. If the surface is a browser or a printer, DRIVE it (screenshot, measure, print-preview) — "verified by reading the code" is not verified.
+- Test against the deployment target. Vercel is UTC; Windows dev is Asia/Dubai. ANY change that renders a date or time must be verified under `TZ=UTC npm run dev` before declaring green.
+- Investigate → build → human click. A report is not a build; a build is not verified. Features touching money, dates, guards, or the intake form ship only after AR has clicked the actual surface.
+- Print surfaces: audit the ROOT LAYOUT and all parent layouts for fixed/floating elements before declaring a print page green. The page's own CSS is not the whole render tree — a `fixed`/`sticky` element in `src/app/layout.tsx` (or any nested layout) will paint on every printed page unless it carries `print:hidden`.
 
 ## Dev DB vs Prod DB — separated (2026-06-27)
 

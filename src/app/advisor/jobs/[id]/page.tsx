@@ -152,9 +152,17 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="ADVISOR" active="jobs"/>
       <div>
-        <Link href="/advisor" className="text-sm text-text-mute hover:underline">
-          {t("backActiveJobs")}
-        </Link>
+        <div className="flex items-start justify-between gap-3">
+          <Link href="/advisor" className="text-sm text-text-mute hover:underline">
+            {t("backActiveJobs")}
+          </Link>
+          <Link
+            href={`/advisor/jobs/${job.id}/print`}
+            className="text-sm text-text-mute hover:underline"
+          >
+            {t("printJobCard")}
+          </Link>
+        </div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           {priorityMeta(job.priority).badge} {job.vehicle.make} {job.vehicle.model}
         </h1>

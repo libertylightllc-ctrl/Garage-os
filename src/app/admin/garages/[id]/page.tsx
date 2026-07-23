@@ -7,6 +7,7 @@ import {
   getGarageActivity,
   getGarageBusinessMetrics,
 } from "@/lib/admin-garage-detail";
+import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 
 // Phase 3 per-shop detail page. Three sections:
 //   1. DATA USAGE — row counts per table, file/storage counts
@@ -45,6 +46,11 @@ export default async function AdminGarageDetailPage({
   // probe is captured even though we send 404.
   const overview = await getGarageOverview(admin, id);
   if (!overview) notFound();
+  // Admin surface is English-only per file header comment, so hard-
+  // wire locale to "en". Every timestamp on this page is about THIS
+  // garage, so it renders in THIS garage's timezone (Deira Central
+  // Motors' timestamps → Asia/Dubai; a KSA garage's → Asia/Riyadh).
+  const tz = countryToTimeZone(overview.country);
 
   const [usage, activity, metrics] = await Promise.all([
     getGarageDataUsage(admin, id),
@@ -69,7 +75,7 @@ export default async function AdminGarageDetailPage({
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">{overview.name}</h1>
         <p className="text-sm text-muted-foreground">
-          {overview.country} · created {overview.createdAt.toISOString().slice(0, 10)}
+          {overview.country} · created {fmtDate(overview.createdAt, "en", tz)}
           {overview.trn ? ` · TRN ${overview.trn}` : ""}
           {" · "}
           {overview.isPilot ? (
@@ -141,7 +147,7 @@ export default async function AdminGarageDetailPage({
           Last activity:{" "}
           <span className="font-mono">
             {activity.lastActiveAt
-              ? activity.lastActiveAt.toISOString().replace("T", " ").slice(0, 16)
+              ? fmtDateTime(activity.lastActiveAt, "en", tz)
               : "—"}
           </span>
           {activity.daysIdle !== null ? ` · ${activity.daysIdle} day${activity.daysIdle === 1 ? "" : "s"} ago` : ""}
@@ -164,12 +170,10 @@ export default async function AdminGarageDetailPage({
                   <td className="px-4 py-2 font-mono text-muted-foreground">{u.email}</td>
                   <td className="px-4 py-2">{u.role}</td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {u.createdAt.toISOString().slice(0, 10)}
+                    {fmtDate(u.createdAt, "en", tz)}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {u.lastLoginAt
-                      ? u.lastLoginAt.toISOString().replace("T", " ").slice(0, 16)
-                      : "—"}
+                    {u.lastLoginAt ? fmtDateTime(u.lastLoginAt, "en", tz) : "—"}
                   </td>
                 </tr>
               ))}

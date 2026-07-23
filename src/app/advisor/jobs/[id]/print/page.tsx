@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { PrintButton } from "@/components/print-button";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import type { MessageKey } from "@/i18n/config";
 import {
   EXTERIOR_OPTIONS,
@@ -60,10 +61,8 @@ export default async function JobCardPrint({
 
   const { customer } = job.vehicle;
   const { garage } = job;
-  const checkIn = job.createdAt.toLocaleString(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const tz = countryToTimeZone(garage.country);
+  const checkIn = fmtDateTime(job.createdAt, locale, tz);
   // Tick / empty box glyphs render cleanly on print (unlike inline SVG,
   // which some printer drivers strip) and read as a paper form the
   // customer is used to signing.
@@ -250,12 +249,7 @@ export default async function JobCardPrint({
         {job.moulkiaConsentAt ? (
           <p className="mt-4 border-t border-black/10 pt-4 text-xs text-zinc-500">
             {t("moulkiaConsentRecorded")}:{" "}
-            <span className="tabular-nums">
-              {job.moulkiaConsentAt.toLocaleString(locale, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </span>
+            <span className="tabular-nums">{fmtDateTime(job.moulkiaConsentAt, locale, tz)}</span>
           </p>
         ) : null}
 

@@ -31,6 +31,7 @@ import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { canEditInvoice } from "@/lib/permissions";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
@@ -68,6 +69,7 @@ export default async function InvoiceView({
     },
   });
   if (!inv) notFound();
+  const tz = countryToTimeZone(inv.garage.country);
   const t = await getT();
   // locale drives the line-item dictionary swap below. Only the
   // read-only display branch uses translation; the inline-edit form
@@ -300,8 +302,8 @@ export default async function InvoiceView({
           </div>
         </div>
         <div className="text-right text-text-mute">
-          <div>{t("issued")}: {inv.issuedAt.toISOString().slice(0, 10)}</div>
-          <div>{t("due")}: {inv.dueDate.toISOString().slice(0, 10)}</div>
+          <div>{t("issued")}: {fmtDate(inv.issuedAt, locale, tz)}</div>
+          <div>{t("due")}: {fmtDate(inv.dueDate, locale, tz)}</div>
           <div>{t("clearance")}: {inv.clearanceStatus}</div>
         </div>
       </div>
@@ -697,7 +699,7 @@ export default async function InvoiceView({
       ) : inv.jobCard.invoiceSentAt ? (
         <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute print:hidden">
           📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{""}
-          {inv.jobCard.invoiceSentAt.toISOString().slice(0, 16).replace("T","")}
+          {fmtDateTime(inv.jobCard.invoiceSentAt, locale, tz)}
         </p>
       ) : null}
 

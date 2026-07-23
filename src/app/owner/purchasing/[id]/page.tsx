@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
 import {
@@ -29,8 +30,14 @@ export default async function PurchaseOrderDetailPage({
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { id } = await params;
   const { error } = await searchParams;
+  const garage = await prisma.garage.findUnique({
+    where: { id: session.user.garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(garage?.country ?? "UAE");
 
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, garageId: session.user.garageId },
@@ -110,7 +117,7 @@ export default async function PurchaseOrderDetailPage({
         {/* Fully received banner */}
         {po.status === "RECEIVED" && po.receivedAt ? (
           <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
-            {t("poReceivedBanner")} {po.receivedAt.toISOString().slice(0, 10)}
+            {t("poReceivedBanner")} {fmtDate(po.receivedAt, locale, tz)}
           </p>
         ) : null}
 

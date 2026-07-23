@@ -6,6 +6,7 @@ import { setEstimateStatusAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
 
 export const dynamic ="force-dynamic";
@@ -60,6 +61,7 @@ export default async function EstimatePreview({
     },
   });
   if (!est) notFound();
+  const tz = countryToTimeZone(est.jobCard.garage.country);
 
   // The preview no longer redirects on non-DRAFT: after Send this page
   // IS the permanent, printable customer-facing record of the estimate.
@@ -112,8 +114,8 @@ export default async function EstimatePreview({
           <div className="text-right text-zinc-500">
             <div>
               {est.sentAt
-                ? `${t("issued")}: ${est.sentAt.toISOString().slice(0, 10)}`
-                : `${t("issued")}: ${est.createdAt.toISOString().slice(0, 10)}`}
+                ? `${t("issued")}: ${fmtDate(est.sentAt, locale, tz)}`
+                : `${t("issued")}: ${fmtDate(est.createdAt, locale, tz)}`}
             </div>
           </div>
         </div>
@@ -206,7 +208,7 @@ export default async function EstimatePreview({
           <span className="inline-flex h-12 items-center justify-center rounded-lg bg-success-50 px-5 text-base font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
             ✓{" "}
             {est.status === "SENT" && est.sentAt
-              ? `${t("estimatePreviewSentBadge")} · ${est.sentAt.toISOString().slice(0, 10)}`
+              ? `${t("estimatePreviewSentBadge")} · ${fmtDate(est.sentAt, locale, tz)}`
               : est.status === "SENT"
                 ? t("estimatePreviewSentBadge")
                 : est.status}

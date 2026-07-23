@@ -4,8 +4,9 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
 import { durationBetween } from "@/lib/duration";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 
 export const dynamic ="force-dynamic";
 
@@ -21,15 +22,18 @@ export default async function MarkedComplete({
 }) {
   const session = await requireAnyRole(["TECH", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { id } = await params;
 
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
     include: {
       vehicle: { include: { customer: { select: { name: true, phone: true } } } },
+      garage: { select: { country: true } },
     },
   });
   if (!job) notFound();
+  const tz = countryToTimeZone(job.garage.country);
 
   // Useful at-a-glance: how long the approved work took (REPAIR window).
   // sentForEstimateAt → workCompletedAt covers diagnose+price+approve+work,
@@ -88,7 +92,7 @@ export default async function MarkedComplete({
                 {t("markedCompleteCompletedAt")}
               </dt>
               <dd className="tabular-nums">
-                {job.workCompletedAt.toISOString().slice(0, 16).replace("T","")}
+                {fmtDateTime(job.workCompletedAt, locale, tz)}
                 {repairWindow ? ` · ${repairWindow}` :""}
               </dd>
             </>

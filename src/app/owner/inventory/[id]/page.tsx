@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { updatePartAction, adjustStockAction } from "@/app/actions/inventory";
 
@@ -22,8 +23,14 @@ export default async function PartDetailPage({
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { id } = await params;
   const { error } = await searchParams;
+  const garage = await prisma.garage.findUnique({
+    where: { id: session.user.garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(garage?.country ?? "UAE");
 
   const part = await prisma.part.findFirst({
     where: { id, garageId: session.user.garageId },
@@ -164,7 +171,7 @@ export default async function PartDetailPage({
                 {movements.map((m) => (
                   <tr key={m.id}>
                     <td className="px-4 py-2 text-muted-foreground">
-                      {m.createdAt.toISOString().replace("T", " ").slice(0, 16)}
+                      {fmtDateTime(m.createdAt, locale, tz)}
                     </td>
                     <td
                       className={`px-4 py-2 text-right tabular-nums font-medium ${

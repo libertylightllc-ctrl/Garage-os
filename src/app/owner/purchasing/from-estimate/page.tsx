@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { createPoFromEstimateAction } from "@/app/actions/purchasing";
 import {
@@ -27,8 +28,14 @@ export default async function ConvertFromEstimatePage({
 }) {
     const session = await requireAnyRole(["OWNER", "MASTER"]);
     const t = await getT();
+    const locale = await getLocale();
     const { jobNumber: rawJobNumber, error } = await searchParams;
     const garageId = session.user.garageId;
+    const garageRow = await prisma.garage.findUnique({
+        where: { id: garageId },
+        select: { country: true },
+    });
+    const tz = countryToTimeZone(garageRow?.country ?? "UAE");
 
     // Accept either a raw integer or the formatted "JC-YYYY-NNNN" — pull
     // the last group of digits (any leading JC- / year prefix is ignored)
@@ -217,11 +224,11 @@ export default async function ConvertFromEstimatePage({
                                 {pickResult.reason === "approved"
                                     ? t("estimateChosenApproved").replace(
                                           "{date}",
-                                          estimateForPreview.approvedAt!.toISOString().slice(0, 10),
+                                          fmtDate(estimateForPreview.approvedAt!, locale, tz),
                                       )
                                     : t("estimateChosenSent").replace(
                                           "{date}",
-                                          estimateForPreview.sentAt!.toISOString().slice(0, 10),
+                                          fmtDate(estimateForPreview.sentAt!, locale, tz),
                                       )}
                             </p>
                         </section>

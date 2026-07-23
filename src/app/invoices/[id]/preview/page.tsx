@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { sendInvoiceToCustomerAction } from "@/app/actions/billing";
 import { balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { canEditInvoice } from "@/lib/permissions";
@@ -52,6 +53,7 @@ export default async function InvoicePreview({
     },
   });
   if (!inv) notFound();
+  const tz = countryToTimeZone(inv.garage.country);
   const t = await getT();
   const locale = await getLocale();
 
@@ -119,10 +121,10 @@ export default async function InvoicePreview({
           </div>
           <div className="text-right text-zinc-500">
             <div>
-              {t("issued")}: {inv.issuedAt.toISOString().slice(0, 10)}
+              {t("issued")}: {fmtDate(inv.issuedAt, locale, tz)}
             </div>
             <div>
-              {t("due")}: {inv.dueDate.toISOString().slice(0, 10)}
+              {t("due")}: {fmtDate(inv.dueDate, locale, tz)}
             </div>
             <div>
               {t("clearance")}: {inv.clearanceStatus}
@@ -251,7 +253,7 @@ export default async function InvoicePreview({
         {alreadySent ? (
           <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute">
             📨 {t("invoiceAlreadySent")} ·{""}
-            {inv.jobCard.invoiceSentAt!.toISOString().slice(0, 16).replace("T","")}
+            {fmtDateTime(inv.jobCard.invoiceSentAt!, locale, tz)}
           </p>
         ) : (
           <form action={sendInvoiceToCustomerAction}>

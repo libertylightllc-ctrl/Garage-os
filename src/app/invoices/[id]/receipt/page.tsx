@@ -3,7 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { AutoPrint } from "@/components/auto-print";
 import { JobNumberBadge } from "@/components/job-number-badge";
 
@@ -42,7 +43,9 @@ export default async function InvoiceReceipt({
     },
   });
   if (!inv) notFound();
+  const tz = countryToTimeZone(inv.garage.country);
   const t = await getT();
+  const locale = await getLocale();
 
   // Only one receipt rendered per page — show the latest payment.
   // If there were multiple payments (none in the current model, but
@@ -116,9 +119,7 @@ export default async function InvoiceReceipt({
 
         <dt className="text-zinc-500">{t("invoiceReceiptDate")}</dt>
         <dd className="tabular-nums">
-          {latestPayment
-            ? latestPayment.paidAt.toISOString().slice(0, 10)
-            :"—"}
+          {latestPayment ? fmtDate(latestPayment.paidAt, locale, tz) :"—"}
         </dd>
 
         <dt className="text-zinc-500">{t("invoiceReceiptMethod")}</dt>

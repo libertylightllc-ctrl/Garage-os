@@ -4,7 +4,8 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 
 export const dynamic ="force-dynamic";
 
@@ -21,11 +22,13 @@ export default async function InvoiceSent({
 }) {
   const session = await requireAnyRole(["CASHIER","OWNER","ADVISOR","MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { id } = await params;
 
   const inv = await prisma.invoice.findFirst({
     where: { id, garageId: session.user.garageId },
     include: {
+      garage: { select: { country: true } },
       jobCard: {
         include: {
           vehicle: { include: { customer: { select: { name: true, phone: true } } } },
@@ -34,6 +37,7 @@ export default async function InvoiceSent({
     },
   });
   if (!inv) notFound();
+  const tz = countryToTimeZone(inv.garage.country);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -82,7 +86,7 @@ export default async function InvoiceSent({
                 {t("invoiceSentAt")}
               </dt>
               <dd className="tabular-nums">
-                {inv.jobCard.invoiceSentAt.toISOString().slice(0, 16).replace("T","")}
+                {fmtDateTime(inv.jobCard.invoiceSentAt, locale, tz)}
               </dd>
             </>
           ) : null}

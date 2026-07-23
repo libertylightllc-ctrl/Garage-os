@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { companyGarageIds } from "@/lib/branches";
 import { ACCOUNTS } from "@/lib/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import type { MessageKey } from "@/i18n/config";
 import { Paginator } from "@/components/paginator";
 import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
@@ -88,7 +89,17 @@ export default async function OwnerLedger({
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
+  const locale = await getLocale();
   const gids = await companyGarageIds(session.user.garageId);
+  // Ledger view rolls up across an owner's branches. Use the OWNER's
+  // primary garage timezone as the report's rendering TZ — that's the
+  // owner's local time, which is what "when did the money move?"
+  // means to them.
+  const ownerGarage = await prisma.garage.findUnique({
+    where: { id: session.user.garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(ownerGarage?.country ?? "UAE");
   const now = new Date();
   const { from: rawFrom, to: rawTo, page: rawPage, per: rawPer } = await searchParams;
 
@@ -356,7 +367,7 @@ export default async function OwnerLedger({
                 >
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="tabular-nums text-xs text-text-mute">
-                      {row.at.toISOString().slice(0, 16).replace("T","")}
+                      {fmtDateTime(row.at, locale, tz)}
                     </span>
                     <span className="font-medium">{row.customer}</span>
                     {row.kind ==="PAYMENT"? (

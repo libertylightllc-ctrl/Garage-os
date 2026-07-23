@@ -37,6 +37,7 @@ import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields"
 import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { getLocale, getT } from "@/i18n/server";
+import { fmtDateTime, fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
@@ -77,6 +78,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     where: { id, garageId: session.user.garageId },
     include: {
       vehicle: true,
+      // garage.country is used to derive the render timezone via
+      // countryToTimeZone(). Server-side toLocaleString without an
+      // explicit timezone silently uses UTC on Vercel.
+      garage: { select: { country: true } },
       steps: { orderBy: { createdAt:"desc"} },
       partRequests: { orderBy: { createdAt:"desc"} },
       helpers: { include: { tech: { select: { id: true, name: true } } } },
@@ -99,6 +104,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     },
   });
   if (!job) notFound();
+  const tz = countryToTimeZone(job.garage.country);
 
   // Workflow stepper inputs — derive on every render so a status/
   // estimate/payment change is reflected without us caching a
@@ -378,7 +384,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           <h2 className="text-sm font-medium">{t("jcFindings")}</h2>
           {submitted ? (
             <span className="text-xs text-success-700 dark:text-success-500">
-              ✅ {t("submittedToCashier")} · {job.finding!.submittedAt!.toISOString().slice(0, 16).replace("T","")}
+              ✅ {t("submittedToCashier")} · {fmtDateTime(job.finding!.submittedAt!, locale, tz)}
             </span>
           ) : null}
         </div>
@@ -642,7 +648,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <h2 className="text-sm font-medium">{t("jcRepair")}</h2>
             {job.workCompletedAt ? (
               <span className="text-xs text-success-700 dark:text-success-500">
-                ✅ {t("workCompletedBadge")} · {job.workCompletedAt.toISOString().slice(0, 16).replace("T","")}
+                ✅ {t("workCompletedBadge")} · {fmtDateTime(job.workCompletedAt, locale, tz)}
               </span>
             ) : null}
           </div>
@@ -790,7 +796,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <h2 className="text-sm font-medium">{t("jcQc")}</h2>
             {qcSignedOff(job.qcAt) ? (
               <span className="text-xs text-success-700 dark:text-success-500">
-                ✅ {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} · {job.qcAt!.toISOString().slice(0, 10)}
+                ✅ {t("qcPassedBadge")} · {job.qcBy?.name ?? ""} · {fmtDate(job.qcAt!, locale, tz)}
               </span>
             ) : null}
           </div>

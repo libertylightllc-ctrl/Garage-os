@@ -7,12 +7,12 @@ import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { formatInvoiceNo } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * Read-only vehicle service history — slice 'service history'.
@@ -49,6 +49,12 @@ export default async function VehicleHistory({
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
+  const garage = await prisma.garage.findUnique({
+    where: { id: session.user.garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(garage?.country ?? "UAE");
+  const ymd = (d: Date) => fmtDate(d, locale, tz);
 
   // Explicit `select` on every level instead of `include`. This
   // narrows the Prisma query to ONLY the columns the render reads —

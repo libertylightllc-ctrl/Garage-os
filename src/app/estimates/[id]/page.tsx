@@ -6,6 +6,7 @@ import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { type StaffRole } from "@/lib/roles";
 import { getLocale, getT } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput } from "@/components/dictate";
 import {
@@ -105,7 +106,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           // Pulled for <GarageBrand> in the header — same garageId
           // we're already scoping on, so no extra row, just the
           // existing one joined with logoUrl in scope.
-          garage: { select: { logoUrl: true } },
+          garage: { select: { logoUrl: true, country: true } },
           jobParts: { orderBy: { createdAt:"asc"} },
           // Slice 6b — show advances received against this job in the
           // UI block below. Ordered oldest-first so the audit list reads
@@ -124,6 +125,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
     },
   });
   if (!est) notFound();
+  const tz = countryToTimeZone(est.jobCard.garage.country);
   // Pull the job-card status out for readability — it drives the
   // Generate-Invoice gate below.
   const jobStatus = est.jobCard.status;
@@ -229,7 +231,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         {est.approvedAt ? (
           <p className="text-sm text-success-700 dark:text-success-500">
             ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{""}
-            {est.approvedAt.toISOString().slice(0, 10)}
+            {fmtDate(est.approvedAt, locale, tz)}
           </p>
         ) : null}
       </div>
@@ -494,7 +496,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       className="flex justify-between gap-3 text-warning-700 dark:text-warning-500"
                     >
                       <span>
-                        {a.receivedAt.toISOString().slice(0, 10)} ·{""}
+                        {fmtDate(a.receivedAt, locale, tz)} ·{""}
                         {a.method ==="CASH"? t("methodCash") : t("methodCardPos")}
                       </span>
                       <span>{money(Number(a.amount))}</span>

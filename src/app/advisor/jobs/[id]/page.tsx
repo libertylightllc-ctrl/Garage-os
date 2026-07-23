@@ -22,6 +22,7 @@ import {
   type JobStatus,
 } from "@/lib/jobcard-status";
 import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { statusKey } from "@/i18n/config";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
@@ -44,6 +45,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     where: { id, garageId: session.user.garageId },
     include: {
       vehicle: { include: { customer: true } },
+      // garage.country is used to derive the render timezone via
+      // countryToTimeZone(). Without it every date on this page
+      // rendered as UTC on Vercel — 4h behind Dubai wall clock.
+      garage: { select: { country: true } },
       estimates: {
         orderBy: { createdAt:"desc"},
         include: { invoice: { select: { id: true } } },
@@ -54,6 +59,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     },
   });
   if (!job) notFound();
+  const tz = countryToTimeZone(job.garage.country);
 
   const techs = await prisma.user.findMany({
     where: { garageId: session.user.garageId, role:"TECH"},
@@ -203,12 +209,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           ) : null}
           <div>
             <dt className="text-xs text-text-mute">{t("checkInLabel")}</dt>
-            <dd className="tabular-nums">
-              {job.createdAt.toLocaleString(locale, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </dd>
+            <dd className="tabular-nums">{fmtDateTime(job.createdAt, locale, tz)}</dd>
           </div>
           <div>
             <dt className="text-xs text-text-mute">{t("mileageInLabel")}</dt>
@@ -417,7 +418,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             ) : null}
             <div className="col-span-2">
               <dt className="text-xs text-text-mute">{t("deliveredAtLabel")}</dt>
-              <dd>{job.deliveredAt.toISOString().slice(0, 16).replace("T","")}</dd>
+              <dd>{fmtDateTime(job.deliveredAt, locale, tz)}</dd>
             </div>
           </dl>
           <p className={
@@ -427,7 +428,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               :"text-text-mute")
           }>
             {job.deliveryConfirmedAt
-              ? `✅ ${t("collectionConfirmed")} · ${job.deliveryConfirmedAt.toISOString().slice(0, 16).replace("T","")}`
+              ? `✅ ${t("collectionConfirmed")} · ${fmtDateTime(job.deliveryConfirmedAt, locale, tz)}`
               : `🟡 ${t("collectionAwaiting")}`}
           </p>
         </div>
@@ -641,7 +642,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                 <li key={r.id} className="flex items-center justify-between">
                   <span>🔧 {t(reminderTypeKey(r.type))}</span>
                   <span className="text-xs text-text-mute">
-                    {t(reminderStatusKey(r.status))} · {r.dueAt.toISOString().slice(0, 10)}
+                    {t(reminderStatusKey(r.status))} · {fmtDate(r.dueAt, locale, tz)}
                   </span>
                 </li>
               ))}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 
 /**
   * Read-only WhatsApp connection status panel for the advisor + cashier
@@ -31,7 +32,8 @@ export async function WhatsAppStatusPanel({
     helpForRole: "advisor" | "cashier";
 }) {
     const t = await getT();
-    const [acct, recent] = await Promise.all([
+    const locale = await getLocale();
+    const [acct, recent, garage] = await Promise.all([
         prisma.whatsAppAccount.findUnique({ where: { garageId } }),
         prisma.whatsAppMessage.findMany({
             where: { direction: "OUT", thread: { garageId } },
@@ -39,8 +41,13 @@ export async function WhatsAppStatusPanel({
             take: recentLimit,
             include: { thread: { include: { customer: true } } },
         }),
+        prisma.garage.findUnique({
+            where: { id: garageId },
+            select: { country: true },
+        }),
     ]);
     const connected = acct?.status === "CONNECTED";
+    const tz = countryToTimeZone(garage?.country ?? "UAE");
 
     return (
         <div className="flex flex-col gap-4">
@@ -105,7 +112,7 @@ export async function WhatsAppStatusPanel({
                                     </span>
                                     <span className="text-xs text-text-mute">
                                         {m.thread.customer.phone} ·{" "}
-                                        {m.createdAt.toISOString().slice(0, 16).replace("T", " ")}
+                                        {fmtDateTime(m.createdAt, locale, tz)}
                                     </span>
                                 </div>
                                 {/* Template + body. Template label is the high-signal

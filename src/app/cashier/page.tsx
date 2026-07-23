@@ -13,7 +13,8 @@ import {
   sendInvoiceToCustomerAction,
   recordPaymentAction,
 } from "@/app/actions/billing";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import type { MessageKey } from "@/i18n/config";
 import { friendlyStatus, type JobStatus } from "@/lib/jobcard-status";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
@@ -223,6 +224,16 @@ export default async function CashierHome({
     return false;
   };
 
+  const locale = await getLocale();
+  // One small side-query for the garage's country so every display
+  // date renders in Asia/Dubai (etc.) rather than UTC. The cashier
+  // dashboard is per-garage, so it's a single row lookup — no widening
+  // of the invoice/ledger/job finds.
+  const garage = await prisma.garage.findUnique({
+    where: { id: garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(garage?.country ?? "UAE");
   const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
       where: { garageId },
@@ -1148,7 +1159,7 @@ export default async function CashierHome({
                       <span className="text-right">
                         <span className="block">{money(total)}</span>
                         <span className="block text-xs text-text-mute">
-                          {`${t("dueLower")} ${inv.dueDate.toISOString().slice(0, 10)}`}
+                          {`${t("dueLower")} ${fmtDate(inv.dueDate, locale, tz)}`}
                         </span>
                       </span>
                     </Link>
@@ -1243,7 +1254,7 @@ export default async function CashierHome({
                         <span>{t("colVat")} {money(vat)}</span>
                         <span>
                           {t("colDatePaid")}{""}
-                          {paidAt ? paidAt.toISOString().slice(0, 10) :"—"}
+                          {paidAt ? fmtDate(paidAt, locale, tz) :"—"}
                         </span>
                         <span>
                           {t("colMethod")}: {methodLabel(method)}
@@ -1297,7 +1308,7 @@ export default async function CashierHome({
                         <td className="p-2 text-end tabular-nums">{money(total)}</td>
                         <td className="p-2 text-end tabular-nums">{money(vat)}</td>
                         <td className="p-2 tabular-nums">
-                          {paidAt ? paidAt.toISOString().slice(0, 10) :"—"}
+                          {paidAt ? fmtDate(paidAt, locale, tz) :"—"}
                         </td>
                         <td className="p-2">{methodLabel(method)}</td>
                       </tr>

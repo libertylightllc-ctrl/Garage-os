@@ -2,6 +2,7 @@ import Link from "next/link";
 import { signOut } from "@/auth";
 import { requireAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 
 // Phase 1 admin surface: cross-garage read-only list. Requires admin.
 // Every other /admin/* page must start with the same requireAdmin()
@@ -88,7 +89,11 @@ export default async function AdminGaragesPage() {
                   {g.users[0]?.email ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
-                  {g.createdAt.toISOString().slice(0, 10)}
+                  {/* Per-row per-garage timezone — admin sees each shop's
+                      LOCAL "created" date, not UTC. Deira Central Motors
+                      (UAE) renders in Asia/Dubai; a KSA garage would
+                      render in Asia/Riyadh. Country from the row itself. */}
+                  {fmtDate(g.createdAt, "en", countryToTimeZone(g.country))}
                 </td>
                 <td className="px-4 py-3">
                   {g.isPilot ? (

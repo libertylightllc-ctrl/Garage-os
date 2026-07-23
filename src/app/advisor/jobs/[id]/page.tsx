@@ -21,7 +21,7 @@ import {
   type JobAction,
   type JobStatus,
 } from "@/lib/jobcard-status";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
 import { statusKey } from "@/i18n/config";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
@@ -38,6 +38,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
 
   const job = await prisma.jobCard.findFirst({
     where: { id, garageId: session.user.garageId },
@@ -176,6 +177,15 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
               <dd>{job.complaint}</dd>
             </div>
           ) : null}
+          <div>
+            <dt className="text-xs text-text-mute">{t("checkInLabel")}</dt>
+            <dd className="tabular-nums">
+              {job.createdAt.toLocaleString(locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </dd>
+          </div>
           <div>
             <dt className="text-xs text-text-mute">{t("mileageInLabel")}</dt>
             <dd>{job.mileageIn ??"—"}</dd>

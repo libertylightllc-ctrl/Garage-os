@@ -17,18 +17,30 @@ export const dynamic = "force-dynamic";
 
 /**
  * Printable customer job-card receipt — the CUSTOMER-facing paper the
- * shop hands the owner at drop-off. Mirrors the estimate/invoice preview
- * pattern: dedicated sibling route, PrintButton + JobNumberBadge reused,
- * pure Tailwind print: variants, white card on-screen too so dark-mode
- * previews match paper.
+ * shop hands the owner at drop-off. Redesigned 2026-07-23 as a bordered
+ * WORKSHOP FORM (not a modern label/value card grid): every field sits
+ * in its own ruled cell so the printed A4 reads like the paper form
+ * customers are used to signing.
  *
- * CONTENT is deliberately the drop-off dispute shield: garage header +
- * TRN, job number, check-in stamp, customer identity, vehicle spec,
- * reception detail (mileage in / fuel level), complaint in the
- * customer's words, condition checklists (exterior + interior + valuables),
- * Moulkia consent stamp when applicable, and signature lines. Everything
- * the customer needs to sign "yes my car had these dents when I dropped
- * it off" is on this sheet.
+ * Border colours:
+ *   Cell / section borders use `border-zinc-800/40` — a computed RGBA
+ *   that survives print CSS in every browser I've tested. Do NOT swap
+ *   to `border-border` (a Tailwind CSS variable that gets stripped by
+ *   `print:border-0` further up the tree). The outer card explicitly
+ *   drops its border on print (via `print:border-0`); the INNER cell
+ *   borders below are the ones that must show up on paper.
+ *
+ * RTL: uses logical properties throughout — `text-end`, `border-inline-*`,
+ *   `flex justify-between`. Arabic flips layout without breaking cell
+ *   grids. See the AR/RTL screenshot in the print-preview verification
+ *   run (2026-07-23).
+ *
+ * CONTENT is unchanged from aed803d: garage header + TRN, job number,
+ * check-in stamp, customer identity, vehicle spec, complaint in the
+ * customer's words, condition checklists (exterior + interior +
+ * valuables), Moulkia consent stamp when applicable, and signature
+ * lines. Everything the customer needs to sign "yes my car had these
+ * dents when I dropped it off" is on this sheet.
  *
  * OMITTED by design: assigned tech, bay, priority, job status, and any
  * estimate/invoice state. Those are internal operational metadata. If
@@ -37,6 +49,39 @@ export const dynamic = "force-dynamic";
  * query param on this same route is the future hook — don't build the
  * toggle yet.
  */
+
+// Cell shared by the Vehicle grid: label on top in small caps, value
+// below. `bold`/`mono` opt-ins tune the value's typography (plate is
+// bold, VIN + mileage use tabular-nums for alignment).
+function Cell({
+  label,
+  value,
+  bold,
+  mono,
+}: {
+  label: string;
+  value: string | number;
+  bold?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded border border-zinc-800/40 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+        {label}
+      </div>
+      <div
+        className={
+          "mt-0.5 text-sm " +
+          (bold ? "font-semibold " : "") +
+          (mono ? "tabular-nums " : "")
+        }
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export default async function JobCardPrint({
   params,
 }: {
@@ -73,211 +118,215 @@ export default async function JobCardPrint({
       {/* White paper card even on-screen so the preview reads like the
           document the customer will hold. Card chrome drops on print. */}
       <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        {/* Header — document identity left, garage header right. Same
-            shape as the estimate/invoice previews so a shop that prints
-            all three sees a consistent letterhead. */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
+        {/* Header — stacked document identity on the start side, garage
+            block on the end side. Each stack line is text-sm so the JC
+            number stays the same size it was before the redesign — the
+            change here is stacking, not sizing. */}
+        <header className="flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
             <h1 className="text-2xl font-semibold tracking-tight">
               {t("jobCardPrintTitle")}
             </h1>
-            <p className="text-sm text-zinc-500">
+            {job.number ? (
+              <div className="text-sm text-zinc-600">
+                <JobNumberBadge jobCard={job} className="tabular-nums" />
+              </div>
+            ) : null}
+            <div className="text-sm text-zinc-600">
               {job.vehicle.make} {job.vehicle.model}
-              {job.vehicle.year ? ` (${job.vehicle.year})` : ""} · {job.vehicle.plate}
-              {job.number ? (
-                <>
-                  {" "}
-                  · <JobNumberBadge jobCard={job} className="tabular-nums" />
-                </>
-              ) : null}
-            </p>
+              {job.vehicle.year ? ` ${job.vehicle.year}` : ""}
+            </div>
+            <div className="text-sm text-zinc-600">{job.vehicle.plate}</div>
           </div>
-          <div className="text-right text-sm">
+          <div className="text-end text-sm">
             <div className="font-medium">{garage.name}</div>
-            <div className="text-zinc-500">TRN: {garage.trn ?? "—"}</div>
-            <div className="text-zinc-500">{garage.country}</div>
+            <div className="text-zinc-600">TRN: {garage.trn ?? "—"}</div>
+            <div className="text-zinc-600">{garage.country}</div>
           </div>
-        </div>
+        </header>
 
-        {/* Customer identity + check-in stamp. Reads like a receipt
-            header: who dropped off, when. */}
-        <div className="mt-6 flex justify-between gap-4 text-sm">
-          <div>
-            <div className="text-zinc-500">{t("secCustomer")}</div>
-            <div className="font-medium">{customer.name}</div>
-            <div className="text-zinc-500">{customer.phone}</div>
+        {/* Customer + Check-in — bordered cells side by side. Customer
+            gets 2/3 width because it holds name + phone + email; check-in
+            takes 1/3. */}
+        <section className="mt-5 grid grid-cols-3 gap-2 break-inside-avoid">
+          <div className="col-span-2 rounded border border-zinc-800/40 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("secCustomer")}
+            </div>
+            <div className="mt-0.5 text-sm font-medium">{customer.name}</div>
+            <div className="text-sm text-zinc-700">{customer.phone}</div>
             {customer.email ? (
-              <div className="text-zinc-500">{customer.email}</div>
+              <div className="text-sm text-zinc-700">{customer.email}</div>
             ) : null}
           </div>
-          <div className="text-right text-zinc-500">
-            <div>
-              {t("checkInLabel")}:{" "}
-              <span className="tabular-nums text-zinc-900">{checkIn}</span>
+          <div className="rounded border border-zinc-800/40 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("checkInLabel")}
             </div>
+            <div className="mt-0.5 text-sm tabular-nums">{checkIn}</div>
           </div>
-        </div>
-
-        {/* Vehicle spec — every field on the intake form that identifies
-            the car. Empty fields render as "—" so the customer can see
-            what the shop DID and DIDN'T capture at check-in. */}
-        <section className="mt-6 border-t border-black/10 pt-4">
-          <h2 className="mb-2 text-sm font-semibold">{t("secVehicle")}</h2>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <div>
-              <dt className="text-xs text-zinc-500">{t("make")}</dt>
-              <dd>{job.vehicle.make}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("model")}</dt>
-              <dd>{job.vehicle.model}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("yearLabel")}</dt>
-              <dd>{job.vehicle.year ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("plate")}</dt>
-              <dd className="font-medium">{job.vehicle.plate}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("vinLabel")}</dt>
-              <dd className="tabular-nums">{job.vehicle.vin ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("engineSizeLabel")}</dt>
-              <dd>{job.vehicle.engineSize ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("fuelTypeLabel")}</dt>
-              <dd>
-                {job.vehicle.fuelType
-                  ? t(`fuelType_${job.vehicle.fuelType}` as MessageKey)
-                  : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("mileageInLabel")}</dt>
-              <dd className="tabular-nums">
-                {job.mileageIn != null ? job.mileageIn.toLocaleString(locale) : "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-zinc-500">{t("fuelLevelLabel")}</dt>
-              <dd>
-                {job.fuelLevel ? t(`fuel_${job.fuelLevel}` as MessageKey) : "—"}
-              </dd>
-            </div>
-          </dl>
         </section>
 
-        {/* Complaint — the customer's own words. Kept as its own block
-            so it stands out on the paper as "what you told us was wrong." */}
+        {/* Vehicle — 3-column grid of bordered cells, one per field. */}
+        <section className="mt-4 break-inside-avoid">
+          <h2 className="mb-1.5 text-sm font-semibold">{t("secVehicle")}</h2>
+          <div className="grid grid-cols-3 gap-2">
+            <Cell label={t("make")} value={job.vehicle.make} />
+            <Cell label={t("model")} value={job.vehicle.model} />
+            <Cell label={t("yearLabel")} value={job.vehicle.year ?? "—"} />
+            <Cell label={t("plate")} value={job.vehicle.plate} bold />
+            <Cell label={t("vinLabel")} value={job.vehicle.vin ?? "—"} mono />
+            <Cell
+              label={t("engineSizeLabel")}
+              value={job.vehicle.engineSize ?? "—"}
+            />
+            <Cell
+              label={t("fuelTypeLabel")}
+              value={
+                job.vehicle.fuelType
+                  ? t(`fuelType_${job.vehicle.fuelType}` as MessageKey)
+                  : "—"
+              }
+            />
+            <Cell
+              label={t("mileageInLabel")}
+              value={
+                job.mileageIn != null ? job.mileageIn.toLocaleString(locale) : "—"
+              }
+              mono
+            />
+            <Cell
+              label={t("fuelLevelLabel")}
+              value={
+                job.fuelLevel ? t(`fuel_${job.fuelLevel}` as MessageKey) : "—"
+              }
+            />
+          </div>
+        </section>
+
+        {/* Complaint — one wide bordered box for the customer's own words. */}
         {job.complaint ? (
-          <section className="mt-4 border-t border-black/10 pt-4">
-            <h2 className="mb-2 text-sm font-semibold">{t("secComplaint")}</h2>
-            <p className="text-sm">{job.complaint}</p>
+          <section className="mt-4 break-inside-avoid">
+            <div className="rounded border border-zinc-800/40 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+                {t("secComplaint")}
+              </div>
+              <p className="mt-0.5 text-sm">{job.complaint}</p>
+            </div>
           </section>
         ) : null}
 
-        {/* Condition at check-in — THE DISPUTE SHIELD. Every checkbox
-            option renders whether ticked or not so the customer signs
-            against a paper form they can read at a glance. */}
-        <section className="mt-4 border-t border-black/10 pt-4">
-          <h2 className="mb-2 text-sm font-semibold">{t("secCondition")}</h2>
-          <div className="mb-3 text-sm">
-            <div className="text-xs font-medium text-zinc-500">
-              {t("exteriorLabel")}
+        {/* Vehicle condition at check-in — TWO stacked bordered boxes
+            (Exterior + Interior), each rendering every checkbox option
+            whether ticked or not. This is the DISPUTE SHIELD. */}
+        <section className="mt-4 break-inside-avoid">
+          <h2 className="mb-1.5 text-sm font-semibold">{t("secCondition")}</h2>
+          <div className="grid grid-cols-1 gap-2">
+            <div className="rounded border border-zinc-800/40 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+                {t("exteriorLabel")}
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-y-1 text-sm sm:grid-cols-3">
+                {EXTERIOR_OPTIONS.map((v) => (
+                  <span key={v}>
+                    {tick(job.exteriorCondition.includes(v))}{" "}
+                    {t(`ext_${v}` as MessageKey)}
+                  </span>
+                ))}
+              </div>
+              {job.exteriorRemarks ? (
+                <p className="mt-1.5 border-t border-zinc-800/20 pt-1 text-xs italic text-zinc-700">
+                  — {job.exteriorRemarks}
+                </p>
+              ) : null}
             </div>
-            <div className="mt-1 grid grid-cols-2 gap-y-1 sm:grid-cols-3">
-              {EXTERIOR_OPTIONS.map((v) => (
-                <span key={v}>
-                  {tick(job.exteriorCondition.includes(v))}{" "}
-                  {t(`ext_${v}` as MessageKey)}
-                </span>
-              ))}
+            <div className="rounded border border-zinc-800/40 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+                {t("interiorLabel")}
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-y-1 text-sm sm:grid-cols-3">
+                {INTERIOR_OPTIONS.map((v) => (
+                  <span key={v}>
+                    {tick(job.interiorCondition.includes(v))}{" "}
+                    {t(`int_${v}` as MessageKey)}
+                  </span>
+                ))}
+              </div>
+              {job.interiorRemarks ? (
+                <p className="mt-1.5 border-t border-zinc-800/20 pt-1 text-xs italic text-zinc-700">
+                  — {job.interiorRemarks}
+                </p>
+              ) : null}
             </div>
-            {job.exteriorRemarks ? (
-              <p className="mt-1 text-xs italic text-zinc-600">
-                — {job.exteriorRemarks}
-              </p>
-            ) : null}
-          </div>
-          <div className="text-sm">
-            <div className="text-xs font-medium text-zinc-500">
-              {t("interiorLabel")}
-            </div>
-            <div className="mt-1 grid grid-cols-2 gap-y-1 sm:grid-cols-3">
-              {INTERIOR_OPTIONS.map((v) => (
-                <span key={v}>
-                  {tick(job.interiorCondition.includes(v))}{" "}
-                  {t(`int_${v}` as MessageKey)}
-                </span>
-              ))}
-            </div>
-            {job.interiorRemarks ? (
-              <p className="mt-1 text-xs italic text-zinc-600">
-                — {job.interiorRemarks}
-              </p>
-            ) : null}
           </div>
         </section>
 
-        {/* Valuables — same paper-form shape as condition above. Even
-            "NONE" needs to be visible + tickable so an unticked form
-            can be spotted at a glance. */}
-        <section className="mt-4 border-t border-black/10 pt-4">
-          <h2 className="mb-2 text-sm font-semibold">{t("secValuables")}</h2>
-          <div className="grid grid-cols-2 gap-y-1 text-sm sm:grid-cols-3">
-            {VALUABLES_OPTIONS.map((v) => (
-              <span key={v}>
-                {tick(job.valuables.includes(v))} {t(`val_${v}` as MessageKey)}
-              </span>
-            ))}
+        {/* Valuables — bordered box; even NONE renders visible so an
+            unticked form can be spotted at a glance. */}
+        <section className="mt-4 break-inside-avoid">
+          <div className="rounded border border-zinc-800/40 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("secValuables")}
+            </div>
+            <div className="mt-1 grid grid-cols-2 gap-y-1 text-sm sm:grid-cols-3">
+              {VALUABLES_OPTIONS.map((v) => (
+                <span key={v}>
+                  {tick(job.valuables.includes(v))}{" "}
+                  {t(`val_${v}` as MessageKey)}
+                </span>
+              ))}
+            </div>
+            {job.valuablesNote ? (
+              <p className="mt-1.5 border-t border-zinc-800/20 pt-1 text-xs italic text-zinc-700">
+                — {job.valuablesNote}
+              </p>
+            ) : null}
           </div>
-          {job.valuablesNote ? (
-            <p className="mt-1 text-xs italic text-zinc-600">
-              — {job.valuablesNote}
-            </p>
-          ) : null}
         </section>
 
         {/* Moulkia consent stamp — appears ONLY when the intake path
             was the Moulkia OCR flow AND the advisor ticked consent. On
-            manual / repeat intake this section is skipped entirely so
-            the paper isn't cluttered with an irrelevant line. */}
+            manual / repeat intake this line is skipped so the paper
+            isn't cluttered with an irrelevant stamp. */}
         {job.moulkiaConsentAt ? (
-          <p className="mt-4 border-t border-black/10 pt-4 text-xs text-zinc-500">
+          <p className="mt-3 text-xs text-zinc-600">
             {t("moulkiaConsentRecorded")}:{" "}
-            <span className="tabular-nums">{fmtDateTime(job.moulkiaConsentAt, locale, tz)}</span>
+            <span className="tabular-nums">
+              {fmtDateTime(job.moulkiaConsentAt, locale, tz)}
+            </span>
           </p>
         ) : null}
 
-        {/* Fine print — the whole reason the customer signs. Kept
-            single-paragraph and short so it fits comfortably above the
-            signature block on A4 without hyphenation. */}
-        <p className="mt-6 border-t border-black/10 pt-4 text-xs text-zinc-600">
-          {t("disputeShieldNote")}
-        </p>
+        {/* Fine print — dispute shield explanation. Kept single-
+            paragraph and short so it fits above the signature block
+            on A4 without hyphenation. */}
+        <p className="mt-4 text-xs text-zinc-700">{t("disputeShieldNote")}</p>
 
-        {/* Signature block — two ruled lines, 60% width each, printer-
-            friendly. Timestamp under each line stays blank so signer
-            writes it in ink — the sheet is proof of on-paper signature,
-            not a digitally-signed record. */}
-        <div className="mt-6 grid grid-cols-2 gap-8 text-sm">
-          <div>
-            <div className="mb-1 h-8 border-b border-black/60" />
-            <div className="text-xs text-zinc-500">{t("signatureCustomer")}</div>
-            <div className="mt-2 h-6 border-b border-black/40" />
-            <div className="text-xs text-zinc-500">{t("signatureDate")}</div>
+        {/* Signature block — two bordered cells side by side. Each cell
+            has a ruled line for the signature and a shorter ruled line
+            for the date. The customer writes both in ink. */}
+        <section className="mt-4 grid grid-cols-2 gap-3 break-inside-avoid">
+          <div className="rounded border border-zinc-800/40 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("signatureCustomer")}
+            </div>
+            <div className="mt-6 border-t border-zinc-800/60" />
+            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("signatureDate")}
+            </div>
+            <div className="mt-4 border-t border-zinc-800/40" />
           </div>
-          <div>
-            <div className="mb-1 h-8 border-b border-black/60" />
-            <div className="text-xs text-zinc-500">{t("signatureAdvisor")}</div>
-            <div className="mt-2 h-6 border-b border-black/40" />
-            <div className="text-xs text-zinc-500">{t("signatureDate")}</div>
+          <div className="rounded border border-zinc-800/40 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("signatureAdvisor")}
+            </div>
+            <div className="mt-6 border-t border-zinc-800/60" />
+            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600">
+              {t("signatureDate")}
+            </div>
+            <div className="mt-4 border-t border-zinc-800/40" />
           </div>
-        </div>
+        </section>
       </div>
 
       {/* Action bar — visible on-screen, hidden on print. Go Back +

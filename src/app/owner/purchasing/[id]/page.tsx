@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { DocumentHeader } from "@/components/document-header";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export default async function PurchaseOrderDetailPage({
   const { error } = await searchParams;
   const garage = await prisma.garage.findUnique({
     where: { id: session.user.garageId },
-    select: { country: true },
+    select: { name: true, trn: true, country: true },
   });
   const tz = countryToTimeZone(garage?.country ?? "UAE");
 
@@ -95,16 +96,38 @@ export default async function PurchaseOrderDetailPage({
           >
             {t("backToPurchasing")}
           </Link>
-          <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            {po.supplier.name}
-            <span className="rounded-full bg-muted px-2 py-0.5 align-middle text-xs font-medium text-muted-foreground">
+          {/* Standardized document header. PO has no vehicle and no
+              gapless per-garage number — supplier name plays the role of
+              the identifying line, and the supplier's own quote number
+              (if present) renders as "Supplier ref: …" so a reader
+              never assumes it's OUR document number. Honest labelling
+              per AR's spec (2026-07-24). */}
+          <div className="mt-1">
+            <DocumentHeader
+              title={t("documentPurchaseOrder")}
+              supplier={{
+                name: po.supplier.name,
+                reference: po.reference,
+                refLabel: t("supplierRef"),
+              }}
+              garage={{
+                name: garage?.name ?? "",
+                trn: garage?.trn ?? null,
+                country: garage?.country ?? "UAE",
+              }}
+            />
+          </div>
+          {/* Status pill + summary caption below the header. Status
+              moved out of the h1 so the standardized stacked shape stays
+              consistent with the other document surfaces. */}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
               {t(`poStatus_${po.status}`)}
             </span>
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {po.reference ? <>{t("poReference")}: {po.reference} · </> : null}
-            {po.lines.length} {t("poLines").toLowerCase()} · {money(total)}
-          </p>
+            <span>
+              {po.lines.length} {t("poLines").toLowerCase()} · {money(total)}
+            </span>
+          </div>
           {po.note ? <p className="mt-1 text-sm text-muted-foreground">{po.note}</p> : null}
         </div>
 

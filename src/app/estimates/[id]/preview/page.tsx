@@ -4,7 +4,7 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { setEstimateStatusAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
-import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
@@ -85,25 +85,16 @@ export default async function EstimatePreview({
           the customer will see. On print the card chrome drops away so
           the paper copy is just the document. */}
       <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("estimate")}
-            </h1>
-            <p className="text-sm text-zinc-500">
-              {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} ·{""}
-              {est.jobCard.vehicle.plate}
-              {est.jobCard.number ? (
-                <> · <JobNumberBadge jobCard={est.jobCard} className="tabular-nums" /></>
-              ) : null}
-            </p>
-          </div>
-          <div className="text-right text-sm">
-            <div className="font-medium">{garage.name}</div>
-            <div className="text-zinc-500">TRN: {garage.trn ??"—"}</div>
-            <div className="text-zinc-500">{garage.country}</div>
-          </div>
-        </div>
+        {/* Standardized document header — shared across every printable
+            surface (job card, estimate, invoice, delivery, PO). Estimate
+            has no gapless per-garage number so we identify by parent JC
+            rather than invent an EST-… slug. */}
+        <DocumentHeader
+          title={t("estimate")}
+          jobCard={est.jobCard}
+          vehicle={est.jobCard.vehicle}
+          garage={garage}
+        />
 
         <div className="mt-6 flex justify-between text-sm">
           <div>

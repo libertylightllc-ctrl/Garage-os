@@ -184,6 +184,7 @@ const en = {
   moreLowStock: "more below reorder",
   // inventory 2a — purchasing (purchase orders)
   purchasingTitle: "Purchasing",
+  documentPurchaseOrder: "Purchase order",
   purchasingSubtitle: "Purchase orders to your suppliers.",
   newPurchaseOrder: "New purchase order",
   purchasingOpen: "Open",
@@ -191,6 +192,7 @@ const en = {
   noPurchaseOrders: "No purchase orders yet.",
   poSupplier: "Supplier",
   poReference: "Reference",
+  supplierRef: "Supplier ref",
   poStatus: "Status",
   poLines: "Lines",
   poTotal: "Total",
@@ -772,6 +774,7 @@ const en = {
   collectionConfirmed: "Customer confirmed collection",
   // customer-facing /c/delivery
   collectionTitle: "Confirm collection",
+  documentDelivery: "Delivery",
   collectionIntro: "Please confirm you've collected your vehicle.",
   confirmCollectionBtn: "Confirm collection",
   collectionThanks: "✅ Thank you — collection confirmed.",
@@ -1406,6 +1409,7 @@ const ar: typeof en = {
   moreLowStock: "أخرى تحت حد الطلب",
   // inventory 2a — purchasing (purchase orders)
   purchasingTitle: "المشتريات",
+  documentPurchaseOrder: "أمر شراء",
   purchasingSubtitle: "أوامر الشراء إلى مورديك.",
   newPurchaseOrder: "أمر شراء جديد",
   purchasingOpen: "مفتوحة",
@@ -1413,6 +1417,7 @@ const ar: typeof en = {
   noPurchaseOrders: "لا توجد أوامر شراء بعد.",
   poSupplier: "المورد",
   poReference: "المرجع",
+  supplierRef: "مرجع المورّد",
   poStatus: "الحالة",
   poLines: "البنود",
   poTotal: "الإجمالي",
@@ -1970,6 +1975,7 @@ const ar: typeof en = {
   collectionConfirmed: "أكد العميل الاستلام",
   // customer-facing /c/delivery
   collectionTitle: "تأكيد الاستلام",
+  documentDelivery: "تسليم",
   collectionIntro: "يرجى تأكيد استلامك للمركبة.",
   confirmCollectionBtn: "تأكيد الاستلام",
   collectionThanks: "✅ شكرًا — تم تأكيد الاستلام.",

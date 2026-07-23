@@ -17,6 +17,7 @@ import {
 import { PrintButton } from "@/components/print-button";
 import { GarageBrand } from "@/components/garage-brand";
 import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
 import { invoiceMessage } from "@/lib/wa-templates";
@@ -245,49 +246,44 @@ export default async function InvoiceView({
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start print:contents">
       <section className="flex min-w-0 flex-col gap-6 lg:col-span-2 print:contents">
 
-      <div className="flex items-start justify-between">
-        <div>
-          {/* Garage's own brand. Already-scoped via the invoice's
-              parent garage relation; cannot show another garage's logo
-              because inv.garage is the joined-by-id record. */}
-          <GarageBrand size="full" logoUrl={inv.garage.logoUrl} className="mb-2" />
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{t("taxInvoice")}</h1>
-            {/* Overdue pill — matches the row badge on /cashier?tab=
-                invoices. arState already returns 'OVERDUE' when today
-                is past dueDate AND balance > 0; a fully-paid invoice
-                returns 'PAID' so this branch is naturally false for
-                paid invoices. */}
-            {state ==="OVERDUE"? (
-              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
-                {t("invoiceBadgeOverdue")}
-              </span>
-            ) : null}
-            {/* Partially Paid pill — slice 6. Mutually exclusive with
-                the Overdue pill above by arState's precedence rules
-                (an overdue invoice that's also partial returns OVERDUE,
-                not PARTIAL — the date signal wins). */}
-            {state ==="PARTIAL"? (
-              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
-                {t("invoiceBadgePartial")}
-              </span>
-            ) : null}
-            {state ==="PAID"? (
-              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
-                {t("invoiceBadgePaid")}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-sm text-text-mute">
-            {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
-          </p>
+      {/* Garage's own brand. Already-scoped via the invoice's
+          parent garage relation; cannot show another garage's logo
+          because inv.garage is the joined-by-id record. */}
+      <GarageBrand size="full" logoUrl={inv.garage.logoUrl} className="mb-2" />
+      {/* Standardized document header — shared across every printable
+          surface. Vehicle line uses the invoice's own jobCard.vehicle
+          so the header's plate matches the customer's car exactly. */}
+      <DocumentHeader
+        title={t("taxInvoice")}
+        documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
+        jobCard={inv.jobCard}
+        vehicle={inv.jobCard.vehicle}
+        garage={inv.garage}
+      />
+      {/* Status pill row below the header — the four billing states
+          (overdue / partial / paid) stay visible but drop out of the
+          h1 line so the stacked header shape stays consistent across
+          documents. Mutually exclusive by arState's precedence rules
+          (overdue+partial → OVERDUE). */}
+      {(state === "OVERDUE" || state === "PARTIAL" || state === "PAID") ? (
+        <div className="mt-1 flex items-center gap-2">
+          {state === "OVERDUE" ? (
+            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+              {t("invoiceBadgeOverdue")}
+            </span>
+          ) : null}
+          {state === "PARTIAL" ? (
+            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-warning-50 px-2 py-0.5 text-xs font-semibold text-warning-600 dark:bg-warning-500/10 dark:text-warning-500">
+              {t("invoiceBadgePartial")}
+            </span>
+          ) : null}
+          {state === "PAID" ? (
+            <span className="inline-flex items-center whitespace-nowrap rounded-full bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
+              {t("invoiceBadgePaid")}
+            </span>
+          ) : null}
         </div>
-        <div className="text-right text-sm">
-          <div className="font-medium">{inv.garage.name}</div>
-          <div className="text-text-mute">TRN: {inv.garage.trn ??"—"}</div>
-          <div className="text-text-mute">{inv.garage.country}</div>
-        </div>
-      </div>
+      ) : null}
 
       <div className="flex justify-between text-sm">
         <div>

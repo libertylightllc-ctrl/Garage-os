@@ -7,7 +7,7 @@ import { translateLineDescription } from "@/lib/line-item-translations";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
 import { Button } from "@/components/ui/button";
 import { GarageBrand } from "@/components/garage-brand";
-import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
 
@@ -48,16 +48,15 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
         {/* Garage's own brand. Scoped via est.jobCard.garage (joined
             by id during the token lookup) — never another garage's. */}
         <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} />
-        <div>
-          <p className="text-sm text-text-mute">{est.jobCard.garage.name}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("yourEstimate")}</h1>
-          <p className="text-sm text-text-mute">
-            {v.make} {v.model} · {v.plate}
-            {est.jobCard.number ? (
-              <> · <JobNumberBadge jobCard={est.jobCard} className="tabular-nums" /></>
-            ) : null}
-          </p>
-        </div>
+        {/* Standardized document header. Customer-facing title uses
+            "Your estimate" so the reader immediately knows this is their
+            document. Same stacked shape as every other document. */}
+        <DocumentHeader
+          title={t("yourEstimate")}
+          jobCard={est.jobCard}
+          vehicle={v}
+          garage={est.jobCard.garage}
+        />
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border">

@@ -7,6 +7,7 @@ import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { AutoPrint } from "@/components/auto-print";
 import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
 
@@ -77,21 +78,18 @@ export default async function InvoiceReceipt({
         {t("invoiceBackToInvoice")}
       </Link>
 
-      {/* Header: garage identity + RECEIPT label so the customer
-          immediately knows what this paper is. */}
-      <div className="flex items-start justify-between border-b border-border pb-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t("invoiceReceiptTitle")}
-          </h1>
-          <p className="text-sm text-zinc-500">
-            {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
-          </p>
-        </div>
-        <div className="text-right text-sm">
-          <div className="font-medium">{inv.garage.name}</div>
-          <div className="text-zinc-500">TRN: {inv.garage.trn ??"—"}</div>
-        </div>
+      {/* Standardized document header. Same stacked shape as
+          /invoices/[id] and /invoices/[id]/preview so the receipt
+          reads as part of the same document family. Border stays on
+          the wrapper below the header. */}
+      <div className="border-b border-border pb-4">
+        <DocumentHeader
+          title={t("invoiceReceiptTitle")}
+          documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
+          jobCard={inv.jobCard}
+          vehicle={inv.jobCard.vehicle}
+          garage={inv.garage}
+        />
       </div>
 
       <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">

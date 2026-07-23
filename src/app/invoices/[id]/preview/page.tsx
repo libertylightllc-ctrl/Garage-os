@@ -10,6 +10,7 @@ import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { canEditInvoice } from "@/lib/permissions";
 import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
 
@@ -90,21 +91,17 @@ export default async function InvoicePreview({
         {/* Header — Tax Invoice + per-garage invoice number + garage
             identity + TRN. Matches the existing /invoices/[id] read-
             only render so the cashier preview is faithful. */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("taxInvoice")}
-            </h1>
-            <p className="text-sm text-zinc-500">
-              {formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
-            </p>
-          </div>
-          <div className="text-right text-sm">
-            <div className="font-medium">{inv.garage.name}</div>
-            <div className="text-zinc-500">TRN: {inv.garage.trn ??"—"}</div>
-            <div className="text-zinc-500">{inv.garage.country}</div>
-          </div>
-        </div>
+        {/* Standardized document header — INV-… + JC-… + vehicle + plate
+            on the start side, garage identity on the end side. Same
+            shape as /invoices/[id] so the cashier preview reads as a
+            faithful render of the invoice they're about to send. */}
+        <DocumentHeader
+          title={t("taxInvoice")}
+          documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
+          jobCard={inv.jobCard}
+          vehicle={inv.jobCard.vehicle}
+          garage={inv.garage}
+        />
 
         <div className="mt-6 flex justify-between text-sm">
           <div>

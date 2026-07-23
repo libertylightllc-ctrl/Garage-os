@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 import { type StaffRole } from "@/lib/roles";
 import { getLocale, getT } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
@@ -106,7 +106,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
           // Pulled for <GarageBrand> in the header — same garageId
           // we're already scoping on, so no extra row, just the
           // existing one joined with logoUrl in scope.
-          garage: { select: { logoUrl: true, country: true } },
+          garage: { select: { name: true, trn: true, logoUrl: true, country: true } },
           jobParts: { orderBy: { createdAt:"asc"} },
           // Slice 6b — show advances received against this job in the
           // UI block below. Ordered oldest-first so the audit list reads
@@ -215,19 +215,19 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
             (where: jobCard: { garageId: session.user.garageId }), so
             there's no cross-tenant logo risk here. */}
         <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} className="my-2" />
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          {t("estimate")}
-          {est.jobCard.number ? (
-            <> · <JobNumberBadge jobCard={est.jobCard} className="text-base font-normal tabular-nums text-text-mute" /></>
-          ) : null}
-        </h1>
-        <p className="text-base text-text-mute">
-          {est.jobCard.vehicle.make} {est.jobCard.vehicle.model} · {est.jobCard.vehicle.plate} ·{""}
+        <DocumentHeader
+          title={t("estimate")}
+          jobCard={est.jobCard}
+          vehicle={est.jobCard.vehicle}
+          garage={est.jobCard.garage}
+        />
+        {/* Status + pricing-by-advisor moved below the header so the
+            standardized stacked shape stays clean. Status stayed inline
+            in the h1 before the header sweep. */}
+        <p className="mt-1 text-sm text-text-mute">
           <span className="font-medium">{est.status}</span>
+          {!canEditEstimate ? <> · {t("pricingByAdvisor")}</> : null}
         </p>
-        {!canEditEstimate ? (
-          <p className="text-sm text-text-mute">{t("pricingByAdvisor")}</p>
-        ) : null}
         {est.approvedAt ? (
           <p className="text-sm text-success-700 dark:text-success-500">
             ✅ {t("approvedOn")} AED {Number(est.approvedAmount ?? est.total).toFixed(2)} ·{""}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { PrintButton } from "@/components/print-button";
-import { JobNumberBadge } from "@/components/job-number-badge";
+import { DocumentHeader } from "@/components/document-header";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import type { MessageKey } from "@/i18n/config";
@@ -176,32 +176,20 @@ export default async function JobCardPrint({
       {/* White paper card even on-screen so the preview reads like the
           document the customer will hold. Card chrome drops on print. */}
       <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        {/* Header — stacked document identity on the start side, garage
-            block on the end side. Each stack line is text-sm so the JC
-            number stays the same size it was before the redesign — the
-            change here is stacking, not sizing. */}
-        <header className="flex items-start justify-between gap-4">
-          <div className="space-y-0.5">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("jobCardPrintTitle")}
-            </h1>
-            {job.number ? (
-              <div className="text-sm text-zinc-600">
-                <JobNumberBadge jobCard={job} className="tabular-nums" />
-              </div>
-            ) : null}
-            <div className="text-sm text-zinc-600">
-              {job.vehicle.make} {job.vehicle.model}
-              {job.vehicle.year ? ` ${job.vehicle.year}` : ""}
-            </div>
-            <div className="text-sm text-zinc-600">{job.vehicle.plate}</div>
-          </div>
-          <div className="text-end text-sm">
-            <div className="font-medium">{garage.name}</div>
-            <div className="text-zinc-600">TRN: {garage.trn ?? "—"}</div>
-            <div className="text-zinc-600">{garage.country}</div>
-          </div>
-        </header>
+        {/* Header — standardized across every printable document via
+            DocumentHeader (job card / estimate / invoice / delivery / PO
+            all share the same stacked shape). See the component for the
+            per-doc identity ordering. */}
+        <DocumentHeader
+          title={t("jobCardPrintTitle")}
+          jobCard={job}
+          vehicle={job.vehicle}
+          garage={garage}
+        />
+
+        {/* Old header markup lived here; format is now pinned in the
+            shared component so it can't fork across the 9 document
+            surfaces. Do not reintroduce inline headers. */}
 
         {/* Customer + Check-in — bordered cells side by side. Customer
             gets 2/3 width because it holds name + phone + email; check-in

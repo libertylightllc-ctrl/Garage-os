@@ -16,7 +16,9 @@ export function MobileTopStrip({
     roleLabel: string;
 }) {
     return (
-        <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-surface/80 px-4 backdrop-blur md:hidden">
+        // print:hidden — defensive against printable pages that render
+        // the mobile shell. Screen-only navigation strip.
+        <header className="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-border bg-surface/80 px-4 backdrop-blur md:hidden print:hidden">
             <div className="flex items-center gap-2">
                 <GarageBrand size="mark" logoUrl={logoUrl} />
                 {logoUrl ? null : (

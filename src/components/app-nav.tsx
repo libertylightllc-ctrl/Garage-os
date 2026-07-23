@@ -221,7 +221,10 @@ export async function AppNav({ role: pageRole, active }: { role: StaffRole; acti
     // breaks the JSX class-string parser.
     return (
         <header
-            className="sticky top-0 z-40 mb-2 border-b border-border bg-surface/80 backdrop-blur"
+            // print:hidden — defensive against printable pages that
+            // render AppNav. The screen-only role bar has no place on
+            // the paper.
+            className="sticky top-0 z-40 mb-2 border-b border-border bg-surface/80 backdrop-blur print:hidden"
             style={{
                 marginLeft: "calc(50% - 50vw)",
                 marginRight: "calc(50% - 50vw)",

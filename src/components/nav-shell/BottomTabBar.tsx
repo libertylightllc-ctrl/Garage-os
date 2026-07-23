@@ -47,7 +47,9 @@ export function BottomTabBar({
             // reserve space for a bar they don't render.
             // Pinned by src/components/nav-shell/__tests__/shell-padding-markers.test.ts.
             data-mobile-tab-bar="1"
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur md:hidden"
+            // print:hidden — defensive against any printable page that
+            // renders the mobile shell. Screen-only navigation.
+            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur md:hidden print:hidden"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
             <ul className="mx-auto flex max-w-md items-stretch justify-around">

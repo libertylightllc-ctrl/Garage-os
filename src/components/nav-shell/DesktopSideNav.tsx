@@ -48,7 +48,9 @@ export function DesktopSideNav({
             // page depends on it staying absent from their DOM.
             // Pinned by src/components/nav-shell/__tests__/shell-padding-markers.test.ts.
             data-app-shell="1"
-            className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-border bg-surface md:flex"
+            // print:hidden — defensive against printable pages that
+            // render the desktop shell. Screen-only navigation.
+            className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-border bg-surface md:flex print:hidden"
         >
             {/* Brand block */}
             <div className="flex items-center gap-2 border-b border-border px-4 py-4">

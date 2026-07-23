@@ -22,6 +22,7 @@ import {
   VALUABLES_OPTIONS,
 } from "@/lib/jobcard-fields";
 import { requireAdvisor } from "@/lib/action-guards";
+import { clampPriority } from "@/lib/priority";
 
 
 function buildQuery(params: Record<string, string>): string {
@@ -286,6 +287,26 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
     assignedToId = tech?.id ?? null;
   }
 
+  // Queue priority — clamped to 0/1/2 via the same helper the setPriorityAction
+  // uses on /advisor/jobs/[id]. Blank input coerces to 0 (normal), which also
+  // matches JobCard.priority @default(0) — leaving the picker untouched is a
+  // no-op.
+  const priority = clampPriority(Number(get("priority") || 0));
+
+  // Bay — must be in this garage. Unknown/blank → null (no bay), matching
+  // today's default. No occupancy check at intake by design: setBayAction on
+  // /advisor/jobs/[id] is also loose, and enforcing it in only one place
+  // would leak the invariant.
+  const bayRaw = get("bayId");
+  let bayId: string | null = null;
+  if (bayRaw) {
+    const bay = await prisma.bay.findFirst({
+      where: { id: bayRaw, garageId: user.garageId },
+      select: { id: true },
+    });
+    bayId = bay?.id ?? null;
+  }
+
   const jobId = await prisma.$transaction(async (tx) => {
     if (vehicleId) {
       // Repeat / sold-vehicle path: confirm it's ours; keep details fresh.
@@ -331,6 +352,8 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         advisorId: user.id,
         status: "ARRIVED",
         assignedToId,
+        priority,
+        bayId,
         number: g.jobSeq,
         mileageIn,
         oilType,

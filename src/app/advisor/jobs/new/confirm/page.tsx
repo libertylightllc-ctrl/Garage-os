@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAnyRole } from "@/lib/guard";
+import { prisma } from "@/lib/prisma";
 import { createCustomerVehicleJobAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { getLocale, getT } from "@/i18n/server";
@@ -65,9 +66,25 @@ function CheckboxGroup({
 }
 
 export default async function ReceptionForm({ searchParams }: { searchParams: Promise<SP> }) {
-  await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
+  // Optional-assignment picker data — techs + bays scoped to this garage.
+  // Empty results collapse each picker to its "unassigned" / "no bay" option
+  // only, which is the same as leaving the field untouched (no schema
+  // change, no visual glitch on a garage with 0 bays).
+  const [techs, bays] = await Promise.all([
+    prisma.user.findMany({
+      where: { garageId: session.user.garageId, role: "TECH" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.bay.findMany({
+      where: { garageId: session.user.garageId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
   const dictLabels = {
     start: t("dictateStart"),
     stop: t("dictateStop"),
@@ -139,7 +156,6 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
 
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
         <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
-        <input type="hidden" name="assignedToId" defaultValue={sp.assignedToId ?? ""} />
         <input type="hidden" name="via" defaultValue={via} />
 
         {/* Customer */}
@@ -273,6 +289,52 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <legend className="px-1 text-sm font-medium">{t("secValuables")}</legend>
           <CheckboxGroup name="valuables" options={VALUABLES_OPTIONS} prefix="val" t={t} />
           <DictateInput locale={locale} labels={dictLabels} name="valuablesNote" placeholder={t("valuablesNoteLabel")} className={FIELD} />
+        </fieldset>
+
+        {/* Assignment (optional). Priority / technician / bay all default
+            to blank — blank behaves exactly as today: no assigned tech
+            (drops into the shared pool for anyone to claim), no bay, and
+            priority 0 (normal). Any of the three can be set later on
+            /advisor/jobs/[id]. Picker shape matches the setters there so
+            an advisor sees the same UI in both places. */}
+        <fieldset className="flex flex-col gap-2 rounded-xl border border-border p-3">
+          <legend className="px-1 text-sm font-medium">{t("secAssignment")}</legend>
+          <label className="text-xs text-text-mute">
+            {t("priorityLabel")}
+            <select name="priority" defaultValue="0" className={FIELD}>
+              <option value="0">{t("prNormal")}</option>
+              <option value="1">{t("prUrgent")}</option>
+              <option value="2">{t("prEmergency")}</option>
+            </select>
+          </label>
+          <label className="text-xs text-text-mute">
+            {t("technicianLabel")}
+            <select
+              name="assignedToId"
+              defaultValue={sp.assignedToId ?? ""}
+              className={FIELD}
+            >
+              <option value="">{t("unassigned")}</option>
+              {techs.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {bays.length > 0 ? (
+            <label className="text-xs text-text-mute">
+              {t("bayLabel")}
+              <select name="bayId" defaultValue="" className={FIELD}>
+                <option value="">{t("noBay")}</option>
+                {bays.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </fieldset>
 
         {/* Consent — only relevant on the Moulkia OCR path (extracting from a photo) */}

@@ -75,6 +75,7 @@ async function cleanup() {
   await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
   await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });
+  await prisma.bay.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.user.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
 }
@@ -99,6 +100,47 @@ describe("hotfix — owner can submit the reception form", () => {
     const to = await call(createCustomerVehicleJobAction, receptionForm());
     expect(to).toMatch(/\/advisor\/jobs\//);
     expect(await prisma.jobCard.count({ where: { garageId: gA } })).toBe(1);
+  });
+
+  it("blank priority/tech/bay land as defaults (0 / null / null)", async () => {
+    // The regression guard: leaving the new intake pickers untouched
+    // must behave exactly as it did before they existed — priority 0,
+    // no assigned tech, no bay. If this fails, the blank case broke.
+    mockAuth.mockResolvedValue(as("OWNER"));
+    await call(createCustomerVehicleJobAction, receptionForm());
+    const job = await prisma.jobCard.findFirst({ where: { garageId: gA } });
+    expect(job?.priority).toBe(0);
+    expect(job?.assignedToId).toBeNull();
+    expect(job?.bayId).toBeNull();
+  });
+
+  it("priority + tech + bay are persisted when set at intake", async () => {
+    mockAuth.mockResolvedValue(as("OWNER"));
+    const techId = P + "u-tech"; // seeded by setup()
+    const bay = await prisma.bay.create({
+      data: { garageId: gA, name: "Bay-" + Math.random().toString(36).slice(2, 6) },
+      select: { id: true },
+    });
+    const fd = receptionForm();
+    fd.set("priority", "1");
+    fd.set("assignedToId", techId);
+    fd.set("bayId", bay.id);
+    await call(createCustomerVehicleJobAction, fd);
+    const job = await prisma.jobCard.findFirst({ where: { garageId: gA } });
+    expect(job?.priority).toBe(1);
+    expect(job?.assignedToId).toBe(techId);
+    expect(job?.bayId).toBe(bay.id);
+  });
+
+  it("bogus tech / bay IDs resolve to null (no cross-garage leak)", async () => {
+    mockAuth.mockResolvedValue(as("OWNER"));
+    const fd = receptionForm();
+    fd.set("assignedToId", "does-not-exist");
+    fd.set("bayId", "does-not-exist");
+    await call(createCustomerVehicleJobAction, fd);
+    const job = await prisma.jobCard.findFirst({ where: { garageId: gA } });
+    expect(job?.assignedToId).toBeNull();
+    expect(job?.bayId).toBeNull();
   });
 
   it("TECH and CASHIER still rejected", async () => {

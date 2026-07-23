@@ -152,7 +152,15 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="ADVISOR" active="jobs"/>
       <div>
-        <div className="flex items-start justify-between gap-3">
+        {/* pe-16 reserves room for the app-wide LangSwitcher (fixed end-3
+            top-3 in layout.tsx) so the print link isn't overlapped by the
+            EN/ع pill. Mirrors the same pattern in
+            src/components/marketing/marketing-home.tsx. Dropped on xl
+            where the switcher floats in the page margin instead of over
+            the header. See docs/LangSwitcher-followup.md for the
+            longer-term fix (move switcher into AppNav on authenticated
+            pages). */}
+        <div className="flex items-start justify-between gap-3 pe-16 xl:pe-0">
           <Link href="/advisor" className="text-sm text-text-mute hover:underline">
             {t("backActiveJobs")}
           </Link>

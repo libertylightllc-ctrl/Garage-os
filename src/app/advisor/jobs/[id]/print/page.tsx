@@ -11,6 +11,7 @@ import {
   EXTERIOR_OPTIONS,
   INTERIOR_OPTIONS,
   VALUABLES_OPTIONS,
+  formatJobNo,
 } from "@/lib/jobcard-fields";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +66,7 @@ function Cell({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded border border-zinc-800/40 p-2">
+    <div className="rounded border border-zinc-800/40 p-2 print:p-1">
       <div className="text-[10px] uppercase tracking-wide text-zinc-600">
         {label}
       </div>
@@ -113,8 +114,65 @@ export default async function JobCardPrint({
   // customer is used to signing.
   const tick = (on: boolean) => (on ? "☑" : "☐");
 
+  // ── Repeating page-header strip on overflow pages ─────────────────
+  //
+  // Requirement: when the job card spills onto a second page, the top
+  // of every page after the first must carry the identifier strip
+  //   JC-YYYY-NNNN · <plate> · Page 2 of 3
+  // so a stack of loose sheets stays associated with the right car.
+  //
+  // Approach: CSS Paged Media `@page` margin boxes with `@page :first`
+  // blanking. `counter(page)` / `counter(pages)` are real page counters,
+  // so "2 of 3" is dynamic — not hardcoded. Page 1 is explicitly blank.
+  //
+  // Browser support (verified 2026-07-23):
+  //   Chrome / Edge → ✅ full support since Chrome 85. THIS IS THE TARGET.
+  //   Firefox / Safari → ⚠️ partial; strip degrades to empty on those,
+  //     rest of the document is identical (acceptable degradation).
+  //
+  // RTL: emit @top-right for LTR, @top-left for RTL. Margin-box logical
+  // properties (`@top-end`) have thinner Chrome coverage than the
+  // physical variants, so we stick with physical + locale-swap. The
+  // `content:` counter chain works identically in both directions.
+  //
+  // Content interpolation: JC number + plate come from the row; both
+  // are safe to inline (JC-NNNN-NNNN is alphanumeric, plates are
+  // alphanumeric+space). If plates ever contain a `"` we'd need to
+  // escape — flagging here, not building for it yet.
+  const jobNo = formatJobNo(job.number, job.createdAt.getFullYear()) ??
+    `#${job.id.slice(-6)}`;
+  const stripPrefix = `${jobNo} · ${job.vehicle.plate}`;
+  const marginBox = locale === "ar" ? "@top-left" : "@top-right";
+  const pageOf = locale === "ar" ? " · صفحة " : " · Page ";
+  const pageOfBetween = locale === "ar" ? " من " : " of ";
+  // Strip styling: 11pt semibold near-black. Sized to sit at the same
+  // visual weight as the page-1 JC-number line (text-sm ≈ 11pt on A4).
+  // Colour `#111827` (Tailwind zinc-900) so a fax or a mono photocopy
+  // still reads it — the strip is the signature-page-to-job-card link,
+  // and #666 at 9pt (previous) faded into footnote territory. Err
+  // toward too prominent rather than too subtle.
+  const printCss = `
+    @page {
+      margin: 12mm;
+      ${marginBox} {
+        content: "${stripPrefix}${pageOf}" counter(page) "${pageOfBetween}" counter(pages);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 11pt;
+        font-weight: 600;
+        color: #111827;
+      }
+    }
+    @page :first {
+      ${marginBox} { content: ""; }
+    }
+  `;
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:min-h-0 print:bg-white print:p-0">
+      {/* Server-rendered @page CSS: repeating identifier strip on
+          overflow pages + tightened 12mm print margins. See the block
+          above for the full rationale and browser-support notes. */}
+      <style dangerouslySetInnerHTML={{ __html: printCss }} />
       {/* White paper card even on-screen so the preview reads like the
           document the customer will hold. Card chrome drops on print. */}
       <div className="rounded-xl border border-border bg-white p-6 text-zinc-900 shadow-sm dark:bg-white dark:shadow-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
@@ -148,8 +206,8 @@ export default async function JobCardPrint({
         {/* Customer + Check-in — bordered cells side by side. Customer
             gets 2/3 width because it holds name + phone + email; check-in
             takes 1/3. */}
-        <section className="mt-5 grid grid-cols-3 gap-2 break-inside-avoid">
-          <div className="col-span-2 rounded border border-zinc-800/40 p-2">
+        <section className="mt-5 grid grid-cols-3 gap-2 break-inside-avoid print:mt-3 print:gap-1.5">
+          <div className="col-span-2 rounded border border-zinc-800/40 p-2 print:p-1.5">
             <div className="text-[10px] uppercase tracking-wide text-zinc-600">
               {t("secCustomer")}
             </div>
@@ -159,7 +217,7 @@ export default async function JobCardPrint({
               <div className="text-sm text-zinc-700">{customer.email}</div>
             ) : null}
           </div>
-          <div className="rounded border border-zinc-800/40 p-2">
+          <div className="rounded border border-zinc-800/40 p-2 print:p-1.5">
             <div className="text-[10px] uppercase tracking-wide text-zinc-600">
               {t("checkInLabel")}
             </div>
@@ -168,9 +226,9 @@ export default async function JobCardPrint({
         </section>
 
         {/* Vehicle — 3-column grid of bordered cells, one per field. */}
-        <section className="mt-4 break-inside-avoid">
-          <h2 className="mb-1.5 text-sm font-semibold">{t("secVehicle")}</h2>
-          <div className="grid grid-cols-3 gap-2">
+        <section className="mt-4 break-inside-avoid print:mt-2.5">
+          <h2 className="mb-1.5 text-sm font-semibold print:mb-1">{t("secVehicle")}</h2>
+          <div className="grid grid-cols-3 gap-2 print:gap-1.5">
             <Cell label={t("make")} value={job.vehicle.make} />
             <Cell label={t("model")} value={job.vehicle.model} />
             <Cell label={t("yearLabel")} value={job.vehicle.year ?? "—"} />
@@ -206,8 +264,8 @@ export default async function JobCardPrint({
 
         {/* Complaint — one wide bordered box for the customer's own words. */}
         {job.complaint ? (
-          <section className="mt-4 break-inside-avoid">
-            <div className="rounded border border-zinc-800/40 p-2">
+          <section className="mt-4 break-inside-avoid print:mt-2.5">
+            <div className="rounded border border-zinc-800/40 p-2 print:p-1">
               <div className="text-[10px] uppercase tracking-wide text-zinc-600">
                 {t("secComplaint")}
               </div>
@@ -219,10 +277,10 @@ export default async function JobCardPrint({
         {/* Vehicle condition at check-in — TWO stacked bordered boxes
             (Exterior + Interior), each rendering every checkbox option
             whether ticked or not. This is the DISPUTE SHIELD. */}
-        <section className="mt-4 break-inside-avoid">
-          <h2 className="mb-1.5 text-sm font-semibold">{t("secCondition")}</h2>
-          <div className="grid grid-cols-1 gap-2">
-            <div className="rounded border border-zinc-800/40 p-2">
+        <section className="mt-4 break-inside-avoid print:mt-2.5">
+          <h2 className="mb-1.5 text-sm font-semibold print:mb-1">{t("secCondition")}</h2>
+          <div className="grid grid-cols-1 gap-2 print:gap-1.5">
+            <div className="rounded border border-zinc-800/40 p-2 print:p-1">
               <div className="text-[10px] uppercase tracking-wide text-zinc-600">
                 {t("exteriorLabel")}
               </div>
@@ -240,7 +298,7 @@ export default async function JobCardPrint({
                 </p>
               ) : null}
             </div>
-            <div className="rounded border border-zinc-800/40 p-2">
+            <div className="rounded border border-zinc-800/40 p-2 print:p-1">
               <div className="text-[10px] uppercase tracking-wide text-zinc-600">
                 {t("interiorLabel")}
               </div>
@@ -263,8 +321,8 @@ export default async function JobCardPrint({
 
         {/* Valuables — bordered box; even NONE renders visible so an
             unticked form can be spotted at a glance. */}
-        <section className="mt-4 break-inside-avoid">
-          <div className="rounded border border-zinc-800/40 p-2">
+        <section className="mt-4 break-inside-avoid print:mt-2.5">
+          <div className="rounded border border-zinc-800/40 p-2 print:p-1">
             <div className="text-[10px] uppercase tracking-wide text-zinc-600">
               {t("secValuables")}
             </div>
@@ -289,7 +347,7 @@ export default async function JobCardPrint({
             manual / repeat intake this line is skipped so the paper
             isn't cluttered with an irrelevant stamp. */}
         {job.moulkiaConsentAt ? (
-          <p className="mt-3 text-xs text-zinc-600">
+          <p className="mt-3 text-xs text-zinc-600 print:mt-2">
             {t("moulkiaConsentRecorded")}:{" "}
             <span className="tabular-nums">
               {fmtDateTime(job.moulkiaConsentAt, locale, tz)}
@@ -300,31 +358,34 @@ export default async function JobCardPrint({
         {/* Fine print — dispute shield explanation. Kept single-
             paragraph and short so it fits above the signature block
             on A4 without hyphenation. */}
-        <p className="mt-4 text-xs text-zinc-700">{t("disputeShieldNote")}</p>
+        <p className="mt-4 text-xs text-zinc-700 print:mt-2">{t("disputeShieldNote")}</p>
 
         {/* Signature block — two bordered cells side by side. Each cell
             has a ruled line for the signature and a shorter ruled line
-            for the date. The customer writes both in ink. */}
-        <section className="mt-4 grid grid-cols-2 gap-3 break-inside-avoid">
-          <div className="rounded border border-zinc-800/40 p-3">
+            for the date. The customer writes both in ink. `break-inside
+            -avoid` keeps both cells together on the same page so a
+            customer never signs a stray sheet with just their name
+            and no context. */}
+        <section className="mt-4 grid grid-cols-2 gap-3 break-inside-avoid print:mt-2.5 print:gap-2">
+          <div className="rounded border border-zinc-800/40 p-3 print:p-2">
             <div className="text-[10px] uppercase tracking-wide text-zinc-600">
               {t("signatureCustomer")}
             </div>
-            <div className="mt-6 border-t border-zinc-800/60" />
-            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600">
+            <div className="mt-6 border-t border-zinc-800/60 print:mt-4" />
+            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600 print:mt-2">
               {t("signatureDate")}
             </div>
-            <div className="mt-4 border-t border-zinc-800/40" />
+            <div className="mt-4 border-t border-zinc-800/40 print:mt-3" />
           </div>
-          <div className="rounded border border-zinc-800/40 p-3">
+          <div className="rounded border border-zinc-800/40 p-3 print:p-2">
             <div className="text-[10px] uppercase tracking-wide text-zinc-600">
               {t("signatureAdvisor")}
             </div>
-            <div className="mt-6 border-t border-zinc-800/60" />
-            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600">
+            <div className="mt-6 border-t border-zinc-800/60 print:mt-4" />
+            <div className="mt-3 text-[10px] uppercase tracking-wide text-zinc-600 print:mt-2">
               {t("signatureDate")}
             </div>
-            <div className="mt-4 border-t border-zinc-800/40" />
+            <div className="mt-4 border-t border-zinc-800/40 print:mt-3" />
           </div>
         </section>
       </div>

@@ -5,10 +5,17 @@ import { AppNav } from "@/components/app-nav";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
-import { createPoFromEstimateAction } from "@/app/actions/purchasing";
+import {
+    createPoFromEstimateAction,
+    autoCreatePartsFromEstimateLinesAction,
+} from "@/app/actions/purchasing";
 import {
     pickEstimateForConversion,
     filterConvertibleLines,
+    slugifyToSku,
+    nextAutoSku,
+    withCollisionSuffix,
+    findNormalizedMatch,
 } from "@/lib/estimate-to-po";
 import { formatJobNo } from "@/lib/jobcard-fields";
 
@@ -77,6 +84,11 @@ export default async function ConvertFromEstimatePage({
                                       declined: true,
                                       description: true,
                                       qty: true,
+                                      // unitPrice — needed to default
+                                      // Part.price in the review form.
+                                      // Customer already approved this
+                                      // number so it's a safe default.
+                                      unitPrice: true,
                                       part: {
                                           select: {
                                               name: true,
@@ -115,6 +127,21 @@ export default async function ConvertFromEstimatePage({
               where: { garageId, active: true },
               orderBy: { name: "asc" },
               select: { id: true, name: true },
+          })
+        : [];
+
+    // Load existing garage parts for the "link to existing" suggestion.
+    // The review form calls findNormalizedMatch against this set per row
+    // to render "Looks like your existing X — link, or create new?".
+    // Only fetched when there's actually a review section to render
+    // (skippedNoPartId > 0) — no need to load 2000 parts on every render.
+    const hasAutoCreateCandidates =
+        (filtered?.skippedNoPartId.length ?? 0) > 0;
+    const existingParts = hasAutoCreateCandidates
+        ? await prisma.part.findMany({
+              where: { garageId, active: true },
+              select: { id: true, sku: true, name: true },
+              orderBy: { name: "asc" },
           })
         : [];
 
@@ -318,36 +345,6 @@ export default async function ConvertFromEstimatePage({
                                     })}
                                 </div>
 
-                                {/* Skipped groups — visible but muted. Tell
-                                    the owner exactly what fell out and why,
-                                    so they can go fix the underlying data
-                                    (add to inventory, uncheck decline). */}
-                                {filtered.skippedNoPartId.length > 0 ? (
-                                    <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
-                                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide">
-                                            {t("skippedNoInventoryHeader").replace(
-                                                "{count}",
-                                                String(filtered.skippedNoPartId.length),
-                                            )}
-                                        </p>
-                                        <ul className="ms-4 list-disc space-y-0.5">
-                                            {filtered.skippedNoPartId.map((l) => (
-                                                <li key={l.id}>
-                                                    {l.description}{" "}
-                                                    <span className="text-xs">
-                                                        — {t("skippedNoInventoryHint")}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <Link
-                                            href="/owner/inventory"
-                                            className="mt-1 inline-block text-xs font-medium underline"
-                                        >
-                                            {t("goToInventory")}
-                                        </Link>
-                                    </div>
-                                ) : null}
                                 {filtered.skippedDeclined.length > 0 ? (
                                     <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
                                         <p className="mb-1 text-xs font-semibold uppercase tracking-wide">
@@ -427,6 +424,145 @@ export default async function ConvertFromEstimatePage({
                                 ) : null}
                             </form>
                         )}
+
+                        {/* Free-text lines review — SIBLING of the PO form,
+                            not a descendant. Nested <form>s are invalid HTML
+                            and produced the hydration warning AR flagged as
+                            "2 Issues". Rendering here also makes the review
+                            reachable when there are NO convertible lines
+                            (previously it was hidden inside the convertible
+                            branch). autoCreatePartsFromEstimateLinesAction
+                            back-fills EstimateLine.partId only. */}
+                        {filtered.skippedNoPartId.length > 0 ? (
+                            <form
+                                action={autoCreatePartsFromEstimateLinesAction}
+                                className="rounded-lg border border-warning-500/40 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10"
+                            >
+                                <input type="hidden" name="jobCardId" value={jobCard.id} />
+                                <input
+                                    type="hidden"
+                                    name="estimateId"
+                                    value={estimateForPreview!.id}
+                                />
+                                <p className="mb-3 text-sm font-semibold text-warning-700 dark:text-warning-500">
+                                    {t("autoCreateHeader").replace(
+                                        "{count}",
+                                        String(filtered.skippedNoPartId.length),
+                                    )}
+                                </p>
+                                <p className="mb-4 text-xs text-warning-700 dark:text-warning-500">
+                                    {t("autoCreateHint")}
+                                </p>
+                                <ul className="flex flex-col gap-3">
+                                    {(() => {
+                                        const takenForDefaults = new Set(
+                                            existingParts.map((p) => p.sku),
+                                        );
+                                        return filtered.skippedNoPartId.map((l) => {
+                                            const match = findNormalizedMatch(
+                                                l.description,
+                                                existingParts,
+                                            );
+                                            const slug = slugifyToSku(l.description);
+                                            const defaultSku = slug
+                                                ? withCollisionSuffix(slug, takenForDefaults)
+                                                : nextAutoSku(takenForDefaults);
+                                            takenForDefaults.add(defaultSku);
+                                            return (
+                                                <li
+                                                    key={l.id}
+                                                    className="rounded-lg border border-border bg-surface p-3"
+                                                >
+                                                    <div className="mb-2 text-sm font-medium">
+                                                        {l.description}
+                                                    </div>
+                                                    {match ? (
+                                                        <label className="mb-2 flex items-start gap-2 rounded border border-info-500/40 bg-info-50 p-2 text-xs text-info-700 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-500">
+                                                            <input
+                                                                type="checkbox"
+                                                                name={`linkTo_${l.id}`}
+                                                                value={match.id}
+                                                                className="mt-0.5"
+                                                                defaultChecked
+                                                            />
+                                                            <span>
+                                                                {t("autoCreateLinkExisting")
+                                                                    .replace("{name}", match.name)
+                                                                    .replace("{sku}", match.sku)}
+                                                            </span>
+                                                        </label>
+                                                    ) : null}
+                                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                                {t("colSku")}
+                                                            </span>
+                                                            <input
+                                                                name={`sku_${l.id}`}
+                                                                defaultValue={defaultSku}
+                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
+                                                            />
+                                                        </label>
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                                {t("colName")}
+                                                            </span>
+                                                            <input
+                                                                name={`name_${l.id}`}
+                                                                defaultValue={l.description}
+                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm"
+                                                            />
+                                                        </label>
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                                {t("colCost")}
+                                                            </span>
+                                                            <input
+                                                                name={`cost_${l.id}`}
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                defaultValue="0"
+                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
+                                                            />
+                                                            <span className="text-[10px] text-muted-foreground">
+                                                                {t("autoCreateCostHint")}
+                                                            </span>
+                                                        </label>
+                                                        <label className="flex flex-col gap-1">
+                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                                {t("colPrice")}
+                                                            </span>
+                                                            <input
+                                                                name={`price_${l.id}`}
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                defaultValue={Number(
+                                                                    l.unitPrice,
+                                                                ).toFixed(2)}
+                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </li>
+                                            );
+                                        });
+                                    })()}
+                                </ul>
+                                <div className="mt-4 flex flex-wrap items-center gap-3">
+                                    <Button type="submit">
+                                        {t("autoCreateSubmit")}
+                                    </Button>
+                                    <Link
+                                        href="/owner/inventory"
+                                        className="text-xs font-medium text-muted-foreground underline"
+                                    >
+                                        {t("goToInventory")}
+                                    </Link>
+                                </div>
+                            </form>
+                        ) : null}
                     </>
                 ) : null}
             </main>

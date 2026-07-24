@@ -40,6 +40,21 @@ export default async function OwnerInventoryPage({
     orderBy: [{ name: "asc" }],
     skip: partsWindow.skip,
     take: partsWindow.take,
+    // `autoCreatedFromLineId` — non-null on Parts spun out of the
+    // Estimate → PO auto-create review flow. Renders an "auto" chip
+    // so the owner can spot rows that came from a free-text estimate
+    // line (vs. hand-typed) and clean them up later if the shape's
+    // wrong. See docs/Estimate-to-PO-Spec.md.
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      cost: true,
+      price: true,
+      qtyOnHand: true,
+      reorderLevel: true,
+      autoCreatedFromLineId: true,
+    },
   });
   const partsSearchParams = (() => {
     const p = new URLSearchParams();
@@ -139,6 +154,11 @@ export default async function OwnerInventoryPage({
                       <Link href={`/owner/inventory/${p.id}`} className="hover:underline">
                         {p.name}
                       </Link>
+                      {p.autoCreatedFromLineId ? (
+                        <span className="ms-2 rounded-full bg-info-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-info-700 dark:bg-info-500/10 dark:text-info-500">
+                          {t("partAutoBadge")}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {money(p.cost)}

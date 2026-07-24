@@ -561,6 +561,11 @@ model EstimateLine {
   vatRate     Decimal  @default(0.05) @db.Decimal(5, 4)
   declined    Boolean  @default(false) // customer chose to skip this item
 
+  // Estimate → PO auto-create back-relation (2026-07-24). Non-null on
+  // the Part row when this line spawned it via the from-estimate flow.
+  // See Part.autoCreatedFromLineId for the design.
+  autoCreatedPart Part? @relation("PartAutoCreatedFromLine")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -695,6 +700,18 @@ model Part {
   // reference is never left dangling.
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  // Estimate → PO auto-create (2026-07-24). Optional back-reference to
+  // the free-text EstimateLine this Part was auto-created from. When
+  // set, the inventory table shows an "auto" badge so the owner can
+  // spot Parts that were spawned by the from-estimate flow and may
+  // still have `cost = 0` waiting for a supplier price. Nullable +
+  // @unique: at most one Part per source line (re-running the flow on
+  // the same line links to the existing Part instead of duplicating).
+  // Kept nullable rather than a required boolean so the audit is
+  // lossless — "which line spawned this?" is answerable in one query.
+  autoCreatedFromLineId String?       @unique
+  autoCreatedFromLine   EstimateLine? @relation("PartAutoCreatedFromLine", fields: [autoCreatedFromLineId], references: [id])
 
   movements          PartMovement[]
   estimateLines      EstimateLine[]

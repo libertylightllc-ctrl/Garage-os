@@ -108,6 +108,7 @@ const en = {
   openingStock: "Opening stock",
   noPartsYet: "No parts yet. Add your first part above.",
   lowStockTag: "Low",
+  partAutoBadge: "Auto",
   savePart: "Save part",
   // inventory 1b — edit part + manual stock adjustment
   editPart: "Edit part",
@@ -228,6 +229,17 @@ const en = {
   skippedNoInventoryHeader: "{count} part(s) skipped — no inventory link",
   skippedNoInventoryHint: "add to inventory first",
   goToInventory: "Go to inventory →",
+  autoCreateHeader: "{count} free-text part(s) — add to inventory to convert",
+  autoCreateHint:
+      "These estimate lines aren't linked to your catalog yet. Confirm each row and we'll create the Part, then include it in the PO. The estimate line is untouched — only the inventory link is added.",
+  autoCreateLinkExisting:
+      "Looks like your existing “{name}” ({sku}) — link, or uncheck to create a new Part.",
+  autoCreateCostHint: "Optional — fill later on the draft PO if unknown.",
+  autoCreateSubmit: "Add these to inventory",
+  colSku: "SKU",
+  colName: "Name",
+  colCost: "Cost",
+  colPrice: "Price",
   skippedDeclinedHeader: "{count} part(s) declined by the customer",
   createDraftPoFromEstimate: "Create draft PO",
   approxTotal: "Approx. total",
@@ -1333,6 +1345,7 @@ const ar: typeof en = {
   openingStock: "المخزون الافتتاحي",
   noPartsYet: "لا توجد قطع بعد. أضف أول قطعة أعلاه.",
   lowStockTag: "منخفض",
+  partAutoBadge: "تلقائي",
   savePart: "حفظ القطعة",
   // inventory 1b — edit part + manual stock adjustment
   editPart: "تعديل القطعة",
@@ -1453,6 +1466,17 @@ const ar: typeof en = {
   skippedNoInventoryHeader: "{count} قطعة متجاهَلة — لا يوجد ربط بالمخزون",
   skippedNoInventoryHint: "أضفها إلى المخزون أولاً",
   goToInventory: "الذهاب إلى المخزون →",
+  autoCreateHeader: "{count} قطعة كنص حر — أضفها إلى المخزون للتحويل",
+  autoCreateHint:
+      "بنود عرض السعر هذه غير مربوطة بكتالوجك بعد. أكِّد كل صف وسننشئ القطعة ثم ندرجها في أمر الشراء. لن يُعدَّل بند عرض السعر — فقط يُضاف الربط بالمخزون.",
+  autoCreateLinkExisting:
+      "يبدو أنها القطعة الموجودة لديك «{name}» ({sku}) — اربطها، أو ألغِ التحديد لإنشاء قطعة جديدة.",
+  autoCreateCostHint: "اختياري — يمكن ملؤه لاحقاً في مسودة أمر الشراء إذا كان غير معروف.",
+  autoCreateSubmit: "إضافة هذه إلى المخزون",
+  colSku: "الرمز",
+  colName: "الاسم",
+  colCost: "التكلفة",
+  colPrice: "السعر",
   skippedDeclinedHeader: "{count} قطعة رفضها العميل",
   createDraftPoFromEstimate: "إنشاء مسودة أمر شراء",
   approxTotal: "إجمالي تقريبي",

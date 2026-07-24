@@ -4,7 +4,6 @@ import { formatInvoiceNo } from "@/lib/billing";
 import { verifyToken } from "@/lib/tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
-import { GarageBrand } from "@/components/garage-brand";
 import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
@@ -39,19 +38,16 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
       <div className="flex flex-col items-start gap-3">
-        {/* Garage's own brand — the priority site for this feature
-            (the shop asked specifically for their logo on the customer
-            invoice link). Scoped by construction: inv.garage is the
-            invoice's parent garage joined by id, so a different
-            garage's logoUrl can never appear here. */}
-        <GarageBrand size="full" logoUrl={inv.garage.logoUrl} />
-        {/* Standardized document header. INV-… + JC-… + vehicle + plate. */}
+        {/* Customer-facing document — pass raw logoUrl. When null, the
+            header falls back to text-only garage name; we deliberately
+            do NOT show the GarageOS mark on a customer's invoice. */}
         <DocumentHeader
           title={t("yourInvoice")}
           documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           jobCard={inv.jobCard}
           vehicle={inv.jobCard.vehicle}
           garage={inv.garage}
+          logoUrl={inv.garage.logoUrl}
         />
       </div>
 

@@ -100,7 +100,7 @@ export default async function JobCardPrint({
     where: { id, garageId: session.user.garageId },
     include: {
       vehicle: { include: { customer: true } },
-      garage: { select: { name: true, trn: true, country: true } },
+      garage: { select: { name: true, trn: true, country: true, logoUrl: true } },
     },
   });
   if (!job) notFound();
@@ -188,11 +188,15 @@ export default async function JobCardPrint({
             DocumentHeader (job card / estimate / invoice / delivery / PO
             all share the same stacked shape). See the component for the
             per-doc identity ordering. */}
+        {/* Internal doc: fall back to the GarageOS mark when the shop
+            hasn't uploaded a logo. Customer sees a mark either way; the
+            no-logo case would leave the header lopsided. */}
         <DocumentHeader
           title={t("jobCardPrintTitle")}
           jobCard={job}
           vehicle={job.vehicle}
           garage={garage}
+          logoUrl={garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
 
         {/* Old header markup lived here; format is now pinned in the

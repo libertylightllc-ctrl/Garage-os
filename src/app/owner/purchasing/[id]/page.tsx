@@ -36,7 +36,7 @@ export default async function PurchaseOrderDetailPage({
   const { error } = await searchParams;
   const garage = await prisma.garage.findUnique({
     where: { id: session.user.garageId },
-    select: { name: true, trn: true, country: true },
+    select: { name: true, trn: true, country: true, logoUrl: true },
   });
   const tz = countryToTimeZone(garage?.country ?? "UAE");
 
@@ -115,6 +115,7 @@ export default async function PurchaseOrderDetailPage({
                 trn: garage?.trn ?? null,
                 country: garage?.country ?? "UAE",
               }}
+              logoUrl={garage?.logoUrl ?? "/brand/garageos-logo.png"}
             />
           </div>
           {/* Status pill + summary caption below the header. Status

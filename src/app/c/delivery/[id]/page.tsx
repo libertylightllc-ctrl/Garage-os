@@ -4,7 +4,6 @@ import { confirmCollectionPublic } from "@/app/actions/delivery";
 import { verifyToken } from "@/lib/tokens";
 import { getT } from "@/i18n/server";
 import { DocumentHeader } from "@/components/document-header";
-import { GarageBrand } from "@/components/garage-brand";
 
 export const dynamic ="force-dynamic";
 
@@ -29,19 +28,15 @@ export default async function CustomerCollection({
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
       <div className="flex flex-col items-start gap-3">
-        {/* Garage's own brand — matches the other customer-facing docs
-            (/c/estimate, /c/invoice). Scoped via job.garage (single
-            findUnique above), can never render another garage's logo. */}
-        <GarageBrand size="full" logoUrl={job.garage.logoUrl} />
-        {/* Standardized document header. "Delivery" title matches the
-            document family (job card / estimate / invoice / delivery /
-            PO all share the same stacked shape). The confirm-collection
-            action stays below as its own affordance. */}
+        {/* Customer-facing document — pass raw logoUrl. When null, the
+            header falls back to text-only garage name; we deliberately
+            do NOT show the GarageOS mark on a customer's document. */}
         <DocumentHeader
           title={t("documentDelivery")}
           jobCard={job}
           vehicle={job.vehicle}
           garage={job.garage}
+          logoUrl={job.garage.logoUrl}
         />
       </div>
 

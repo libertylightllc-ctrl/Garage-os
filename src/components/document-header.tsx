@@ -38,6 +38,7 @@ export function DocumentHeader({
     vehicle,
     supplier,
     garage,
+    logoUrl,
 }: {
     /** Localized document type — "Job card", "Estimate", "Invoice", etc. */
     title: string;
@@ -60,6 +61,20 @@ export function DocumentHeader({
     } | null;
     /** Garage identity block on the end side. */
     garage: { name: string; trn: string | null; country: string };
+    /**
+     * Garage logo shown on the end side above the garage name. Callers
+     * decide the fallback:
+     *   Internal pages (advisor / cashier / owner) — pass
+     *     `garage.logoUrl ?? "/brand/garageos-logo.png"` so the doc
+     *     always carries a mark even when the shop hasn't uploaded.
+     *   Customer-facing /c/* pages — pass just `garage.logoUrl`. When
+     *     null the block falls back to text-only garage name so a
+     *     customer never sees the GarageOS mark on THEIR invoice —
+     *     that would be our brand on their document.
+     * `loading="eager" fetchPriority="high"` because the print dialog
+     * can fire before a lazy-loaded image resolves, printing blank.
+     */
+    logoUrl?: string | null;
 }) {
     return (
         <header className="flex items-start justify-between gap-4">
@@ -103,10 +118,21 @@ export function DocumentHeader({
                     </div>
                 ) : null}
             </div>
-            <div className="text-end text-sm">
-                <div className="font-medium">{garage.name}</div>
-                <div className="text-zinc-600">TRN: {garage.trn ?? "—"}</div>
-                <div className="text-zinc-600">{garage.country}</div>
+            <div className="flex flex-col items-end gap-1 text-end text-sm">
+                {logoUrl ? (
+                    <img
+                        src={logoUrl}
+                        alt=""
+                        loading="eager"
+                        fetchPriority="high"
+                        className="h-10 w-auto max-w-[140px] object-contain"
+                    />
+                ) : null}
+                <div>
+                    <div className="font-medium">{garage.name}</div>
+                    <div className="text-zinc-600">TRN: {garage.trn ?? "—"}</div>
+                    <div className="text-zinc-600">{garage.country}</div>
+                </div>
             </div>
         </header>
     );

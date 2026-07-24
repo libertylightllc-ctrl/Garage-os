@@ -55,7 +55,7 @@ export default async function EstimatePreview({
       jobCard: {
         include: {
           vehicle: { include: { customer: true } },
-          garage: { select: { name: true, trn: true, country: true } },
+          garage: { select: { name: true, trn: true, country: true, logoUrl: true } },
         },
       },
     },
@@ -89,11 +89,14 @@ export default async function EstimatePreview({
             surface (job card, estimate, invoice, delivery, PO). Estimate
             has no gapless per-garage number so we identify by parent JC
             rather than invent an EST-… slug. */}
+        {/* Internal preview of the customer-facing estimate — fall
+            back to the GarageOS mark when the shop hasn't uploaded. */}
         <DocumentHeader
           title={t("estimate")}
           jobCard={est.jobCard}
           vehicle={est.jobCard.vehicle}
           garage={garage}
+          logoUrl={garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
 
         <div className="mt-6 flex justify-between text-sm">

@@ -29,7 +29,6 @@ import { workflowStage } from "@/lib/workflow-stage";
 import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
-import { GarageBrand } from "@/components/garage-brand";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 import { CatalogPartSelect } from "@/components/catalog-part-select";
 import { stockOptionSuffix } from "@/lib/stock-label";
@@ -210,16 +209,16 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
           {jobSide ? t("backJob") : t("accounts")}
         </Link>
-        {/* Garage's own brand. est.jobCard.garage was loaded with the
-            same garageId scope already enforced by the findFirst above
-            (where: jobCard: { garageId: session.user.garageId }), so
-            there's no cross-tenant logo risk here. */}
-        <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} className="my-2" />
+        {/* Logo lives inside DocumentHeader's garage block now — see
+            document-header.tsx. The standalone <GarageBrand> above the
+            header is removed; the doc reads as one shape across every
+            surface. Internal doc: fall back to the GarageOS mark. */}
         <DocumentHeader
           title={t("estimate")}
           jobCard={est.jobCard}
           vehicle={est.jobCard.vehicle}
           garage={est.jobCard.garage}
+          logoUrl={est.jobCard.garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
         {/* Status + pricing-by-advisor moved below the header so the
             standardized stacked shape stays clean. Status stayed inline

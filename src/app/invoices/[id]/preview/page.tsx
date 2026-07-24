@@ -95,12 +95,15 @@ export default async function InvoicePreview({
             on the start side, garage identity on the end side. Same
             shape as /invoices/[id] so the cashier preview reads as a
             faithful render of the invoice they're about to send. */}
+        {/* Cashier's preview of the customer-facing invoice. Internal
+            surface — fall back to the GarageOS mark. */}
         <DocumentHeader
           title={t("taxInvoice")}
           documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           jobCard={inv.jobCard}
           vehicle={inv.jobCard.vehicle}
           garage={inv.garage}
+          logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
 
         <div className="mt-6 flex justify-between text-sm">

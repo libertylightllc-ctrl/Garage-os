@@ -6,7 +6,6 @@ import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
 import { Button } from "@/components/ui/button";
-import { GarageBrand } from "@/components/garage-brand";
 import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
@@ -45,17 +44,16 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-5 p-6">
       <div className="flex flex-col items-start gap-3">
-        {/* Garage's own brand. Scoped via est.jobCard.garage (joined
-            by id during the token lookup) — never another garage's. */}
-        <GarageBrand size="full" logoUrl={est.jobCard.garage.logoUrl} />
-        {/* Standardized document header. Customer-facing title uses
-            "Your estimate" so the reader immediately knows this is their
-            document. Same stacked shape as every other document. */}
+        {/* Customer-facing document — pass raw logoUrl. When null, the
+            header falls back to text-only garage name; we deliberately
+            do NOT show the GarageOS mark on a customer's document
+            because that's our brand, not theirs. */}
         <DocumentHeader
           title={t("yourEstimate")}
           jobCard={est.jobCard}
           vehicle={v}
           garage={est.jobCard.garage}
+          logoUrl={est.jobCard.garage.logoUrl}
         />
       </div>
 

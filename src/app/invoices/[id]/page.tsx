@@ -15,7 +15,6 @@ import {
   // on their own contextual surfaces.
 } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
-import { GarageBrand } from "@/components/garage-brand";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { DocumentHeader } from "@/components/document-header";
 import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
@@ -246,19 +245,18 @@ export default async function InvoiceView({
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start print:contents">
       <section className="flex min-w-0 flex-col gap-6 lg:col-span-2 print:contents">
 
-      {/* Garage's own brand. Already-scoped via the invoice's
-          parent garage relation; cannot show another garage's logo
-          because inv.garage is the joined-by-id record. */}
-      <GarageBrand size="full" logoUrl={inv.garage.logoUrl} className="mb-2" />
-      {/* Standardized document header — shared across every printable
+      {/* Logo lives inside DocumentHeader now — see document-header.tsx.
+          Standardized document header shared across every printable
           surface. Vehicle line uses the invoice's own jobCard.vehicle
-          so the header's plate matches the customer's car exactly. */}
+          so the header's plate matches the customer's car exactly.
+          Internal doc: fall back to the GarageOS mark. */}
       <DocumentHeader
         title={t("taxInvoice")}
         documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
         jobCard={inv.jobCard}
         vehicle={inv.jobCard.vehicle}
         garage={inv.garage}
+        logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
       />
       {/* Status pill row below the header — the four billing states
           (overdue / partial / paid) stay visible but drop out of the

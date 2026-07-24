@@ -83,12 +83,16 @@ export default async function InvoiceReceipt({
           reads as part of the same document family. Border stays on
           the wrapper below the header. */}
       <div className="border-b border-border pb-4">
+        {/* Print-receipt route. Auto-fires the Ctrl+P dialog on load
+            so the eager-loaded logo prop matters here more than most
+            surfaces — a lazy logo would print blank on the first pass. */}
         <DocumentHeader
           title={t("invoiceReceiptTitle")}
           documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           jobCard={inv.jobCard}
           vehicle={inv.jobCard.vehicle}
           garage={inv.garage}
+          logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
       </div>
 

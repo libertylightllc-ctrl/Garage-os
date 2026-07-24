@@ -133,6 +133,7 @@ Specs in `/docs` (read before deciding):
 - Test against the deployment target. Vercel is UTC; Windows dev is Asia/Dubai. ANY change that renders a date or time must be verified under `TZ=UTC npm run dev` before declaring green.
 - Investigate → build → human click. A report is not a build; a build is not verified. Features touching money, dates, guards, or the intake form ship only after AR has clicked the actual surface.
 - Print surfaces: audit the ROOT LAYOUT and all parent layouts for fixed/floating elements before declaring a print page green. The page's own CSS is not the whole render tree — a `fixed`/`sticky` element in `src/app/layout.tsx` (or any nested layout) will paint on every printed page unless it carries `print:hidden`.
+- Fixture scripts must allocate `JobCard.number` via the `Garage.jobSeq` increment (via the shared `scripts/lib/next-job-number.ts` helper), never `MAX(number)+1`. Hand-rolled allocation desyncs the counter and breaks intake with a `Unique constraint failed on ("garageId", number)` on the next real POST. Same failure has hit twice from the same cause (`60514bf`, 2026-07-24).
 
 ## Dev DB vs Prod DB — separated (2026-06-27)
 

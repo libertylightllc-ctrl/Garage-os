@@ -14,6 +14,7 @@ if (fs.existsSync(envLocal)) {
 
 async function main() {
   const { prisma } = await import("../src/lib/prisma");
+  const { nextJobNumber } = await import("./lib/next-job-number");
   const garageId = "demo-garage";
 
   const vehicle = await prisma.vehicle.findFirst({
@@ -54,11 +55,9 @@ async function main() {
   ].join(" ");
 
   if (!job) {
-    const highest = await prisma.jobCard.aggregate({
-      where: { garageId },
-      _max: { number: true },
-    });
-    const nextNumber = (highest._max.number ?? 0) + 1;
+    // Same jobSeq mechanism as the real intake action — see
+    // scripts/lib/next-job-number.ts for why MAX(number)+1 is wrong.
+    const nextNumber = await nextJobNumber(prisma, garageId);
 
     job = await prisma.jobCard.create({
       data: {

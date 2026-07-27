@@ -41,6 +41,14 @@ export default defineConfig({
   },
   datasource: {
     url: process.env["DATABASE_URL"],
+    // directUrl — used by `prisma migrate deploy` and any operation
+    // that needs a real Postgres session (advisory locks, prepared
+    // statements). On Supabase, DATABASE_URL points at the transaction
+    // pooler (port 6543) for runtime; DIRECT_URL points at the SAME
+    // pooler host on port 5432 (session mode) so migrations don't
+    // hang. Without this, `prisma migrate deploy` silently timed out
+    // during Vercel builds — see commit 5a2c49e for context.
+    directUrl: process.env["DIRECT_URL"],
     shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"],
   },
 });

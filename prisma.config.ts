@@ -40,15 +40,23 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
+    // Prisma 7 removed `directUrl` from both schema.prisma and this
+    // config type — the Datasource shape here is `{ url,
+    // shadowDatabaseUrl }` and Prisma silently ignored the extra
+    // field when we tried it.
+    //
+    // Migration URL is overridden at the vercel-build script level
+    // instead: `DATABASE_URL="$DIRECT_URL" prisma migrate deploy &&
+    // next build`. That prefix only re-binds DATABASE_URL for the
+    // migrate invocation; the subsequent `next build` (and the
+    // Next.js runtime) reads the parent process's DATABASE_URL,
+    // which stays the transaction pooler (port 6543).
+    //
+    // DIRECT_URL env in Vercel points at the SAME pooler host on
+    // port 5432 (session mode) — required because the transaction
+    // pooler doesn't support advisory locks / prepared statements
+    // that migrations depend on. See commit 5a2c49e for the incident.
     url: process.env["DATABASE_URL"],
-    // directUrl — used by `prisma migrate deploy` and any operation
-    // that needs a real Postgres session (advisory locks, prepared
-    // statements). On Supabase, DATABASE_URL points at the transaction
-    // pooler (port 6543) for runtime; DIRECT_URL points at the SAME
-    // pooler host on port 5432 (session mode) so migrations don't
-    // hang. Without this, `prisma migrate deploy` silently timed out
-    // during Vercel builds — see commit 5a2c49e for context.
-    directUrl: process.env["DIRECT_URL"],
     shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"],
   },
 });

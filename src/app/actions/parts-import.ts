@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { safeLogAiEvent } from "@/lib/ai-event-log";
 import { validateInvoiceImage, saveUpload, LogoValidationError } from "@/lib/storage";
 import { extractPartsInvoice, ocrCostUsd, OcrDisabledError, type OcrAttempt } from "@/lib/ocr";
 import { requireOperational } from "@/lib/action-guards";
@@ -23,18 +24,19 @@ function fail(msg: string, path = "/owner/inventory"): never {
 /** One AiEvent row per OCR attempt — cost/latency metering, like Moulkia. */
 async function logAttempts(attempts: OcrAttempt[], garageId: string, userId: string) {
   for (const a of attempts) {
-    await prisma.aiEvent.create({
-      data: {
-        garageId,
-        userId,
-        kind: "OCR",
-        model: a.model,
-        sourceType: a.error ? `PARTS_INVOICE:${a.error}` : "PARTS_INVOICE",
-        tokensIn: a.tokensIn,
-        tokensOut: a.tokensOut,
-        costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
-        latencyMs: a.latencyMs,
-      },
+    // safeLogAiEvent — never throws; parts-invoice OCR crashing the
+    // owner's inventory upload is the same shape as the intake bug.
+    // See docs/telemetry-must-not-crash-operation-spec.md.
+    await safeLogAiEvent({
+      garageId,
+      userId,
+      kind: "OCR",
+      model: a.model,
+      sourceType: a.error ? `PARTS_INVOICE:${a.error}` : "PARTS_INVOICE",
+      tokensIn: a.tokensIn,
+      tokensOut: a.tokensOut,
+      costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
+      latencyMs: a.latencyMs,
     });
   }
 }

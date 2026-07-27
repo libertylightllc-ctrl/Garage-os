@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { safeLogAiEvent } from "@/lib/ai-event-log";
 import { recordInbound, sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import {
   classifyConversation,
@@ -76,17 +77,18 @@ export async function handleInbound(opts: {
   const cls = classifyConversation(opts.body);
 
   // Meter the AI interaction (the Layer-2 margin trap).
-  await prisma.aiEvent.create({
-    data: {
-      garageId: opts.garageId,
-      kind: "RECEPTIONIST",
-      model: "receptionist-rules",
-      sourceType: "WHATSAPP",
-      tokensIn: 0,
-      tokensOut: 0,
-      costEstimate: 0,
-      latencyMs: 0,
-    },
+  // safeLogAiEvent — never throws. A crash here used to bubble out to
+  // the WhatsApp webhook handler and trigger Meta retries; see
+  // docs/telemetry-must-not-crash-operation-spec.md.
+  await safeLogAiEvent({
+    garageId: opts.garageId,
+    kind: "RECEPTIONIST",
+    model: "receptionist-rules",
+    sourceType: "WHATSAPP",
+    tokensIn: 0,
+    tokensOut: 0,
+    costEstimate: 0,
+    latencyMs: 0,
   });
 
   const base = { garageId: opts.garageId, customerId: opts.customer.id, waId: opts.waId, aiGenerated: true };

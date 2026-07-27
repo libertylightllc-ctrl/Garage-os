@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { safeLogAiEvent } from "@/lib/ai-event-log";
 import {
   extractMoulkiaFront,
   extractMoulkiaBack,
@@ -46,18 +47,19 @@ async function logAttempts(
   sourceSide: "FRONT" | "BACK",
 ) {
   for (const a of attempts) {
-    await prisma.aiEvent.create({
-      data: {
-        garageId,
-        userId,
-        kind: "OCR",
-        model: a.model,
-        sourceType: a.error ? `MOULKIA_${sourceSide}:${a.error}` : `MOULKIA_${sourceSide}`,
-        tokensIn: a.tokensIn,
-        tokensOut: a.tokensOut,
-        costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
-        latencyMs: a.latencyMs,
-      },
+    // safeLogAiEvent — never throws. A stale JWT / rotated user id used
+    // to FK-violate here and take down the whole intake POST; see
+    // docs/telemetry-must-not-crash-operation-spec.md.
+    await safeLogAiEvent({
+      garageId,
+      userId,
+      kind: "OCR",
+      model: a.model,
+      sourceType: a.error ? `MOULKIA_${sourceSide}:${a.error}` : `MOULKIA_${sourceSide}`,
+      tokensIn: a.tokensIn,
+      tokensOut: a.tokensOut,
+      costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
+      latencyMs: a.latencyMs,
     });
   }
 }

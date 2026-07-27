@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { FloorNow } from "@/components/floor-now";
 import { classifyIntent } from "@/lib/copilot";
+import { safeLogAiEvent } from "@/lib/ai-event-log";
 import { companyGarageIds } from "@/lib/branches";
 import { getT } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
@@ -294,18 +295,18 @@ export default async function OwnerHome({
   let answer: string | null = null;
   if (q && q.trim()) {
     answer = await answerCopilot(t, gids, q, now);
-    await prisma.aiEvent.create({
-      data: {
-        garageId,
-        userId: session.user.id,
-        kind:"COPILOT",
-        model:"copilot-rules",
-        sourceType:"OWNER_QUESTION",
-        tokensIn: 0,
-        tokensOut: 0,
-        costEstimate: 0,
-        latencyMs: 0,
-      },
+    // Best-effort telemetry — never crash the owner dashboard render
+    // on a meter write. See docs/telemetry-must-not-crash-operation-spec.md.
+    await safeLogAiEvent({
+      garageId,
+      userId: session.user.id,
+      kind: "COPILOT",
+      model: "copilot-rules",
+      sourceType: "OWNER_QUESTION",
+      tokensIn: 0,
+      tokensOut: 0,
+      costEstimate: 0,
+      latencyMs: 0,
     });
   }
 

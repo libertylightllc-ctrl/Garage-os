@@ -200,6 +200,47 @@ The conversion screen must show:
 
 ---
 
+## 4b. Known follow-up UX polish — not blocking
+
+Discovered by AR during the MASTER click-pass on 2026-07-18. Logged so it
+doesn't evaporate — small, own commit, do NOT rider it into the initial
+build.
+
+### "No convertible parts" message conflates three distinct cases
+
+`src/app/owner/purchasing/from-estimate/page.tsx:229-232` renders one
+message — `t("noConvertibleParts")` — whenever `filtered.convertible.length
+=== 0`. But the empty-convertible set actually has three flavours that
+call for different owner action:
+
+1. **Estimate has zero PART lines** (labour-only or advisor still typing).
+   Owner action: none — ask the advisor to price the parts.
+2. **Estimate has PART lines but all have `partId=NULL`** (free-text
+   Moulkia intake — this is the JC-2026-0005 case AR hit). Owner action:
+   add them to inventory first, then re-enter the flow. Should include a
+   link to `/owner/inventory`.
+3. **Estimate has PART lines but all are `declined=true`** (customer
+   rejected every part). Owner action: none — the customer said no.
+
+The distinguishing data is already computed: `filtered.skippedNoPartId`
+and `filtered.skippedDeclined` sit alongside `filtered.convertible` in
+the same `FilteredLines` return, so the branch is trivial.
+
+Fix shape (for the follow-up commit):
+- Split the single "noConvertibleParts" branch into three subcases based
+  on `skippedNoPartId.length` and `skippedDeclined.length`.
+- Three new i18n keys (en + ar): `estimateEmptyParts`,
+  `estimateAllUnlinked`, `estimateAllDeclined`.
+- Case (2) gets the same `/owner/inventory` link the mixed-skip section
+  already has.
+- ~30 LOC + i18n keys. No test change beyond covering the branches in
+  the existing helper test.
+
+Not urgent — the current single message isn't wrong, just less
+actionable. Defer until a natural touch of this file.
+
+---
+
 ## 5. Explicitly out of scope
 
 - Any schema change to `PurchaseOrderLine.partId` nullability (option "c"

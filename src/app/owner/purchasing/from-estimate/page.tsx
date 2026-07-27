@@ -31,12 +31,23 @@ export const dynamic = "force-dynamic";
 export default async function ConvertFromEstimatePage({
     searchParams,
 }: {
-    searchParams: Promise<{ jobNumber?: string; error?: string }>;
+    searchParams: Promise<{
+        jobNumber?: string;
+        estimateId?: string;
+        error?: string;
+    }>;
 }) {
     const session = await requireAnyRole(["OWNER", "MASTER"]);
     const t = await getT();
     const locale = await getLocale();
-    const { jobNumber: rawJobNumber, error } = await searchParams;
+    const {
+        jobNumber: rawJobNumber,
+        estimateId: rawEstimateId,
+        error,
+    } = await searchParams;
+    // Whitespace/empty guard — a stray `?estimateId=` in the URL should
+    // fall back to "no explicit id" instead of failing the find().
+    const estimateId = rawEstimateId?.trim() ? rawEstimateId.trim() : undefined;
     const garageId = session.user.garageId;
     const garageRow = await prisma.garage.findUnique({
         where: { id: garageId },
@@ -76,6 +87,14 @@ export default async function ConvertFromEstimatePage({
                               status: true,
                               approvedAt: true,
                               sentAt: true,
+                              // updatedAt — DRAFT tie-break inside the
+                              // `multiple` picker sort. See
+                              // pickEstimateForConversion for the rule.
+                              updatedAt: true,
+                              // total — surfaced as a column in the
+                              // `multiple` picker list so the owner can
+                              // eyeball which revision is which.
+                              total: true,
                               lines: {
                                   select: {
                                       id: true,
@@ -111,8 +130,12 @@ export default async function ConvertFromEstimatePage({
 
     // The picker only makes sense once a job resolves. Compute the
     // estimate + line partitions here so the JSX below stays readable.
+    // `estimateId` narrows the pick when the owner clicked a row on
+    // the `multiple` list; if the id is stale (e.g., points at a
+    // REJECTED row now), the classifier falls back to `multiple` so
+    // the owner sees what's actually available.
     const pickResult = jobCard
-        ? pickEstimateForConversion(jobCard.estimates)
+        ? pickEstimateForConversion(jobCard.estimates, estimateId)
         : null;
     const estimateForPreview =
         pickResult?.kind === "picked" ? pickResult.estimate : null;
@@ -233,10 +256,71 @@ export default async function ConvertFromEstimatePage({
                         {t("estimateNone")}
                     </p>
                 ) : null}
-                {pickResult?.kind === "none-usable" ? (
+                {pickResult?.kind === "all-rejected" ? (
                     <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-                        {t("estimateNoneUsable").replace("{count}", String(pickResult.totalCount))}
+                        {t("estimateAllRejected").replace("{count}", String(pickResult.totalCount))}
                     </p>
+                ) : null}
+
+                {/* Multi-usable picker — the owner explicitly clicks the
+                    revision they want, rather than us guessing between
+                    (say) an APPROVED and a DRAFT. Each row links back to
+                    this same page with `estimateId=…` so the picked
+                    branch fires on the next render and everything below
+                    (convertible lines, review, supplier picker) renders
+                    exactly as today. */}
+                {jobCard && pickResult?.kind === "multiple" ? (
+                    <section className="space-y-3 rounded-xl border border-border p-4">
+                        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {t("estimateMultipleHeader")}
+                        </h2>
+                        <ul className="flex flex-col gap-2">
+                            {pickResult.estimates.map((e) => {
+                                const stampIso =
+                                    e.approvedAt?.toISOString() ??
+                                    e.sentAt?.toISOString() ??
+                                    e.updatedAt.toISOString();
+                                const stamp = fmtDate(new Date(stampIso), locale, tz);
+                                const statusLabel = t(
+                                    `estimateStatus_${e.status}` as const,
+                                );
+                                const partsIn = e.lines.length;
+                                const href = `/owner/purchasing/from-estimate?jobNumber=${jobCard.number}&estimateId=${encodeURIComponent(e.id)}`;
+                                return (
+                                    <li
+                                        key={e.id}
+                                        className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 rounded-lg border border-border/60 p-3 text-sm"
+                                    >
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                                                    {statusLabel}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {stamp}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span className="tabular-nums text-xs text-muted-foreground">
+                                            {t("estimateLinesCount").replace(
+                                                "{count}",
+                                                String(partsIn),
+                                            )}
+                                        </span>
+                                        <span className="tabular-nums text-sm font-medium">
+                                            {money(Number(e.total))}
+                                        </span>
+                                        <Link
+                                            href={href}
+                                            className="rounded-md border border-border bg-surface-2 px-3 py-1 text-xs font-medium hover:underline"
+                                        >
+                                            {t("estimateUseThis")}
+                                        </Link>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </section>
                 ) : null}
 
                 {/* Estimate + lines — the convert form. Everything the
@@ -244,18 +328,35 @@ export default async function ConvertFromEstimatePage({
                 {jobCard && pickResult?.kind === "picked" && estimateForPreview && filtered ? (
                     <>
                         <section className="space-y-1 rounded-xl border border-border p-4">
-                            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                {t("estimateChosenHeader")}
-                            </h2>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {t("estimateChosenHeader")}
+                                </h2>
+                                {/* Source-status label — informational only,
+                                    not a gate. Tells the owner whether the
+                                    PO they're about to file was sourced
+                                    from a DRAFT / SENT / APPROVED estimate.
+                                    Reads at a glance next to the header. */}
+                                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {t(
+                                        `estimateStatus_${estimateForPreview.status}` as const,
+                                    )}
+                                </span>
+                            </div>
                             <p className="text-sm">
                                 {pickResult.reason === "approved"
                                     ? t("estimateChosenApproved").replace(
                                           "{date}",
                                           fmtDate(estimateForPreview.approvedAt!, locale, tz),
                                       )
-                                    : t("estimateChosenSent").replace(
+                                    : pickResult.reason === "sent"
+                                    ? t("estimateChosenSent").replace(
                                           "{date}",
                                           fmtDate(estimateForPreview.sentAt!, locale, tz),
+                                      )
+                                    : t("estimateChosenDraft").replace(
+                                          "{date}",
+                                          fmtDate(estimateForPreview.updatedAt, locale, tz),
                                       )}
                             </p>
                         </section>

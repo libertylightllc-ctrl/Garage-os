@@ -3,11 +3,14 @@
 // touching Prisma. See docs/Estimate-to-PO-Spec.md for the locked rules.
 //
 // 1. pickEstimateForConversion — a job has many estimates (revisions).
-//    Choose the right one to convert, following the locked selection rule:
-//    APPROVED (latest by approvedAt) > SENT (latest by sentAt).
-//    Never DRAFT (would leak internal figures), never REJECTED (customer
-//    said no). If none of the estimates are usable, surface that with
-//    enough context to render a helpful message.
+//    APPROVED / SENT / DRAFT are all usable; REJECTED is not. When zero
+//    are usable it's `all-rejected`; when one is usable it's `picked`;
+//    when 2+ are usable it's `multiple` and the caller shows a list so
+//    the owner explicitly picks one (never auto-pick — an owner may
+//    want the old DRAFT over the fresh APPROVED, and silently deciding
+//    would hide a real choice). Pass an `estimateId` to select an
+//    explicit one out of the usable set (used after the owner clicks a
+//    row on the `multiple` list).
 //
 // 2. filterConvertibleLines — an estimate has lines of every LineKind
 //    (LABOR, PART, FEE). Only PART lines that (a) link to an inventory
@@ -21,11 +24,14 @@ import type { EstimateStatus, LineKind } from "@/generated/prisma/enums";
 // Minimal shapes so callers can pass either a full Prisma row or a test
 // fixture. If Estimate / EstimateLine schema fields change, the tests +
 // call-sites fail loud; this stays narrow on purpose.
+// `updatedAt` is the DRAFT tie-break — DRAFT rows have neither
+// `approvedAt` nor `sentAt`, so "most recently edited" stands in.
 export interface EstimateForPick {
     id: string;
     status: EstimateStatus;
     approvedAt: Date | null;
     sentAt: Date | null;
+    updatedAt: Date;
 }
 
 export interface EstimateLineForFilter {
@@ -35,45 +41,71 @@ export interface EstimateLineForFilter {
     declined: boolean;
 }
 
+export type EstimatePickReason = "approved" | "sent" | "draft";
+
 export type EstimatePickResult<E extends EstimateForPick> =
-    | { kind: "picked"; estimate: E; reason: "approved" | "sent" }
-    | { kind: "none-usable"; totalCount: number }
+    | { kind: "picked"; estimate: E; reason: EstimatePickReason }
+    | { kind: "multiple"; estimates: E[] }
+    | { kind: "all-rejected"; totalCount: number }
     | { kind: "no-estimate" };
+
+// Rank inside the multi-list sort — APPROVED first, then SENT, then
+// DRAFT. Within the same rank, newer wins (approvedAt / sentAt /
+// updatedAt in that order). Used purely for display; picking a single
+// one happens explicitly via `estimateId`.
+const RANK: Record<"APPROVED" | "SENT" | "DRAFT", number> = {
+    APPROVED: 0,
+    SENT: 1,
+    DRAFT: 2,
+};
+
+function isUsable<E extends EstimateForPick>(e: E): boolean {
+    if (e.status === "APPROVED") return e.approvedAt !== null;
+    if (e.status === "SENT") return e.sentAt !== null;
+    return e.status === "DRAFT";
+    // REJECTED falls through implicitly — never usable.
+}
+
+function reasonFor<E extends EstimateForPick>(e: E): EstimatePickReason {
+    if (e.status === "APPROVED") return "approved";
+    if (e.status === "SENT") return "sent";
+    return "draft";
+}
+
+function sortUsable<E extends EstimateForPick>(a: E, b: E): number {
+    const ra = RANK[a.status as "APPROVED" | "SENT" | "DRAFT"];
+    const rb = RANK[b.status as "APPROVED" | "SENT" | "DRAFT"];
+    if (ra !== rb) return ra - rb;
+    const key = (e: E): Date => e.approvedAt ?? e.sentAt ?? e.updatedAt;
+    return +key(b) - +key(a);
+}
 
 export function pickEstimateForConversion<E extends EstimateForPick>(
     estimates: E[],
+    estimateId?: string,
 ): EstimatePickResult<E> {
     if (estimates.length === 0) return { kind: "no-estimate" };
 
-    // APPROVED wins. Filter also demands approvedAt is set — a row with
-    // status=APPROVED and null approvedAt is malformed data (the schema
-    // doesn't enforce paired writes) and shouldn't be picked without a
-    // tie-break timestamp.
-    const approved = estimates.filter(
-        (e) => e.status === "APPROVED" && e.approvedAt !== null,
-    );
-    if (approved.length > 0) {
-        // Latest by approvedAt. Non-null guaranteed by the filter above.
-        const latest = approved.reduce((a, b) =>
-            a.approvedAt!.getTime() >= b.approvedAt!.getTime() ? a : b,
-        );
-        return { kind: "picked", estimate: latest, reason: "approved" };
+    const usable = estimates.filter(isUsable).sort(sortUsable);
+    if (usable.length === 0) {
+        return { kind: "all-rejected", totalCount: estimates.length };
     }
 
-    const sent = estimates.filter(
-        (e) => e.status === "SENT" && e.sentAt !== null,
-    );
-    if (sent.length > 0) {
-        const latest = sent.reduce((a, b) =>
-            a.sentAt!.getTime() >= b.sentAt!.getTime() ? a : b,
-        );
-        return { kind: "picked", estimate: latest, reason: "sent" };
+    // Explicit id selection happens AFTER the usable filter, from this
+    // job's set only. Unknown or non-usable id (e.g. a stale link to a
+    // now-REJECTED estimate) falls through to the picker list — the
+    // owner sees what's actually available.
+    if (estimateId) {
+        const chosen = usable.find((e) => e.id === estimateId);
+        if (chosen) {
+            return { kind: "picked", estimate: chosen, reason: reasonFor(chosen) };
+        }
     }
 
-    // We have estimates, but none are usable — all DRAFT and/or REJECTED
-    // (or malformed with null timestamps). Return the total so the UI can
-    // say "This job has 2 estimate(s), but none are Approved or Sent yet."
-    return { kind: "none-usable", totalCount: estimates.length };
+    if (usable.length === 1) {
+        return { kind: "picked", estimate: usable[0], reason: reasonFor(usable[0]) };
+    }
+    return { kind: "multiple", estimates: usable };
 }
 
 export interface FilteredLines<L extends EstimateLineForFilter> {

@@ -92,3 +92,9 @@ next-env.d.ts
 
 .vercel
 backups/
+
+# Local-only scratch: agent workspace, ad-hoc diffs, one-off helper output.
+# Never gets committed. If a file here is worth keeping, move it under
+# scripts/ or docs/.
+scratchpad/
+diff.txt

@@ -1,4 +1,6 @@
 import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { sessionUserExists } from "@/lib/session-user";
 
 /**
  * THE single permission-guard module for server ACTIONS.
@@ -23,11 +25,27 @@ type SessionUser = {
   name?: string | null;
 };
 
-/** Core: session user whose role is in `roles`, else throw "Not authorized". */
+/**
+ * Core: session user whose role is in `roles`, else throw "Not authorized".
+ *
+ * Also verifies the JWT's user id still resolves to a real User row —
+ * a stale JWT (dev reseed, admin hard-delete) used to sail past auth
+ * and only fail deep in downstream FK writes (`JobCard.advisorId`,
+ * `AiEvent.userId`, …), turning intake into "Something went wrong."
+ * See [[sessionUserExists]] and
+ * `docs/telemetry-must-not-crash-operation-spec.md` for the sibling
+ * telemetry rule.
+ */
 export async function requireAnyRole(roles: string[]): Promise<SessionUser> {
   const session = await auth();
   if (!session?.user || !roles.includes(session.user.role)) {
     throw new Error("Not authorized");
+  }
+  if (!(await sessionUserExists(session.user.id))) {
+    // Stale JWT — user gone. Redirect to /login so the user can
+    // re-authenticate; a fresh POST /login overwrites the cookie
+    // with a JWT whose sub references a live User row.
+    redirect("/login");
   }
   return session.user as SessionUser;
 }

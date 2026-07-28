@@ -371,6 +371,7 @@ model Vehicle {
   jobCards JobCard[]
   bookings Booking[]
   reminders Reminder[]
+  poLines  PurchaseOrderLine[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -793,10 +794,51 @@ model PurchaseOrderLine {
   returnedQty     Int           @default(0) // how much has been returned to the supplier (2c; 0 ≤ returnedQty ≤ receivedQty)
   unitCost        Decimal       @db.Decimal(12, 2)
 
+  // Vehicle assignment — snapshot at line-write time. A PO is a document
+  // sent to a supplier; a later Vehicle edit must NOT retroactively change
+  // what the supplier already received.
+  //
+  // Three shapes:
+  //   1. vehicleId set + snapshot fields populated → linked to a Vehicle
+  //      row, snapshot frozen at write.
+  //   2. vehicleId null + snapshot fields populated → walk-in / stock
+  //      order; car not in the system, advisor typed the details.
+  //   3. all fields null → no vehicle linked (pre-existing catalog buy
+  //      with no context).
+  //
+  // Display readers use snapshot fields directly; vehicleId is for
+  // history/reporting only. See src/lib/po-vehicle.ts.
+  //
+  // ── LIFECYCLE (READ THIS BEFORE ADDING A "SYNC VEHICLE DATA" HELPER) ──
+  // • Snapshot fields are WRITTEN ONCE at line creation (auto-resolved
+  //   from Part.autoCreatedFromLine chain OR from the picker/free-text
+  //   form) and are EDITABLE ONLY BY THE ADVISOR through the PO line's
+  //   own edit form.
+  // • They are NEVER refreshed from the linked Vehicle after creation —
+  //   not by a cron, not by a "keep-in-sync" helper, not by a Vehicle
+  //   update trigger. A document that changes retroactively after being
+  //   sent to a supplier is a bug and a legal problem.
+  // • The backfill in migration 20260727120000 populates only rows where
+  //   ALL identity snapshot columns are NULL. Do NOT relax that guard.
+  //
+  // Identifiers (VIN, plate, part number) stay in Latin script under any
+  // locale. Do NOT wrap these strings in translation helpers.
+  vehicleId         String?
+  vehicle           Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleMake       String?
+  vehicleModel      String?
+  vehicleYear       Int?
+  vehicleEngineSize String?
+  vehicleFuelType   String?
+  vehicleVin        String?
+  vehiclePlate      String?
+  vehicleJobNumber  Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([purchaseOrderId])
+  @@index([vehicleId])
 }
 
 // Inventory OCR import (2026-07-05). A photographed supplier invoice, OCR'd

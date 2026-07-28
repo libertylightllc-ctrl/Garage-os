@@ -145,6 +145,39 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+// Send audit log — see model PurchaseOrderSend for the full contract.
+// Intentional omissions (do NOT add without a new commit + spec):
+//   • no PRINT — print is local, has no recipient, no observable outcome.
+//   • no DELIVERED — needs a Resend webhook; ships with the webhook, not before.
+// Adding an enum value that nothing can produce is a trap.
+enum PurchaseOrderSendChannel {
+  WHATSAPP
+  EMAIL
+}
+
+// HANDED_OFF (not "OPENED") is the WhatsApp shape: the wa.me intent left
+// our hands, the outcome is unknown. "OPENED" would read like email
+// open-tracking, which is the opposite. Every WHATSAPP row terminates at
+// HANDED_OFF or FAILED (we can't observe more). Every EMAIL row goes
+// HANDED_OFF (immediately, before we call Resend — for symmetry with the
+// wa.me hand-off) then transitions to SENT once Resend accepts, or FAILED
+// with an errorCode. DELIVERED is deliberately absent until the webhook
+// commit lands.
+enum PurchaseOrderSendStatus {
+  HANDED_OFF
+  SENT
+  FAILED
+}
+
+// Snapshot of what the document WAS at send time. A PO/RFQ can be edited
+// after sending (advisor adds a price, unpriced lines fill in); the audit
+// row must still show "this went out as an RFQ" — that's the record that
+// answers "did we already ask this supplier, and for what?"
+enum PurchaseOrderDocumentKind {
+  PO
+  RFQ
+}
+
 // Inventory OCR import — a photographed supplier invoice, OCR'd into draft
 // parts lines that the OWNER reviews + corrects before any catalog write.
 // DRAFT = awaiting review; CONFIRMED = owner saved it to the catalog;
@@ -221,6 +254,7 @@ model Garage {
   parts          Part[]
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
+  purchaseOrderSends PurchaseOrderSend[]
   partsImports   PartsImport[]
   partRequests   PartRequest[]
   reminders      Reminder[]
@@ -308,6 +342,7 @@ model User {
   deliveredJobs   JobCard[] @relation("DeliveredJobs")
   aiEvents        AiEvent[]
   workSessions    WorkSession[] @relation("TechWorkSessions")
+  purchaseOrderSends PurchaseOrderSend[] @relation("PurchaseOrderSentBy")
 
   // Last successful sign-in for this staff user. Written by the
   // baseProvider in src/auth.ts on every authorize() pass — best-effort,
@@ -775,6 +810,7 @@ model PurchaseOrder {
   receivedAt DateTime? // when stock was received (2b)
 
   lines PurchaseOrderLine[]
+  sends PurchaseOrderSend[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -839,6 +875,61 @@ model PurchaseOrderLine {
 
   @@index([purchaseOrderId])
   @@index([vehicleId])
+}
+
+// PO send audit log — one row per send attempt (WhatsApp intent or Email).
+// Answers "did we already ask this supplier, and for what?" — visible on
+// the PO detail page under "Sent history" (newest first, empty state when
+// nothing has gone out).
+//
+// Snapshot vs. join:
+//   • recipient is a STRING SNAPSHOT of the address/number actually used,
+//     NOT a live join to Supplier. If the supplier's email or phone
+//     changes later, history must still show where the message actually
+//     went — the audit is worthless if it retroactively lies.
+//   • documentKind is a SNAPSHOT of what the PO was when it left the
+//     shop. A PO/RFQ can be edited after sending (advisor adds a price,
+//     unpriced lines fill in) — the row still says "this went out as an
+//     RFQ" because that is what the supplier received.
+//
+// Channel semantics:
+//   • WHATSAPP — server logs HANDED_OFF when the button click reaches
+//     the redirect action; there is no callback, so the row terminates
+//     there. UI copy must be honest: "Opened in WhatsApp — delivery not
+//     confirmed." A row implying a message was sent when the user closed
+//     WhatsApp is worse than no row at all.
+//   • EMAIL — HANDED_OFF written before the Resend call for symmetry;
+//     transitions to SENT (Resend accepted) or FAILED (errorCode set).
+//     DELIVERED is intentionally NOT in the enum: it needs a Resend
+//     delivery webhook which ships with the webhook commit, not before.
+//
+// providerMessageId is Resend's message id (email only) — used by the
+// future webhook to look up the row and mark DELIVERED. Never rendered
+// to the browser (leaks account details / correlation).
+//
+// errorCode is our OWN enum only ("no_recipient", "unverified_domain",
+// "not_configured", "provider_error") — the four codes the render-side
+// whitelist accepts. NEVER stores the provider's own error message —
+// those go to server-side logs. See src/lib/mail.ts.
+model PurchaseOrderSend {
+  id                String                    @id @default(cuid())
+  purchaseOrderId   String
+  purchaseOrder     PurchaseOrder             @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  garageId          String
+  garage            Garage                    @relation(fields: [garageId], references: [id])
+  channel           PurchaseOrderSendChannel
+  recipient         String                    // snapshot at send time — email address or phone, per channel
+  documentKind      PurchaseOrderDocumentKind // snapshot of PO vs RFQ classification at send time
+  sentByUserId      String
+  sentBy            User                      @relation("PurchaseOrderSentBy", fields: [sentByUserId], references: [id])
+  status            PurchaseOrderSendStatus
+  providerMessageId String?                   // email only (Resend id); null for WHATSAPP
+  errorCode         String?                   // our enum only, never provider text (see src/lib/mail.ts MailErrorCode)
+
+  createdAt DateTime @default(now())
+
+  @@index([purchaseOrderId])
+  @@index([garageId])
 }
 
 // Inventory OCR import (2026-07-05). A photographed supplier invoice, OCR'd

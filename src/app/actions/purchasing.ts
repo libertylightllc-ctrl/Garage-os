@@ -14,6 +14,7 @@ import {
   normalizePartName,
   findNormalizedMatch,
 } from "@/lib/estimate-to-po";
+import { buildPoLineVehicleSnapshot } from "@/lib/po-vehicle";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -111,14 +112,61 @@ export async function addPoLineAction(formData: FormData) {
   if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
   if (unitCost === null) fail("Unit cost must be a non-negative number.", back);
 
+  // Load the Part with the vehicle-chain include so we can snapshot at
+  // creation time. The chain is only present when the Part was auto-
+  // created from an estimate line (from-estimate flow); catalog/seeded
+  // parts have autoCreatedFromLine === null and the helper returns
+  // `{}`, so the line ships with every snapshot column null and the
+  // supplier document renders "(no vehicle linked)".
   const part = await prisma.part.findFirst({
     where: { id: partId, garageId: user.garageId },
-    select: { id: true },
+    select: {
+      id: true,
+      autoCreatedFromLine: {
+        select: {
+          estimate: {
+            select: {
+              jobCard: {
+                select: {
+                  number: true,
+                  vehicle: {
+                    select: {
+                      id: true,
+                      make: true,
+                      model: true,
+                      year: true,
+                      plate: true,
+                      vin: true,
+                      engineSize: true,
+                      fuelType: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   if (!part) fail("Part not found.", back);
 
+  // Snapshot the vehicle context — written once at line creation and
+  // never refreshed from Vehicle afterwards. See the PurchaseOrderLine
+  // model comment in prisma/schema.prisma for the lifecycle rule.
+  const jc = part.autoCreatedFromLine?.estimate.jobCard ?? null;
+  const vehicleSnapshot = buildPoLineVehicleSnapshot(
+    jc ? { jobNumber: jc.number, vehicle: jc.vehicle } : null,
+  );
+
   await prisma.purchaseOrderLine.create({
-    data: { purchaseOrderId: po.id, partId: part.id, qty, unitCost },
+    data: {
+      purchaseOrderId: po.id,
+      partId: part.id,
+      qty,
+      unitCost,
+      ...vehicleSnapshot,
+    },
   });
 
   revalidatePath(back);
@@ -489,7 +537,9 @@ export async function createPoFromEstimateAction(formData: FormData) {
 
   // Verify the estimate belongs to this job (and by inheritance, this
   // garage). Load lines so we can re-check them against the submitted
-  // include[] set — form data can lie; the DB is truth.
+  // include[] set — form data can lie; the DB is truth. Also load the
+  // jobCard's number + vehicle so we can snapshot per line without a
+  // second round trip.
   const estimate = await prisma.estimate.findFirst({
     where: { id: estimateId, jobCardId: jobCard.id },
     select: {
@@ -497,9 +547,36 @@ export async function createPoFromEstimateAction(formData: FormData) {
       lines: {
         select: { id: true, kind: true, partId: true, declined: true },
       },
+      jobCard: {
+        select: {
+          number: true,
+          vehicle: {
+            select: {
+              id: true,
+              make: true,
+              model: true,
+              year: true,
+              plate: true,
+              vin: true,
+              engineSize: true,
+              fuelType: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!estimate) fail("Estimate not found on this job.", await retryPath());
+
+  // Snapshot source — every line under this from-estimate action
+  // resolves to the SAME vehicle (the job's own car), so we build the
+  // snapshot object once and spread it into every line's create. See
+  // the schema comment on PurchaseOrderLine for the "written once"
+  // lifecycle rule.
+  const vehicleSnapshot = buildPoLineVehicleSnapshot({
+    jobNumber: estimate.jobCard.number,
+    vehicle: estimate.jobCard.vehicle,
+  });
 
   // Same convertibility filter the UI shows — anything the form claimed
   // to include must be in this set. A line that's since been declined or
@@ -569,6 +646,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
           partId: l.partId,
           qty: l.qty,
           unitCost: l.unitCost,
+          ...vehicleSnapshot,
         })),
       },
     },

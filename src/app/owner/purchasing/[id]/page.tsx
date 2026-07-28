@@ -14,6 +14,7 @@ import { stockOptionSuffix } from "@/lib/stock-label";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
 import { purchaseOrderMessage } from "@/lib/po-message";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
+import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
 import { signId } from "@/lib/tokens";
 import { appUrl } from "@/lib/whatsapp";
 import {
@@ -35,13 +36,17 @@ export default async function PurchaseOrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    emailOk?: string;
+    emailError?: string;
+  }>;
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, emailOk, emailError } = await searchParams;
   const garage = await prisma.garage.findUnique({
     where: { id: session.user.garageId },
     select: { name: true, trn: true, country: true, logoUrl: true },
@@ -142,10 +147,12 @@ export default async function PurchaseOrderDetailPage({
   const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost), 0);
 
   // ── Print / send derivations ─────────────────────────────────
-  // For now every document is labelled a Purchase Order. The RFQ
-  // classifier (any unpriced line → RFQ) rides in a follow-up
-  // commit that wires poDocKind across all five surfaces at once.
-  const docTitle = t("documentPurchaseOrder");
+  // RFQ/PO classifier — shared with the 4 other document surfaces
+  // via `poDocKind`. AR's rule: ANY unpriced line means the shop
+  // isn't committing to a price on that line, so the whole document
+  // is an RFQ. Only a fully-priced document is a Purchase Order.
+  const isRfq = poDocKind(po.lines) === "RFQ";
+  const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
   // The visible identifier for print / WhatsApp — supplier's own
   // quote reference if they gave us one (helps them match against
   // THEIR record), otherwise the last 6 chars of our PO id as a
@@ -169,7 +176,7 @@ export default async function PurchaseOrderDetailPage({
   // + email plain-text), so the copy can't drift. `publicUrl` is
   // the last line either way.
   const messageBody = purchaseOrderMessage({
-    doc: { title: docTitle, number: docNumber, isRfq: false },
+    doc: { title: docTitle, number: docNumber, isRfq },
     garage: { name: garage?.name ?? "" },
     supplier: { contactPerson: po.supplier.contactPerson },
     lines: po.lines.map((l) => ({
@@ -179,6 +186,7 @@ export default async function PurchaseOrderDetailPage({
     note: po.note,
     publicUrl,
     perLineVehicle: po.lines.map((l) => vehicles.perLine.get(l.id) ?? null),
+    perLineUnpriced: po.lines.map(isLineUnpriced),
     distinctVehicles: vehicles.distinct,
     lang: locale === "ar" ? "ar" : "en",
   });
@@ -209,9 +217,9 @@ export default async function PurchaseOrderDetailPage({
           </Link>
         </div>
 
-        {/* Action bar — Print + Send via WhatsApp + Send via Email.
-            Hidden on print. The three buttons live above the
-            document so the printout starts cleanly at the header. */}
+        {/* Action bar — Print + Send via WhatsApp. Hidden on print.
+            Email dispatch is a separate channel held on MAIL_FROM
+            domain verification and rides in the next commit. */}
         <div className="flex flex-wrap items-center gap-3 print:hidden">
           <PrintButton className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-2">
             <Printer aria-hidden="true" className="h-4 w-4" />
@@ -223,6 +231,44 @@ export default async function PurchaseOrderDetailPage({
             disabledReason={waHref ? undefined : t("supplierNoPhoneReason")}
           />
         </div>
+
+        {/* Email send outcome banners. The failure code comes from
+            the action as a small enum — never as the provider's own
+            error text — so nothing untrusted / user-hostile / secret
+            (API messages sometimes carry keys or account details)
+            reaches the URL or the DOM. Unknown / legacy codes fall
+            back to the generic message. Real error text is logged
+            server-side only. */}
+        {emailOk ? (
+          <p className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500 print:hidden">
+            {t("emailSentOk")}
+          </p>
+        ) : null}
+        {emailError ? (
+          <div className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500 print:hidden">
+            <div className="font-semibold">{t("emailSentError")}</div>
+            <div className="mt-0.5">
+              {(() => {
+                // Whitelist. Anything else → generic. Do NOT extend
+                // this by writing `t(\`emailErr_${code}\`)` blindly —
+                // that would send arbitrary URL-supplied strings
+                // straight into the i18n lookup (and, on miss, back
+                // into the DOM).
+                const KNOWN = new Set([
+                  "no_recipient",
+                  "unverified_domain",
+                  "not_configured",
+                  "provider_error",
+                ] as const);
+                type KnownCode = typeof KNOWN extends Set<infer T> ? T : never;
+                if (KNOWN.has(emailError as KnownCode)) {
+                  return t(`emailErr_${emailError as KnownCode}` as const);
+                }
+                return t("emailErr_generic");
+              })()}
+            </div>
+          </div>
+        ) : null}
 
         <div>
           {/* Standardized document header. Title switches between
@@ -275,8 +321,11 @@ export default async function PurchaseOrderDetailPage({
               <div className="col-span-2 border-t border-zinc-300 pt-1">
                 <span className="font-medium">{t("printTotalsLabel")}:</span>{" "}
                 {po.lines.length} {t("poLines").toLowerCase()}
-                {" · "}
-                {money(total)}
+                {/* On RFQ, suppressing the money total — a partial sum
+                    (priced lines only) reads as "the shop's cost" which
+                    it isn't; a full sum including 0.00 lines under-counts.
+                    Neither is a number worth showing. */}
+                {isRfq ? null : <> · {money(total)}</>}
               </div>
             </div>
           </section>
@@ -288,7 +337,8 @@ export default async function PurchaseOrderDetailPage({
               {t(`poStatus_${po.status}`)}
             </span>
             <span>
-              {po.lines.length} {t("poLines").toLowerCase()} · {money(total)}
+              {po.lines.length} {t("poLines").toLowerCase()}
+              {isRfq ? null : <> · {money(total)}</>}
             </span>
           </div>
           {po.note ? <p className="mt-1 text-sm text-muted-foreground">{po.note}</p> : null}
@@ -409,11 +459,28 @@ export default async function PurchaseOrderDetailPage({
                           aria-label={t("poUnitCost")}
                           className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                         />
+                      ) : isLineUnpriced(l) ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>—</span>
+                          {/* "quote please" tag — rendered as its OWN
+                              element next to the cost cell, NOT
+                              concatenated into any user-visible
+                              string. Description passes through to
+                              WhatsApp verbatim; we do not want a
+                              future refactor sending "Battery 70Ah
+                              (quote please)" as the description into
+                              a persisted store. */}
+                          <span className="rounded-md border border-warning-500/40 bg-warning-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                            {t("lineUnpricedTag")}
+                          </span>
+                        </span>
                       ) : (
                         money(Number(l.unitCost))
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {isLineUnpriced(l) ? "—" : money(l.qty * Number(l.unitCost))}
+                    </td>
                     {isDraft ? (
                       <td className="px-4 py-3 text-right print:hidden">
                         <div className="flex items-center justify-end gap-2">

@@ -122,7 +122,7 @@ describe("invoiceMessage — template rendering", () => {
     });
 });
 
-describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
+describe("purchaseOrderMessage — supplier PO / RFQ WhatsApp body", () => {
     const basePo = {
         doc: { title: "Purchase Order", number: "#ABC123", isRfq: false },
         garage: { name: "Demo Motors" },
@@ -134,6 +134,7 @@ describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
         note: null,
         publicUrl: "https://garageos.shop/c/po/AAA~BBB",
         perLineVehicle: [null, null],
+        perLineUnpriced: [false, false],
         distinctVehicles: [],
         lang: "en" as const,
     };
@@ -237,6 +238,7 @@ describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
         expect(msg).toContain("Purchase Order #ABC123 — from Demo Motors");
         expect(msg).toContain("2 × Front brake pads");
         expect(msg).toContain("1 × Battery 70Ah");
+        // PO body has no RFQ closing prompt.
         expect(msg).not.toMatch(/prices? and availability/i);
     });
 
@@ -272,8 +274,19 @@ describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
 
     it("PO note renders as its own paragraph when present", () => {
         const msg = purchaseOrderMessage({ ...basePo, note: "  Please deliver by Thursday.  " });
+        // Trimmed and preceded by a blank line so it reads as its own
+        // paragraph on WhatsApp. Trailing whitespace is not asserted —
+        // the note may be the last block in the message.
         expect(msg).toContain("\n\nPlease deliver by Thursday.");
         expect(msg).not.toContain("Please deliver by Thursday.  ");
+    });
+
+    it("note that is blank / whitespace → skipped (no double newline gap)", () => {
+        const msg = purchaseOrderMessage({ ...basePo, note: "   " });
+        // The heading and items are still adjacent — orphan paragraph
+        // must not appear. Message paragraphs: greeting / heading /
+        // items / link. Four blocks separated by \n\n = three splits.
+        expect(msg.split("\n\n").length).toBeLessThanOrEqual(4);
     });
 
     it("publicUrl renders as the LAST line under a 'View document' label (EN)", () => {
@@ -301,11 +314,18 @@ describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
         const msg = purchaseOrderMessage(singleVehiclePo);
         expect(msg).toContain("For: Nissan Patrol 2022 · D 12345 · VIN JN1TANT32U0123456 · 5 PETROL · JC-42");
         expect(msg).toContain("2 × Front brake pads");
+        // Items must NOT get the inline (JC-N · Make Model) suffix — the
+        // header already names the one vehicle.
         expect(msg).not.toMatch(/Front brake pads.*\(JC-42/);
         expect(msg).not.toContain("(no vehicle linked)");
     });
 
     it("single-vehicle + some unresolved lines: unresolved lines still tagged '(no vehicle linked)'", () => {
+        // Regression: previously the singleVehicle short-circuit
+        // returned `base` for every line, which meant unresolved
+        // lines silently read as belonging to the header's car.
+        // Fix: only skip the tag when the line ITSELF resolves to
+        // the single vehicle.
         const msg = purchaseOrderMessage({
             ...singleVehiclePo,
             lines: [
@@ -337,7 +357,76 @@ describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
         expect(msg).toContain("1 × Battery 70Ah (no vehicle linked)");
     });
 
+    it("mixed pricing — unpriced lines get '(please quote)' appended AFTER any vehicle tag, priced lines stay bare", () => {
+        // Simulating a mixed RFQ where the 2nd line is unpriced. Both
+        // lines resolve to the same vehicle (singleVehicle shape), so
+        // neither line carries a vehicle inline tag; the "please
+        // quote" marker is the only per-line differentiator.
+        const msg = purchaseOrderMessage({
+            ...singleVehiclePo,
+            perLineUnpriced: [false, true],
+        });
+        expect(msg).toContain("2 × Front brake pads");
+        expect(msg).not.toContain("2 × Front brake pads (please quote)");
+        expect(msg).toContain("1 × Battery 70Ah (please quote)");
+    });
+
+    it("mixed pricing + multi-vehicle — '(please quote)' rides AFTER the (JC-N · Make Model) inline tag on unpriced lines", () => {
+        // The marker must survive alongside the vehicle context —
+        // both belong to the same line and both should reach the
+        // supplier.
+        const msg = purchaseOrderMessage({
+            ...multiVehiclePo,
+            perLineUnpriced: [true, false],
+        });
+        expect(msg).toContain("2 × Front brake pads (JC-42 · Nissan Patrol) (please quote)");
+        expect(msg).toContain("1 × Battery 70Ah (JC-43 · Toyota Land Cruiser)");
+        expect(msg).not.toContain("1 × Battery 70Ah (JC-43 · Toyota Land Cruiser) (please quote)");
+    });
+
+    it("mixed pricing (AR): unpriced lines get '(برجاء إفادتنا بالسعر)'", () => {
+        const msg = purchaseOrderMessage({
+            ...singleVehiclePo,
+            lang: "ar",
+            doc: { title: "طلب عرض سعر", number: "#RFQ-01", isRfq: true },
+            supplier: { contactPerson: "أحمد" },
+            perLineUnpriced: [false, true],
+        });
+        expect(msg).toContain("1 × Battery 70Ah (برجاء إفادتنا بالسعر)");
+        expect(msg).not.toContain("2 × Front brake pads (برجاء إفادتنا بالسعر)");
+    });
+
+    it("marker is NEVER injected into the description field — description passes through verbatim", () => {
+        // Regression contract for the "concatenated string leaks to
+        // WhatsApp" bug shape (see 'fixture — no inventory link'
+        // history). If a future refactor moved the marker into
+        // `lines[i].description`, the input description would
+        // survive verbatim ("Front brake pads"), and the marker
+        // would sit AFTER it as its own segment — which is what
+        // the current builder does and what this test pins.
+        const msg = purchaseOrderMessage({
+            ...basePo,
+            lines: [
+                { qty: 1, description: "SPECIAL_DESCRIPTION_MARKER" },
+                { qty: 1, description: "SPECIAL_DESCRIPTION_MARKER" },
+            ],
+            perLineUnpriced: [false, true],
+        });
+        // Description appears twice, both times exactly as passed in.
+        // On the unpriced line the marker follows as its own segment,
+        // separated by whitespace — not concatenated into the string.
+        const occurrences = (msg.match(/SPECIAL_DESCRIPTION_MARKER/g) || []).length;
+        expect(occurrences).toBe(2);
+        expect(msg).not.toContain("SPECIAL_DESCRIPTION_MARKER(please quote)");
+        expect(msg).not.toContain("SPECIAL_DESCRIPTION_MARKER (quote please)");
+    });
+
     it("both channels get IDENTICAL body — WhatsApp URL-encoded body equals email plain-text body", () => {
+        // Belt-and-braces on the "channels can't drift" contract.
+        // The email action passes `messageBody` directly as its text
+        // body; the WhatsApp button URL-encodes the same `messageBody`
+        // into wa.me?text=…. Decoding the URL must give back the
+        // exact plain-text body.
         const msg = purchaseOrderMessage(basePo);
         const waEncoded = `https://wa.me/97145551234?text=${encodeURIComponent(msg)}`;
         const decoded = decodeURIComponent(waEncoded.split("?text=")[1]);

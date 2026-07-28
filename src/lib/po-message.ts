@@ -94,13 +94,23 @@ export interface PurchaseOrderMessageInput {
     /**
      * Line items in display order. `description` renders VERBATIM —
      * it comes straight from Part.name and passes through to the
-     * supplier's WhatsApp / email as-is. Do NOT concatenate any
-     * marker (vehicle tag, "quote please", etc.) into it here or in
-     * the caller — anything user-visible-per-line lives in its own
-     * builder segment so a future refactor can't leak markers into
-     * the DB or downstream logs.
+     * supplier's WhatsApp / email. Do NOT concatenate the "please
+     * quote" marker into it; the builder appends that as its own
+     * segment based on `perLineUnpriced[i]` and the caller's own
+     * doc-kind classification lives outside this shape (see
+     * `poDocKind` in @/lib/po-doc-kind).
      */
     lines: Array<{ qty: number; description: string }>;
+    /**
+     * Per-line "unpriced" flag, matched to `lines` by INDEX. When
+     * `true`, the body renders a "(please quote)" suffix on that
+     * line so the supplier knows which items to quote in a mixed
+     * document. Callers derive this via `isLineUnpriced` from
+     * @/lib/po-doc-kind — never by inspecting the description or
+     * the qty×cost total, which would double-count the description
+     * field's job.
+     */
+    perLineUnpriced: readonly boolean[];
     /** Optional free-text note from PO.note. Rendered as its own paragraph. */
     note: string | null;
     /**
@@ -140,6 +150,7 @@ export function purchaseOrderMessage(input: PurchaseOrderMessageInput): string {
         note,
         publicUrl,
         perLineVehicle,
+        perLineUnpriced,
         distinctVehicles,
         lang,
     } = input;
@@ -195,6 +206,16 @@ export function purchaseOrderMessage(input: PurchaseOrderMessageInput): string {
             .join("\n")}`;
     }
 
+    // "Please quote" suffix — a SEPARATE segment appended after the
+    // vehicle tag (or straight after the description when there's no
+    // vehicle tag). Deliberately NOT concatenated into
+    // `l.description`, which passes through verbatim: description
+    // is user-facing text that lives in the DB (Part.name) and gets
+    // shipped to WhatsApp. Marker rendering is a display-time
+    // decision by this builder, not a stored string. See po-message
+    // input contract.
+    const pleaseQuoteTag = ar ? "(برجاء إفادتنا بالسعر)" : "(please quote)";
+
     const items = lines
         .map((l, i) => {
             const v = perLineVehicle[i] ?? null;
@@ -209,9 +230,16 @@ export function purchaseOrderMessage(input: PurchaseOrderMessageInput): string {
             //   multi-vehicle + unresolved         → "(no vehicle linked)"
             //   no header (0 resolved) + resolved  → inline (won't happen)
             //   no header + unresolved             → "(no vehicle linked)"
-            if (singleVehicle && v) return base;
-            if (v) return base + inlineTag(v);
-            return `${base} ${noVehicleTag}`;
+            let out: string;
+            if (singleVehicle && v) out = base;
+            else if (v) out = base + inlineTag(v);
+            else out = `${base} ${noVehicleTag}`;
+            // "(please quote)" appended AFTER whatever vehicle tag
+            // this line already carries — a mixed RFQ needs the
+            // supplier to see which specific lines to price, and
+            // the tag has to survive alongside vehicle context.
+            if (perLineUnpriced[i]) out = `${out} ${pleaseQuoteTag}`;
+            return out;
         })
         .join("\n");
     const closing = doc.isRfq

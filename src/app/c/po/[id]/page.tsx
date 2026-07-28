@@ -6,6 +6,7 @@ import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { DocumentHeader } from "@/components/document-header";
 import { PrintButton } from "@/components/print-button";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
+import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
 
 export const dynamic = "force-dynamic";
 
@@ -97,11 +98,8 @@ export default async function PublicPurchaseOrder({
     const locale = await getLocale();
     const tz = countryToTimeZone(po.garage.country ?? "UAE");
 
-    // For now the public supplier view is always titled Purchase
-    // Order. Doc-kind switching (RFQ when any line is unpriced)
-    // rides in a follow-up commit that wires poDocKind across all
-    // five surfaces at once.
-    const docTitle = t("documentPurchaseOrder");
+    const isRfq = poDocKind(po.lines) === "RFQ";
+    const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
     const docNumber = po.reference?.trim()
         ? po.reference
         : `#${po.id.slice(-6).toUpperCase()}`;
@@ -187,26 +185,44 @@ export default async function PublicPurchaseOrder({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 text-right tabular-nums">{l.qty}</td>
+                                    {/* Per-LINE decision, not per-document: a
+                                        mixed RFQ shows real prices on priced
+                                        lines and a "please quote" marker only
+                                        on the ones the supplier needs to fill
+                                        in. */}
                                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                                        {money(unit)}
+                                        {isLineUnpriced(l) ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <span>—</span>
+                                                {/* Marker element — NOT part of the
+                                                    description or any stored field. */}
+                                                <span className="rounded-md border border-warning-500/40 bg-warning-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                                                    {t("lineUnpricedTag")}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            money(unit)
+                                        )}
                                     </td>
                                     <td className="px-3 py-2 text-right tabular-nums">
-                                        {money(l.qty * unit)}
+                                        {isLineUnpriced(l) ? "—" : money(l.qty * unit)}
                                     </td>
                                 </tr>
                             );
                         })}
                     </tbody>
-                    <tfoot className="border-t border-border bg-surface-2/50 text-sm font-medium">
-                        <tr>
-                            <td colSpan={4} className="px-3 py-2 text-right">
-                                {t("printTotalsLabel")}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                                {money(total)}
-                            </td>
-                        </tr>
-                    </tfoot>
+                    {isRfq ? null : (
+                        <tfoot className="border-t border-border bg-surface-2/50 text-sm font-medium">
+                            <tr>
+                                <td colSpan={4} className="px-3 py-2 text-right">
+                                    {t("printTotalsLabel")}
+                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                    {money(total)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
 

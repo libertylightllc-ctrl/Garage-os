@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
+import { FromEstimateSubmit } from "@/components/from-estimate-submit";
 import {
     createPoFromEstimateAction,
     autoCreatePartsFromEstimateLinesAction,
@@ -496,33 +497,40 @@ export default async function ConvertFromEstimatePage({
                                     )}
                                 </label>
 
-                                <div className="pt-1">
-                                    <Button
-                                        type="submit"
-                                        variant="hero"
-                                        disabled={suppliers.length === 0}
-                                    >
-                                        {t("createDraftPoFromEstimate")}
-                                    </Button>
-                                </div>
-
-                                {/* Totals footer for orientation — sum the
-                                    convertible prefills so the owner can
-                                    eyeball the ballpark before submitting.
-                                    Not authoritative (the action re-reads
-                                    the form). */}
+                                {/* Button label + approx-total live in a
+                                    client component that watches the actual
+                                    cost inputs — the doc kind switches to
+                                    "Create request for quotation" the moment
+                                    any cost is 0 (or blank / negative), and
+                                    approx-total disappears in that case. See
+                                    from-estimate-submit.tsx. */}
                                 {filtered.convertible.length > 0 ? (
-                                    <p className="pt-1 text-xs text-muted-foreground">
-                                        {t("approxTotal")}:{" "}
-                                        {money(
-                                            filtered.convertible.reduce((s, l) => {
-                                                const q = Math.max(1, Math.ceil(Number(l.qty)));
-                                                const c = l.part ? Number(l.part.cost) : 0;
-                                                return s + q * c;
-                                            }, 0),
-                                        )}
-                                    </p>
-                                ) : null}
+                                    <FromEstimateSubmit
+                                        disabled={suppliers.length === 0}
+                                        labelPo={t("createDraftPoFromEstimate")}
+                                        labelRfq={t("createRfqFromEstimate")}
+                                        approxTotalLabel={t("approxTotal")}
+                                        // Client component re-runs the total
+                                        // over the LIVE inputs (not the server
+                                        // prefill, which is 0 for
+                                        // uncosted-in-inventory parts). Locale
+                                        // + currency matches the internal
+                                        // `money()` above so the two hints in
+                                        // this file agree on formatting.
+                                        locale="en-AE"
+                                        currency="AED"
+                                    />
+                                ) : (
+                                    <div className="pt-1">
+                                        <Button
+                                            type="submit"
+                                            variant="hero"
+                                            disabled={suppliers.length === 0}
+                                        >
+                                            {t("createDraftPoFromEstimate")}
+                                        </Button>
+                                    </div>
+                                )}
                             </form>
                         )}
 

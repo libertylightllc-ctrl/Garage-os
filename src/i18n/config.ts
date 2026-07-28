@@ -482,6 +482,18 @@ const en = {
   // booking (customer)
   bookTitle: "Book a service",
   bookIntro: "Tell us what’s wrong in your own words — we’ll propose a fix.",
+  // Photo rejection banner on the public booking form. Enum codes
+  // come from validateImageUpload / LogoValidationError; anything not
+  // in the render-side whitelist falls back to `bookPhotoErr_generic`.
+  // Server-side detail (provider text, exception message) NEVER
+  // reaches this — only the code.
+  bookPhotoErrorTitle: "Your photo wasn’t accepted",
+  bookPhotoErr_generic: "Try a different photo, or continue without one.",
+  bookPhotoErr_EMPTY: "The photo file appears to be empty.",
+  bookPhotoErr_TOO_LARGE: "The photo is too large — please try a smaller one (up to 5 MB).",
+  bookPhotoErr_BAD_MIME: "That file type isn’t supported. Please use PNG, JPEG, or WEBP.",
+  bookPhotoErr_BAD_MAGIC: "The photo doesn’t look like a real image. Please try another.",
+  bookPhotoErr_MIME_MISMATCH: "The photo type doesn’t match the file contents. Please try another.",
   yourName: "Your name",
   phone: "Phone",
   make: "Make",
@@ -1750,6 +1762,13 @@ const ar: typeof en = {
 
   bookTitle: "احجز خدمة",
   bookIntro: "أخبرنا بالمشكلة بكلماتك — وسنقترح الحل.",
+  bookPhotoErrorTitle: "لم يتم قبول الصورة",
+  bookPhotoErr_generic: "جرّب صورة أخرى، أو تابع بدون صورة.",
+  bookPhotoErr_EMPTY: "ملف الصورة فارغ.",
+  bookPhotoErr_TOO_LARGE: "حجم الصورة كبير جدًا — الحد الأقصى 5 ميغابايت.",
+  bookPhotoErr_BAD_MIME: "نوع الملف غير مدعوم. استخدم PNG أو JPEG أو WEBP.",
+  bookPhotoErr_BAD_MAGIC: "الملف لا يبدو أنه صورة حقيقية. جرّب ملفًا آخر.",
+  bookPhotoErr_MIME_MISMATCH: "نوع الصورة لا يطابق محتواها. جرّب ملفًا آخر.",
   yourName: "الاسم",
   phone: "الهاتف",
   make: "الماركة",

@@ -9,11 +9,40 @@ export const dynamic ="force-dynamic";
 const field =
 "w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20";
 
-export default async function CustomerBooking({ params }: { params: Promise<{ garageId: string }> }) {
+export default async function CustomerBooking({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ garageId: string }>;
+  searchParams: Promise<{ photoError?: string }>;
+}) {
   const { garageId } = await params;
+  const { photoError } = await searchParams;
   const garage = await prisma.garage.findUnique({ where: { id: garageId }, select: { name: true } });
   if (!garage) notFound();
   const t = await getT();
+
+  // Render-side whitelist for the photo rejection banner. Same
+  // discipline as the ?emailError= handling on the purchasing PO
+  // page — only the known enum codes from validateImageUpload's
+  // LogoValidationError can render as a specific message. Anything
+  // else (URL fuzzing, a code we later add server-side, a browser
+  // extension mangling the query string) falls through to the generic
+  // copy. Never t(`bookPhotoErr_${code}`) with an untrusted code —
+  // that would send arbitrary URL-supplied strings into i18n lookup.
+  const KNOWN_PHOTO_ERRORS = new Set([
+    "EMPTY",
+    "TOO_LARGE",
+    "BAD_MIME",
+    "BAD_MAGIC",
+    "MIME_MISMATCH",
+  ] as const);
+  type KnownPhotoError = typeof KNOWN_PHOTO_ERRORS extends Set<infer T> ? T : never;
+  const photoErrorMessage: string | null = photoError
+    ? KNOWN_PHOTO_ERRORS.has(photoError as KnownPhotoError)
+      ? t(`bookPhotoErr_${photoError as KnownPhotoError}` as const)
+      : t("bookPhotoErr_generic")
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
@@ -22,6 +51,16 @@ export default async function CustomerBooking({ params }: { params: Promise<{ ga
         <h1 className="text-2xl font-semibold tracking-tight">{t("bookTitle")}</h1>
         <p className="text-sm text-text-mute">{t("bookIntro")}</p>
       </div>
+
+      {photoErrorMessage ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500"
+        >
+          <div className="font-semibold">{t("bookPhotoErrorTitle")}</div>
+          <div className="mt-0.5">{photoErrorMessage}</div>
+        </div>
+      ) : null}
 
       <form action={createBookingPublic} className="flex flex-col gap-3">
         <input type="hidden" name="garageId" value={garageId} />

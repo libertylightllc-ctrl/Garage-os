@@ -42,14 +42,21 @@ export async function createBookingPublic(formData: FormData) {
   if (photo instanceof File && photo.size > 0) {
     // Public unauthenticated surface — magic-byte + MIME allowlist
     // BEFORE storage, tighter size cap than the authenticated flows.
-    // Rejection surfaces as a user-facing 4xx (BOOKING_PHOTO_<code>)
-    // rather than a stack trace; the customer needs to know their photo
-    // was rejected, not that the server exploded.
+    // On rejection, redirect BACK to the booking form with an enum
+    // code in the query string (never provider text, never the raw
+    // exception message — see the render-side whitelist on the
+    // booking page for the same discipline as ?emailError= in the
+    // purchasing flow). Throwing an Error here hits Next's generic
+    // error boundary — "Something went wrong / ref: 1900925717" — and
+    // the customer has no idea their photo was the problem. That
+    // regression breaks bookings for anyone uploading a HEIC iPhone
+    // photo or an oversize image, so the code round-trips through the
+    // URL and renders as a proper banner.
     try {
       await validateImageUpload(photo, { maxBytes: PUBLIC_INTAKE_PHOTO_MAX_BYTES });
     } catch (e) {
       if (e instanceof LogoValidationError) {
-        throw new Error(`Booking photo rejected: ${e.message}`);
+        redirect(`/c/book/${garageId}?photoError=${e.code}`);
       }
       throw e;
     }

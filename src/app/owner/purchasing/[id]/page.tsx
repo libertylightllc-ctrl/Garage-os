@@ -6,17 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { DocumentHeader } from "@/components/document-header";
 import { PrintButton } from "@/components/print-button";
-import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
+import { SendPoViaWhatsAppButton } from "@/components/SendPoViaWhatsAppButton";
+import { PoSentHistory } from "@/components/PoSentHistory";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
-import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
-import { purchaseOrderMessage } from "@/lib/po-message";
+import { normalizeToE164 } from "@/lib/wa";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
 import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
-import { signId } from "@/lib/tokens";
-import { appUrl } from "@/lib/whatsapp";
 import {
   addPoLineAction,
   editPoLineAction,
@@ -24,6 +22,7 @@ import {
   setPoStatusAction,
   receivePurchaseOrderAction,
   returnPurchaseOrderAction,
+  sendPurchaseOrderWhatsAppAction,
 } from "@/app/actions/purchasing";
 
 export const dynamic = "force-dynamic";
@@ -159,11 +158,10 @@ export default async function PurchaseOrderDetailPage({
   // fallback so we always show something.
   const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
 
-  // Public supplier-facing link — signed token so the URL isn't
-  // guessable and can't be replayed against a different document
-  // kind. Appended as the final line of both channel bodies.
-  const poToken = signId("po", po.id);
-  const publicUrl = `${appUrl()}/c/po/${poToken}`;
+  // The public /c/po/[token] link used to be built here and appended
+  // to the wa.me body. Both send channels now compose that URL inside
+  // their own actions — the page no longer needs to build or render
+  // it.
 
   // Vehicle context — resolved from the auto-created chain.
   // Feeds the Vehicle column in the table below AND the header
@@ -172,30 +170,21 @@ export default async function PurchaseOrderDetailPage({
   // and "(no vehicle linked)" in the message body).
   const vehicles = resolvePoVehicles(po.lines);
 
-  // Shared body — same text goes down BOTH channels (WhatsApp link
-  // + email plain-text), so the copy can't drift. `publicUrl` is
-  // the last line either way.
-  const messageBody = purchaseOrderMessage({
-    doc: { title: docTitle, number: docNumber, isRfq },
-    garage: { name: garage?.name ?? "" },
-    supplier: { contactPerson: po.supplier.contactPerson },
-    lines: po.lines.map((l) => ({
-      qty: l.qty,
-      description: l.part.name,
-    })),
-    note: po.note,
-    publicUrl,
-    perLineVehicle: po.lines.map((l) => vehicles.perLine.get(l.id) ?? null),
-    perLineUnpriced: po.lines.map(isLineUnpriced),
-    distinctVehicles: vehicles.distinct,
-    lang: locale === "ar" ? "ar" : "en",
-  });
+  // The shared message body used to be built here for the wa.me href.
+  // It now lives inside sendPurchaseOrderWhatsAppAction (and C's email
+  // action) — the same purchaseOrderMessage() shape, called from ONE
+  // place per channel so the copy still can't drift. This page only
+  // needs to know whether the supplier phone is usable enough to
+  // enable the button, not what would go through it.
 
-  // WhatsApp — build the wa.me URL on the server; the button just
-  // renders the anchor. Disabled state fires when the supplier phone
-  // is missing or unnormalizable (see normalizeToE164).
+  // WhatsApp — the button is now a form POST that hits
+  // sendPurchaseOrderWhatsAppAction. That action writes a HANDED_OFF
+  // audit row before redirecting to wa.me, so we no longer build the
+  // wa.me URL here. Client-side normalizeToE164 still runs to gate
+  // the disabled state: no valid phone → show the button disabled
+  // rather than round-trip through the action just to fail.
   const phoneE164 = normalizeToE164(po.supplier.phone);
-  const waHref = phoneE164 ? buildWaMeUrl(phoneE164, messageBody) : null;
+  const waDisabled = !phoneE164;
 
   const printedOnLabel = fmtDate(new Date(), locale, tz);
 
@@ -225,10 +214,12 @@ export default async function PurchaseOrderDetailPage({
             <Printer aria-hidden="true" className="h-4 w-4" />
             {t("printPo")}
           </PrintButton>
-          <SendViaWhatsAppButton
-            href={waHref}
+          <SendPoViaWhatsAppButton
+            action={sendPurchaseOrderWhatsAppAction}
+            poId={po.id}
             label={t("sendViaWhatsApp")}
-            disabledReason={waHref ? undefined : t("supplierNoPhoneReason")}
+            disabled={waDisabled}
+            disabledReason={waDisabled ? t("supplierNoPhoneReason") : undefined}
           />
         </div>
 
@@ -269,6 +260,17 @@ export default async function PurchaseOrderDetailPage({
             </div>
           </div>
         ) : null}
+
+        {/* Sent history — one row per send attempt (WhatsApp click or
+            email dispatch), newest first. Every attempt visible; no
+            dedupe. Off-print — the log is for the shop, not the
+            supplier. See PoSentHistory for the honesty-about-WhatsApp
+            wording. */}
+        <PoSentHistory
+          purchaseOrderId={po.id}
+          garageId={session.user.garageId}
+          timeZone={tz}
+        />
 
         <div>
           {/* Standardized document header. Title switches between

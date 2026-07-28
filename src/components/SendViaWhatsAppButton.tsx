@@ -13,6 +13,10 @@ import { MessageCircle } from "lucide-react";
  * fail-visible not fail-silent.
  *
  * Server component — no client state needed. Just an <a href>.
+ *
+ * For PURCHASE ORDERS (which are audited via PurchaseOrderSend), use
+ * SendPoViaWhatsAppButton instead — it POSTs to a server action that
+ * logs the HANDED_OFF row before redirecting to wa.me.
  */
 export function SendViaWhatsAppButton({
     href,

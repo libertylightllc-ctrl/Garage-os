@@ -14,7 +14,14 @@ import {
   normalizePartName,
   findNormalizedMatch,
 } from "@/lib/estimate-to-po";
-import { buildPoLineVehicleSnapshot } from "@/lib/po-vehicle";
+import { buildPoLineVehicleSnapshot, resolvePoVehicles } from "@/lib/po-vehicle";
+import { purchaseOrderMessage } from "@/lib/po-message";
+import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
+import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
+import { signId } from "@/lib/tokens";
+import { appUrl } from "@/lib/whatsapp";
+import { getLocale, getT } from "@/i18n/server";
+import { logPoSend } from "@/lib/po-send-log";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -815,4 +822,140 @@ export async function autoCreatePartsFromEstimateLinesAction(formData: FormData)
 
   revalidatePath("/owner/purchasing/from-estimate");
   redirect(await retryPath());
+}
+
+/**
+ * Send-via-WhatsApp: log the intent, then redirect to wa.me.
+ *
+ * The button used to be a plain <a href="wa.me/…"> with a server-
+ * computed href, which meant we had no idea whether the user clicked
+ * it — no audit row. This action inverts that: form POST → server
+ * builds the same body → writes a HANDED_OFF row → redirects to the
+ * wa.me URL. The user's WhatsApp opens with the message drafted; they
+ * still have to hit Send inside WhatsApp. That's why the audit status
+ * is HANDED_OFF, not SENT — we know we handed it off, we don't know
+ * they sent it.
+ *
+ * documentKind is captured HERE, before the redirect, from
+ * poDocKind(po.lines) — deliberately not recomputed on read. A PO can
+ * be edited from RFQ into a priced PO after sending; the row still
+ * says "this went out as an RFQ" because that's what left the shop.
+ *
+ * The log write is fire-and-forget-safe (see logPoSend). If the audit
+ * row fails to persist for any reason, the wa.me redirect still
+ * happens — losing a row is strictly better than blocking a legit
+ * send.
+ */
+export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
+  const user = await requireOperational();
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/owner/purchasing");
+
+  const po = await prisma.purchaseOrder.findFirst({
+    where: { id, garageId: user.garageId },
+    include: {
+      supplier: {
+        select: { name: true, phone: true, contactPerson: true },
+      },
+      lines: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          part: {
+            select: {
+              name: true,
+              autoCreatedFromLine: {
+                include: {
+                  estimate: {
+                    include: {
+                      jobCard: {
+                        select: {
+                          number: true,
+                          vehicle: {
+                            select: {
+                              id: true,
+                              make: true,
+                              model: true,
+                              year: true,
+                              plate: true,
+                              vin: true,
+                              engineSize: true,
+                              fuelType: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!po) redirect("/owner/purchasing");
+
+  const detailPath = `/owner/purchasing/${po.id}`;
+
+  const phoneE164 = normalizeToE164(po.supplier.phone);
+  if (!phoneE164) {
+    // No usable phone — this shouldn't normally reach the action because
+    // the button is disabled server-side. But defence in depth: bounce
+    // back cleanly rather than throw.
+    redirect(detailPath);
+  }
+
+  // Capture documentKind + doc metadata BEFORE anything else. The
+  // whole point of the snapshot is that a later edit (unpriced line
+  // gets a price, RFQ → PO) does NOT rewrite the audit row.
+  const capturedDocKind: "PO" | "RFQ" = poDocKind(po.lines);
+  const t = await getT();
+  const locale = await getLocale();
+  const docTitle = capturedDocKind === "RFQ" ? t("documentRfq") : t("documentPurchaseOrder");
+  const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
+
+  const publicUrl = `${appUrl()}/c/po/${signId("po", po.id)}`;
+  const vehicles = resolvePoVehicles(po.lines);
+  const garage = await prisma.garage.findUnique({
+    where: { id: user.garageId },
+    select: { name: true },
+  });
+
+  const messageBody = purchaseOrderMessage({
+    doc: { title: docTitle, number: docNumber, isRfq: capturedDocKind === "RFQ" },
+    garage: { name: garage?.name ?? "" },
+    supplier: { contactPerson: po.supplier.contactPerson },
+    lines: po.lines.map((l) => ({ qty: l.qty, description: l.part.name })),
+    note: po.note,
+    publicUrl,
+    perLineVehicle: po.lines.map((l) => vehicles.perLine.get(l.id) ?? null),
+    perLineUnpriced: po.lines.map(isLineUnpriced),
+    distinctVehicles: vehicles.distinct,
+    lang: locale === "ar" ? "ar" : "en",
+  });
+
+  const waHref = buildWaMeUrl(phoneE164, messageBody);
+
+  // Sender name for the audit snapshot. `user.name` on SessionUser is
+  // populated from the JWT (see src/auth.ts); fall back to email if
+  // the JWT was minted before name was included. Frozen here so a
+  // future rename or offboarding can't rewrite the row.
+  const senderName = user.name?.trim() || user.email || "unknown";
+
+  await logPoSend({
+    purchaseOrderId: po.id,
+    garageId: user.garageId,
+    channel: "WHATSAPP",
+    recipient: phoneE164,            // snapshot of what we actually opened WhatsApp with
+    documentKind: capturedDocKind,   // captured BEFORE the redirect, not on read
+    sentByUserId: user.id,
+    sentByName: senderName,          // snapshot — future User.name changes don't rewrite this row
+    status: "HANDED_OFF",            // wa.me is a hand-off; we can't observe delivery
+  });
+
+  // Revalidate so the Sent history section reflects the new row when
+  // the user comes back to the page.
+  revalidatePath(detailPath);
+  redirect(waHref);
 }

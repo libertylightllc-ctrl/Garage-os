@@ -922,6 +922,15 @@ model PurchaseOrderSend {
   documentKind      PurchaseOrderDocumentKind // snapshot of PO vs RFQ classification at send time
   sentByUserId      String
   sentBy            User                      @relation("PurchaseOrderSentBy", fields: [sentByUserId], references: [id])
+  // Sender's display name AT SEND TIME. Same snapshot argument as
+  // `recipient` and `documentKind`: a staff member leaving or being
+  // renamed must not retroactively rewrite who sent a document. The
+  // history table prefers this string; falls back to the User join
+  // only when null (defensive against any pre-migration row — none
+  // can exist today since this ships in the same commit as the
+  // first writer, but keeping the fallback costs nothing and keeps
+  // the reader honest about the ordering).
+  sentByName        String?
   status            PurchaseOrderSendStatus
   providerMessageId String?                   // email only (Resend id); null for WHATSAPP
   errorCode         String?                   // our enum only, never provider text (see src/lib/mail.ts MailErrorCode)

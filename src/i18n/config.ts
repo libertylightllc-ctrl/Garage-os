@@ -190,6 +190,21 @@ const en = {
   printPo: "🖨 Print",
   sendViaWhatsApp: "Send via WhatsApp",
   supplierNoPhoneReason: "Supplier phone number is missing — add it on the supplier record to enable WhatsApp.",
+  // Sent history — one row per send attempt on a PO, newest first.
+  // See src/components/PoSentHistory.tsx. Copy is deliberately honest
+  // about the difference between "we handed it to WhatsApp on your
+  // phone" (we DON'T know what happened next) and "we sent it via
+  // email" (we know Resend accepted the message).
+  sendHistoryTitle: "Sent history",
+  sendHistoryEmpty: "No send history yet.",
+  sendChannel_WHATSAPP: "WhatsApp",
+  sendChannel_EMAIL: "Email",
+  sendDocChip_PO: "PO",
+  sendDocChip_RFQ: "RFQ",
+  sendStatus_HANDED_OFF_whatsapp: "Opened in WhatsApp — delivery not confirmed",
+  sendStatus_HANDED_OFF_email: "Handed to email provider — delivery not confirmed",
+  sendStatus_SENT_email: "Sent by email",
+  sendStatus_FAILED: "Failed",
   emailSentOk: "Sent by email.",
   emailSentError: "Email failed to send.",
   // Whitelisted failure codes surfaced from the send action. The URL
@@ -1457,6 +1472,16 @@ const ar: typeof en = {
   printPo: "🖨 طباعة",
   sendViaWhatsApp: "إرسال عبر واتساب",
   supplierNoPhoneReason: "رقم هاتف المورد غير مسجّل — أضفه في بيانات المورد لتفعيل الإرسال عبر واتساب.",
+  sendHistoryTitle: "سجل الإرسال",
+  sendHistoryEmpty: "لا يوجد سجل إرسال بعد.",
+  sendChannel_WHATSAPP: "واتساب",
+  sendChannel_EMAIL: "بريد إلكتروني",
+  sendDocChip_PO: "أمر شراء",
+  sendDocChip_RFQ: "طلب عرض سعر",
+  sendStatus_HANDED_OFF_whatsapp: "فُتح في واتساب — لم يتم تأكيد التسليم",
+  sendStatus_HANDED_OFF_email: "تم التسليم لمزوّد البريد — لم يتم تأكيد التسليم",
+  sendStatus_SENT_email: "تم الإرسال بالبريد",
+  sendStatus_FAILED: "فشل",
   emailSentOk: "تم الإرسال بالبريد الإلكتروني.",
   emailSentError: "فشل إرسال البريد الإلكتروني.",
   emailErr_generic: "حاول مرة أخرى بعد قليل. إذا استمرت المشكلة، تواصل مع الدعم.",

@@ -207,6 +207,74 @@ export async function validateLogoFile(file: File): Promise<void> {
   }
 }
 
+// ─── GENERIC IMAGE UPLOAD ────────────────────────────────────────────
+// Attaches to the three legacy saveUpload() call sites (intake photos,
+// tech job photos, tech-step photos). Same magic-byte + MIME discipline
+// as the logo/invoice validators, with a per-site size cap because the
+// public intake surface can't share the same latitude as an
+// authenticated tech's phone camera.
+//
+// SVG is explicitly rejected — stored SVG served from our origin
+// executes <script> when navigated to as a top-level document. See
+// docs/upload-validation-spec.md for the full attack path this closes.
+
+/** Default cap for authenticated tech / advisor photo uploads. Phone photos are 2–5 MB. */
+export const AUTH_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+
+/** Cap for the PUBLIC unauthenticated intake surface. Tighter — no auth, no rate limit. */
+export const PUBLIC_INTAKE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Validate a candidate image before it reaches saveUpload().
+ *
+ * Reuses sniffImageType() so PNG/JPEG/WEBP are the ONLY allowed shapes;
+ * SVG cannot pass because it has no matching magic-byte signature.
+ * HEIC is also rejected here — the tech phone flow accepts phone-camera
+ * defaults (usually JPEG); HEIC would need conversion before storage.
+ *
+ * `maxBytes` is per-caller so the public intake surface can be tighter
+ * than the authenticated tech flow.
+ *
+ * Throws LogoValidationError with a stable `.code` on any failure so
+ * server actions can map to a user-facing message via the existing
+ * error handling. Rejects with:
+ *   EMPTY, TOO_LARGE, BAD_MIME, BAD_MAGIC, MIME_MISMATCH.
+ */
+export async function validateImageUpload(
+  file: File,
+  opts: { maxBytes: number },
+): Promise<void> {
+  if (file.size === 0) {
+    throw new LogoValidationError("EMPTY", "Photo file is empty.");
+  }
+  if (file.size > opts.maxBytes) {
+    throw new LogoValidationError(
+      "TOO_LARGE",
+      `Photo must be ${Math.floor(opts.maxBytes / (1024 * 1024))} MB or smaller (got ${Math.round(file.size / (1024 * 1024))} MB).`,
+    );
+  }
+  if (!LOGO_ALLOWED_MIME.includes(file.type as (typeof LOGO_ALLOWED_MIME)[number])) {
+    throw new LogoValidationError(
+      "BAD_MIME",
+      `Photo must be PNG, JPEG, or WEBP (got "${file.type || "unknown"}").`,
+    );
+  }
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const sniffed = sniffImageType(head);
+  if (sniffed === null) {
+    throw new LogoValidationError(
+      "BAD_MAGIC",
+      "Photo file content does not match its declared type.",
+    );
+  }
+  if (sniffed !== file.type) {
+    throw new LogoValidationError(
+      "MIME_MISMATCH",
+      `Photo declared "${file.type}" but actual content is "${sniffed}".`,
+    );
+  }
+}
+
 // ─── INVOICE IMAGE (OCR import) ──────────────────────────────────────
 // A photographed supplier invoice for the parts-import OCR flow. Same
 // magic-byte + MIME discipline as the logo, but a phone-photo-sized cap

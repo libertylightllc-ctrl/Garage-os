@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { saveUpload } from "@/lib/storage";
+import { saveUpload, validateImageUpload, AUTH_PHOTO_MAX_BYTES } from "@/lib/storage";
 import { canLogWork } from "@/lib/claim";
 import { requireTech } from "@/lib/action-guards";
 
@@ -49,8 +49,12 @@ export async function addStepAction(formData: FormData) {
 
   if (type === "PHOTO") {
     const f = formData.get("file");
-    if (f instanceof File && f.size > 0) photoUrl = await saveUpload(f, user.garageId);
-    else throw new Error("No photo selected");
+    if (!(f instanceof File) || f.size === 0) throw new Error("No photo selected");
+    // Magic-byte + MIME allowlist BEFORE storage. Same discipline as
+    // checkInPhotoAction. Rejects SVG (no matching magic bytes) and
+    // any MIME/content mismatch. See docs/upload-validation-spec.md.
+    await validateImageUpload(f, { maxBytes: AUTH_PHOTO_MAX_BYTES });
+    photoUrl = await saveUpload(f, user.garageId);
   } else if (type === "FINISH") {
     transcript = "Technician marked work finished";
   } else {

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { transition, skipTo, type JobAction, type JobStatus } from "@/lib/jobcard-status";
-import { saveUpload } from "@/lib/storage";
+import { saveUpload, validateImageUpload, AUTH_PHOTO_MAX_BYTES } from "@/lib/storage";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
 import { clampPriority } from "@/lib/priority";
@@ -576,6 +576,10 @@ export async function checkInPhotoAction(formData: FormData) {
 
   const f = formData.get("file");
   if (!(f instanceof File) || f.size === 0) throw new Error("No photo selected");
+  // Magic-byte + MIME allowlist BEFORE storage. SVG cannot pass —
+  // sniffImageType only accepts PNG/JPEG/WEBP. See storage.ts and
+  // docs/upload-validation-spec.md for the attack path this closes.
+  await validateImageUpload(f, { maxBytes: AUTH_PHOTO_MAX_BYTES });
   const photoUrl = await saveUpload(f, user.garageId);
 
   await prisma.jobStep.create({

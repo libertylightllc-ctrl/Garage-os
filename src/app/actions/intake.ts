@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { runIntake } from "@/lib/intake";
-import { saveUpload } from "@/lib/storage";
+import {
+  saveUpload,
+  validateImageUpload,
+  PUBLIC_INTAKE_PHOTO_MAX_BYTES,
+  LogoValidationError,
+} from "@/lib/storage";
 import { requireAdvisor } from "@/lib/action-guards";
 
 // PUBLIC — customer booking (no auth; this is the WhatsApp/web booking surface).
@@ -34,7 +39,22 @@ export async function createBookingPublic(formData: FormData) {
 
   const photoUrls: string[] = [];
   const photo = formData.get("photo");
-  if (photo instanceof File && photo.size > 0) photoUrls.push(await saveUpload(photo, garageId));
+  if (photo instanceof File && photo.size > 0) {
+    // Public unauthenticated surface — magic-byte + MIME allowlist
+    // BEFORE storage, tighter size cap than the authenticated flows.
+    // Rejection surfaces as a user-facing 4xx (BOOKING_PHOTO_<code>)
+    // rather than a stack trace; the customer needs to know their photo
+    // was rejected, not that the server exploded.
+    try {
+      await validateImageUpload(photo, { maxBytes: PUBLIC_INTAKE_PHOTO_MAX_BYTES });
+    } catch (e) {
+      if (e instanceof LogoValidationError) {
+        throw new Error(`Booking photo rejected: ${e.message}`);
+      }
+      throw e;
+    }
+    photoUrls.push(await saveUpload(photo, garageId));
+  }
 
   // AI proposes (metered to AiEvent); a human advisor confirms later.
   const proposal = await runIntake({ garageId, text });

@@ -1,8 +1,10 @@
-# Upload validation gap — three saveUpload call sites need magic-byte validation
+# Upload validation gap — CLOSED 2026-07-29
 
 Discovered 2026-07-24 while considering an `.svg` MIME addition to
-`CONTENT_TYPES` for a fixture. Not built tonight — this doc captures the
-attack path + fix shape so the work isn't lost.
+`CONTENT_TYPES` for a fixture. Fixed 2026-07-29 — see the "Fix as
+shipped" section at the end. The rest of this document remains as the
+threat-model record so the "why" survives if someone considers relaxing
+the closure later.
 
 ## Current state
 
@@ -139,3 +141,51 @@ threat model needs a second look:
 - Wire it into the three unvalidated call sites.
 - Add tests per the list above.
 - Reconsider SVG only after those land.
+
+## Fix as shipped (2026-07-29)
+
+- `validateImageUpload(file, {maxBytes})` in `src/lib/storage.ts`. Same
+  magic-byte discipline as `validateInvoiceImage`; SVG cannot pass
+  because `sniffImageType` only accepts PNG/JPEG/WEBP.
+- Two size caps: `PUBLIC_INTAKE_PHOTO_MAX_BYTES = 5 MB` for the
+  unauthenticated `createBookingPublic` surface; `AUTH_PHOTO_MAX_BYTES
+  = 8 MB` for the authenticated tech/advisor flows. Regression-pinned
+  by a test that fails if `PUBLIC_INTAKE_PHOTO_MAX_BYTES` ≥
+  `AUTH_PHOTO_MAX_BYTES`.
+- All three call sites wired:
+  - `intake.ts:37` — public path maps `LogoValidationError` to a
+    user-facing `"Booking photo rejected: …"` error instead of a
+    stack trace.
+  - `jobs.ts:579` and `techsteps.ts:52` — throw-through per existing
+    action pattern.
+- Serve-route hardening in `src/app/api/files/[name]/route.ts`
+  (defence-in-depth):
+  - Extension allowlist first → 404 on miss. SVG explicitly excluded.
+    Kills the "one PR later adds `.svg` to `CONTENT_TYPES`" regression
+    path: the route refuses SVG regardless of what `CONTENT_TYPES`
+    says.
+  - `X-Content-Type-Options: nosniff` on every response — blocks
+    browsers from re-classifying an `image/*` response as `text/html`.
+  - `Content-Disposition: inline` for images (advisor + tech workflows
+    depend on `<img src="/api/files/…">` rendering), `attachment` for
+    audio (top-level nav downloads rather than attempting to render).
+- Tests: `src/lib/__tests__/upload-validation.test.ts` (10 assertions
+  covering happy path, five reject codes, size-cap invariant, error
+  shape, and the structural "URL never contains the client filename"
+  pin) + `src/app/api/files/[name]/__tests__/route.test.ts` (9
+  assertions covering the extension allowlist, disposition switch,
+  nosniff header, and path-traversal).
+
+## What still isn't done
+
+- **Prod data audit** — the audit script (`scratchpad-audit-uploads.ts`
+  during dev, deleted before commit) could not connect to prod
+  (`.env` credentials returned auth failure at time of fix). Local
+  dev DB had 0 non-allowlisted extensions across `Booking.photoUrls`
+  + `JobStep.photoUrl`. The prod audit remains an operator task —
+  paste the same SQL against prod and confirm the row counts before
+  assuming this is prevention-only.
+- SVG is still not accepted. That's the point — the "reconsider adding
+  SVG" line from the original section above should stay parked unless
+  a real requirement lands. Every case seen so far can be handled by
+  a large-enough PNG.

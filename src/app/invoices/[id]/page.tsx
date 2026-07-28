@@ -19,7 +19,7 @@ import { JobNumberBadge } from "@/components/job-number-badge";
 import { DocumentHeader } from "@/components/document-header";
 import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
-import { invoiceMessage } from "@/lib/wa-templates";
+import { invoiceMessage } from "@/lib/po-message";
 import { appUrl } from "@/lib/whatsapp";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is"use server"and can only export async functions — exporting a

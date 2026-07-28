@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
-import { invoiceMessage } from "@/lib/wa-templates";
+import { invoiceMessage, purchaseOrderMessage } from "@/lib/po-message";
 
 describe("normalizeToE164 — all 8 cases", () => {
     it("full E.164 with plus", () => {
@@ -119,5 +119,228 @@ describe("invoiceMessage — template rendering", () => {
             invoice: { total: 300, number: 1 },
         });
         expect(msg).toContain("AED 300.00");
+    });
+});
+
+describe("purchaseOrderMessage — supplier PO WhatsApp/email body", () => {
+    const basePo = {
+        doc: { title: "Purchase Order", number: "#ABC123", isRfq: false },
+        garage: { name: "Demo Motors" },
+        supplier: { contactPerson: "Ahmed" },
+        lines: [
+            { qty: 2, description: "Front brake pads" },
+            { qty: 1, description: "Battery 70Ah" },
+        ],
+        note: null,
+        publicUrl: "https://garageos.shop/c/po/AAA~BBB",
+        perLineVehicle: [null, null],
+        distinctVehicles: [],
+        lang: "en" as const,
+    };
+
+    const singleVehiclePo = {
+        ...basePo,
+        perLineVehicle: [
+            {
+                vehicleId: "v1",
+                make: "Nissan",
+                model: "Patrol",
+                year: 2022,
+                plate: "D 12345",
+                vin: "JN1TANT32U0123456",
+                engineSize: "5",
+                fuelType: "PETROL",
+                jobNumber: 42,
+            },
+            {
+                vehicleId: "v1",
+                make: "Nissan",
+                model: "Patrol",
+                year: 2022,
+                plate: "D 12345",
+                vin: "JN1TANT32U0123456",
+                engineSize: "5",
+                fuelType: "PETROL",
+                jobNumber: 42,
+            },
+        ],
+        distinctVehicles: [
+            {
+                vehicleId: "v1",
+                make: "Nissan",
+                model: "Patrol",
+                year: 2022,
+                plate: "D 12345",
+                vin: "JN1TANT32U0123456",
+                engineSize: "5",
+                fuelType: "PETROL",
+                jobNumber: 42,
+            },
+        ],
+    };
+
+    const multiVehiclePo = {
+        ...basePo,
+        perLineVehicle: [
+            {
+                vehicleId: "v1",
+                make: "Nissan",
+                model: "Patrol",
+                year: 2022,
+                plate: "D 12345",
+                vin: null,
+                engineSize: null,
+                fuelType: null,
+                jobNumber: 42,
+            },
+            {
+                vehicleId: "v2",
+                make: "Toyota",
+                model: "Land Cruiser",
+                year: 2021,
+                plate: "A 12345",
+                vin: null,
+                engineSize: null,
+                fuelType: null,
+                jobNumber: 43,
+            },
+        ],
+        distinctVehicles: [
+            {
+                vehicleId: "v1",
+                make: "Nissan",
+                model: "Patrol",
+                year: 2022,
+                plate: "D 12345",
+                vin: null,
+                engineSize: null,
+                fuelType: null,
+                jobNumber: 42,
+            },
+            {
+                vehicleId: "v2",
+                make: "Toyota",
+                model: "Land Cruiser",
+                year: 2021,
+                plate: "A 12345",
+                vin: null,
+                engineSize: null,
+                fuelType: null,
+                jobNumber: 43,
+            },
+        ],
+    };
+
+    it("PO body (EN): greets by name, heads with title+number+garage, lists qty × item", () => {
+        const msg = purchaseOrderMessage(basePo);
+        expect(msg).toContain("Hi Ahmed,");
+        expect(msg).toContain("Purchase Order #ABC123 — from Demo Motors");
+        expect(msg).toContain("2 × Front brake pads");
+        expect(msg).toContain("1 × Battery 70Ah");
+        expect(msg).not.toMatch(/prices? and availability/i);
+    });
+
+    it("RFQ body (EN): appends the price-and-availability closing prompt", () => {
+        const msg = purchaseOrderMessage({
+            ...basePo,
+            doc: { title: "Request for Quotation", number: "#RFQ-01", isRfq: true },
+        });
+        expect(msg).toContain("Request for Quotation #RFQ-01");
+        expect(msg).toContain("Please share prices and availability for each item.");
+    });
+
+    it("no contactPerson → generic greeting, not empty 'Hi ,'", () => {
+        const msg = purchaseOrderMessage({
+            ...basePo,
+            supplier: { contactPerson: null },
+        });
+        expect(msg.startsWith("Hi,")).toBe(true);
+        expect(msg).not.toContain("Hi ,");
+    });
+
+    it("AR locale: greeting + heading + closing render in Arabic", () => {
+        const msg = purchaseOrderMessage({
+            ...basePo,
+            doc: { title: "طلب عرض سعر", number: "#RFQ-01", isRfq: true },
+            supplier: { contactPerson: "أحمد" },
+            lang: "ar",
+        });
+        expect(msg).toContain("مرحباً أحمد،");
+        expect(msg).toContain("طلب عرض سعر #RFQ-01 — Demo Motors");
+        expect(msg).toContain("برجاء إفادتنا بالأسعار والتوفر لكل بند.");
+    });
+
+    it("PO note renders as its own paragraph when present", () => {
+        const msg = purchaseOrderMessage({ ...basePo, note: "  Please deliver by Thursday.  " });
+        expect(msg).toContain("\n\nPlease deliver by Thursday.");
+        expect(msg).not.toContain("Please deliver by Thursday.  ");
+    });
+
+    it("publicUrl renders as the LAST line under a 'View document' label (EN)", () => {
+        const msg = purchaseOrderMessage(basePo);
+        const lines = msg.split("\n");
+        expect(lines[lines.length - 1]).toBe(
+            "View document: https://garageos.shop/c/po/AAA~BBB",
+        );
+    });
+
+    it("publicUrl label is Arabic when lang=ar", () => {
+        const msg = purchaseOrderMessage({
+            ...basePo,
+            lang: "ar",
+            doc: { title: "طلب عرض سعر", number: "#RFQ-01", isRfq: true },
+            supplier: { contactPerson: "أحمد" },
+        });
+        const lines = msg.split("\n");
+        expect(lines[lines.length - 1]).toBe(
+            "عرض المستند: https://garageos.shop/c/po/AAA~BBB",
+        );
+    });
+
+    it("single-vehicle: 'For: …' header line names the car, items stay bare", () => {
+        const msg = purchaseOrderMessage(singleVehiclePo);
+        expect(msg).toContain("For: Nissan Patrol 2022 · D 12345 · VIN JN1TANT32U0123456 · 5 PETROL · JC-42");
+        expect(msg).toContain("2 × Front brake pads");
+        expect(msg).not.toMatch(/Front brake pads.*\(JC-42/);
+        expect(msg).not.toContain("(no vehicle linked)");
+    });
+
+    it("single-vehicle + some unresolved lines: unresolved lines still tagged '(no vehicle linked)'", () => {
+        const msg = purchaseOrderMessage({
+            ...singleVehiclePo,
+            lines: [
+                { qty: 2, description: "Front brake pads" },
+                { qty: 1, description: "Air filter" },
+            ],
+            perLineVehicle: [singleVehiclePo.perLineVehicle[0], null],
+        });
+        expect(msg).toContain("For: Nissan Patrol");
+        expect(msg).toContain("2 × Front brake pads");
+        expect(msg).not.toContain("2 × Front brake pads (no vehicle linked)");
+        expect(msg).toContain("1 × Air filter (no vehicle linked)");
+    });
+
+    it("multi-vehicle: header lists all + each item gets its inline (JC-N · Make Model) tag", () => {
+        const msg = purchaseOrderMessage(multiVehiclePo);
+        expect(msg).toContain("For vehicles:");
+        expect(msg).toContain("• Nissan Patrol 2022 · D 12345 · JC-42");
+        expect(msg).toContain("• Toyota Land Cruiser 2021 · A 12345 · JC-43");
+        expect(msg).toContain("2 × Front brake pads (JC-42 · Nissan Patrol)");
+        expect(msg).toContain("1 × Battery 70Ah (JC-43 · Toyota Land Cruiser)");
+    });
+
+    it("zero-resolved: no 'For:' header, each unresolved item gets '(no vehicle linked)' inline", () => {
+        const msg = purchaseOrderMessage(basePo);
+        expect(msg).not.toContain("For:");
+        expect(msg).not.toContain("For vehicles:");
+        expect(msg).toContain("2 × Front brake pads (no vehicle linked)");
+        expect(msg).toContain("1 × Battery 70Ah (no vehicle linked)");
+    });
+
+    it("both channels get IDENTICAL body — WhatsApp URL-encoded body equals email plain-text body", () => {
+        const msg = purchaseOrderMessage(basePo);
+        const waEncoded = `https://wa.me/97145551234?text=${encodeURIComponent(msg)}`;
+        const decoded = decodeURIComponent(waEncoded.split("?text=")[1]);
+        expect(decoded).toBe(msg);
     });
 });

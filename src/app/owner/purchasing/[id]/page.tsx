@@ -1,13 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Printer, MessageCircle } from "lucide-react";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { DocumentHeader } from "@/components/document-header";
+import { PrintButton } from "@/components/print-button";
+import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
+import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
+import { purchaseOrderMessage } from "@/lib/po-message";
+import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
+import { signId } from "@/lib/tokens";
+import { appUrl } from "@/lib/whatsapp";
 import {
   addPoLineAction,
   editPoLineAction,
@@ -43,10 +51,58 @@ export default async function PurchaseOrderDetailPage({
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, garageId: session.user.garageId },
     include: {
-      supplier: { select: { name: true } },
+      // Widened select — phone/email/contactPerson feed the print
+      // header block + the WhatsApp send button. All optional on
+      // Supplier, all handled gracefully when absent.
+      supplier: {
+        select: {
+          name: true,
+          phone: true,
+          email: true,
+          contactPerson: true,
+        },
+      },
       lines: {
         orderBy: { createdAt: "asc" },
-        include: { part: { select: { name: true, sku: true } } },
+        include: {
+          part: {
+            select: {
+              name: true,
+              sku: true,
+              // Vehicle chain — resolves to a vehicle when the
+              // Part was spun up via the from-estimate flow; null
+              // otherwise. See resolvePoVehicles for the rendering
+              // logic that turns this into per-line / per-doc
+              // context. Nested include is intentional — one query
+              // instead of N+1.
+              autoCreatedFromLine: {
+                include: {
+                  estimate: {
+                    include: {
+                      jobCard: {
+                        select: {
+                          number: true,
+                          vehicle: {
+                            select: {
+                              id: true,
+                              make: true,
+                              model: true,
+                              year: true,
+                              plate: true,
+                              vin: true,
+                              engineSize: true,
+                              fuelType: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -85,26 +141,102 @@ export default async function PurchaseOrderDetailPage({
     new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED" }).format(v);
   const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost), 0);
 
+  // ── Print / send derivations ─────────────────────────────────
+  // For now every document is labelled a Purchase Order. The RFQ
+  // classifier (any unpriced line → RFQ) rides in a follow-up
+  // commit that wires poDocKind across all five surfaces at once.
+  const docTitle = t("documentPurchaseOrder");
+  // The visible identifier for print / WhatsApp — supplier's own
+  // quote reference if they gave us one (helps them match against
+  // THEIR record), otherwise the last 6 chars of our PO id as a
+  // fallback so we always show something.
+  const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
+
+  // Public supplier-facing link — signed token so the URL isn't
+  // guessable and can't be replayed against a different document
+  // kind. Appended as the final line of both channel bodies.
+  const poToken = signId("po", po.id);
+  const publicUrl = `${appUrl()}/c/po/${poToken}`;
+
+  // Vehicle context — resolved from the auto-created chain.
+  // Feeds the Vehicle column in the table below AND the header
+  // shape in the WhatsApp/email body. See resolvePoVehicles for
+  // the null semantics (unresolved lines render "—" on the surface
+  // and "(no vehicle linked)" in the message body).
+  const vehicles = resolvePoVehicles(po.lines);
+
+  // Shared body — same text goes down BOTH channels (WhatsApp link
+  // + email plain-text), so the copy can't drift. `publicUrl` is
+  // the last line either way.
+  const messageBody = purchaseOrderMessage({
+    doc: { title: docTitle, number: docNumber, isRfq: false },
+    garage: { name: garage?.name ?? "" },
+    supplier: { contactPerson: po.supplier.contactPerson },
+    lines: po.lines.map((l) => ({
+      qty: l.qty,
+      description: l.part.name,
+    })),
+    note: po.note,
+    publicUrl,
+    perLineVehicle: po.lines.map((l) => vehicles.perLine.get(l.id) ?? null),
+    distinctVehicles: vehicles.distinct,
+    lang: locale === "ar" ? "ar" : "en",
+  });
+
+  // WhatsApp — build the wa.me URL on the server; the button just
+  // renders the anchor. Disabled state fires when the supplier phone
+  // is missing or unnormalizable (see normalizeToE164).
+  const phoneE164 = normalizeToE164(po.supplier.phone);
+  const waHref = phoneE164 ? buildWaMeUrl(phoneE164, messageBody) : null;
+
+  const printedOnLabel = fmtDate(new Date(), locale, tz);
+
   return (
     <div>
-      <AppNav role="OWNER" active="purchasing" />
-      <main className="mx-auto max-w-3xl space-y-6 p-6">
-        <div>
+      {/* Nav is hidden on print — a printed PO/RFQ shouldn't carry app
+          chrome to the supplier. */}
+      <div className="print:hidden">
+        <AppNav role="OWNER" active="purchasing" />
+      </div>
+      <main className="mx-auto max-w-3xl space-y-6 p-6 print:max-w-none print:p-0">
+        {/* Back link — off-print. */}
+        <div className="print:hidden">
           <Link
             href="/owner/purchasing"
             className="text-xs uppercase tracking-widest text-muted-foreground underline-offset-2 hover:underline"
           >
             {t("backToPurchasing")}
           </Link>
-          {/* Standardized document header. PO has no vehicle and no
-              gapless per-garage number — supplier name plays the role of
-              the identifying line, and the supplier's own quote number
-              (if present) renders as "Supplier ref: …" so a reader
-              never assumes it's OUR document number. Honest labelling
-              per AR's spec (2026-07-24). */}
+        </div>
+
+        {/* Action bar — Print + Send via WhatsApp + Send via Email.
+            Hidden on print. The three buttons live above the
+            document so the printout starts cleanly at the header. */}
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <PrintButton className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-sm font-semibold hover:bg-surface-2">
+            <Printer aria-hidden="true" className="h-4 w-4" />
+            {t("printPo")}
+          </PrintButton>
+          <SendViaWhatsAppButton
+            href={waHref}
+            label={t("sendViaWhatsApp")}
+            disabledReason={waHref ? undefined : t("supplierNoPhoneReason")}
+          />
+        </div>
+
+        <div>
+          {/* Standardized document header. Title switches between
+              "Purchase Order" and "Request for Quotation" based on
+              whether the lines have prices — an unpriced doc going
+              to a supplier is an RFQ, and calling it a PO would be
+              dishonest labelling. PO has no vehicle and no gapless
+              per-garage number — supplier name plays the role of
+              the identifying line, and the supplier's own quote
+              number (if present) renders as "Supplier ref: …" so a
+              reader never assumes it's OUR document number. */}
           <div className="mt-1">
             <DocumentHeader
-              title={t("documentPurchaseOrder")}
+              title={docTitle}
               supplier={{
                 name: po.supplier.name,
                 reference: po.reference,
@@ -118,6 +250,36 @@ export default async function PurchaseOrderDetailPage({
               logoUrl={garage?.logoUrl ?? "/brand/garageos-logo.png"}
             />
           </div>
+
+          {/* Print-only supplemental block. Everything DocumentHeader
+              doesn't already carry: the date the printout was made,
+              the supplier's contact details (so a phone call to
+              follow up can happen off the printed page), and a
+              totals row. Renders only on print (`hidden print:block`)
+              — screen state stays as it was. */}
+          <section className="mt-3 hidden text-xs text-zinc-700 print:block">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              <div>
+                <span className="font-medium">{t("printedOn")}:</span> {printedOnLabel}
+              </div>
+              <div>
+                <span className="font-medium">{t("printSupplierContact")}:</span>{" "}
+                {[
+                  po.supplier.contactPerson,
+                  po.supplier.phone,
+                  po.supplier.email,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </div>
+              <div className="col-span-2 border-t border-zinc-300 pt-1">
+                <span className="font-medium">{t("printTotalsLabel")}:</span>{" "}
+                {po.lines.length} {t("poLines").toLowerCase()}
+                {" · "}
+                {money(total)}
+              </div>
+            </div>
+          </section>
           {/* Status pill + summary caption below the header. Status
               moved out of the h1 so the standardized stacked shape stays
               consistent with the other document surfaces. */}
@@ -151,6 +313,7 @@ export default async function PurchaseOrderDetailPage({
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">{t("partName")}</th>
+                <th className="px-4 py-3">{t("colVehicle")}</th>
                 <th className="px-4 py-3 text-right">{t("poOrdered")}</th>
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poReceived")}</th> : null}
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poOutstanding")}</th> : null}
@@ -170,10 +333,35 @@ export default async function PurchaseOrderDetailPage({
                 // multiple <td>s wouldn't be valid HTML. Non-DRAFT rows
                 // stay read-only; server-side guard also rejects.
                 const editFormId = `edit-po-line-${l.id}`;
+                const lineVehicle = vehicles.perLine.get(l.id) ?? null;
                 return (
                   <tr key={l.id}>
                     <td className="px-4 py-3 font-medium">
                       {l.part.name} <span className="font-mono text-xs text-muted-foreground">{l.part.sku}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {lineVehicle ? (
+                        <div className="space-y-0.5">
+                          <div className="font-medium">
+                            {formatVehicleShort(lineVehicle)}
+                          </div>
+                          {lineVehicle.vin ? (
+                            <div className="font-mono text-[10px] text-muted-foreground">
+                              VIN {lineVehicle.vin}
+                            </div>
+                          ) : null}
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            JC-{lineVehicle.jobNumber}
+                          </div>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-muted-foreground"
+                          title={t("noVehicleLinkedReason")}
+                        >
+                          {t("noVehicleLinkedShort")}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {isDraft ? (
@@ -227,7 +415,7 @@ export default async function PurchaseOrderDetailPage({
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{money(l.qty * Number(l.unitCost))}</td>
                     {isDraft ? (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right print:hidden">
                         <div className="flex items-center justify-end gap-2">
                           {/* Edit form — inputs live in the cells above,
                               associated by the `form=` attribute.
@@ -255,7 +443,7 @@ export default async function PurchaseOrderDetailPage({
               })}
               {po.lines.length === 0 ? (
                 <tr>
-                  <td colSpan={isDraft ? 5 : 4} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={isDraft ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
                     {t("noPoLines")}
                   </td>
                 </tr>
@@ -263,6 +451,11 @@ export default async function PurchaseOrderDetailPage({
             </tbody>
           </table>
         </div>
+
+        {/* Everything below the lines table is interactive editing —
+            receive, return, add-line, status transitions. All hidden on
+            print. The printable content ends at the lines table above. */}
+        <div className="contents print:hidden">
 
         {/* Receive delivery — PARTIAL receiving (2b). Enter how many of each
             line arrived NOW (≤ outstanding). Defaults to the full outstanding
@@ -412,6 +605,7 @@ export default async function PurchaseOrderDetailPage({
             </form>
           </section>
         ) : null}
+        </div>
       </main>
     </div>
   );

@@ -5,6 +5,7 @@ import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
 import { createPurchaseOrderAction } from "@/app/actions/purchasing";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,8 @@ export default async function NewPurchaseOrderPage({
             .
           </p>
         ) : (
-          <form action={createPurchaseOrderAction} className="space-y-4 rounded-xl border border-border p-4">
+          <form id="new-po-form" action={createPurchaseOrderAction} className="space-y-4 rounded-xl border border-border p-4">
+            <UnsavedChangesGuard formId="new-po-form" />
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poSupplier")}</span>
               <select

@@ -348,7 +348,15 @@ export default async function PurchaseOrderDetailPage({
 
         {error ? (
           <p className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
-            {error}
+            {/* Structured codes from editPoLineAction get their own
+                message so the copy can be locale-aware and specific.
+                Anything else (legacy string errors) passes through
+                verbatim for now. */}
+            {error === "stale_line"
+              ? t("poLineStaleError")
+              : error === "line_not_found"
+              ? t("poLineNotFoundError")
+              : error}
           </p>
         ) : null}
 
@@ -492,6 +500,16 @@ export default async function PurchaseOrderDetailPage({
                           <form id={editFormId} action={editPoLineAction} className="inline-flex">
                             <input type="hidden" name="poId" value={po.id} />
                             <input type="hidden" name="lineId" value={l.id} />
+                            {/* Stale-write guard: the row's `updatedAt`
+                                comes back verbatim so the server can
+                                refuse a save from a tab that opened
+                                before someone else's write landed. See
+                                editPoLineAction. */}
+                            <input
+                              type="hidden"
+                              name="expectedUpdatedAt"
+                              value={l.updatedAt.toISOString()}
+                            />
                             <button className="text-xs text-brand-900 hover:underline dark:text-white" type="submit">
                               {t("save")}
                             </button>

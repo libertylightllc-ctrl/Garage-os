@@ -223,6 +223,14 @@ const en = {
   purchasingOpen: "Open",
   purchasingClosed: "Closed",
   noPurchaseOrders: "No purchase orders yet.",
+  // Stale-write banners on the PO detail page. editPoLineAction
+  // narrows its UPDATE by the row's `updatedAt`; if another tab has
+  // saved since this form loaded, the count is 0 and the action
+  // redirects with one of these codes. The table below the banner
+  // re-renders from the DB, so the fresh values are visible on the
+  // same page.
+  poLineStaleError: "Someone else changed this line while you had it open. The row below shows the current values — re-apply your edit if you still want to change it.",
+  poLineNotFoundError: "This line was removed while you had it open. Reload the page to see the current lines.",
   notFoundTitle: "Not found",
   notFoundBody: "This page doesn’t exist or the link has expired.",
   notFoundGoHome: "Go home",
@@ -1540,6 +1548,8 @@ const ar: typeof en = {
   purchasingOpen: "مفتوحة",
   purchasingClosed: "مغلقة",
   noPurchaseOrders: "لا توجد أوامر شراء بعد.",
+  poLineStaleError: "قام شخص آخر بتغيير هذا السطر أثناء فتحه لديك. يعرض الصف أدناه القيم الحالية — أعد تطبيق تعديلك إذا كنت لا تزال ترغب في التغيير.",
+  poLineNotFoundError: "تم حذف هذا السطر أثناء فتحه لديك. أعد تحميل الصفحة لعرض الأسطر الحالية.",
   notFoundTitle: "غير موجود",
   notFoundBody: "هذه الصفحة غير موجودة أو انتهت صلاحية الرابط.",
   notFoundGoHome: "الصفحة الرئيسية",

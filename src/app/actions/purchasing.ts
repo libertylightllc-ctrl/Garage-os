@@ -197,6 +197,15 @@ export async function editPoLineAction(formData: FormData) {
   const lineId = String(formData.get("lineId") ?? "").trim();
   const qty = parsePositiveInt(String(formData.get("qty") ?? ""));
   const unitCost = parseMoney(String(formData.get("unitCost") ?? ""));
+  // Stale-write guard — the form renders the row's `updatedAt` (as an
+  // ISO string) into a hidden input. We narrow the WHERE by that same
+  // timestamp so a save from a stale tab produces count===0 instead of
+  // silently overwriting a change made in another tab. Prisma stores
+  // DateTime at ms precision on Postgres timestamp(3); `@updatedAt` is
+  // set from JS Date, so the round-trip is exact. See
+  // docs/optimistic-concurrency-spec.md for the wider gap this is a
+  // narrow slice of.
+  const expectedUpdatedAtRaw = String(formData.get("expectedUpdatedAt") ?? "").trim();
 
   const back = `/owner/purchasing/${poId}`;
   if (!poId || !lineId) fail("Missing line.", back);
@@ -206,17 +215,30 @@ export async function editPoLineAction(formData: FormData) {
   if (po.status !== "DRAFT") fail("Lines can only be changed on a draft order.", back);
   if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
   if (unitCost === null) fail("Unit cost must be a non-negative number.", back);
+  const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
+  if (!expectedUpdatedAt || Number.isNaN(expectedUpdatedAt.getTime())) {
+    // Old client bundle submitting without the hidden input, or a
+    // hand-crafted POST — treat as stale so we never silently overwrite.
+    fail("stale_line", back);
+  }
 
-  // Scope the update through the owned PO so a foreign lineId can't match.
-  // updateMany returns { count } — a count of 0 means the line wasn't on
-  // this PO (or was deleted between page render and submit). Silently
-  // succeeding on a no-op edit would look like it worked but mutate
-  // nothing; make it loud.
+  // Scope the update through the owned PO so a foreign lineId can't match,
+  // AND narrow by updatedAt so a stale tab produces count===0.
   const claim = await prisma.purchaseOrderLine.updateMany({
-    where: { id: lineId, purchaseOrderId: po.id },
+    where: { id: lineId, purchaseOrderId: po.id, updatedAt: expectedUpdatedAt },
     data: { qty, unitCost },
   });
-  if (claim.count === 0) fail("Line not found — reload and try again.", back);
+  if (claim.count === 0) {
+    // Distinguish "row deleted" from "row changed since fetch" so the
+    // banner can say the right thing. Row still there → someone edited
+    // it under us; row gone → someone removed it.
+    const stillExists = await prisma.purchaseOrderLine.findFirst({
+      where: { id: lineId, purchaseOrderId: po.id },
+      select: { id: true },
+    });
+    if (!stillExists) fail("line_not_found", back);
+    fail("stale_line", back);
+  }
 
   revalidatePath(back);
   redirect(back);

@@ -24,6 +24,12 @@ vi.mock("next/navigation", () => ({
 }));
 const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
+// The guard verifies the JWT's user id resolves to a live User row via
+// prisma.user.count. This suite never seeds a User, so the real query
+// returns 0 and every action redirects to /login before it can be
+// tested. Force the guard to say "yes, live user" so the actual
+// action-under-test runs.
+vi.mock("@/lib/session-user", () => ({ sessionUserExists: async () => true }));
 
 const {
   createPurchaseOrderAction,
@@ -213,10 +219,20 @@ describe("editPoLineAction", { retry: 3 }, () => {
     return { po, line };
   }
 
+  // `expectedUpdatedAt` is required — every existing test now threads
+  // the row's live `updatedAt` (ISO) through the form so the
+  // stale-write guard passes on the happy path. The three concurrency
+  // tests further down exercise the guard itself.
   it("edits qty + unitCost on a DRAFT line", async () => {
     const { po, line } = await draftPoWithLine(gA, "E1");
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "7", unitCost: "12.34" }));
+    await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "7",
+      unitCost: "12.34",
+      expectedUpdatedAt: line.updatedAt.toISOString(),
+    }));
     const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
     expect(row?.qty).toBe(7);
     expect(Number(row?.unitCost)).toBe(12.34);
@@ -225,7 +241,13 @@ describe("editPoLineAction", { retry: 3 }, () => {
   it("cannot edit a line on another garage's PO", async () => {
     const { po, line } = await draftPoWithLine(gB, "E2");
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "99", unitCost: "99.99" }));
+    await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "99",
+      unitCost: "99.99",
+      expectedUpdatedAt: line.updatedAt.toISOString(),
+    }));
     const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
     expect(row?.qty).toBe(2); // unchanged
     expect(Number(row?.unitCost)).toBe(10.0);
@@ -236,9 +258,84 @@ describe("editPoLineAction", { retry: 3 }, () => {
     const a1 = await draftPoWithLine(gA, "E3a");
     const a2 = await draftPO(gA);
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(editPoLineAction, form({ poId: a2.id, lineId: a1.line.id, qty: "99", unitCost: "99" }));
+    await call(editPoLineAction, form({
+      poId: a2.id,
+      lineId: a1.line.id,
+      qty: "99",
+      unitCost: "99",
+      expectedUpdatedAt: a1.line.updatedAt.toISOString(),
+    }));
     const row = await prisma.purchaseOrderLine.findUnique({ where: { id: a1.line.id } });
     expect(row?.qty).toBe(2); // unchanged
+  });
+
+  // ── Optimistic concurrency: fresh / stale / deleted ─────────────
+  // The stale-write guard narrows the UPDATE by the row's `updatedAt`
+  // that was rendered into the edit form's hidden input. A tab that
+  // opened before someone else's write must fail loud, not silently
+  // overwrite. See docs/optimistic-concurrency-spec.md for why this
+  // is scoped to editPoLineAction and not applied app-wide.
+
+  it("happy path: fresh updatedAt from a real DB read + updateMany round-trip", async () => {
+    // Guards against the ISO ↔ Prisma ↔ Postgres round-trip losing
+    // precision. If timestamp(3) truncates the microseconds our JS
+    // Date gave it, every fresh save fails as stale — worse than the
+    // bug this replaces. Read the row through the same include shape
+    // the detail page uses so the fixture matches production reality.
+    const { po, line } = await draftPoWithLine(gA, "F1");
+    const readBack = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(readBack).not.toBeNull();
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const redirected = await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "9",
+      unitCost: "3.50",
+      expectedUpdatedAt: readBack!.updatedAt.toISOString(),
+    }));
+    // Should have redirected back to the PO detail page (no error).
+    expect(redirected).not.toContain("error=");
+    const after = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(after?.qty).toBe(9);
+    expect(Number(after?.unitCost)).toBe(3.5);
+  });
+
+  it("stale updatedAt: refuses the write, row unchanged", async () => {
+    const { po, line } = await draftPoWithLine(gA, "F2");
+    const captured = line.updatedAt.toISOString();
+    // Simulate another tab writing between the render (captured) and
+    // this save. A raw SQL update advances `updatedAt` server-side —
+    // Prisma's `updateMany` with the auto @updatedAt would also
+    // advance it, but keeping the qty/cost stable makes the assert
+    // downstream unambiguous.
+    await prisma.$executeRaw`UPDATE "PurchaseOrderLine" SET "updatedAt" = NOW() + INTERVAL '1 second' WHERE id = ${line.id}`;
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const redirected = await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "77",
+      unitCost: "77.77",
+      expectedUpdatedAt: captured,
+    }));
+    expect(redirected).toContain("stale_line");
+    const after = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
+    expect(after?.qty).toBe(2); // unchanged
+    expect(Number(after?.unitCost)).toBe(10.0);
+  });
+
+  it("deleted row: refuses the write with line_not_found", async () => {
+    const { po, line } = await draftPoWithLine(gA, "F3");
+    const captured = line.updatedAt.toISOString();
+    await prisma.purchaseOrderLine.delete({ where: { id: line.id } });
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const redirected = await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "77",
+      unitCost: "77.77",
+      expectedUpdatedAt: captured,
+    }));
+    expect(redirected).toContain("line_not_found");
   });
 
   // qty validation
@@ -282,7 +379,13 @@ describe("editPoLineAction", { retry: 3 }, () => {
   it("accepts unitCost of 0 (free stock counts as a real transaction)", async () => {
     const { po, line } = await draftPoWithLine(gA, "E-zero");
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(editPoLineAction, form({ poId: po.id, lineId: line.id, qty: "1", unitCost: "0" }));
+    await call(editPoLineAction, form({
+      poId: po.id,
+      lineId: line.id,
+      qty: "1",
+      unitCost: "0",
+      expectedUpdatedAt: line.updatedAt.toISOString(),
+    }));
     const row = await prisma.purchaseOrderLine.findUnique({ where: { id: line.id } });
     expect(Number(row?.unitCost)).toBe(0);
   });

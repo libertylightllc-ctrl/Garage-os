@@ -144,7 +144,8 @@ dev` / `npm test`.
 
 Two env files:
 - `.env.local` — git-ignored. `DATABASE_URL` = `postgres://...@localhost:51214/...`
-  (the Prisma 7 bundled local Postgres). Loaded by:
+  (the Prisma 7 bundled local Postgres — canonical port triple 51213 / 51214 /
+  51215; see `docs/dev-db-proxy-spec.md`). Loaded by:
   - Next.js dev server (`npm run dev`) — native precedence
   - `prisma.config.ts` (every `prisma` CLI command) — explicit shim
   - `prisma/seed.ts` — explicit shim
@@ -156,11 +157,17 @@ Two env files:
   is loud.
 
 NPM scripts targeting the local DB (all read `.env.local`):
-- `npm run db:dev` — start the local Postgres (port 51214 + shadow 51215)
+- `npm run db:init` — one-shot create the `garageos` `prisma dev` server (fresh install / after `prisma dev rm`).
+- `npm run db:dev` — bring the DB up (creates if missing, else starts). Canonical port triple 51213 / 51214 / 51215.
+- `npm run db:doctor` — verify the machine's dev DB state (no phantoms, ports match); exits non-zero on drift with the exact recovery command.
 - `npm run db:migrate` — `prisma migrate dev` against local
 - `npm run db:reset` — wipe local + reapply migrations (needs explicit consent)
 - `npm run db:seed` — populate local with Demo Garage + 4 demo users
 - `npm run db:studio` — Prisma Studio on local
+
+See `docs/dev-db-proxy-spec.md` for how the port pinning actually works
+(`prisma dev`'s `--port` flags are silently ignored in v0.16.26; determinism
+comes from the "exactly one server named `garageos`" invariant).
 
 Production targets — explicit, intentional:
 - `npx prisma migrate deploy` — runs from the Vercel build step; manually

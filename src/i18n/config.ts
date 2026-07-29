@@ -223,6 +223,9 @@ const en = {
   purchasingOpen: "Open",
   purchasingClosed: "Closed",
   noPurchaseOrders: "No purchase orders yet.",
+  notFoundTitle: "Not found",
+  notFoundBody: "This page doesn’t exist or the link has expired.",
+  notFoundGoHome: "Go home",
   // Purchasing list — new columns + filter pills, added with the
   // widened list view. sendDocChip_PO / sendDocChip_RFQ / sendChannel_*
   // are reused from the send-audit work.
@@ -1537,6 +1540,9 @@ const ar: typeof en = {
   purchasingOpen: "مفتوحة",
   purchasingClosed: "مغلقة",
   noPurchaseOrders: "لا توجد أوامر شراء بعد.",
+  notFoundTitle: "غير موجود",
+  notFoundBody: "هذه الصفحة غير موجودة أو انتهت صلاحية الرابط.",
+  notFoundGoHome: "الصفحة الرئيسية",
   poDocNumberCol: "رقم المستند",
   poKindCol: "النوع",
   poVehicleCol: "المركبة / المهمة",

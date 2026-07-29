@@ -75,13 +75,23 @@ function summarizeVehicles(
     vehicleJobNumber: number | null;
   }>,
 ): VehicleSummary {
-  // Group by identity: prefer vehicleId, fall back to plate+jobNumber
-  // for the walk-in / no-Vehicle-row case (allowed by the schema
-  // comment on PurchaseOrderLine — snapshot without a linked Vehicle
-  // is legitimate when the car isn't in the DB).
+  // Group by vehicle identity ALONE — vehicleId when present, else
+  // plate. Job numbers are per-line context ("this part was ordered
+  // for JC-12 on that car"), NOT part of vehicle identity — collect
+  // them into a set so the summary lists "JC-12, JC-14" under one row
+  // instead of splitting the same car into two "vehicles" the moment
+  // it appears on two jobs. Previous key `plate|jobNumber` caused the
+  // "2 vehicles" false count on POs that touched one car across two
+  // jobs.
   const seen = new Map<
     string,
-    { make: string; model: string; year: number | null; plate: string; jobNumber: number | null }
+    {
+      make: string;
+      model: string;
+      year: number | null;
+      plate: string;
+      jobNumbers: Set<number>;
+    }
   >();
   for (const l of lines) {
     // Fully-null vehicle (catalog buy with no context) — skip. Not a
@@ -94,24 +104,33 @@ function summarizeVehicles(
     ) {
       continue;
     }
-    const key =
-      l.vehicleId ??
-      `${l.vehiclePlate ?? ""}|${l.vehicleJobNumber ?? ""}`;
-    if (!seen.has(key)) {
+    // Prefer vehicleId; fall back to plate. Namespace the fallback so
+    // a bare plate string can never collide with a Vehicle UUID.
+    const key = l.vehicleId ?? `plate:${l.vehiclePlate ?? ""}`;
+    const existing = seen.get(key);
+    if (existing) {
+      if (l.vehicleJobNumber != null) existing.jobNumbers.add(l.vehicleJobNumber);
+    } else {
+      const jobNumbers = new Set<number>();
+      if (l.vehicleJobNumber != null) jobNumbers.add(l.vehicleJobNumber);
       seen.set(key, {
         make: l.vehicleMake ?? "",
         model: l.vehicleModel ?? "",
         year: l.vehicleYear,
         plate: l.vehiclePlate ?? "",
-        jobNumber: l.vehicleJobNumber,
+        jobNumbers,
       });
     }
   }
   if (seen.size === 0) return { kind: "none" };
   if (seen.size === 1) {
     const v = [...seen.values()][0];
+    const jobList = [...v.jobNumbers].sort((a, b) => a - b);
+    const jobLabel = jobList.length
+      ? jobList.map((n) => `JC-${n}`).join(", ")
+      : "";
     const bits = [
-      v.jobNumber != null ? `JC-${v.jobNumber}` : "",
+      jobLabel,
       [v.make, v.model, v.year != null ? String(v.year) : ""].filter(Boolean).join(" "),
       v.plate,
     ].filter(Boolean);
@@ -315,13 +334,13 @@ export default async function PurchasingPage({
           <div className="flex flex-wrap items-center gap-1 gap-y-2 border-b border-border pb-2">
             {PURCHASE_ORDER_TABS.map((s) => {
               const isActive = s === currentStatus;
-              // Tab click resets kind + sent so a tab switch always
-              // lands on the full status view. Filter pills stay in
-              // the UI, letting the owner re-apply visibly.
+              // Carry kind + sent through the tab switch. "Show me
+              // unsent RFQs across statuses" is a real cross-status
+              // question — resetting on tab click made the owner
+              // re-apply both filters every time.
               const href = `/owner/purchasing?${buildQuery({
                 status: statusToUrlParam(s),
-                kind: "all",
-                sent: "all",
+                page: "",
               })}`;
               const count = countByStatus.get(s) ?? 0;
               return (

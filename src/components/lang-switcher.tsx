@@ -6,7 +6,26 @@ import { useRouter } from "next/navigation";
 export function LangSwitcher({ locale }: { locale: string }) {
     const router = useRouter();
     function set(l: string) {
-        document.cookie = `lang=${l};path=/;max-age=31536000`;
+        // Cookie scope: parent-domain on prod so the cookie survives
+        // any bounce between apex (`garageos.shop`) and www
+        // (`www.garageos.shop`) — Vercel 308-redirects apex → www, but
+        // a host-only cookie set on www is invisible to a subsequent
+        // request that arrives on apex first. Scoping to
+        // `.garageos.shop` makes the cookie readable on both hosts.
+        //
+        // Localhost gets NO `domain=` attribute — a `domain=localhost`
+        // (or `.localhost`) attribute is silently dropped by every
+        // major browser, which would break the toggle in local dev.
+        // Host-only is the correct scope for a single-host dev server.
+        //
+        // See docs/apex-www-cookie-scope-spec.md for the class of bug
+        // this addresses and the auth-session cookie that shares it.
+        const host = window.location.hostname;
+        const isGarageosShop =
+            host === "garageos.shop" || host.endsWith(".garageos.shop");
+        const domainAttr = isGarageosShop ? ";domain=.garageos.shop" : "";
+        const secureAttr = window.location.protocol === "https:" ? ";secure" : "";
+        document.cookie = `lang=${l};path=/${domainAttr};samesite=lax${secureAttr};max-age=31536000`;
         router.refresh();
     }
     const base = "px-2 py-0.5 text-xs rounded";

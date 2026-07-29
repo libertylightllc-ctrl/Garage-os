@@ -279,6 +279,55 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
     redirect("/advisor/jobs/new?error=fields");
   }
 
+  // ── Pre-flight: identify Cases A, B, C before writing anything ────────
+  // Vehicle has NO unique on (garageId, plate) at the schema level (verified
+  // 2026-07-30), so a naive `vehicle.create` under a different customer would
+  // silently corrupt the plate namespace — two Vehicle rows, same plate,
+  // different owners, and every plate-lookup surface (service history, PO
+  // vehicle snapshot, plate shortcut on this page) starts returning
+  // ambiguous results. The schema won't catch this; the action has to.
+  //
+  //   Case A (implicit): plate matches, phone matches the SAME customer.
+  //     → route through the existing `vehicleId` branch below so name /
+  //       email / vehicle spec get refreshed, no new rows written.
+  //   Case B: plate matches an existing Vehicle but under a DIFFERENT
+  //     customer. Could be a vehicle-sold case OR a plate typo — the action
+  //     cannot tell them apart. Kick back to the intake form with a clear
+  //     message; the disambiguation wizard is commit 2 (see
+  //     docs/intake-duplicate-handling-spec.md).
+  //   Case C: plate is new; the customer's phone already exists.
+  //     → today's fallthrough branch is already correct — `customer.upsert`
+  //       finds the existing customer and `vehicle.create` inserts under
+  //       them. No special handling required.
+  //   Default: everything is new — today's fallthrough branch is correct.
+  //
+  // Skip pre-flight when `vehicleId` is already set — that's the advisor
+  // explicitly picking an existing Vehicle from the picker, which is Case A
+  // by construction.
+  if (!vehicleId) {
+    const [existingVehicle, existingCustomer] = await Promise.all([
+      prisma.vehicle.findFirst({
+        where: { plate, customer: { garageId: user.garageId } },
+        select: { id: true, customerId: true },
+      }),
+      prisma.customer.findFirst({
+        where: { garageId: user.garageId, phone },
+        select: { id: true },
+      }),
+    ]);
+    if (existingVehicle && existingCustomer && existingVehicle.customerId === existingCustomer.id) {
+      // Case A implicit — reuse the existing Vehicle. The `vehicleId` branch
+      // in the transaction below will refresh name/phone/email/spec.
+      vehicleId = existingVehicle.id;
+    } else if (existingVehicle) {
+      // Case B — plate is under a different customer (or no customer with
+      // this phone exists yet). NEVER silently create a duplicate Vehicle
+      // row. Commit 2 replaces this redirect with the disambiguation page.
+      redirect("/advisor/jobs/new?error=plate_belongs_to_another_customer");
+    }
+    // Case C and default fall through to the transaction below untouched.
+  }
+
   // Resolve assigned tech (optional, must be in this garage).
   let assignedToId: string | null = null;
   if (assignedToRaw) {

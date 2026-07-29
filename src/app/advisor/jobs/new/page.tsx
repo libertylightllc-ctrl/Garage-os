@@ -17,6 +17,7 @@ const ERR: Record<string, MessageKey> = {
   noplate:"errFields",
   fields:"errFields",
   ocr:"errOcrFailed",
+  plate_belongs_to_another_customer: "errPlateBelongsToAnotherCustomer",
 };
 
 const FIELD ="rounded-md border border-border bg-transparent px-2 py-1 text-sm";

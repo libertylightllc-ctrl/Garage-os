@@ -625,6 +625,7 @@ const en = {
   errNoFile: "Select a Moulkia photo.",
   errFields: "Fill owner, mobile, plate, make and model.",
   errOcrFailed: "Couldn't read the Moulkia — please enter the details manually.",
+  errPlateBelongsToAnotherCustomer: "That plate is already registered to a different customer. Double-check the plate, or if this car has been sold, use the existing-vehicle flow to update the owner.",
   tryAgain: "Try again",
   // PhotoCapture (one-tap camera/mic) — UX labels
   takePhoto: "Take photo",
@@ -1885,6 +1886,7 @@ const ar: typeof en = {
   errNoFile: "اختر صورة الملكية.",
   errFields: "املأ المالك والجوال واللوحة والصنع والطراز.",
   errOcrFailed: "تعذّر قراءة الملكية — يرجى إدخال البيانات يدويًا.",
+  errPlateBelongsToAnotherCustomer: "رقم اللوحة مسجّل بالفعل لعميل مختلف. تحقّق من الرقم، أو إذا بيعت السيارة، استخدم مسار المركبة الحالية لتحديث بيانات المالك.",
   tryAgain: "حاول مجددًا",
   // PhotoCapture
   takePhoto: "التقاط صورة",

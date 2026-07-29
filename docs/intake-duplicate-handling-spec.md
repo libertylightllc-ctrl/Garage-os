@@ -10,9 +10,14 @@ problem shape so the analysis isn't lost.
 
 - Intake action lives under `src/app/advisor/jobs/new/**` (confirm page +
   action; not touched by any current commit).
-- Schema:
+- Schema (verified 2026-07-30 against `prisma/schema.prisma`):
   - `Customer @@unique([garageId, phone])`
-  - `Vehicle @@unique([garageId, plate])` (via customer relation)
+  - `Vehicle` — **no `@@unique`**, only `@@index([customerId])`. Duplicate
+    plates in the same garage are allowed by the schema; the intake action
+    is the only line of defence. (Earlier revisions of this doc claimed
+    `Vehicle @@unique([garageId, plate])` — that was wrong and had already
+    been dropped from schema.prisma; corrected here so the branching logic
+    isn't designed around a constraint that doesn't exist.)
   - `JobCard @@unique([garageId, number])`
 
 ## What happens today
@@ -120,3 +125,38 @@ Pre-flight lookup before writes:
 Commit strategy when the go-ahead comes: one commit for the action's
 branching + pre-flight lookup (Cases A + C + no-op default), a second
 commit for the Case B disambiguation surface, tests alongside each.
+
+## Public intake — `createBookingPublic` (proposed, not built)
+
+The public booking flow has the same silent-duplicate gap but no advisor
+to disambiguate at the moment of intake. Chosen approach when the time
+comes to build it: **flag it, don't block it.**
+
+- Accept the booking as normal — customer flow never fails, never asks a
+  question they can't answer.
+- Add a boolean column on `Booking` (name it for what it observes, not
+  what it means — e.g. `plateMatchesOtherCustomer`; a name like
+  `plateCollision` breaks the moment the definition shifts).
+- Set the flag at creation time when `(garageId, plate)` matches an
+  existing Vehicle under a DIFFERENT customer. Do NOT set it when the
+  match is under the SAME customer — that's a repeat customer, the
+  good path; badging it would train advisors to ignore the badge.
+- The `/advisor/bookings` list shows a "check owner" badge on flagged
+  rows. Confirming that booking routes through the same disambiguation
+  wizard commit 2 adds for the advisor path.
+
+Two notes to carry forward when this is built:
+
+1. **The flag is a snapshot, not a fact.** A collision can appear later
+   (two customers book the same plate an hour apart; the first booking's
+   flag was already false at write time). So the flag alone is not
+   enough — the confirm-time action must ALSO recheck the collision
+   before promoting a Booking to a JobCard, with the wizard as the real
+   backstop. Flag catches most cases; flag + confirm-time recheck is
+   complete.
+
+2. **Name the column for what it observes, not what it means.** The
+   business definition of "collision" may drift over time (does a match
+   under the same customer's spouse count? what about a merged customer
+   record?). `plateMatchesOtherCustomer` describes a query result, which
+   is stable. `plateCollision` describes a judgment, which isn't.

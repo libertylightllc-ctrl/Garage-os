@@ -13,9 +13,7 @@ import {
 import {
     pickEstimateForConversion,
     filterConvertibleLines,
-    slugifyToSku,
-    nextAutoSku,
-    withCollisionSuffix,
+    computeSkuChoice,
     findNormalizedMatch,
 } from "@/lib/estimate-to-po";
 import { formatJobNo } from "@/lib/jobcard-fields";
@@ -572,11 +570,28 @@ export default async function ConvertFromEstimatePage({
                                                 l.description,
                                                 existingParts,
                                             );
-                                            const slug = slugifyToSku(l.description);
-                                            const defaultSku = slug
-                                                ? withCollisionSuffix(slug, takenForDefaults)
-                                                : nextAutoSku(takenForDefaults);
+                                            const skuChoice = computeSkuChoice(
+                                                l.description,
+                                                existingParts,
+                                                takenForDefaults,
+                                            );
+                                            const defaultSku = skuChoice.value;
                                             takenForDefaults.add(defaultSku);
+                                            // Muted caption below the SKU input — see
+                                            // docs/auto-create-sku-bump-indicator-spec.md.
+                                            // Only fires on the two non-trivial branches;
+                                            // plain slug renders nothing.
+                                            const skuCaption =
+                                                skuChoice.kind === "bumped"
+                                                    ? t("autoCreateSkuBumped")
+                                                          .replace("{base}", skuChoice.base)
+                                                          .replace("{takenBy}", skuChoice.takenBy.name)
+                                                    : skuChoice.kind === "auto"
+                                                        ? t("autoCreateSkuAutoFallback").replace(
+                                                              "{value}",
+                                                              skuChoice.value,
+                                                          )
+                                                        : null;
                                             return (
                                                 <li
                                                     key={l.id}
@@ -609,8 +624,14 @@ export default async function ConvertFromEstimatePage({
                                                             <input
                                                                 name={`sku_${l.id}`}
                                                                 defaultValue={defaultSku}
+                                                                title={skuCaption ?? undefined}
                                                                 className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
                                                             />
+                                                            {skuCaption ? (
+                                                                <span className="text-[10px] leading-snug text-muted-foreground">
+                                                                    {skuCaption}
+                                                                </span>
+                                                            ) : null}
                                                         </label>
                                                         <label className="flex flex-col gap-1">
                                                             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">

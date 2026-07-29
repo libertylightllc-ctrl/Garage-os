@@ -265,3 +265,73 @@ export function findNormalizedMatch<P extends { id: string; name: string; sku: s
     }
     return null;
 }
+
+/**
+ * Which of the three SKU-generation branches a review row landed on.
+ *
+ *   - `slug`   — description slugged cleanly, no collision. Boring
+ *                default; render no caption.
+ *   - `bumped` — the slug collides with an existing Part in this
+ *                garage; withCollisionSuffix picked `<slug>-2` (or -N).
+ *                Caption should explain WHY and NAME the existing part
+ *                so the owner sees whether it's the same physical
+ *                thing (link instead) or genuinely different.
+ *   - `auto`   — description slugs to `""` (empty / punctuation-only)
+ *                and nextAutoSku picked `AUTO-N`. Caption should flag
+ *                this as a placeholder, not a meaningful code.
+ *
+ * The distinction exists purely for the review UI — the SKU generators
+ * themselves don't need to change, so the tag is computed here from
+ * the same inputs the generators use. See
+ * docs/auto-create-sku-bump-indicator-spec.md.
+ */
+export type SkuChoice<P extends { id: string; name: string; sku: string }> =
+    | { kind: "slug"; value: string }
+    | { kind: "bumped"; value: string; base: string; takenBy: P }
+    | { kind: "auto"; value: string };
+
+/**
+ * Pure — mirrors the exact branching in the review-page render
+ * (slugifyToSku → withCollisionSuffix / nextAutoSku) but tags the
+ * result. Callers use the tag to render the caption + i18n string,
+ * and MUST use the `.value` field (never re-derive from `.base`) for
+ * the actual SKU input default, so bump math and display math can't
+ * drift.
+ *
+ * `existingParts` and `takenSkus` are separate on purpose. The
+ * generator loop widens `takenSkus` per row (so two rows both
+ * slugging to `BRAKE-PADS` produce `BRAKE-PADS` + `BRAKE-PADS-2`),
+ * but `existingParts` is the fixed set of Parts already in the
+ * garage — used to look up who owns the base name for the "already
+ * used by X" caption. Passing the widening set as `existingParts`
+ * would name a phantom "taken-by" for the second row that doesn't
+ * correspond to any real Part.
+ */
+export function computeSkuChoice<P extends { id: string; name: string; sku: string }>(
+    description: string,
+    existingParts: readonly P[],
+    takenSkus: Set<string>,
+): SkuChoice<P> {
+    const slug = slugifyToSku(description);
+    if (!slug) {
+        return { kind: "auto", value: nextAutoSku(takenSkus) };
+    }
+    const value = withCollisionSuffix(slug, takenSkus);
+    if (value === slug) {
+        return { kind: "slug", value };
+    }
+    // Bumped. Find the existing Part that holds the base name. Uses
+    // the FIXED existingParts set — never the widening takenSkus —
+    // so we cite a real Part, not a same-batch peer that hasn't been
+    // written to the DB yet.
+    const takenBy = existingParts.find((p) => p.sku === slug);
+    if (!takenBy) {
+        // Base is in takenSkus but NOT in existingParts — must be a
+        // same-batch collision from an earlier row's default. Fall
+        // back to a plain slug tag; there's no real Part to name.
+        // Empirically rare (two free-text lines slugging to the same
+        // base in one estimate) but honest is better than a fake name.
+        return { kind: "slug", value };
+    }
+    return { kind: "bumped", value, base: slug, takenBy };
+}

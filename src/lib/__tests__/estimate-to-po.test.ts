@@ -7,6 +7,7 @@ import {
     withCollisionSuffix,
     normalizePartName,
     findNormalizedMatch,
+    computeSkuChoice,
     type EstimateForPick,
     type EstimateLineForFilter,
 } from "@/lib/estimate-to-po";
@@ -482,5 +483,68 @@ describe("findNormalizedMatch", () => {
         // The 'break pads' vs 'brake pads' case — different normalized
         // strings, so no match. Documented limit.
         expect(findNormalizedMatch("break pads", parts)).toBeNull();
+    });
+});
+
+// SKU-bump indicator — see docs/auto-create-sku-bump-indicator-spec.md.
+// Three shapes the spec pins: clean slug (no caption), bumped (caption
+// with base + takenBy name), auto-N fallback (caption with placeholder
+// nudge). The helper computes the tag; the review UI renders it.
+describe("computeSkuChoice — SKU-bump indicator branching", () => {
+    const brakeSensor = {
+        id: "p1",
+        name: "Rear brake sensor",
+        sku: "BRAKE-SENSOR-FIXTURE",
+    };
+    const existing = [brakeSensor];
+
+    it("clean slug + no collision → { kind: 'slug' }, no caption fires", () => {
+        const taken = new Set(existing.map((p) => p.sku));
+        const c = computeSkuChoice("Front brake pads", existing, taken);
+        expect(c.kind).toBe("slug");
+        expect(c.value).toBe("FRONT-BRAKE-PADS");
+    });
+
+    it("slug collides with existing Part → { kind: 'bumped' } carrying base + takenBy", () => {
+        // Description slugs to BRAKE-SENSOR-FIXTURE — same as existing
+        // Part's SKU. Bumped to -2; caption should name that Part.
+        const taken = new Set(existing.map((p) => p.sku));
+        const c = computeSkuChoice("Brake sensor fixture", existing, taken);
+        expect(c.kind).toBe("bumped");
+        if (c.kind !== "bumped") throw new Error("narrowing");
+        expect(c.value).toBe("BRAKE-SENSOR-FIXTURE-2");
+        expect(c.base).toBe("BRAKE-SENSOR-FIXTURE");
+        expect(c.takenBy).toBe(brakeSensor);
+        // takenBy is the ACTUAL Part object — the caption can render its
+        // `.name` field to tell the owner what took the base name.
+        expect(c.takenBy.name).toBe("Rear brake sensor");
+    });
+
+    it("punctuation-only description → { kind: 'auto', value: 'AUTO-1' }", () => {
+        const c = computeSkuChoice("!!!", existing, new Set(existing.map((p) => p.sku)));
+        expect(c.kind).toBe("auto");
+        expect(c.value).toBe("AUTO-1");
+    });
+
+    it("same-batch collision (base was picked as a peer default, not in existingParts) → falls back to 'slug' tag with no phantom takenBy", () => {
+        // Two free-text lines both slugging to BRAKE-PADS. Row 1
+        // computes BRAKE-PADS; row 2 widens the taken set to include
+        // it and computes BRAKE-PADS-2 — but there's no real Part
+        // holding BRAKE-PADS. Rather than invent a takenBy that
+        // doesn't exist, the helper degrades to plain 'slug'. Rare in
+        // practice but the honest thing to do.
+        const emptyExisting: typeof existing = [];
+        const taken = new Set<string>();
+        // Row 1
+        const c1 = computeSkuChoice("Brake pads", emptyExisting, taken);
+        expect(c1.kind).toBe("slug");
+        taken.add(c1.value);
+        // Row 2 — same slug, same batch. Helper should NOT tag this
+        // as 'bumped' with a phantom takenBy.
+        const c2 = computeSkuChoice("Brake pads", emptyExisting, taken);
+        // Value is bumped for uniqueness…
+        expect(c2.value).toBe("BRAKE-PADS-2");
+        // …but the tag is 'slug' because there's no real Part to cite.
+        expect(c2.kind).toBe("slug");
     });
 });

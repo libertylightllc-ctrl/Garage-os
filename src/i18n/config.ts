@@ -275,6 +275,14 @@ const en = {
   autoCreateLinkExisting:
       "Looks like your existing “{name}” ({sku}) — link, or uncheck to create a new Part.",
   autoCreateCostHint: "Optional — fill later on the draft PO if unknown.",
+  // Captions under the SKU input when the auto-generated SKU wasn't the
+  // clean slug: {base} = the base SKU we would have used, {takenBy} =
+  // the name of the existing Part that already holds it, {value} = the
+  // AUTO-N placeholder we picked when there's no name to slug from.
+  autoCreateSkuBumped:
+      "Renamed from {base} (already used by {takenBy}).",
+  autoCreateSkuAutoFallback:
+      "No name to slug from — using {value} as a placeholder. Please edit.",
   autoCreateSubmit: "Add these to inventory",
   colSku: "SKU",
   colName: "Name",
@@ -1562,6 +1570,10 @@ const ar: typeof en = {
   autoCreateLinkExisting:
       "يبدو أنها القطعة الموجودة لديك «{name}» ({sku}) — اربطها، أو ألغِ التحديد لإنشاء قطعة جديدة.",
   autoCreateCostHint: "اختياري — يمكن ملؤه لاحقاً في مسودة أمر الشراء إذا كان غير معروف.",
+  autoCreateSkuBumped:
+      "أعيد تسميته من {base} (مستخدم بالفعل لـ {takenBy}).",
+  autoCreateSkuAutoFallback:
+      "لا يوجد اسم لاشتقاق الرمز — استُخدم {value} كعنصر نائب. يُرجى التعديل.",
   autoCreateSubmit: "إضافة هذه إلى المخزون",
   colSku: "الرمز",
   colName: "الاسم",

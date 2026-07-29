@@ -126,6 +126,29 @@ Commit strategy when the go-ahead comes: one commit for the action's
 branching + pre-flight lookup (Cases A + C + no-op default), a second
 commit for the Case B disambiguation surface, tests alongside each.
 
+### Landmine to defuse in commit 2 — the existing "Repeat customer" flow
+
+The `plateLookupAction` + confirm form's `vehicleId` branch that today
+handles "advisor picks an existing vehicle" runs `tx.customer.update({
+where: existing.customerId, data: { name, phone, email } })` — it
+MUTATES the previous owner's Customer row in place. That's fine for a
+returning customer whose contact info changed, but it's data-corruption
+if used to "reassign" a sold car: every OTHER row attached to the
+previous Customer (their other cars, bookings, reminders, ledger) now
+silently claims to belong to the new owner.
+
+Commit 2's "Update owner" button MUST do a real reassignment:
+  1. Find-or-create a Customer with the new phone under this garage.
+  2. Move the Vehicle's `customerId` FK to that (new or matching) Customer.
+  3. Leave the previous Customer's row and all of its other relations
+     untouched. Consider capturing the ownership change as an audit row
+     (a new `VehicleOwnershipChange` table, or reusing `AiEvent` /
+     similar) so history remains queryable.
+
+This is the reason the banner in commit 1 was softened to remove the
+"use the existing-vehicle flow" pointer — that flow will corrupt data
+if used for a sold-vehicle case.
+
 ## Public intake — `createBookingPublic` (proposed, not built)
 
 The public booking flow has the same silent-duplicate gap but no advisor

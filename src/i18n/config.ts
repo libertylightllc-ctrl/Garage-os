@@ -187,7 +187,7 @@ const en = {
   purchasingTitle: "Purchasing",
   documentPurchaseOrder: "Purchase order",
   documentRfq: "Request for Quotation",
-  printPo: "🖨 Print",
+  printPo: "Print",
   sendViaWhatsApp: "Send via WhatsApp",
   supplierNoPhoneReason: "Supplier phone number is missing — add it on the supplier record to enable WhatsApp.",
   // Sent history — one row per send attempt on a PO, newest first.
@@ -1520,7 +1520,7 @@ const ar: typeof en = {
   purchasingTitle: "المشتريات",
   documentPurchaseOrder: "أمر شراء",
   documentRfq: "طلب عرض سعر",
-  printPo: "🖨 طباعة",
+  printPo: "طباعة",
   sendViaWhatsApp: "إرسال عبر واتساب",
   supplierNoPhoneReason: "رقم هاتف المورد غير مسجّل — أضفه في بيانات المورد لتفعيل الإرسال عبر واتساب.",
   sendHistoryTitle: "سجل الإرسال",

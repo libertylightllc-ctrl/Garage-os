@@ -492,7 +492,7 @@ export default async function PurchaseOrderDetailPage({
                       {isLineUnpriced(l) ? "—" : money(l.qty * Number(l.unitCost))}
                     </td>
                     {isDraft ? (
-                      <td className="px-4 py-3 text-right print:hidden">
+                      <td className="px-4 py-3 text-right whitespace-nowrap print:hidden">
                         <div className="flex items-center justify-end gap-2">
                           {/* Edit form — inputs live in the cells above,
                               associated by the `form=` attribute.

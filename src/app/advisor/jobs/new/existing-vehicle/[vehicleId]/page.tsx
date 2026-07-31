@@ -72,66 +72,48 @@ export default async function ExistingVehicleDisambiguation({
     };
 
     // ── Choice 1 — Same car, same owner ──────────────────────────
-    // Prefill everything from the existing Vehicle + Customer so the
-    // advisor lands on a filled confirm form and only needs mileage
-    // + complaint. `vehicleId` in the URL means the action's
-    // transaction takes the "repeat" branch (see
-    // createCustomerVehicleJobAction).
+    // `vehicleId` in the URL means the action's transaction takes
+    // the "repeat" branch (see createCustomerVehicleJobAction). The
+    // confirm page does a garage-scoped DB lookup on vehicleId and
+    // fills owner name / phone / plate / make / model / year / vin /
+    // spec from the record — the URL carries none of that. PII in a
+    // URL bar (and in server access logs + browser history +
+    // referrer headers) is what this whole fix is about; the record
+    // is already in the DB, so there's nothing to gain by
+    // duplicating it into the query string.
     const sameOwnerHref = "/advisor/jobs/new/confirm?" + forward({
         via: "repeat",
         vehicleId: vehicle.id,
-        ownerName: vehicle.customer.name,
-        phone: vehicle.customer.phone,
-        plate: vehicle.plate,
-        make: vehicle.make,
-        model: vehicle.model,
-        year: vehicle.year ? String(vehicle.year) : "",
-        vin: vehicle.vin ?? "",
-        engineSize: vehicle.engineSize ?? "",
-        fuelType: vehicle.fuelType ?? "",
     });
 
     // ── Choice 2 — Same car, owner has changed ──────────────────
-    // Prefill vehicle metadata (make/model/year/plate/vin/spec) so
-    // the advisor doesn't retype it, but leave owner name + phone
-    // BLANK — the advisor is entering the new owner's contact
-    // details. `editOwner=1` tells the confirm action to do a real
-    // FK move to a new Customer + write a VehicleOwnershipTransfer
-    // row, rather than mutating the existing Customer row in place
-    // (the landmine flagged in docs/intake-duplicate-handling-spec.md).
+    // `editOwner=1` tells the confirm action to do a real FK move
+    // to a new Customer + write a VehicleOwnershipTransfer row,
+    // rather than mutating the existing Customer row in place (the
+    // landmine flagged in docs/intake-duplicate-handling-spec.md).
+    // The confirm page suppresses owner-name / phone / email
+    // defaults when editOwner=1 (advisor is typing the NEW owner),
+    // but still fills vehicle-spec defaults from the DB lookup on
+    // vehicleId — the car itself is unchanged.
     const newOwnerHref = "/advisor/jobs/new/confirm?" + forward({
         via: "repeat",
         vehicleId: vehicle.id,
         editOwner: "1",
-        plate: vehicle.plate,
-        make: vehicle.make,
-        model: vehicle.model,
-        year: vehicle.year ? String(vehicle.year) : "",
-        vin: vehicle.vin ?? "",
-        engineSize: vehicle.engineSize ?? "",
-        fuelType: vehicle.fuelType ?? "",
     });
 
     // ── Choice 3 — Different car — same plate number ────────────
     // The plate typed will be attached to a NEW Vehicle. The old
     // Vehicle keeps its VIN + history but loses this plate. All
     // writes happen atomically in the confirm submit action's
-    // transaction; the URL carries only intent.
+    // transaction; the URL carries only intent + the plate the
+    // advisor typed on the physical car. Owner name / phone / VIN
+    // for the NEW car are typed on the confirm form — never
+    // forwarded through the URL, even if the OCR path had already
+    // extracted them (that path was the Case B leak).
     const plateMovedHref = "/advisor/jobs/new/confirm?" + forward({
         via: "manual",
         releasePlateFrom: vehicle.id,
         plate: plateTyped,
-        // Carry forward what the advisor already typed for the NEW
-        // car (owner name, phone, make/model/etc) — Moulkia OCR path
-        // populates these before the collision surfaces.
-        ownerName: sp.ownerName ?? "",
-        phone: sp.phone ?? "",
-        make: sp.make ?? "",
-        model: sp.model ?? "",
-        year: sp.year ?? "",
-        vin: sp.vin ?? "",
-        engineSize: sp.engineSize ?? "",
-        fuelType: sp.fuelType ?? "",
     });
 
     // ── Choice 4 — Wrong plate — search again ───────────────────

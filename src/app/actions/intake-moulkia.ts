@@ -403,23 +403,16 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       // releasePlateFrom=<id> (Choice 3), or under a fresh vehicleId
       // (Choice 1), which shortcut this pre-flight.
       //
-      // Carry forward every form field the advisor already typed so
-      // the panel's redirects can prefill downstream forms. This
-      // includes ownerName / phone (potentially the new owner) so
-      // Choice 3's manual path doesn't blank them.
-      const forward = new URLSearchParams({
-        via,
-        plate,
-        ownerName,
-        phone,
-        make,
-        model,
-        year: year != null ? String(year) : "",
-        vin: vin ?? "",
-        engineSize: engineSize ?? "",
-        fuelType: fuelType ?? "",
-        assignedToId: assignedToRaw,
-      });
+      // Carry non-PII intake context forward. PII fields (ownerName,
+      // phone, vin, email) are DELIBERATELY dropped — the panel does
+      // a garage-scoped DB lookup for what it displays, and the
+      // confirm page does the same for its defaults when vehicleId is
+      // set. Anything the advisor typed for the NEW car (Choice 3
+      // path) is retyped on the confirm form after picking a choice.
+      // See docs/intake-duplicate-handling-spec.md — "PII in URL"
+      // section — for the class of bug and the sites that carry it.
+      const forward = new URLSearchParams({ via, plate });
+      if (assignedToRaw) forward.set("assignedToId", assignedToRaw);
       redirect(
         `/advisor/jobs/new/existing-vehicle/${existingVehicleByPlate.id}?${forward.toString()}`,
       );

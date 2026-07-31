@@ -107,6 +107,39 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
   const ocrBackFailed = sp.error ==="ocrBack";
   const backSkipped = sp.skippedBack ==="1";
 
+  // Repeat-vehicle DB lookup. When the caller passed vehicleId (all
+  // slice-3 panel choices, the intake-landing existing-vehicle picker,
+  // plateLookupAction's Case A route through the panel), fill every
+  // form default from the DB record instead of URL query params.
+  // Owner name / phone / VIN used to travel through the URL — that's
+  // the class of leak this fix is closing. Garage-scoped via the
+  // customer relation; a vehicleId from another tenant renders no
+  // defaults (same posture as notFound(), just without a hard 404 so
+  // the form still submits).
+  //
+  // When editOwner=1 (Choice 2 — same car, owner has changed), we
+  // deliberately DO NOT fill owner name / phone / email from the
+  // record: the advisor is capturing the NEW owner's details. Vehicle
+  // spec still fills from the record because the car itself is
+  // unchanged.
+  const editOwner = sp.editOwner === "1";
+  const existing = sp.vehicleId
+    ? await prisma.vehicle.findFirst({
+        where: { id: sp.vehicleId, customer: { garageId: session.user.garageId } },
+        include: { customer: { select: { name: true, phone: true, email: true } } },
+      })
+    : null;
+  const dbOwnerName = editOwner ? "" : existing?.customer.name ?? "";
+  const dbPhone = editOwner ? "" : existing?.customer.phone ?? "";
+  const dbEmail = editOwner ? "" : existing?.customer.email ?? "";
+  const dbPlate = existing?.plate ?? "";
+  const dbMake = existing?.make ?? "";
+  const dbModel = existing?.model ?? "";
+  const dbYear = existing?.year != null ? String(existing.year) : "";
+  const dbVin = existing?.vin ?? "";
+  const dbEngineSize = existing?.engineSize ?? "";
+  const dbFuelType = existing?.fuelType ?? "";
+
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-5 p-6">
       <AppNav role="ADVISOR" active="jobs"/>
@@ -174,16 +207,16 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <legend className="px-1 text-sm font-medium">{t("secCustomer")}</legend>
           <label className="text-xs text-text-mute">
             {t("ownerName")}
-            <input name="ownerName" defaultValue={sp.ownerName ?? ""} required className={FIELD} />
+            <input name="ownerName" defaultValue={sp.ownerName ?? dbOwnerName} required className={FIELD} />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-text-mute">
               {t("mobile")}
-              <input name="phone" type="tel" defaultValue={sp.phone ?? ""} placeholder="+9715XXXXXXXX" required className={FIELD} />
+              <input name="phone" type="tel" defaultValue={sp.phone ?? dbPhone} placeholder="+9715XXXXXXXX" required className={FIELD} />
             </label>
             <label className="text-xs text-text-mute">
               {t("email")}
-              <input name="email" type="email" defaultValue={sp.email ?? ""} className={FIELD} />
+              <input name="email" type="email" defaultValue={sp.email ?? dbEmail} className={FIELD} />
             </label>
           </div>
         </fieldset>
@@ -194,7 +227,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-text-mute">
               {t("plate")}
-              <input name="plate" defaultValue={sp.plate ?? ""} required className={FIELD} />
+              <input name="plate" defaultValue={sp.plate ?? dbPlate} required className={FIELD} />
             </label>
             {/* VIN + decode button — col-span-2 so the decode UI gets
                 full width below the input. The button itself is a
@@ -203,7 +236,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
                 BLANK fields it can (preserves OCR / typed values). */}
             <label className="col-span-2 text-xs text-text-mute">
               {t("vinLabel")}
-              <input name="vin" defaultValue={sp.vin ?? ""} className={FIELD} />
+              <input name="vin" defaultValue={sp.vin ?? dbVin} className={FIELD} />
               <div className="mt-2">
                 <VinDecodeButton
                   labels={{
@@ -220,15 +253,15 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
             </label>
             <label className="text-xs text-text-mute">
               {t("make")}
-              <input name="make" defaultValue={sp.make ?? ""} required className={FIELD} />
+              <input name="make" defaultValue={sp.make ?? dbMake} required className={FIELD} />
             </label>
             <label className="text-xs text-text-mute">
               {t("model")}
-              <input name="model" defaultValue={sp.model ?? ""} required className={FIELD} />
+              <input name="model" defaultValue={sp.model ?? dbModel} required className={FIELD} />
             </label>
             <label className="text-xs text-text-mute">
               {t("yearLabel")}
-              <input name="year" type="number" min="1950" max="2100" defaultValue={sp.year ?? ""} className={FIELD} />
+              <input name="year" type="number" min="1950" max="2100" defaultValue={sp.year ?? dbYear} className={FIELD} />
             </label>
             <label className="text-xs text-text-mute">
               {t("mileageInLabel")}
@@ -243,7 +276,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
               {t("engineSizeLabel")}
               <input
                 name="engineSize"
-                defaultValue={sp.engineSize ?? ""}
+                defaultValue={sp.engineSize ?? dbEngineSize}
                 placeholder="2.7"
                 className={FIELD}
               />
@@ -255,7 +288,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
                 form. */}
             <label className="text-xs text-text-mute">
               {t("fuelTypeLabel")}
-              <select name="fuelType" defaultValue={sp.fuelType ?? ""} className={FIELD}>
+              <select name="fuelType" defaultValue={sp.fuelType ?? dbFuelType} className={FIELD}>
                 <option value="">—</option>
                 {FUEL_TYPES.map((v) => (
                   <option key={v} value={v}>

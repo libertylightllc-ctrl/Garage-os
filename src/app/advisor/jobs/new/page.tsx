@@ -180,18 +180,14 @@ export default async function NewJobCard({
           <h2 className="mb-2 text-sm font-medium">{t("orPickExisting")}</h2>
           <ul className="flex flex-col gap-2">
             {vehicles.map((v) => {
-              const q = new URLSearchParams({
-                via:"repeat",
-                vehicleId: v.id,
-                ownerName: v.customer.name,
-                phone: v.customer.phone,
-                plate: v.plate,
-                make: v.make,
-                model: v.model,
-                year: v.year ? String(v.year) :"",
-                vin: v.vin ?? "",
-              });
-              if (v.customer.email) q.set("email", v.customer.email);
+              // Pass only the vehicle id — the confirm page does a
+              // garage-scoped DB lookup and fills every default from
+              // the record. Everything owner + vehicle related used
+              // to live in the URL (name / phone / plate / VIN /
+              // email), which meant every advisor's browser history,
+              // access log and referrer header carried other
+              // customers' PII. See docs/intake-duplicate-handling-spec.md.
+              const q = new URLSearchParams({ via: "repeat", vehicleId: v.id });
               return (
                 <li key={v.id}>
                   <Link

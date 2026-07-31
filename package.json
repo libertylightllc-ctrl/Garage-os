@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "check:pii-urls": "node scripts/check-pii-in-urls.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:init": "prisma dev --name garageos --detach",

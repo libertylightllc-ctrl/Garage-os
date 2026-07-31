@@ -65,6 +65,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: PII-in-URL check
+        # Fails the build if any file under src/app/advisor/** or
+        # src/app/actions/** constructs a URL that carries a watched
+        # PII key (ownerName / phone / email / vin / chassis / mobile).
+        # Written after the same class of bug appeared in two slices —
+        # see docs/intake-duplicate-handling-spec.md § "PII in URL".
+        # Runs BEFORE typecheck so the fastest guardrail fires first.
+        run: node scripts/check-pii-in-urls.mjs
+
       - name: Apply Prisma migrations
         # `prisma migrate deploy` applies every committed migration
         # against the ephemeral postgres without trying to detect

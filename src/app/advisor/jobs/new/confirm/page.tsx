@@ -44,6 +44,11 @@ interface SP {
   // new Vehicle is created. Both are hidden inputs, not editable.
   editOwner?: string;
   releasePlateFrom?: string;
+  // Moulkia OCR pipeline — opaque draft id keyed by IntakeDraft.
+  // The confirm page loads the draft server-side and uses its fields
+  // as the third defaults tier (URL param → vehicleId DB row → draft).
+  // The extracted PII never appears in the URL bar.
+  draftId?: string;
 }
 
 type T = (k: MessageKey) => string;
@@ -129,16 +134,40 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
         include: { customer: { select: { name: true, phone: true, email: true } } },
       })
     : null;
-  const dbOwnerName = editOwner ? "" : existing?.customer.name ?? "";
-  const dbPhone = editOwner ? "" : existing?.customer.phone ?? "";
+  // Third defaults tier — the Moulkia OCR draft. Only consulted when no
+  // vehicleId is set (repeat-customer path already has authoritative
+  // data). Garage-scoped + not-expired: a stale draft renders no
+  // defaults, but the form still submits so the advisor can type
+  // manually.
+  const now = new Date();
+  const draft = sp.draftId
+    ? await prisma.intakeDraft.findFirst({
+        where: {
+          id: sp.draftId,
+          garageId: session.user.garageId,
+          expiresAt: { gt: now },
+        },
+      })
+    : null;
+  const dbOwnerName = editOwner
+    ? ""
+    : existing?.customer.name ?? draft?.ownerName ?? "";
+  const dbPhone = editOwner
+    ? ""
+    : existing?.customer.phone ?? "";
   const dbEmail = editOwner ? "" : existing?.customer.email ?? "";
-  const dbPlate = existing?.plate ?? "";
-  const dbMake = existing?.make ?? "";
-  const dbModel = existing?.model ?? "";
-  const dbYear = existing?.year != null ? String(existing.year) : "";
-  const dbVin = existing?.vin ?? "";
-  const dbEngineSize = existing?.engineSize ?? "";
-  const dbFuelType = existing?.fuelType ?? "";
+  const dbPlate = existing?.plate ?? draft?.plate ?? "";
+  const dbMake = existing?.make ?? draft?.make ?? "";
+  const dbModel = existing?.model ?? draft?.model ?? "";
+  const dbYear =
+    existing?.year != null
+      ? String(existing.year)
+      : draft?.year != null
+        ? String(draft.year)
+        : "";
+  const dbVin = existing?.vin ?? draft?.vin ?? "";
+  const dbEngineSize = existing?.engineSize ?? draft?.engineSize ?? "";
+  const dbFuelType = existing?.fuelType ?? draft?.fuelType ?? "";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-5 p-6">
@@ -201,6 +230,12 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
             them mid-form and end up with the wrong write path. */}
         <input type="hidden" name="editOwner" defaultValue={sp.editOwner ?? ""} />
         <input type="hidden" name="releasePlateFrom" defaultValue={sp.releasePlateFrom ?? ""} />
+        {/* Moulkia OCR draft id — carries the extracted PII server-side
+            across front→back→confirm so nothing sensitive rides the
+            URL. Deleted OUTSIDE the write transaction on successful
+            create. See docs/intake-duplicate-handling-spec.md § "PII
+            in URL". */}
+        <input type="hidden" name="draftId" defaultValue={sp.draftId ?? ""} />
 
         {/* Customer */}
         <fieldset className="flex flex-col gap-2 rounded-xl border border-border p-3">
@@ -355,7 +390,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
             {t("technicianLabel")}
             <select
               name="assignedToId"
-              defaultValue={sp.assignedToId ?? ""}
+              defaultValue={sp.assignedToId ?? draft?.assignedToId ?? ""}
               className={FIELD}
             >
               <option value="">{t("unassigned")}</option>

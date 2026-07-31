@@ -337,52 +337,90 @@ All three target a Vehicle already in the DB, so the fix is to pass
 only `vehicleId` in the URL and let the confirm page do a
 garage-scoped `findFirst` for the defaults it needs.
 
-### Remaining follow-up — Moulkia OCR pipeline
+### Moulkia OCR pipeline — closed
 
-Not yet fixed. The OCR flow redirects between three surfaces,
-carrying the extracted PII in URL query params at every hop because
-no Vehicle row exists yet:
+**Fixed** in commit sequence `83609d0` (grep detector, red) → OCR
+fix commit (green). Chose the server-side draft option after AR's
+reasoning: signing a cookie proves origin, not confidentiality —
+the advisor's browser would still hold the extracted owner name +
+VIN in readable form. Signed-cookie plan was moot anyway once the
+draft-record option landed: an opaque cuid plus a garage-scoped
+`findFirst` is the whole capability model, no signing/encryption
+secret needed.
 
-- `moulkiaFrontAction` → `/advisor/jobs/new/back?ownerName=…&vin=…`
-- `moulkiaBackAction` → `/advisor/jobs/new/confirm?ownerName=…&vin=…`
-- `/advisor/jobs/new/back` skip link → confirm (same fields, forwarded)
+Shape shipped:
 
-The DB-lookup fix from `6663146` doesn't apply here — the whole
-point of these hops is to accumulate OCR data across two photo
-captures and one confirm submit BEFORE any row is written. Options:
+- `IntakeDraft` — Prisma model, TTL 2h from creation, garage-scoped
+  and creator-scoped. All extracted fields nullable so a front-only
+  draft persists with just owner + plate. Two indexes: `(garageId,
+  expiresAt)` for the read path + garage-scoped sweep, `(expiresAt)`
+  as a safety net for a future cross-garage cleanup job.
+- `moulkiaFrontAction` — sweeps expired drafts for THIS garage
+  (scoped, so a busy branch never pays for another's cleanup),
+  creates a fresh draft with the extraction, redirects with only
+  `?draftId=<opaque cuid>` in the URL.
+- `moulkiaBackAction` — reads draftId from POST body, loads
+  garage-scoped + not-expired, merges front (from draft) with back
+  (from OCR), updates the same draft. Stale / cross-garage / missing
+  → redirect to `/advisor/jobs/new` (never 500).
+- `/advisor/jobs/new/back` page — takes `?draftId=<id>`, loads
+  garage-scoped, renders the extracted fields (this is the
+  advisor's own draft — rendering it is not the leak). Skip link
+  carries only `draftId + via + skippedBack`.
+- `/advisor/jobs/new/confirm` page — extended with a third defaults
+  tier: `sp.<field> ?? dbFromVehicleId ?? draftFromDraftId ?? ""`.
+  Draft's `assignedToId` also carries through so an OCR scan with a
+  pre-picked tech survives the two hops.
+- `createCustomerVehicleJobAction` — deletes the draft OUTSIDE the
+  write transaction (best-effort, swallowed on failure). A delete
+  failure MUST NOT roll back a job card that was already committed.
 
-- **Signed HTTP-only cookie.** Set on the front→back redirect,
-  extended on the back→confirm redirect, cleared on confirm submit
-  (or TTL after ~10 min). Same-request-cycle carry; nothing to log or
-  index. Preferred.
-- **Scratch server-side row.** `IntakeDraft` table keyed by user +
-  timestamp, TTL cleanup. Heavier — writes to the DB before the
-  advisor commits, needs its own garbage collection.
-- **POST body carry only.** Would require reshaping front→back and
-  back→confirm as forms rather than redirects. Bigger UX rewrite;
-  loses the "camera auto-submits" pattern that makes OCR feel one-tap.
+Not inheriting across drafts: each fresh `moulkiaFrontAction` call
+creates a new draft with its own cuid + its own `assignedToId` from
+the current form submission. Two live drafts within the TTL window
+is a normal state; each is addressed by its own cuid and never
+crosses. Verified in the browser 2026-07-31 with a synthetic draft
+containing "PII LEAK TEST NAME" — URL bar clean throughout
+front→back→confirm→done; `IntakeDraft` row deleted on job-card
+create; new Customer + Vehicle carry the OCR fields as intended.
 
-Blocking the fix on: cookie signing key story. Auth.js already has an
-`AUTH_SECRET` we can reuse via HKDF, so the ingredients are there.
+CI grep detector (see § next): landed red on the 6 leaking lines,
+turned green after this fix. Anyone reintroducing the pattern —
+either with the same `URLSearchParams({ ownerName })` shape or a
+new `?vin=` template literal — will hit the CI failure with a
+pointer to this spec.
 
-### Why this got past slice 5
+### Why this got past slice 5, and the guardrail we built
 
 Slice 5's fix was framed around the confirm-form error re-render
 path. It didn't audit every OTHER site that redirects into a page
 under `/advisor/jobs/new/**`, and there was no lint / test-level
-guard that would fail a PR reintroducing the pattern. Options for
-a lasting fix:
+guard that would fail a PR reintroducing the pattern.
 
-- **Grep rule / eslint custom rule** flagging
-  `URLSearchParams(...)` blocks that include known-PII keys
-  (`ownerName`, `phone`, `email`, `vin`) targeting our own routes.
-  Cheap; catches the pattern before it lands.
-- **A "safe redirect" helper** for intake surfaces that only accepts
-  an allow-listed set of query params. Higher effort; strictly
-  enforces the invariant.
+Grep rule shipped in `scripts/check-pii-in-urls.mjs`, wired into
+`.github/workflows/test.yml` before typecheck. Scans
+`src/app/advisor/**` AND `src/app/actions/**` (the redirect origins
+that target advisor pages live in /actions, not /advisor — the
+literal /advisor scope missed sites 6–7). Four trigger patterns:
 
-Not building either as part of the fix commit — recording so we
-pick one after real intake reveals whether the class keeps recurring.
+- `new URLSearchParams({ … piiKey … })` — object-literal contents
+  are bracket-bounded via `[^}]*?` so a match can't spill past `}`.
+- `confirmUrl({ … })` / `backUrl({ … })` / `buildQuery({ … })` with
+  a PII key — catches the URL-helper wrapper shape.
+- `.set("piiKey", …)` / `.append("piiKey", …)` on URL search params.
+- Template-literal URL with `?piiKey=` or `&piiKey=`.
+
+Watched PII keys: `ownerName`, `phone`, `email`, `vin`, `chassis`,
+`mobile`. Landed RED on the 6 Moulkia-pipeline lines described
+above. Turned GREEN after the OCR fix. Every excluded (whitelisted)
+match is printed with its reason so the reviewer can audit the
+whitelist once per run — if the whitelist starts growing, that's a
+signal the triggers are too broad, not that the code is too dirty.
+
+Alternative we considered and didn't build: a "safe redirect"
+helper for intake surfaces that only accepts allow-listed params.
+Higher effort; keep the grep on file first, evaluate again if the
+class keeps recurring anyway.
 
 ## Public intake — `createBookingPublic` (proposed, not built)
 

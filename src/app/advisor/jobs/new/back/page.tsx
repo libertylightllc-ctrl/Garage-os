@@ -1,59 +1,62 @@
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
+import { prisma } from "@/lib/prisma";
 import { moulkiaBackAction } from "@/app/actions/intake-moulkia";
 import { AppNav } from "@/components/app-nav";
 import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
 
-export const dynamic ="force-dynamic";
+export const dynamic = "force-dynamic";
 
-// Step 2 of the Moulkia two-photo flow. The advisor has just captured the front
-// (owner + plate); now we ask for the back (VIN, make, model, year, engine no.).
-// Front fields ride along as hidden inputs so we can merge after the back OCR.
+// Step 2 of the Moulkia two-photo flow. The advisor has captured the front
+// (owner + plate); now we ask for the back (VIN, make, model, year).
 //
-// Skip link: takes the advisor straight to the confirm page with skippedBack=1,
-// front fields preserved. Reception can fill the back manually when the photo
-// is unreadable — they're never blocked.
+// The extracted front fields live server-side in an IntakeDraft row keyed
+// by the opaque draftId in the URL. Nothing PII rides the URL — this fix
+// closes what slice 3's fix commit (6663146) left open on the OCR pipeline.
+// See docs/intake-duplicate-handling-spec.md § "PII in URL — pattern and
+// remaining follow-up".
+//
+// Skip link: takes the advisor straight to the confirm page carrying just
+// the draftId + a `skippedBack=1` flag. Reception can fill the back manually
+// when the photo is unreadable — they're never blocked.
 export default async function NewJobMoulkiaBack({
   searchParams,
 }: {
-  searchParams: Promise<{
-    ownerName?: string;
-    plate?: string;
-    vin?: string;
-    make?: string;
-    model?: string;
-    year?: string;
-    assignedToId?: string;
-  }>;
+  searchParams: Promise<{ draftId?: string }>;
 }) {
-  await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
+  const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
-  const {
-    ownerName ="",
-    plate ="",
-    vin ="",
-    make ="",
-    model ="",
-    year ="",
-    assignedToId ="",
-  } = await searchParams;
+  const { draftId } = await searchParams;
+  if (!draftId) notFound();
 
-  // Build the skip URL — preserve everything we already extracted from the
-  // front (owner + plate + vehicle specs).
-  const skipParams = new URLSearchParams({ via:"moulkia", skippedBack:"1"});
-  if (ownerName) skipParams.set("ownerName", ownerName);
-  if (plate) skipParams.set("plate", plate);
-  if (vin) skipParams.set("vin", vin);
-  if (make) skipParams.set("make", make);
-  if (model) skipParams.set("model", model);
-  if (year) skipParams.set("year", year);
-  if (assignedToId) skipParams.set("assignedToId", assignedToId);
-  const skipHref = `/advisor/jobs/new/confirm?${skipParams.toString()}`;
+  const now = new Date();
+  const draft = await prisma.intakeDraft.findFirst({
+    where: {
+      id: draftId,
+      garageId: session.user.garageId,
+      expiresAt: { gt: now },
+    },
+  });
+  // Stale / cross-garage / never-existed → fresh start. Not a 500 —
+  // a timeout on a two-hour draft is a normal user story.
+  if (!draft) redirect("/advisor/jobs/new");
+
+  // Read-only summary card showing what the front OCR captured. This is
+  // the advisor's own garage's own draft's data; rendering it is not the
+  // PII-in-URL leak (that was carrying it through address bar / referrer
+  // headers / access logs). Here it lives only in the rendered HTML the
+  // advisor is looking at.
+  const { ownerName, plate, vin, make, model, year } = draft;
+
+  const skipHref = `/advisor/jobs/new/confirm?draftId=${encodeURIComponent(
+    draft.id,
+  )}&via=moulkia&skippedBack=1`;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <AppNav role="ADVISOR" active="jobs"/>
+      <AppNav role="ADVISOR" active="jobs" />
       <div>
         <Link
           href="/advisor/jobs/new"
@@ -79,15 +82,9 @@ export default async function NewJobMoulkiaBack({
 
       <section className="rounded-xl border border-border p-4">
         <form action={moulkiaBackAction} className="flex flex-col gap-3">
-          {/* Carry the FRONT extraction across into the back action — every
-              field the front captured rides along so the merge can see them. */}
-          <input type="hidden" name="frontOwnerName" value={ownerName} />
-          <input type="hidden" name="frontPlate" value={plate} />
-          <input type="hidden" name="frontVin" value={vin} />
-          <input type="hidden" name="frontMake" value={make} />
-          <input type="hidden" name="frontModel" value={model} />
-          <input type="hidden" name="frontYear" value={year} />
-          <input type="hidden" name="assignedToId" value={assignedToId} />
+          {/* Only the opaque draft id rides forward — the back action
+              looks up the front fields from the draft row itself. */}
+          <input type="hidden" name="draftId" value={draft.id} />
           <PhotoCapture
             name="file"
             mode="auto-submit"

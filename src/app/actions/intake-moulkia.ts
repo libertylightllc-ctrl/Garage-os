@@ -65,9 +65,21 @@ async function logAttempts(
   }
 }
 
+// TTL for an IntakeDraft. Two hours matches a real intake window
+// (advisor might take a phone call between the two photos or step
+// away). Long enough to survive that, short enough that abandoned
+// drafts don't accumulate in the DB — each fresh scan sweeps
+// expired rows in the same garage before creating a new one.
+const INTAKE_DRAFT_TTL_MS = 2 * 60 * 60 * 1000;
+
 // ----------------------------------------------------------------------------
 // Step 1 — Photograph the FRONT of the Moulkia (owner + plate)
 // ----------------------------------------------------------------------------
+// Persists the OCR extraction in a server-side IntakeDraft and puts
+// only its opaque cuid in the URL. See
+// docs/intake-duplicate-handling-spec.md § "PII in URL — pattern and
+// remaining follow-up" for why the previous URL-carry pattern was a
+// leak and this record is the fix.
 export async function moulkiaFrontAction(formData: FormData) {
   const user = await requireAdvisor();
 
@@ -88,26 +100,45 @@ export async function moulkiaFrontAction(formData: FormData) {
   const r = await extractMoulkiaFront(base64, mediaType);
   await logAttempts(r.attempts, user.garageId, user.id, "FRONT");
 
+  // Sweep expired drafts for THIS garage before the new insert. Scoped
+  // to `garageId` per AR's #3 — one busy branch never pays for
+  // another's cleanup. Cheap: uses the (garageId, expiresAt) index.
+  const now = new Date();
+  await prisma.intakeDraft.deleteMany({
+    where: { garageId: user.garageId, expiresAt: { lt: now } },
+  });
+
   if (r.failed) {
-    // Can't read the front — no point asking for the back. Go straight to manual entry.
+    // Can't read the front — no point asking for the back. Go straight
+    // to manual entry. No draft to persist; nothing PII in URL.
     redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
   }
 
-  // Front succeeded → go to step 2 (back), carrying every field the front
-  // captured (owner + plate + make + model + year + VIN). The back step
-  // can still override on overlap; if the advisor skips it, these values
-  // become the final answer.
-  redirect(
-    backUrl({
-      ownerName: r.fields.ownerName,
-      plate: r.fields.plate,
-      vin: r.fields.vin,
-      make: r.fields.make,
-      model: r.fields.model,
-      year: r.fields.year ? String(r.fields.year) : "",
-      assignedToId,
-    }),
-  );
+  // Front succeeded → persist the extraction in a fresh draft and
+  // redirect to step 2 with only the opaque draft id in the URL. The
+  // /back page loads the draft (garage-scoped, not-expired) and
+  // renders the front-captured fields. On confirm submit, the draft
+  // is deleted OUTSIDE the write transaction so a cleanup failure
+  // can't roll back the job card. Two live drafts within the TTL
+  // window is fine — each one is keyed by its own cuid; a fresh scan
+  // gets a fresh draft with a fresh assignedToId, never inheriting.
+  const draft = await prisma.intakeDraft.create({
+    data: {
+      garageId: user.garageId,
+      createdByUserId: user.id,
+      ownerName: r.fields.ownerName || null,
+      plate: r.fields.plate || null,
+      vin: r.fields.vin || null,
+      make: r.fields.make || null,
+      model: r.fields.model || null,
+      year: r.fields.year ?? null,
+      assignedToId: assignedToId || null,
+      expiresAt: new Date(now.getTime() + INTAKE_DRAFT_TTL_MS),
+    },
+    select: { id: true },
+  });
+
+  redirect(`/advisor/jobs/new/back?draftId=${encodeURIComponent(draft.id)}`);
 }
 
 // ----------------------------------------------------------------------------
@@ -116,44 +147,29 @@ export async function moulkiaFrontAction(formData: FormData) {
 export async function moulkiaBackAction(formData: FormData) {
   const user = await requireAdvisor();
 
-  // Read the front fields that rode in via hidden inputs. The FRONT prompt
-  // now captures vehicle specs too, so we carry them through and let merge
-  // decide which wins. Back overrides on overlap; front fills the gaps.
-  function readFrontFromForm(): MoulkiaFront {
-    const yearRaw = String(formData.get("frontYear") ?? "").trim();
-    const yearN = parseInt(yearRaw, 10);
-    return {
-      ownerName: String(formData.get("frontOwnerName") ?? "").trim(),
-      plate: String(formData.get("frontPlate") ?? "").trim(),
-      vin: String(formData.get("frontVin") ?? "").trim(),
-      make: String(formData.get("frontMake") ?? "").trim(),
-      model: String(formData.get("frontModel") ?? "").trim(),
-      year: Number.isFinite(yearN) && yearN >= 1950 && yearN <= 2100 ? yearN : null,
-    };
-  }
+  // The draft holds the front-captured fields plus the tech assignment.
+  // Nothing else rode in via URL / hidden inputs after this fix — the
+  // /back page passes only the opaque draft id back through here.
+  const draftId = String(formData.get("draftId") ?? "").trim();
+  if (!draftId) redirect("/advisor/jobs/new?error=nofile");
+
+  const now = new Date();
+  const draft = await prisma.intakeDraft.findFirst({
+    where: { id: draftId, garageId: user.garageId, expiresAt: { gt: now } },
+  });
+  // Stale / cross-garage / never-existed → fresh start. Never 500 on
+  // a missing draft — that's a normal timeout or an abandoned tab.
+  if (!draft) redirect("/advisor/jobs/new");
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    // Treat as a skip back — let the advisor fill the back fields manually,
-    // but keep everything the FRONT scan already gave us.
-    const front = readFrontFromForm();
+    // Skip the back photo — front fields become the answer as-is. No
+    // update to persist; confirm page reads the draft directly.
     redirect(
-      confirmUrl({
-        via: "moulkia",
-        skippedBack: "1",
-        assignedToId: String(formData.get("assignedToId") ?? ""),
-        ownerName: front.ownerName,
-        plate: front.plate,
-        vin: front.vin,
-        make: front.make,
-        model: front.model,
-        year: front.year ? String(front.year) : "",
-      }),
+      `/advisor/jobs/new/confirm?draftId=${encodeURIComponent(draft.id)}&via=moulkia&skippedBack=1`,
     );
   }
   const f = file as File;
-  const assignedToId = String(formData.get("assignedToId") ?? "");
-  const front = readFrontFromForm();
 
   const base64 = Buffer.from(await f.arrayBuffer()).toString("base64");
   const mediaType = f.type || "image/jpeg";
@@ -162,35 +178,38 @@ export async function moulkiaBackAction(formData: FormData) {
   await logAttempts(r.attempts, user.garageId, user.id, "BACK");
 
   if (r.failed) {
-    // Back unreadable — still proceed with the front fields and flag the gap.
+    // Back unreadable — front fields stay in the draft as-is. Flag on
+    // confirm so the advisor knows the back gap.
     redirect(
-      confirmUrl({
-        via: "moulkia",
-        error: "ocrBack",
-        assignedToId,
-        ownerName: front.ownerName,
-        plate: front.plate,
-        vin: front.vin,
-        make: front.make,
-        model: front.model,
-        year: front.year ? String(front.year) : "",
-      }),
+      `/advisor/jobs/new/confirm?draftId=${encodeURIComponent(draft.id)}&via=moulkia&error=ocrBack`,
     );
   }
 
+  // Merge front (from draft) with back (from OCR) via the same helper
+  // the URL-carry version used. Back wins on overlap; front fills gaps.
+  const front: MoulkiaFront = {
+    ownerName: draft.ownerName ?? "",
+    plate: draft.plate ?? "",
+    vin: draft.vin ?? "",
+    make: draft.make ?? "",
+    model: draft.model ?? "",
+    year: draft.year,
+  };
   const merged = mergeMoulkiaFields(front, r.fields);
-  redirect(
-    confirmUrl({
-      via: "moulkia",
-      assignedToId,
-      ownerName: merged.ownerName,
-      plate: merged.plate,
-      vin: merged.vin,
-      make: merged.make,
-      model: merged.model,
-      year: merged.year ? String(merged.year) : "",
-    }),
-  );
+
+  await prisma.intakeDraft.update({
+    where: { id: draft.id },
+    data: {
+      ownerName: merged.ownerName || null,
+      plate: merged.plate || null,
+      vin: merged.vin || null,
+      make: merged.make || null,
+      model: merged.model || null,
+      year: merged.year ?? null,
+    },
+  });
+
+  redirect(`/advisor/jobs/new/confirm?draftId=${encodeURIComponent(draft.id)}&via=moulkia`);
 }
 
 // Plate search on the intake landing page. Slice 3 (2026-07-30):
@@ -287,6 +306,14 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   //                        neither vehicle.
   const editOwner = get("editOwner") === "1";
   const releasePlateFrom = get("releasePlateFrom") || null;
+  // Draft id from the Moulkia OCR flow (front→back→confirm). Only its
+  // opaque cuid rides the URL — the extracted PII lives in the
+  // IntakeDraft row and is retrieved server-side by the confirm page.
+  // On successful create, we delete the draft OUTSIDE the write
+  // transaction so a cleanup failure can never roll back a job card
+  // that was already committed (see the delete call at the tail of
+  // this function).
+  const draftId = get("draftId") || null;
 
   // Reception detail
   const mileageRaw = parseInt(get("mileageIn"), 10);
@@ -600,6 +627,22 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
     });
     return job.id;
   });
+
+  // Best-effort draft cleanup — OUTSIDE the transaction. A delete
+  // failure here MUST NOT roll back a job card that was already
+  // committed. Any leftover row is swept by the next
+  // moulkiaFrontAction in this garage (see the deleteMany at the top)
+  // or by its own TTL. Garage-scoped in the where clause so a mangled
+  // draftId in the POST can't touch another tenant's row.
+  if (draftId) {
+    try {
+      await prisma.intakeDraft.deleteMany({
+        where: { id: draftId, garageId: user.garageId },
+      });
+    } catch {
+      // swallowed intentionally — see comment above
+    }
+  }
 
   revalidatePath("/advisor");
   // Hand-off confirmation screen — explicit "you sent this to a tech" page

@@ -149,6 +149,116 @@ This is the reason the banner in commit 1 was softened to remove the
 "use the existing-vehicle flow" pointer — that flow will corrupt data
 if used for a sold-vehicle case.
 
+## Slice ordering
+
+Recorded here as the parent spec so downstream slice specs
+(`vin-duplicate-audit-and-merge-plan-spec.md` etc.) can cross-reference
+one place. Order: **5 → 1a → 1 → 3 → 2 → 4 → 6 → 7**.
+
+- **Slice 5** — write-side normalisation on plate / VIN / phone
+  (shipped `fe7e061`). Non-blocking Case B banner + VIN+phone shortcut.
+- **Slice 1a** — VIN duplicate audit + merge plan + backfill. Deferred
+  until there's real intake data to audit.
+  See [vin-duplicate-audit-and-merge-plan-spec.md](vin-duplicate-audit-and-merge-plan-spec.md).
+- **Slice 1** — partial unique index on `(garageId, vin)` where vin is
+  not null. Blocked on slice 1a. Deferred with 1a.
+- **Slice 3** — disambiguation panel on plate collisions (shipped
+  `0551b05`, 2026-07-31). Four choices — same car/same owner, same
+  car/owner changed, different car/same plate, wrong plate — with
+  atomic writes and audit rows (`VehiclePlateHistory`,
+  `VehicleOwnershipTransfer`). Replaces the hard-block from slice 5's
+  Case B warning.
+- **Slice 2** — wire plate history + normalisation into the remaining
+  write paths that still bypass the intake action (booking → job-card
+  promotion, `plateLookupAction`'s Case-A refresh, direct-vehicle
+  metadata edits). Next slice.
+- **Slice 4** — auto-plate-update on repeat intake when the customer
+  brings the same car back with a new plate. Piggy-backs on slice 2's
+  history table.
+- **Slice 6** — find-vehicle search. See section below.
+- **Slice 7** — public booking flag (`plateMatchesOtherCustomer`). See
+  the createBookingPublic section further down.
+
+## Slice 6 — Find-vehicle search
+
+**Status:** not built. VIN-matching gap surfaced during slice-3
+verification (2026-07-31) — recorded here so it's tracked, not left
+as a session note.
+
+### Today
+
+`src/app/advisor/vehicles/page.tsx` matches a single `?q=` query
+across three OR branches, all garage-scoped:
+
+- `plate` — `contains: q`, case-insensitive
+- `customer.name` — `contains: q`, case-insensitive
+- `customer.phone` — `contains: <digits-only q>` when `q` has ≥ 3 digits
+
+VIN is not searchable anywhere in the advisor UI. Detail pages fetch by
+`id` only; the intake existing-vehicle picker at `/advisor/jobs/new`
+lists every vehicle unfiltered.
+
+### The gap slice 3 exposed
+
+Slice 3's Choice 3 (different car — same plate) leaves the old
+Vehicle with `plate: ""`. That vehicle stays findable by owner name
+today — verified in the browser 2026-07-31 — but owner names drift
+(rename, corporate rebadge, sale mid-repair). Once both plate and
+current owner name have moved, VIN is the only stable identity left
+on the row, and there's no UI to look it up. Every real garage
+customer knows their VIN because it's stamped in the Moulkia they
+already handed over at intake.
+
+Related: fleet vehicles routinely rotate plates between cars, so
+"search by current plate" ages out fastest of the three axes.
+
+### Decision on record
+
+**A plateless vehicle must be findable by VIN or owner name.** These
+two together are the load-bearing lookup axes after slice 3 released
+plate mutability. Plate stays as a search axis because it's the
+common case, but slice 6 must not depend on it existing.
+
+### What slice 6 adds
+
+Extend the advisor-search OR with a VIN branch:
+
+- Full-VIN match — `vin` equals the normalised query (17-char VIN
+  input; already normalised at write time by slice 5's
+  `normalizeVin`). Case-insensitive.
+- Last-6-tail match — `vin` ends with the normalised query when the
+  query is exactly 6 alphanumeric characters after normalisation.
+  Covers the common case where the customer only remembers the last
+  6 digits from their reg card.
+
+Normalise the query the same way slice 5's helpers normalise writes,
+so the compare is canonicalised on both sides.
+
+### Cases the tests must cover
+
+- Full VIN, exact match — finds it.
+- Full VIN, mixed case + hyphens — finds it (normalisation).
+- Last-6, matches one vehicle — finds it.
+- Last-6, matches multiple vehicles in the same garage — returns all,
+  advisor picks. No silent "first-match wins."
+- Plateless vehicle (`plate: ""`) matched by VIN — returns it. This
+  is the slice-3 regression guard.
+- Cross-garage — VIN in another garage never leaks in.
+- Legacy un-normalised VIN row (pre-slice-5 write) — currently
+  won't match a normalised query. Note in the test that this is
+  waiting on slice 1a's backfill; don't hard-fail the test today,
+  but assert the match happens once the row is normalised.
+
+### Not in slice 6
+
+- Public-facing search. Slice 6 is advisor-only.
+- Fuzzy matching (Levenshtein / transposition). Exact + last-6 only.
+- Merging duplicates found by VIN — that's slice 1a's job.
+- Adding VIN to the intake existing-vehicle picker at
+  `/advisor/jobs/new`. That list is unfiltered by design (pagination
+  handles size); a separate VIN-search there is a slice-7+ concern
+  if intake volume ever justifies it.
+
 ## Public intake — `createBookingPublic` (proposed, not built)
 
 The public booking flow has the same silent-duplicate gap but no advisor

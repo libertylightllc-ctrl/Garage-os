@@ -24,11 +24,20 @@ export const dynamic ="force-dynamic";
 export default async function HandoffDone({
   searchParams,
 }: {
-  searchParams: Promise<{ jobId?: string }>;
+  searchParams: Promise<{
+    jobId?: string;
+    // Slice 5: non-blocking warning flag. Set when the intake action
+    // detected the plate was currently attached to a different customer's
+    // vehicle in this garage but wrote the job anyway. Only the FLAG
+    // travels in the URL — the other owner's name is looked up
+    // server-side below to avoid leaking PII into browser history / access
+    // logs / referer headers.
+    plateWarning?: string;
+  }>;
 }) {
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
-  const { jobId } = await searchParams;
+  const { jobId, plateWarning } = await searchParams;
   if (!jobId) notFound();
 
   const job = await prisma.jobCard.findFirst({
@@ -55,6 +64,26 @@ export default async function HandoffDone({
     ? t("handoffSpecific").replace("{name}", assignedTech.name)
     : t("handoffShared");
 
+  // Slice 5 non-blocking plate-collision warning. Runs only when the
+  // intake action set ?plateWarning=1 (avoids a query on every done page
+  // render). Garage-scoped via customer.garageId relation filter —
+  // vehicles under other garages' customers are structurally excluded,
+  // matching the pre-flight in createCustomerVehicleJobAction. Excludes
+  // the JobCard's own Vehicle so we don't self-match.
+  let plateWarningOtherOwner: string | null = null;
+  if (plateWarning === "1" && job.vehicle.plate) {
+    const otherVehicle = await prisma.vehicle.findFirst({
+      where: {
+        plate: job.vehicle.plate,
+        customer: { garageId: session.user.garageId },
+        NOT: { id: job.vehicleId },
+      },
+      select: { customer: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    plateWarningOtherOwner = otherVehicle?.customer.name ?? null;
+  }
+
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="jobs"/>
@@ -65,6 +94,24 @@ export default async function HandoffDone({
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t("handoffTitle")}</h1>
         <p className="mt-2 text-base text-text">{handoffMessage}</p>
       </section>
+
+      {/* Slice 5: non-blocking plate collision warning. Set by the intake
+          action when the plate on this new job card is currently also
+          attached to a different customer's vehicle in the same garage.
+          The job was created anyway (schema has no plate unique); the
+          advisor sees this so they know to resolve on the vehicle detail
+          surface once slice 3 ships. The other owner's name is resolved
+          server-side above (not in the URL) — avoids PII in access logs. */}
+      {plateWarning === "1" ? (
+        <section className="rounded-xl border border-warning-500/40 bg-warning-50 p-4 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          <p className="font-medium">{t("handoffPlateWarningTitle")}</p>
+          <p className="mt-1">
+            {plateWarningOtherOwner
+              ? t("handoffPlateWarningBody").replace("{owner}", plateWarningOtherOwner)
+              : t("handoffPlateWarningBodyGeneric")}
+          </p>
+        </section>
+      ) : null}
 
       {/* Summary of what was created — gives the advisor confidence the
           right data made it through and a quick reference if they're

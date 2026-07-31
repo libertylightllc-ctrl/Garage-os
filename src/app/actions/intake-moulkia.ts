@@ -24,6 +24,7 @@ import {
 } from "@/lib/jobcard-fields";
 import { requireAdvisor } from "@/lib/action-guards";
 import { clampPriority } from "@/lib/priority";
+import { normalizeVin, normalizeUaePhone, normalizePlate } from "@/lib/normalize";
 
 
 function buildQuery(params: Record<string, string>): string {
@@ -195,11 +196,19 @@ export async function moulkiaBackAction(formData: FormData) {
 // Repeat customer: look up an existing vehicle by plate and prefill from the record.
 export async function plateLookupAction(formData: FormData) {
   const user = await requireAdvisor();
-  const plate = String(formData.get("plate") ?? "").trim();
-  if (!plate) redirect("/advisor/jobs/new?error=noplate");
+  const plateRaw = String(formData.get("plate") ?? "").trim();
+  if (!plateRaw) redirect("/advisor/jobs/new?error=noplate");
+
+  // Normalise the search key to match the storage rule in
+  // createCustomerVehicleJobAction — new writes go in as
+  // normalizePlate(x), so an advisor typing "A 12345" must match a
+  // stored "A12345". Legacy rows written before slice 5 kept whatever
+  // formatting the advisor typed and may not match; slice 1a's
+  // backfill closes that gap.
+  const plate = normalizePlate(plateRaw);
 
   const vehicle = await prisma.vehicle.findFirst({
-    where: { plate: { equals: plate, mode: "insensitive" }, customer: { garageId: user.garageId } },
+    where: { plate, customer: { garageId: user.garageId } },
     include: { customer: true },
   });
 
@@ -235,14 +244,31 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const get = (k: string) => String(formData.get(k) ?? "").trim();
   const getAll = (k: string) => formData.getAll(k).map(String);
 
-  // Customer + vehicle identity
+  // Customer + vehicle identity. VIN, phone, AND plate are normalised
+  // at write time (and at compare time in the pre-flight below) so
+  // different formats of the same value stop creating parallel records:
+  //   VIN:    "5n1ar2 mm7dc-605739" → "5N1AR2MM7DC605739"
+  //   Phone:  "+971 50 123 4567" / "0501234567" / "971501234567" →
+  //           "501234567"
+  //   Plate:  "A 12345" / "a-12345" → "A12345"
+  // Legacy rows in prod may not be normalised; slice 1a audits + backfills
+  // before slice 1 adds the normalized columns and indexes.
+  //
+  // Cost of slice 5 normalising storage: if a legacy Customer row exists
+  // with an un-normalised phone (e.g. "0501234567"), the upsert below
+  // will look up by the normalised "501234567", miss the legacy row, and
+  // create a duplicate Customer. Same class of gap for legacy Vehicle
+  // rows with un-normalised plate/vin. Slice 1a's backfill collapses
+  // these once run.
   const ownerName = get("ownerName");
-  const phone = get("phone");
+  const phone = normalizeUaePhone(get("phone"));
   const email = get("email") || null;
-  const plate = get("plate");
+  const plateRaw = get("plate");
+  const plate = plateRaw ? normalizePlate(plateRaw) : "";
   const make = get("make");
   const model = get("model");
-  const vin = get("vin") || null;
+  const vinRaw = get("vin");
+  const vin = vinRaw ? normalizeVin(vinRaw) : null;
   const yearRaw = parseInt(get("year"), 10);
   const year = Number.isFinite(yearRaw) ? yearRaw : null;
   // Intrinsic vehicle spec — these live on Vehicle so they survive
@@ -304,8 +330,22 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   // Skip pre-flight when `vehicleId` is already set — that's the advisor
   // explicitly picking an existing Vehicle from the picker, which is Case A
   // by construction.
+  //
+  // Slice 5 (2026-07-30): the hard-block on Case B was removed so advisors
+  // can keep creating job cards while the disambiguation panel (slice 3) is
+  // still pending. We still DETECT Case B here so the done page can show a
+  // non-blocking warning naming the other owner; we no longer refuse the
+  // create. The Vehicle schema has no unique on plate (see
+  // docs/intake-duplicate-handling-spec.md) so this is data-consistent
+  // with the existing "duplicate Vehicle rows in the same garage" state
+  // that already exists on prod. Slice 3 replaces this with the routed
+  // disambiguation panel that prevents new duplicates from being written.
+  // Every Vehicle/Customer lookup below is scoped to `user.garageId` via
+  // Prisma's relation-through filter (`customer: { garageId }`) or a
+  // direct `garageId` where clause. No cross-tenant read paths.
+  let plateAlsoOnOtherVehicle = false;
   if (!vehicleId) {
-    const [existingVehicle, existingCustomer] = await Promise.all([
+    const [existingVehicleByPlate, existingCustomer] = await Promise.all([
       prisma.vehicle.findFirst({
         where: { plate, customer: { garageId: user.garageId } },
         select: { id: true, customerId: true },
@@ -315,15 +355,61 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         select: { id: true },
       }),
     ]);
-    if (existingVehicle && existingCustomer && existingVehicle.customerId === existingCustomer.id) {
-      // Case A implicit — reuse the existing Vehicle. The `vehicleId` branch
-      // in the transaction below will refresh name/phone/email/spec.
-      vehicleId = existingVehicle.id;
-    } else if (existingVehicle) {
-      // Case B — plate is under a different customer (or no customer with
-      // this phone exists yet). NEVER silently create a duplicate Vehicle
-      // row. Commit 2 replaces this redirect with the disambiguation page.
-      redirect("/advisor/jobs/new?error=plate_belongs_to_another_customer");
+    // Case A (by plate): plate + phone both match the same customer.
+    if (
+      existingVehicleByPlate &&
+      existingCustomer &&
+      existingVehicleByPlate.customerId === existingCustomer.id
+    ) {
+      vehicleId = existingVehicleByPlate.id;
+    } else if (vin) {
+      // Case A (by VIN) — the OCR-came-back-with-a-known-chassis shortcut.
+      // Only take this path when BOTH the VIN matches AND the incoming
+      // phone matches that VIN's current owner.
+      //
+      // Phone equality is deliberately weak evidence on its own — fleet
+      // vehicles (delivery, taxi, corporate) commonly share one contact
+      // number across many cars, so a phone match without a VIN match
+      // proves nothing. It's acceptable HERE because VIN is the primary
+      // signal; the phone check is defence-in-depth against reassigning
+      // a VIN-matched Vehicle to the wrong customer without going
+      // through the ownership-change flow (slice 3).
+      //
+      //   - VIN matches but phone doesn't → could be plate transfer OR
+      //     ownership change; NOT safe to shortcut, needs the
+      //     disambiguation panel (slice 3). Fall through to today's
+      //     default create path so the advisor is unblocked, with the
+      //     plate-collision warning if applicable.
+      //   - No VIN provided → legacy / skipped-OCR path; can't shortcut.
+      //   - Plate on the reused Vehicle may differ from the incoming
+      //     plate (customer brought the same car back with a new plate).
+      //     Slice 4 owns the auto-plate-update + history bookkeeping;
+      //     slice 5 leaves the existing plate alone.
+      //
+      // `vin` is already normalised (see above) so `equals` is a
+      // canonicalised compare against normalised writes. Legacy rows
+      // that pre-date normalisation may still hold raw formats and
+      // won't match; the shortcut is best-effort until slice 1a
+      // backfills.
+      const byVin = await prisma.vehicle.findFirst({
+        where: {
+          vin,
+          customer: { garageId: user.garageId },
+        },
+        select: { id: true, customerId: true },
+      });
+      if (byVin && existingCustomer && byVin.customerId === existingCustomer.id) {
+        vehicleId = byVin.id;
+      }
+    }
+    if (!vehicleId && existingVehicleByPlate) {
+      // Case B — plate is currently attached to a different customer,
+      // and no VIN shortcut applied. Non-blocking as of slice 5: mark
+      // the collision so the done page can show a warning; fall through
+      // to the default insert branch. The done page does its own
+      // garage-scoped lookup for the other owner's name — we do NOT
+      // put a customer name in the URL (referer / access-log leak).
+      plateAlsoOnOtherVehicle = true;
     }
     // Case C and default fall through to the transaction below untouched.
   }
@@ -428,5 +514,16 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   // Hand-off confirmation screen — explicit "you sent this to a tech" page
   // before dropping the advisor onto the job timeline. Lets them queue up
   // another intake without losing context, and makes the handoff feel real.
-  redirect(`/advisor/jobs/new/done?jobId=${jobId}`);
+  //
+  // plateWarning: set when Case B was detected in pre-flight (plate is
+  // currently on another customer's vehicle in this garage). Only the flag
+  // travels in the URL — the done page does its own garage-scoped lookup
+  // for the OTHER owner's name from the plate on the JobCard it just
+  // created. Passing a customer name in the URL would leak PII into
+  // browser history / referer / access logs (Moulkia data is personal).
+  const doneParams = new URLSearchParams({ jobId });
+  if (plateAlsoOnOtherVehicle) {
+    doneParams.set("plateWarning", "1");
+  }
+  redirect(`/advisor/jobs/new/done?${doneParams.toString()}`);
 }

@@ -94,9 +94,19 @@ export default async function NewJobCard({
       </div>
 
       {error && ERR[error] ? (
-        <p className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
-          {t(ERR[error])}
-        </p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
+          <p>{t(ERR[error])}</p>
+          {/* Dismiss × — clears the ?error param so a fresh visit or
+              refresh doesn't keep showing a stale message from an
+              earlier attempt. */}
+          <Link
+            href="/advisor/jobs/new"
+            aria-label={t("intakeErrorDismiss")}
+            className="-mt-1 shrink-0 rounded-md px-2 py-0.5 text-lg leading-none text-danger-700 hover:bg-danger-100 dark:text-danger-500 dark:hover:bg-danger-500/20"
+          >
+            ×
+          </Link>
+        </div>
       ) : null}
 
       {/* New customer — Moulkia OCR. One-tap camera; the act of scanning IS consent.

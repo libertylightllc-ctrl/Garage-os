@@ -310,6 +310,80 @@ week, it moves up.
   handles size); a separate VIN-search there is a slice-7+ concern
   if intake volume ever justifies it.
 
+## PII in URL — pattern and remaining follow-up
+
+Class of bug: URL query params used as an inter-request carry
+mechanism for intake state. Owner name, phone, VIN and email land in
+the browser's URL bar, its history, the server access log, the CDN
+log, and any outgoing `Referer` header from links on the page — an
+advisor loading the panel with `?ownerName=ARAFATH SYED YASAR
+SHAFIULLA…` broadcasts that customer's PII to every one of those
+places.
+
+Slice 5 fixed the confirm-form validation path (`?error=…` params
+stopped carrying owner data). Slice 3's disambiguation panel
+reintroduced the same shape by copying the "forward everything the
+advisor typed" redirect pattern from `createCustomerVehicleJobAction`
+into its Case B fall-through. Same audit lens that would have caught
+slice 5 caught slice 3 in production use.
+
+Sites cleaned in fix commit `6663146` (2026-07-31):
+
+- `createCustomerVehicleJobAction` Case B → panel redirect
+- Existing-vehicle panel Choice 1/2/3 hrefs → confirm
+- Intake landing "Or pick an existing vehicle" row Links → confirm
+
+All three target a Vehicle already in the DB, so the fix is to pass
+only `vehicleId` in the URL and let the confirm page do a
+garage-scoped `findFirst` for the defaults it needs.
+
+### Remaining follow-up — Moulkia OCR pipeline
+
+Not yet fixed. The OCR flow redirects between three surfaces,
+carrying the extracted PII in URL query params at every hop because
+no Vehicle row exists yet:
+
+- `moulkiaFrontAction` → `/advisor/jobs/new/back?ownerName=…&vin=…`
+- `moulkiaBackAction` → `/advisor/jobs/new/confirm?ownerName=…&vin=…`
+- `/advisor/jobs/new/back` skip link → confirm (same fields, forwarded)
+
+The DB-lookup fix from `6663146` doesn't apply here — the whole
+point of these hops is to accumulate OCR data across two photo
+captures and one confirm submit BEFORE any row is written. Options:
+
+- **Signed HTTP-only cookie.** Set on the front→back redirect,
+  extended on the back→confirm redirect, cleared on confirm submit
+  (or TTL after ~10 min). Same-request-cycle carry; nothing to log or
+  index. Preferred.
+- **Scratch server-side row.** `IntakeDraft` table keyed by user +
+  timestamp, TTL cleanup. Heavier — writes to the DB before the
+  advisor commits, needs its own garbage collection.
+- **POST body carry only.** Would require reshaping front→back and
+  back→confirm as forms rather than redirects. Bigger UX rewrite;
+  loses the "camera auto-submits" pattern that makes OCR feel one-tap.
+
+Blocking the fix on: cookie signing key story. Auth.js already has an
+`AUTH_SECRET` we can reuse via HKDF, so the ingredients are there.
+
+### Why this got past slice 5
+
+Slice 5's fix was framed around the confirm-form error re-render
+path. It didn't audit every OTHER site that redirects into a page
+under `/advisor/jobs/new/**`, and there was no lint / test-level
+guard that would fail a PR reintroducing the pattern. Options for
+a lasting fix:
+
+- **Grep rule / eslint custom rule** flagging
+  `URLSearchParams(...)` blocks that include known-PII keys
+  (`ownerName`, `phone`, `email`, `vin`) targeting our own routes.
+  Cheap; catches the pattern before it lands.
+- **A "safe redirect" helper** for intake surfaces that only accepts
+  an allow-listed set of query params. Higher effort; strictly
+  enforces the invariant.
+
+Not building either as part of the fix commit — recording so we
+pick one after real intake reveals whether the class keeps recurring.
+
 ## Public intake — `createBookingPublic` (proposed, not built)
 
 The public booking flow has the same silent-duplicate gap but no advisor

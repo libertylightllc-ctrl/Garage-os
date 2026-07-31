@@ -249,6 +249,57 @@ so the compare is canonicalised on both sides.
   waiting on slice 1a's backfill; don't hard-fail the test today,
   but assert the match happens once the row is normalised.
 
+### Open question — no undo path for Choices 2 and 3
+
+Recorded 2026-07-31 after slice 3 shipped. Not building until real
+intake data shows how often this bites.
+
+Slice 3's atomic writes are one-way from the UI:
+
+- **Choice 2** (same car, owner changed) — `Vehicle.customerId` moved
+  and a `VehicleOwnershipTransfer` row written. If the advisor picked
+  the wrong choice — the customer really was the same person, they
+  just brought the car in on a different phone that day — the FK move
+  stands. Nothing in the app rolls it back.
+- **Choice 3** (different car, same plate) — old vehicle's plate
+  blanked, its `VehiclePlateHistory` row closed, new Vehicle + fresh
+  history row created. If the advisor picked this by mistake — it
+  really was the same car and the plate had genuinely returned — the
+  release stands, and the new plateless-old-vehicle now needs manual
+  cleanup.
+
+Both audit rows hold the previous state, so undo IS feasible:
+
+- Choice-2 undo: read the most-recent `VehicleOwnershipTransfer` for
+  the vehicle, move `customerId` back to `fromCustomerId`, delete the
+  transfer row (or write a compensating "reverted" row — see below).
+- Choice-3 undo: reopen the old vehicle's most-recent released
+  `VehiclePlateHistory` row (clear `releasedAt` + `releasedByUserId`),
+  restore `Vehicle.plate` from that history row's `plate` field, and
+  delete the mistakenly-created new Vehicle + its plateHistory row +
+  its JobCard.
+
+Design questions to answer before building:
+
+- **Delete the audit row, or keep it and add a compensating row?**
+  Deleting is cleaner for the history query but loses the fact that
+  the mistake happened. Compensating rows keep the audit trail honest
+  but make "current owner" queries messier.
+- **Who's allowed to undo?** Any advisor, only the one who made the
+  original write, or owner-only? Time-limited (e.g. within the same
+  shift)?
+- **What if downstream state has moved on?** Choice-3's new Vehicle
+  might have parts requested, an estimate priced, WhatsApp messages
+  sent to the (wrong) new customer. Undo has to either cascade
+  (delete all of that) or refuse (surface the block, tell the advisor
+  what would have to be undone first).
+- **UI surface.** Toast with an Undo link on the done page? An entry
+  in the vehicle detail page's history section? Both?
+
+Priority: park until we see the rate of Choice-2/3 mistakes in prod.
+If it's < 1/month per shop, undo is a nice-to-have; if it's every
+week, it moves up.
+
 ### Not in slice 6
 
 - Public-facing search. Slice 6 is advisor-only.

@@ -193,7 +193,14 @@ export async function moulkiaBackAction(formData: FormData) {
   );
 }
 
-// Repeat customer: look up an existing vehicle by plate and prefill from the record.
+// Plate search on the intake landing page. Slice 3 (2026-07-30):
+// hits the disambiguation panel when the plate is on record, so the
+// advisor consciously picks "same car / same owner", "same car / new
+// owner", "different car — same plate", or "wrong plate". The prior
+// behaviour prefilled the confirm form directly, which silently
+// assumed same-car-same-owner and made the "sold" case impossible
+// to signal without hand-editing the confirm fields (and, under
+// slice 5, ended in a duplicate write).
 export async function plateLookupAction(formData: FormData) {
   const user = await requireAdvisor();
   const plateRaw = String(formData.get("plate") ?? "").trim();
@@ -209,31 +216,16 @@ export async function plateLookupAction(formData: FormData) {
 
   const vehicle = await prisma.vehicle.findFirst({
     where: { plate, customer: { garageId: user.garageId } },
-    include: { customer: true },
+    select: { id: true },
   });
 
   if (!vehicle) {
     // Not on file → treat as a new customer (no Moulkia photo), prefill just the plate.
     redirect(confirmUrl({ via: "manual", plate }));
   }
-  const v = vehicle!;
+  // On file → panel decides what happens next.
   redirect(
-    confirmUrl({
-      via: "repeat",
-      vehicleId: v.id,
-      ownerName: v.customer.name,
-      phone: v.customer.phone,
-      plate: v.plate,
-      make: v.make,
-      model: v.model,
-      year: v.year ? String(v.year) : "",
-      vin: v.vin ?? "",
-      // Carry intrinsic spec through so the returning vehicle pre-fills
-      // the new Engine size / Fuel type inputs (saved once, used for
-      // every subsequent visit + every part request).
-      engineSize: v.engineSize ?? "",
-      fuelType: v.fuelType ?? "",
-    }),
+    `/advisor/jobs/new/existing-vehicle/${vehicle!.id}?via=repeat&plate=${encodeURIComponent(plate)}`,
   );
 }
 
@@ -277,6 +269,24 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   const engineSize = get("engineSize") || null;
   const assignedToRaw = get("assignedToId");
   let vehicleId = get("vehicleId");
+  // Slice 3 disambiguation flags — set by the intake collision panel.
+  // See src/app/advisor/jobs/new/existing-vehicle/[vehicleId]/page.tsx.
+  //
+  //   editOwner=1        → Choice 2 (same car, owner has changed).
+  //                        Do a real FK move on Vehicle.customerId,
+  //                        NEVER mutate the previous Customer row in
+  //                        place (would corrupt every other Vehicle /
+  //                        Booking / Reminder still attached to them).
+  //                        Write a VehicleOwnershipTransfer audit row.
+  //   releasePlateFrom=X → Choice 3 (different car, same plate). The
+  //                        old Vehicle X keeps its VIN + service
+  //                        history but loses this plate; the new
+  //                        Vehicle we're about to create takes it.
+  //                        Both writes happen in ONE transaction so
+  //                        the plate can never briefly belong to
+  //                        neither vehicle.
+  const editOwner = get("editOwner") === "1";
+  const releasePlateFrom = get("releasePlateFrom") || null;
 
   // Reception detail
   const mileageRaw = parseInt(get("mileageIn"), 10);
@@ -306,45 +316,28 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   }
 
   // ── Pre-flight: identify Cases A, B, C before writing anything ────────
-  // Vehicle has NO unique on (garageId, plate) at the schema level (verified
-  // 2026-07-30), so a naive `vehicle.create` under a different customer would
-  // silently corrupt the plate namespace — two Vehicle rows, same plate,
-  // different owners, and every plate-lookup surface (service history, PO
-  // vehicle snapshot, plate shortcut on this page) starts returning
-  // ambiguous results. The schema won't catch this; the action has to.
+  // Vehicle has NO unique on (garageId, plate) at the schema level, so a
+  // naive `vehicle.create` under a different customer would silently
+  // corrupt the plate namespace. Schema won't catch it; the action has
+  // to. Every lookup below is garage-scoped via
+  // `customer: { garageId: user.garageId }`.
   //
-  //   Case A (implicit): plate matches, phone matches the SAME customer.
-  //     → route through the existing `vehicleId` branch below so name /
-  //       email / vehicle spec get refreshed, no new rows written.
-  //   Case B: plate matches an existing Vehicle but under a DIFFERENT
-  //     customer. Could be a vehicle-sold case OR a plate typo — the action
-  //     cannot tell them apart. Kick back to the intake form with a clear
-  //     message; the disambiguation wizard is commit 2 (see
-  //     docs/intake-duplicate-handling-spec.md).
-  //   Case C: plate is new; the customer's phone already exists.
-  //     → today's fallthrough branch is already correct — `customer.upsert`
-  //       finds the existing customer and `vehicle.create` inserts under
-  //       them. No special handling required.
-  //   Default: everything is new — today's fallthrough branch is correct.
+  //   Case A (implicit): plate + phone match the same customer → route
+  //     through the existing `vehicleId` branch (refresh customer /
+  //     vehicle metadata, reuse the row).
+  //   Case B: plate matches a different customer's Vehicle → redirect
+  //     to the disambiguation panel unless the advisor already picked
+  //     a choice (editOwner=1 or releasePlateFrom=…). No write happens
+  //     on the panel-redirect path.
+  //   Case C: plate is new; customer's phone exists → fallthrough
+  //     (upsert customer, create vehicle).
+  //   Default: everything is new → fallthrough.
   //
-  // Skip pre-flight when `vehicleId` is already set — that's the advisor
-  // explicitly picking an existing Vehicle from the picker, which is Case A
-  // by construction.
-  //
-  // Slice 5 (2026-07-30): the hard-block on Case B was removed so advisors
-  // can keep creating job cards while the disambiguation panel (slice 3) is
-  // still pending. We still DETECT Case B here so the done page can show a
-  // non-blocking warning naming the other owner; we no longer refuse the
-  // create. The Vehicle schema has no unique on plate (see
-  // docs/intake-duplicate-handling-spec.md) so this is data-consistent
-  // with the existing "duplicate Vehicle rows in the same garage" state
-  // that already exists on prod. Slice 3 replaces this with the routed
-  // disambiguation panel that prevents new duplicates from being written.
-  // Every Vehicle/Customer lookup below is scoped to `user.garageId` via
-  // Prisma's relation-through filter (`customer: { garageId }`) or a
-  // direct `garageId` where clause. No cross-tenant read paths.
-  let plateAlsoOnOtherVehicle = false;
-  if (!vehicleId) {
+  // Skip pre-flight when `vehicleId` is set OR the disambiguation
+  // panel has already routed a specific choice here (editOwner /
+  // releasePlateFrom). Panel-set flags are the advisor's explicit
+  // decision; we honour them without re-detecting.
+  if (!vehicleId && !releasePlateFrom) {
     const [existingVehicleByPlate, existingCustomer] = await Promise.all([
       prisma.vehicle.findFirst({
         where: { plate, customer: { garageId: user.garageId } },
@@ -403,13 +396,33 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       }
     }
     if (!vehicleId && existingVehicleByPlate) {
-      // Case B — plate is currently attached to a different customer,
-      // and no VIN shortcut applied. Non-blocking as of slice 5: mark
-      // the collision so the done page can show a warning; fall through
-      // to the default insert branch. The done page does its own
-      // garage-scoped lookup for the other owner's name — we do NOT
-      // put a customer name in the URL (referer / access-log leak).
-      plateAlsoOnOtherVehicle = true;
+      // Case B — plate currently on a different customer's Vehicle and
+      // no shortcut applied. Redirect to the disambiguation panel; no
+      // writes happen here. The advisor picks a choice, and comes
+      // back through this action with editOwner=1 (Choice 2) or
+      // releasePlateFrom=<id> (Choice 3), or under a fresh vehicleId
+      // (Choice 1), which shortcut this pre-flight.
+      //
+      // Carry forward every form field the advisor already typed so
+      // the panel's redirects can prefill downstream forms. This
+      // includes ownerName / phone (potentially the new owner) so
+      // Choice 3's manual path doesn't blank them.
+      const forward = new URLSearchParams({
+        via,
+        plate,
+        ownerName,
+        phone,
+        make,
+        model,
+        year: year != null ? String(year) : "",
+        vin: vin ?? "",
+        engineSize: engineSize ?? "",
+        fuelType: fuelType ?? "",
+        assignedToId: assignedToRaw,
+      });
+      redirect(
+        `/advisor/jobs/new/existing-vehicle/${existingVehicleByPlate.id}?${forward.toString()}`,
+      );
     }
     // Case C and default fall through to the transaction below untouched.
   }
@@ -445,8 +458,59 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   }
 
   const jobId = await prisma.$transaction(async (tx) => {
-    if (vehicleId) {
-      // Repeat / sold-vehicle path: confirm it's ours; keep details fresh.
+    if (vehicleId && editOwner) {
+      // Slice 3 Choice 2 — same car, owner has changed. FK move on
+      // Vehicle.customerId to a Customer keyed by the NEW phone;
+      // NEVER mutate the previous Customer's row (would corrupt every
+      // other Vehicle / Booking / Reminder still attached to them).
+      // Snapshot the previous owner in the audit before the FK moves.
+      const existing = await tx.vehicle.findFirst({
+        where: { id: vehicleId, customer: { garageId: user.garageId } },
+        include: { customer: { select: { id: true, name: true, phone: true } } },
+      });
+      if (!existing) throw new Error("Vehicle not found in this garage");
+      const previousOwner = existing.customer;
+      const newCustomer = await tx.customer.upsert({
+        where: { garageId_phone: { garageId: user.garageId, phone } },
+        update: { name: ownerName, email },
+        create: { garageId: user.garageId, name: ownerName, phone, email },
+        select: { id: true },
+      });
+      if (newCustomer.id !== previousOwner.id) {
+        await tx.vehicleOwnershipTransfer.create({
+          data: {
+            vehicleId: existing.id,
+            fromCustomerId: previousOwner.id,
+            toCustomerId: newCustomer.id,
+            transferredByUserId: user.id,
+            previousOwnerName: previousOwner.name,
+            previousOwnerPhone: previousOwner.phone,
+          },
+        });
+        await tx.vehicle.update({
+          where: { id: existing.id },
+          data: {
+            customerId: newCustomer.id,
+            make, model, year, plate, vin, engineSize, fuelType,
+          },
+        });
+      } else {
+        // Same-phone edge: the "new" owner is really the same
+        // Customer row. Fall back to Choice 1 semantics for the
+        // vehicle-metadata refresh only. No transfer row written.
+        await tx.customer.update({
+          where: { id: previousOwner.id },
+          data: { name: ownerName, email },
+        });
+        await tx.vehicle.update({
+          where: { id: existing.id },
+          data: { make, model, year, plate, vin, engineSize, fuelType },
+        });
+      }
+    } else if (vehicleId) {
+      // Choice 1 / plate-lookup Case A — same car, same owner. Refresh
+      // customer contact info and vehicle metadata on the existing
+      // row; no FK move, no audit row.
       const existing = await tx.vehicle.findFirst({
         where: { id: vehicleId, customer: { garageId: user.garageId } },
         select: { id: true, customerId: true },
@@ -461,7 +525,31 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         data: { make, model, year, plate, vin, engineSize, fuelType },
       });
     } else {
-      // New customer + vehicle. Upsert customer by phone so a known number attaches.
+      // New Vehicle path — Choice 3 (releasePlateFrom set) OR plate-is-new
+      // default. Either way we upsert the Customer by phone and create a
+      // fresh Vehicle row + open a VehiclePlateHistory row for the plate.
+      //
+      // Choice 3 also closes the old Vehicle's plate history + blanks its
+      // plate cache. Both happen in this transaction so the plate is
+      // never "attached to nothing" between the two writes.
+      if (releasePlateFrom) {
+        const oldVehicle = await tx.vehicle.findFirst({
+          where: { id: releasePlateFrom, customer: { garageId: user.garageId } },
+          select: { id: true, plate: true },
+        });
+        if (!oldVehicle) throw new Error("Old vehicle not found in this garage");
+        // Close every currently-open plate history row for this Vehicle
+        // (should be exactly one, but updateMany is safe if the backfill
+        // left a stray).
+        await tx.vehiclePlateHistory.updateMany({
+          where: { vehicleId: oldVehicle.id, releasedAt: null },
+          data: { releasedAt: new Date(), releasedByUserId: user.id },
+        });
+        await tx.vehicle.update({
+          where: { id: oldVehicle.id },
+          data: { plate: "" },
+        });
+      }
       const customer = await tx.customer.upsert({
         where: { garageId_phone: { garageId: user.garageId, phone } },
         update: { name: ownerName, email },
@@ -472,6 +560,16 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         data: { customerId: customer.id, make, model, year, plate, vin, engineSize, fuelType },
         select: { id: true },
       });
+      if (plate) {
+        await tx.vehiclePlateHistory.create({
+          data: {
+            vehicleId: vehicle.id,
+            plate,
+            normalizedPlate: plate, // already normalised at the top
+            attachedByUserId: user.id,
+          },
+        });
+      }
       vehicleId = vehicle.id;
     }
 
@@ -512,18 +610,9 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
 
   revalidatePath("/advisor");
   // Hand-off confirmation screen — explicit "you sent this to a tech" page
-  // before dropping the advisor onto the job timeline. Lets them queue up
-  // another intake without losing context, and makes the handoff feel real.
-  //
-  // plateWarning: set when Case B was detected in pre-flight (plate is
-  // currently on another customer's vehicle in this garage). Only the flag
-  // travels in the URL — the done page does its own garage-scoped lookup
-  // for the OTHER owner's name from the plate on the JobCard it just
-  // created. Passing a customer name in the URL would leak PII into
-  // browser history / referer / access logs (Moulkia data is personal).
-  const doneParams = new URLSearchParams({ jobId });
-  if (plateAlsoOnOtherVehicle) {
-    doneParams.set("plateWarning", "1");
-  }
-  redirect(`/advisor/jobs/new/done?${doneParams.toString()}`);
+  // before dropping the advisor onto the job timeline. Slice 3 removed
+  // the plateWarning URL param the slice-5 done page was reading; the
+  // disambiguation panel intercepts BEFORE the write, so there's no
+  // ambiguous state to warn about post-create.
+  redirect(`/advisor/jobs/new/done?jobId=${jobId}`);
 }

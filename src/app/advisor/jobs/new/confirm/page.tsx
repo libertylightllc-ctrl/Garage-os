@@ -37,6 +37,13 @@ interface SP {
   error?: string;
   //"1"= advisor skipped the back-photo step
   skippedBack?: string;
+  // Slice 3 disambiguation panel outputs. editOwner=1 means the confirm
+  // action does a Customer FK move on the existing Vehicle + writes a
+  // VehicleOwnershipTransfer row. releasePlateFrom carries the old
+  // Vehicle's id so its plate + history get closed atomically when the
+  // new Vehicle is created. Both are hidden inputs, not editable.
+  editOwner?: string;
+  releasePlateFrom?: string;
 }
 
 type T = (k: MessageKey) => string;
@@ -157,6 +164,10 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
       <form action={createCustomerVehicleJobAction} className="flex flex-col gap-5">
         <input type="hidden" name="vehicleId" defaultValue={sp.vehicleId ?? ""} />
         <input type="hidden" name="via" defaultValue={via} />
+        {/* Slice 3 — panel outputs. Hidden so the advisor can't clear
+            them mid-form and end up with the wrong write path. */}
+        <input type="hidden" name="editOwner" defaultValue={sp.editOwner ?? ""} />
+        <input type="hidden" name="releasePlateFrom" defaultValue={sp.releasePlateFrom ?? ""} />
 
         {/* Customer */}
         <fieldset className="flex flex-col gap-2 rounded-xl border border-border p-3">

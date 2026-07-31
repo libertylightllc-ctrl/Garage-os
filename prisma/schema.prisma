@@ -343,6 +343,14 @@ model User {
   aiEvents        AiEvent[]
   workSessions    WorkSession[] @relation("TechWorkSessions")
   purchaseOrderSends PurchaseOrderSend[] @relation("PurchaseOrderSentBy")
+  // Slice 3 audits — separate named relations so the User row can be
+  // referenced from any of the three roles on an intake collision:
+  // attached / released a plate history row, or performed an
+  // ownership transfer. Nullable on the plate side because the
+  // backfill runs without a user context.
+  plateHistoryAttached  VehiclePlateHistory[]      @relation("PlateHistoryAttachedBy")
+  plateHistoryReleased  VehiclePlateHistory[]      @relation("PlateHistoryReleasedBy")
+  ownershipTransfers    VehicleOwnershipTransfer[] @relation("OwnershipTransferBy")
 
   // Last successful sign-in for this staff user. Written by the
   // baseProvider in src/auth.ts on every authorize() pass — best-effort,
@@ -379,6 +387,13 @@ model Customer {
   vehicles  Vehicle[]
   bookings  Booking[]
   waThreads WhatsAppThread[]
+  // Slice 3 — ownership-transfer audit rows reference the customer on
+  // both sides of the transfer (previous / new owner) so both need
+  // named relations. Neither side is authoritative; the Vehicle's
+  // current `customerId` is the source of truth for "who owns this
+  // now."
+  ownershipTransfersFrom VehicleOwnershipTransfer[] @relation("OwnershipTransferFrom")
+  ownershipTransfersTo   VehicleOwnershipTransfer[] @relation("OwnershipTransferTo")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -407,6 +422,11 @@ model Vehicle {
   bookings Booking[]
   reminders Reminder[]
   poLines  PurchaseOrderLine[]
+  // Slice 3 additions — see VehiclePlateHistory / VehicleOwnershipTransfer
+  // at the bottom of this file for why these are separate tables and not
+  // JSON columns on Vehicle.
+  plateHistory       VehiclePlateHistory[]
+  ownershipTransfers VehicleOwnershipTransfer[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1235,4 +1255,62 @@ model AdminAuditLog {
   @@index([actorAdminId, createdAt])
   @@index([targetGarageId, createdAt])
   @@index([action, createdAt])
+}
+
+// Plate history on a Vehicle. One row per (Vehicle, plate) tenure with
+// the dates the plate was attached and released. The plate currently
+// shown on the Vehicle is the one whose row has `releasedAt IS NULL`;
+// the Vehicle.plate column stays as the fast-render cache for that
+// current value.
+//
+// Slice 3 (2026-07-30) — introduced with the intake disambiguation
+// panel. Choice 3 (plate transferred) writes both a release row on the
+// old Vehicle and an attach row on the new one, atomic in the confirm
+// action's transaction. Legacy Vehicles get a single backfilled row at
+// migration time (attachedAt = Vehicle.createdAt, releasedAt = null),
+// skipping any Vehicle whose plate is blank so we never insert an
+// empty-plate history entry.
+model VehiclePlateHistory {
+    id               String    @id @default(cuid())
+    vehicleId        String
+    vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+    plate            String
+    normalizedPlate  String
+    attachedAt       DateTime  @default(now())
+    releasedAt       DateTime? // null → this is the current plate on the Vehicle
+    attachedByUserId String?
+    attachedByUser   User?     @relation("PlateHistoryAttachedBy", fields: [attachedByUserId], references: [id])
+    releasedByUserId String?
+    releasedByUser   User?     @relation("PlateHistoryReleasedBy", fields: [releasedByUserId], references: [id])
+
+    @@index([vehicleId, releasedAt])
+    @@index([normalizedPlate, releasedAt])
+}
+
+// Ownership transfer audit. Append-only. Written in the confirm
+// action's transaction whenever the disambiguation panel's Choice 2
+// (same car, owner has changed) fires. The FK move happens on the
+// Vehicle row (Vehicle.customerId → new Customer); the previous
+// Customer's row is NEVER mutated in place — that would corrupt any
+// other Vehicles / Bookings / Reminders still attached to the previous
+// owner. Snapshot fields freeze what the previous owner looked like at
+// transfer time so the audit doesn't lie later.
+model VehicleOwnershipTransfer {
+    id                 String   @id @default(cuid())
+    vehicleId          String
+    vehicle            Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+    fromCustomerId     String
+    fromCustomer       Customer @relation("OwnershipTransferFrom", fields: [fromCustomerId], references: [id])
+    toCustomerId       String
+    toCustomer         Customer @relation("OwnershipTransferTo", fields: [toCustomerId], references: [id])
+    transferredAt      DateTime @default(now())
+    transferredByUserId String
+    transferredByUser  User     @relation("OwnershipTransferBy", fields: [transferredByUserId], references: [id])
+    // Snapshot of the previous owner at transfer time — never joined
+    // for read; kept for audit even if the previous Customer row is
+    // later edited or deleted.
+    previousOwnerName  String
+    previousOwnerPhone String
+
+    @@index([vehicleId, transferredAt])
 }

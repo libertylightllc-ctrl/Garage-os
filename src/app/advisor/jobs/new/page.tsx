@@ -44,11 +44,11 @@ function TechSelect({
 export default async function NewJobCard({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; page?: string; per?: string }>;
+  searchParams: Promise<{ error?: string; page?: string; per?: string; plate?: string }>;
 }) {
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
-  const { error, page: rawPage, per: rawPer } = await searchParams;
+  const { error, page: rawPage, per: rawPer, plate: platePrefill } = await searchParams;
   const garageId = session.user.garageId;
 
   // Vehicle picker is paginated — the "Or pick an existing vehicle" list
@@ -145,7 +145,17 @@ export default async function NewJobCard({
         <h2 className="text-sm font-medium">{t("repeatCustomer")}</h2>
         <p className="mt-1 text-xs text-text-mute">{t("plateLookupHint")}</p>
         <form action={plateLookupAction} className="mt-3 flex gap-2">
-          <input name="plate" placeholder={t("plate")} required className={`${field} flex-1`} />
+          {/* platePrefill: set when the advisor came here via the
+              disambiguation panel's Choice 4 ("Wrong plate — search
+              again"), carrying the typed plate so they can correct it
+              in place instead of retyping from scratch. */}
+          <input
+            name="plate"
+            placeholder={t("plate")}
+            required
+            defaultValue={platePrefill ?? ""}
+            className={`${field} flex-1`}
+          />
           <button className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
             {t("lookupBtn")}
           </button>

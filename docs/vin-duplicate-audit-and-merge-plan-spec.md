@@ -46,7 +46,7 @@ glance. Classification is driven by `make` / `model` / `plate` (see
 -- Query A: exact-match VIN duplicates in the same garage.
 WITH v_with_last AS (
     SELECT
-        v."garageId",
+        c."garageId",
         v.vin,
         v.id AS vehicle_id,
         c.name AS owner_name,
@@ -115,7 +115,7 @@ so this is entirely a legacy-row concern. Same output shape as A.
 -- Query A': normalisation-format VIN duplicates in the same garage.
 WITH v_with_norm AS (
     SELECT
-        v."garageId",
+        c."garageId",
         v.vin AS raw_vin,
         UPPER(REGEXP_REPLACE(v.vin, '[^A-Za-z0-9]', '', 'g')) AS norm_vin,
         v.id AS vehicle_id,

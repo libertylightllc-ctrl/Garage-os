@@ -299,21 +299,14 @@ const en = {
   skippedNoInventoryHeader: "{count} part(s) skipped — no inventory link",
   skippedNoInventoryHint: "add to inventory first",
   goToInventory: "Go to inventory →",
-  autoCreateHeader: "{count} free-text part(s) — add to inventory to convert",
-  autoCreateHint:
-      "These estimate lines aren't linked to your catalog yet. Confirm each row and we'll create the Part, then include it in the PO. The estimate line is untouched — only the inventory link is added.",
-  autoCreateLinkExisting:
-      "Looks like your existing “{name}” ({sku}) — link, or uncheck to create a new Part.",
-  autoCreateCostHint: "Optional — fill later on the draft PO if unknown.",
-  // Captions under the SKU input when the auto-generated SKU wasn't the
-  // clean slug: {base} = the base SKU we would have used, {takenBy} =
-  // the name of the existing Part that already holds it, {value} = the
-  // AUTO-N placeholder we picked when there's no name to slug from.
-  autoCreateSkuBumped:
-      "Renamed from {base} (already used by {takenBy}).",
-  autoCreateSkuAutoFallback:
-      "No name to slug from — using {value} as a placeholder. Please edit.",
-  autoCreateSubmit: "Add these to inventory",
+  // Replaces the "Add these to inventory" panel (2026-07-31 removal).
+  // Free-text estimate lines that aren't linked to a catalogue Part are
+  // now listed read-only — the owner links or creates the Part in
+  // /owner/inventory first, then re-visits the estimate.
+  skippedFreeTextHeader:
+      "{count} free-text part(s) — not in your catalogue",
+  skippedFreeTextHint:
+      "These lines have no linked Part, so they can't go on a PO. Create the Part in inventory first (or edit the estimate line to link an existing one), then convert this estimate again.",
   colSku: "SKU",
   colName: "Name",
   colCost: "Cost",
@@ -1636,17 +1629,12 @@ const ar: typeof en = {
   skippedNoInventoryHeader: "{count} قطعة متجاهَلة — لا يوجد ربط بالمخزون",
   skippedNoInventoryHint: "أضفها إلى المخزون أولاً",
   goToInventory: "الذهاب إلى المخزون →",
-  autoCreateHeader: "{count} قطعة كنص حر — أضفها إلى المخزون للتحويل",
-  autoCreateHint:
-      "بنود عرض السعر هذه غير مربوطة بكتالوجك بعد. أكِّد كل صف وسننشئ القطعة ثم ندرجها في أمر الشراء. لن يُعدَّل بند عرض السعر — فقط يُضاف الربط بالمخزون.",
-  autoCreateLinkExisting:
-      "يبدو أنها القطعة الموجودة لديك «{name}» ({sku}) — اربطها، أو ألغِ التحديد لإنشاء قطعة جديدة.",
-  autoCreateCostHint: "اختياري — يمكن ملؤه لاحقاً في مسودة أمر الشراء إذا كان غير معروف.",
-  autoCreateSkuBumped:
-      "أعيد تسميته من {base} (مستخدم بالفعل لـ {takenBy}).",
-  autoCreateSkuAutoFallback:
-      "لا يوجد اسم لاشتقاق الرمز — استُخدم {value} كعنصر نائب. يُرجى التعديل.",
-  autoCreateSubmit: "إضافة هذه إلى المخزون",
+  // See the EN comment — panel removed 2026-07-31; the read-only skip
+  // notice replaces the "Add these to inventory" flow.
+  skippedFreeTextHeader:
+      "{count} قطعة كنص حر — غير موجودة في الكتالوج",
+  skippedFreeTextHint:
+      "هذه البنود بدون قطعة مربوطة، فلا يمكن إدراجها في أمر الشراء. أنشئ القطعة في المخزون أولاً (أو عدّل بند عرض السعر لربطه بقطعة موجودة)، ثم أعد تحويل عرض السعر.",
   colSku: "الرمز",
   colName: "الاسم",
   colCost: "التكلفة",

@@ -6,15 +6,10 @@ import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { FromEstimateSubmit } from "@/components/from-estimate-submit";
-import {
-    createPoFromEstimateAction,
-    autoCreatePartsFromEstimateLinesAction,
-} from "@/app/actions/purchasing";
+import { createPoFromEstimateAction } from "@/app/actions/purchasing";
 import {
     pickEstimateForConversion,
     filterConvertibleLines,
-    computeSkuChoice,
-    findNormalizedMatch,
 } from "@/lib/estimate-to-po";
 import { formatJobNo } from "@/lib/jobcard-fields";
 
@@ -149,21 +144,6 @@ export default async function ConvertFromEstimatePage({
               where: { garageId, active: true },
               orderBy: { name: "asc" },
               select: { id: true, name: true },
-          })
-        : [];
-
-    // Load existing garage parts for the "link to existing" suggestion.
-    // The review form calls findNormalizedMatch against this set per row
-    // to render "Looks like your existing X — link, or create new?".
-    // Only fetched when there's actually a review section to render
-    // (skippedNoPartId > 0) — no need to load 2000 parts on every render.
-    const hasAutoCreateCandidates =
-        (filtered?.skippedNoPartId.length ?? 0) > 0;
-    const existingParts = hasAutoCreateCandidates
-        ? await prisma.part.findMany({
-              where: { garageId, active: true },
-              select: { id: true, sku: true, name: true },
-              orderBy: { name: "asc" },
           })
         : [];
 
@@ -532,166 +512,40 @@ export default async function ConvertFromEstimatePage({
                             </form>
                         )}
 
-                        {/* Free-text lines review — SIBLING of the PO form,
-                            not a descendant. Nested <form>s are invalid HTML
-                            and produced the hydration warning AR flagged as
-                            "2 Issues". Rendering here also makes the review
-                            reachable when there are NO convertible lines
-                            (previously it was hidden inside the convertible
-                            branch). autoCreatePartsFromEstimateLinesAction
-                            back-fills EstimateLine.partId only. */}
+                        {/* Free-text estimate lines (no linked Part) — READ-
+                            ONLY notice. Removed 2026-07-31: the "Add these
+                            to inventory" panel used to mint catalog Parts
+                            from this screen (writing Part rows with
+                            qtyOnHand:0 + cost:0 + a SKU auto-bumped to
+                            OIL-FILTER-2 when it collided). A quotation / PO
+                            must not change the inventory catalogue — the
+                            owner creates the Part in /owner/inventory first,
+                            then re-visits the estimate to link the line, then
+                            converts. Free-text lines still surface here so
+                            the owner sees what didn't make the PO. */}
                         {filtered.skippedNoPartId.length > 0 ? (
-                            <form
-                                action={autoCreatePartsFromEstimateLinesAction}
-                                className="rounded-lg border border-warning-500/40 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10"
-                            >
-                                <input type="hidden" name="jobCardId" value={jobCard.id} />
-                                <input
-                                    type="hidden"
-                                    name="estimateId"
-                                    value={estimateForPreview!.id}
-                                />
-                                <p className="mb-3 text-sm font-semibold text-warning-700 dark:text-warning-500">
-                                    {t("autoCreateHeader").replace(
+                            <div className="rounded-lg border border-warning-500/40 bg-warning-50 p-4 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide">
+                                    {t("skippedFreeTextHeader").replace(
                                         "{count}",
                                         String(filtered.skippedNoPartId.length),
                                     )}
                                 </p>
-                                <p className="mb-4 text-xs text-warning-700 dark:text-warning-500">
-                                    {t("autoCreateHint")}
+                                <p className="mb-2 text-xs">
+                                    {t("skippedFreeTextHint")}
                                 </p>
-                                <ul className="flex flex-col gap-3">
-                                    {(() => {
-                                        const takenForDefaults = new Set(
-                                            existingParts.map((p) => p.sku),
-                                        );
-                                        return filtered.skippedNoPartId.map((l) => {
-                                            const match = findNormalizedMatch(
-                                                l.description,
-                                                existingParts,
-                                            );
-                                            const skuChoice = computeSkuChoice(
-                                                l.description,
-                                                existingParts,
-                                                takenForDefaults,
-                                            );
-                                            const defaultSku = skuChoice.value;
-                                            takenForDefaults.add(defaultSku);
-                                            // Muted caption below the SKU input — see
-                                            // docs/auto-create-sku-bump-indicator-spec.md.
-                                            // Only fires on the two non-trivial branches;
-                                            // plain slug renders nothing.
-                                            const skuCaption =
-                                                skuChoice.kind === "bumped"
-                                                    ? t("autoCreateSkuBumped")
-                                                          .replace("{base}", skuChoice.base)
-                                                          .replace("{takenBy}", skuChoice.takenBy.name)
-                                                    : skuChoice.kind === "auto"
-                                                        ? t("autoCreateSkuAutoFallback").replace(
-                                                              "{value}",
-                                                              skuChoice.value,
-                                                          )
-                                                        : null;
-                                            return (
-                                                <li
-                                                    key={l.id}
-                                                    className="rounded-lg border border-border bg-surface p-3"
-                                                >
-                                                    <div className="mb-2 text-sm font-medium">
-                                                        {l.description}
-                                                    </div>
-                                                    {match ? (
-                                                        <label className="mb-2 flex items-start gap-2 rounded border border-info-500/40 bg-info-50 p-2 text-xs text-info-700 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-500">
-                                                            <input
-                                                                type="checkbox"
-                                                                name={`linkTo_${l.id}`}
-                                                                value={match.id}
-                                                                className="mt-0.5"
-                                                                defaultChecked
-                                                            />
-                                                            <span>
-                                                                {t("autoCreateLinkExisting")
-                                                                    .replace("{name}", match.name)
-                                                                    .replace("{sku}", match.sku)}
-                                                            </span>
-                                                        </label>
-                                                    ) : null}
-                                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                                        <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                                {t("colSku")}
-                                                            </span>
-                                                            <input
-                                                                name={`sku_${l.id}`}
-                                                                defaultValue={defaultSku}
-                                                                title={skuCaption ?? undefined}
-                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
-                                                            />
-                                                            {skuCaption ? (
-                                                                <span className="text-[10px] leading-snug text-muted-foreground">
-                                                                    {skuCaption}
-                                                                </span>
-                                                            ) : null}
-                                                        </label>
-                                                        <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                                {t("colName")}
-                                                            </span>
-                                                            <input
-                                                                name={`name_${l.id}`}
-                                                                defaultValue={l.description}
-                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                                                            />
-                                                        </label>
-                                                        <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                                {t("colCost")}
-                                                            </span>
-                                                            <input
-                                                                name={`cost_${l.id}`}
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                defaultValue="0"
-                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
-                                                            />
-                                                            <span className="text-[10px] text-muted-foreground">
-                                                                {t("autoCreateCostHint")}
-                                                            </span>
-                                                        </label>
-                                                        <label className="flex flex-col gap-1">
-                                                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                                {t("colPrice")}
-                                                            </span>
-                                                            <input
-                                                                name={`price_${l.id}`}
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                defaultValue={Number(
-                                                                    l.unitPrice,
-                                                                ).toFixed(2)}
-                                                                className="rounded border border-border bg-transparent px-2 py-1 text-sm tabular-nums"
-                                                            />
-                                                        </label>
-                                                    </div>
-                                                </li>
-                                            );
-                                        });
-                                    })()}
+                                <ul className="ms-4 list-disc space-y-0.5">
+                                    {filtered.skippedNoPartId.map((l) => (
+                                        <li key={l.id}>{l.description}</li>
+                                    ))}
                                 </ul>
-                                <div className="mt-4 flex flex-wrap items-center gap-3">
-                                    <Button type="submit">
-                                        {t("autoCreateSubmit")}
-                                    </Button>
-                                    <Link
-                                        href="/owner/inventory"
-                                        className="text-xs font-medium text-muted-foreground underline"
-                                    >
-                                        {t("goToInventory")}
-                                    </Link>
-                                </div>
-                            </form>
+                                <Link
+                                    href="/owner/inventory"
+                                    className="mt-3 inline-block text-xs font-medium underline"
+                                >
+                                    {t("goToInventory")}
+                                </Link>
+                            </div>
                         ) : null}
                     </>
                 ) : null}

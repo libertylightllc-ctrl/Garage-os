@@ -659,41 +659,54 @@ export default async function PurchaseOrderDetailPage({
         {isDraft ? (
           <section className="space-y-3 rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold tracking-tight">{t("addPoLine")}</h2>
-            {parts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {t("noPartsForPo")}{" "}
-                <Link href="/owner/inventory" className="font-medium text-foreground hover:underline">
-                  {t("tabInventory")}
-                </Link>
-                .
-              </p>
-            ) : (
-              <form action={addPoLineAction} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <input type="hidden" name="poId" value={po.id} />
-                <label className="col-span-2 flex flex-col gap-1">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("partName")}</span>
-                  <select name="partId" required defaultValue="" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm">
-                    <option value="" disabled>{t("choosePlaceholder")}</option>
-                    {parts.map((p) => (
-                      <option key={p.id} value={p.id} data-cost={String(p.cost)}>
-                        {p.name} ({p.sku}) · {stockHint(p)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("adjustQty")}</span>
-                  <input name="qty" type="number" min="1" required className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poUnitCost")}</span>
-                  <input name="unitCost" type="number" step="0.01" min="0" required className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
-                </label>
-                <div className="col-span-2 flex items-end sm:col-span-4">
-                  <Button type="submit">{t("addPoLine")}</Button>
-                </div>
-              </form>
-            )}
+            {/* Layer 1 (2026-08-02): datalist combo. The owner can pick
+                an existing catalogue Part by name OR type free text for
+                a part the shop doesn't stock — both paths add a line.
+                Free-text ships as description-only (partId null); an
+                exact-name match resolves to a catalogue Part server-
+                side. No Part row is ever created here — stock only
+                moves at goods receipt (Layer 5). */}
+            <form action={addPoLineAction} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <input type="hidden" name="poId" value={po.id} />
+              <label className="col-span-2 flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("partName")}</span>
+                <input
+                  name="lineText"
+                  type="text"
+                  required
+                  list="po-add-line-parts"
+                  autoComplete="off"
+                  placeholder={t("addPoLinePlaceholder")}
+                  className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                />
+                {/* Suggestions from the catalogue — a picked value fills
+                    the input with the Part.name verbatim, which the
+                    server matches case-insensitively. */}
+                <datalist id="po-add-line-parts">
+                  {parts.map((p) => (
+                    <option key={p.id} value={p.name}>
+                      {p.sku} · {stockHint(p)}
+                    </option>
+                  ))}
+                </datalist>
+                <span className="text-[11px] text-muted-foreground">
+                  {t("addPoLineHint")}
+                </span>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("adjustQty")}</span>
+                <input name="qty" type="number" min="1" required className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poUnitCost")}</span>
+                {/* No `required` — blank = awaiting a supplier quote
+                    (Layer 0). See parseMoney. */}
+                <input name="unitCost" type="number" step="0.01" min="0" placeholder="—" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
+              </label>
+              <div className="col-span-2 flex items-end sm:col-span-4">
+                <Button type="submit">{t("addPoLine")}</Button>
+              </div>
+            </form>
           </section>
         ) : null}
 

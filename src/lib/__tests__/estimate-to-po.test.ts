@@ -267,16 +267,15 @@ describe("pickEstimateForConversion", () => {
 });
 
 describe("filterConvertibleLines", () => {
-    it("empty list → all buckets empty", () => {
+    it("empty list → both buckets empty", () => {
         const r = filterConvertibleLines([]);
-        expect(r).toEqual({ convertible: [], skippedNoPartId: [], skippedDeclined: [] });
+        expect(r).toEqual({ convertible: [], skippedDeclined: [] });
     });
 
     it("linked, non-declined PART → convertible", () => {
         const l = line("l1", "PART", { partId: "p1" });
         const r = filterConvertibleLines([l]);
         expect(r.convertible).toEqual([l]);
-        expect(r.skippedNoPartId).toEqual([]);
         expect(r.skippedDeclined).toEqual([]);
     });
 
@@ -290,22 +289,27 @@ describe("filterConvertibleLines", () => {
         //
         // Server-side, `parseMoney` in createPoFromEstimateAction
         // accepts non-negative (including 0) — see
-        // src/app/actions/purchasing.ts:44 — so the whole path is
+        // src/app/actions/purchasing.ts — so the whole path is
         // zero-safe.
         const l1 = line("l1", "PART", { partId: "p1" });
         const l2 = line("l2", "PART", { partId: "p2" });
         const l3 = line("l3", "PART", { partId: "p3" });
         const r = filterConvertibleLines([l1, l2, l3]);
         expect(r.convertible).toEqual([l1, l2, l3]);
-        expect(r.skippedNoPartId).toEqual([]);
         expect(r.skippedDeclined).toEqual([]);
     });
 
-    it("PART with null partId → skippedNoPartId", () => {
+    it("PART with null partId (free-text) → convertible (Layer 1, 2026-08-02)", () => {
+        // Free-text lines used to be split off as `skippedNoPartId`
+        // because PurchaseOrderLine.partId was NOT NULL. Layer 0 widened
+        // the schema and Layer 1 rewired this filter: a description-only
+        // line is a valid RFQ line and belongs on the PO. The
+        // "not in your catalogue" panel on the from-estimate screen is
+        // gone; there is no separate bucket for free-text.
         const l = line("l1", "PART", { partId: null });
         const r = filterConvertibleLines([l]);
-        expect(r.skippedNoPartId).toEqual([l]);
-        expect(r.convertible).toEqual([]);
+        expect(r.convertible).toEqual([l]);
+        expect(r.skippedDeclined).toEqual([]);
     });
 
     it("PART with declined=true → skippedDeclined (even if partId is set)", () => {
@@ -315,20 +319,19 @@ describe("filterConvertibleLines", () => {
         expect(r.convertible).toEqual([]);
     });
 
-    it("declined takes precedence over missing partId", () => {
-        // "customer said no" is more helpful than "add to inventory
-        // first" — the customer's decision stands regardless of link.
+    it("declined free-text line → skippedDeclined (customer said no wins over shape)", () => {
+        // "customer said no" is the more helpful signal than "no catalogue
+        // link" — the customer's decision stands regardless of link.
         const l = line("l1", "PART", { partId: null, declined: true });
         const r = filterConvertibleLines([l]);
         expect(r.skippedDeclined).toEqual([l]);
-        expect(r.skippedNoPartId).toEqual([]);
+        expect(r.convertible).toEqual([]);
     });
 
     it("LABOR is ignored — not in any bucket", () => {
         const l = line("l1", "LABOR", { partId: "p1" });
         const r = filterConvertibleLines([l]);
         expect(r.convertible).toEqual([]);
-        expect(r.skippedNoPartId).toEqual([]);
         expect(r.skippedDeclined).toEqual([]);
     });
 
@@ -338,15 +341,14 @@ describe("filterConvertibleLines", () => {
         expect(r.convertible).toEqual([]);
     });
 
-    it("mixed input — buckets split correctly", () => {
-        const good = line("l1", "PART", { partId: "p1" });
-        const noPart = line("l2", "PART", { partId: null });
+    it("mixed input — linked + free-text both convertible; declined skipped", () => {
+        const linked = line("l1", "PART", { partId: "p1" });
+        const freeText = line("l2", "PART", { partId: null });
         const dec = line("l3", "PART", { partId: "p3", declined: true });
         const labor = line("l4", "LABOR", { partId: "p4" });
         const fee = line("l5", "FEE");
-        const r = filterConvertibleLines([good, noPart, dec, labor, fee]);
-        expect(r.convertible).toEqual([good]);
-        expect(r.skippedNoPartId).toEqual([noPart]);
+        const r = filterConvertibleLines([linked, freeText, dec, labor, fee]);
+        expect(r.convertible).toEqual([linked, freeText]);
         expect(r.skippedDeclined).toEqual([dec]);
     });
 

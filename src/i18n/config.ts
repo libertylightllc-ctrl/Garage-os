@@ -317,6 +317,9 @@ const en = {
   lineUnpricedTag: "quote please",
   approxTotal: "Approx. total",
   addPoLine: "Add line",
+  addPoLinePlaceholder: "Part name, or type free text",
+  addPoLineHint:
+    "Pick from your catalogue, or type free text for a part you don't stock.",
   noPoLines: "No lines yet. Add a part above.",
   noPartsForPo: "Add a part to your catalog first, in",
   markOrdered: "Mark as ordered",
@@ -1647,6 +1650,9 @@ const ar: typeof en = {
   lineUnpricedTag: "برجاء إفادتنا بالسعر",
   approxTotal: "إجمالي تقريبي",
   addPoLine: "إضافة بند",
+  addPoLinePlaceholder: "اسم القطعة، أو اكتب وصفًا حرًا",
+  addPoLineHint:
+    "اختر من الكتالوج، أو اكتب وصفًا حرًا لقطعة غير موجودة في المخزون.",
   noPoLines: "لا توجد بنود بعد. أضف قطعة أعلاه.",
   noPartsForPo: "أضف قطعة إلى الكتالوج أولًا في",
   markOrdered: "تحديد كمطلوب",

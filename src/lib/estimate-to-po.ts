@@ -13,11 +13,19 @@
 //    row on the `multiple` list).
 //
 // 2. filterConvertibleLines — an estimate has lines of every LineKind
-//    (LABOR, PART, FEE). Only PART lines that (a) link to an inventory
-//    Part and (b) weren't declined by the customer can flow into a PO,
-//    because PurchaseOrderLine.partId is required in the schema. Return
-//    the convertible set plus the skipped groups so the UI can show
-//    "3 of 5 parts — 2 skipped, needs inventory link" etc.
+//    (LABOR, PART, FEE). Every non-declined PART line can flow into a
+//    PO: linked (partId set) writes the PO line with the Part link and
+//    the estimate's description as a snapshot; free-text (partId null,
+//    Layer 0 schema widen) writes the PO line as description-only with
+//    partId null. Nothing writes to the catalogue at any point — the
+//    Part row is born at goods receipt (Layer 5), not here.
+//
+//    Layer 1 (2026-08-02) — free-text lines used to be split off as
+//    `skippedNoPartId` because PurchaseOrderLine.partId was NOT NULL.
+//    That was the piece that made "send a quotation for a part we
+//    don't stock" impossible from this screen. Free-text lines are
+//    now in `convertible`; `skippedDeclined` still exists because
+//    "customer said no" IS a real skip signal for the reader.
 
 import type { EstimateStatus, LineKind } from "@/generated/prisma/enums";
 
@@ -39,6 +47,10 @@ export interface EstimateLineForFilter {
     kind: LineKind;
     partId: string | null;
     declined: boolean;
+    // Layer 1 (2026-08-02): free-text lines are convertible now, so the
+    // description travels with them. Optional on the interface so tests
+    // can still construct minimal fixtures.
+    description?: string;
 }
 
 export type EstimatePickReason = "approved" | "sent" | "draft";
@@ -110,15 +122,26 @@ export function pickEstimateForConversion<E extends EstimateForPick>(
 
 export interface FilteredLines<L extends EstimateLineForFilter> {
     convertible: L[];
-    skippedNoPartId: L[];
     skippedDeclined: L[];
 }
 
+/**
+ * Layer 1 (2026-08-02): every non-declined PART line is convertible,
+ * whether it has a partId link or not. Free-text lines flow onto the
+ * PO with partId null + description set — the schema's row-level
+ * CHECK ("partId OR description") is satisfied by the description
+ * alone.
+ *
+ * LABOR and FEE lines are still silently dropped — they can't be
+ * ordered from a parts supplier. Declined PART lines go to
+ * `skippedDeclined` so the UI can render "customer said no to N
+ * items — not on the PO" (still a real signal to the reader; the
+ * partId=null split is not).
+ */
 export function filterConvertibleLines<L extends EstimateLineForFilter>(
     lines: L[],
 ): FilteredLines<L> {
     const convertible: L[] = [];
-    const skippedNoPartId: L[] = [];
     const skippedDeclined: L[] = [];
 
     for (const l of lines) {
@@ -126,23 +149,18 @@ export function filterConvertibleLines<L extends EstimateLineForFilter>(
         // from the owner's perspective, they just aren't parts.
         if (l.kind !== "PART") continue;
 
-        // Declined checked BEFORE partId — a declined line without a
-        // partId is still fundamentally "customer said no", and that's
-        // the more helpful message than "add to inventory first".
         if (l.declined) {
             skippedDeclined.push(l);
             continue;
         }
 
-        if (l.partId === null) {
-            skippedNoPartId.push(l);
-            continue;
-        }
-
+        // Both linked (partId set) and free-text (partId null) lines
+        // land here. The action writes description verbatim and only
+        // verifies the catalogue Part row when partId is non-null.
         convertible.push(l);
     }
 
-    return { convertible, skippedNoPartId, skippedDeclined };
+    return { convertible, skippedDeclined };
 }
 
 // ── Auto-create Part from free-text estimate line ─────────────────

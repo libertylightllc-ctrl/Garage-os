@@ -118,14 +118,33 @@ async function ownedPO(poId: string, garageId: string) {
 }
 
 /**
- * Add a line to a DRAFT purchase order. The part must be in the caller's
- * garage. Unit cost defaults are handled by the form; here we validate.
+ * Add a line to a DRAFT purchase order.
+ *
+ * Layer 1 (2026-08-02): the input is a text field backed by a
+ * `<datalist>` of catalogue Part names in this garage. The user can
+ * either pick a suggestion (in which case the value matches a Part
+ * exactly, case-insensitive) OR type free text for a part the shop
+ * doesn't stock. Both paths add a line to the PO:
+ *
+ *   - Exact-match → linked line: `partId` set, `description` snapshots
+ *     the Part name so the "originally asked for" record survives even
+ *     if the Part is renamed later.
+ *   - No match     → free-text line: `partId` null, `description` is
+ *     what the user typed. Layer 5 attaches a catalogue Part at goods
+ *     receipt; until then the line renders description-only on every
+ *     surface.
+ *
+ * Nothing writes to the inventory catalogue at any point. Stock only
+ * moves at goods receipt (Layer 5).
  */
 export async function addPoLineAction(formData: FormData) {
   const user = await requireOperational();
 
   const poId = String(formData.get("poId") ?? "").trim();
-  const partId = String(formData.get("partId") ?? "").trim();
+  // Datalist combo — one text input carries both cases. Trim before
+  // any lookup so trailing whitespace never creates a false-free-text
+  // when the user's suggestion had a trailing space.
+  const lineText = String(formData.get("lineText") ?? "").trim();
   const qty = parsePositiveInt(String(formData.get("qty") ?? ""));
   const unitCostResult = parseMoney(String(formData.get("unitCost") ?? ""));
 
@@ -135,7 +154,7 @@ export async function addPoLineAction(formData: FormData) {
   const po = await ownedPO(poId, user.garageId);
   if (!po) fail("Purchase order not found.");
   if (po.status !== "DRAFT") fail("Lines can only be changed on a draft order.", back);
-  if (!partId) fail("Choose a part.", back);
+  if (!lineText) fail("Enter a part name or description.", back);
   if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
   // Blank → { ok:true, value:null } = awaiting a supplier quote (Layer
   // 0). Garbage → { ok:false } is what we still reject. See parseMoney.
@@ -143,16 +162,22 @@ export async function addPoLineAction(formData: FormData) {
     fail("Unit cost must be a non-negative number (or leave blank while waiting for a quote).", back);
   const unitCost = unitCostResult.value;
 
-  // Load the Part with the vehicle-chain include so we can snapshot at
-  // creation time. The chain is only present when the Part was auto-
-  // created from an estimate line (from-estimate flow); catalog/seeded
-  // parts have autoCreatedFromLine === null and the helper returns
-  // `{}`, so the line ships with every snapshot column null and the
-  // supplier document renders "(no vehicle linked)".
-  const part = await prisma.part.findFirst({
-    where: { id: partId, garageId: user.garageId },
+  // Exact-match against catalogue Parts in this garage. Case-insensitive
+  // because the datalist suggestion the user picked may not preserve
+  // the exact case of the Part.name. `equals + mode:"insensitive"` is
+  // an indexable predicate on Postgres; no full-scan risk.
+  //
+  // The vehicle-chain include is pulled only on the match — a free-text
+  // line has no chain to snapshot from and the line ships with every
+  // snapshot column null.
+  const match = await prisma.part.findFirst({
+    where: {
+      garageId: user.garageId,
+      name: { equals: lineText, mode: "insensitive" },
+    },
     select: {
       id: true,
+      name: true,
       autoCreatedFromLine: {
         select: {
           estimate: {
@@ -180,12 +205,11 @@ export async function addPoLineAction(formData: FormData) {
       },
     },
   });
-  if (!part) fail("Part not found.", back);
 
   // Snapshot the vehicle context — written once at line creation and
   // never refreshed from Vehicle afterwards. See the PurchaseOrderLine
   // model comment in prisma/schema.prisma for the lifecycle rule.
-  const jc = part.autoCreatedFromLine?.estimate.jobCard ?? null;
+  const jc = match?.autoCreatedFromLine?.estimate.jobCard ?? null;
   const vehicleSnapshot = buildPoLineVehicleSnapshot(
     jc ? { jobNumber: jc.number, vehicle: jc.vehicle } : null,
   );
@@ -193,7 +217,14 @@ export async function addPoLineAction(formData: FormData) {
   await prisma.purchaseOrderLine.create({
     data: {
       purchaseOrderId: po.id,
-      partId: part.id,
+      // Linked path: the Part's canonical name goes to `description` so
+      // the row satisfies the CHECK constraint even if partId is later
+      // nulled by a migration and to preserve the "originally asked for"
+      // text if the Part is renamed.
+      //
+      // Free-text path: partId stays null; description IS the identity.
+      partId: match?.id ?? null,
+      description: match?.name ?? lineText,
       qty,
       unitCost,
       ...vehicleSnapshot,
@@ -637,7 +668,18 @@ export async function createPoFromEstimateAction(formData: FormData) {
     select: {
       id: true,
       lines: {
-        select: { id: true, kind: true, partId: true, declined: true },
+        select: {
+          id: true,
+          kind: true,
+          partId: true,
+          declined: true,
+          // Layer 1 (2026-08-02): free-text lines carry through with
+          // partId null; the description IS the line identity. The PO
+          // line's description column persists the snapshot even after
+          // Layer 5 attaches a partId at receive.
+          description: true,
+          qty: true,
+        },
       },
       jobCard: {
         select: {
@@ -695,38 +737,70 @@ export async function createPoFromEstimateAction(formData: FormData) {
   });
   if (!supplier) fail("Supplier not found.", await retryPath());
 
-  // Build PO lines. Each line's qty and unitCost come from the form (the
-  // owner may have edited both from the prefill). We look up the Part on
-  // each so we can (a) verify it exists in this garage and (b) pull the
-  // partId cleanly — we already know it's non-null because the line was
-  // in `convertible`.
+  // Build PO lines. Each line's qty and unitCost come from the form
+  // (the owner may have edited both from the prefill). Linked lines
+  // (partId set) re-verify the Part exists in the caller's garage;
+  // free-text lines (partId null, Layer 1) skip that lookup and
+  // write description-only.
   interface LineToCreate {
-    partId: string;
+    // Layer 1 (2026-08-02): partId is nullable — a free-text estimate
+    // line converts to a description-only PO line so the shop can
+    // quote parts they don't stock. The schema's row-level CHECK
+    // ("partId OR description") is satisfied by the description alone.
+    partId: string | null;
+    description: string;
     qty: number;
     // Layer 0 (2026-08-01): null = the advisor left the cost blank
     // because the supplier quote hasn't landed yet. The resulting PO
     // line reads as unpriced on every surface and blocks Mark Ordered
     // until a real price is entered. See parseMoney + canMarkOrdered.
-    unitCost: string | null; // Prisma Decimal accepts numeric strings; null = awaiting quote
+    unitCost: string | null;
   }
   const linesToCreate: LineToCreate[] = [];
   for (const lineId of validIncludedIds) {
     const line = convertible.find((l) => l.id === lineId);
-    if (!line || line.partId === null) continue; // already filtered, defensive
+    if (!line) continue; // defensive; convertibleIds already narrowed
     const qty = parsePositiveInt(String(formData.get(`qty_${lineId}`) ?? ""));
     if (qty === null) fail("Invalid quantity.", await retryPath());
     const costResult = parseMoney(String(formData.get(`cost_${lineId}`) ?? ""));
     // Blank cost → { ok:true, value:null } is fine (awaiting quote).
     // Only garbage (NaN / negative / non-numeric) rejects.
     if (!costResult.ok) fail("Invalid unit cost.", await retryPath());
-    // Verify the Part is still in this garage (protects against a part
-    // being deleted between page render and submit — rare but real).
-    const part = await prisma.part.findFirst({
-      where: { id: line.partId, garageId: user.garageId },
-      select: { id: true },
-    });
-    if (!part) fail("Part not found — reload and try again.", await retryPath());
-    linesToCreate.push({ partId: part.id, qty, unitCost: costResult.value });
+    // Description is the estimate line's own text. Kept on the PO row
+    // even when partId is non-null so the "originally asked for" wording
+    // survives if the linked Part is later renamed or Layer 5 links a
+    // catalogue Part with a slightly different name. Trim to defend
+    // against a stray whitespace-only DB row satisfying the CHECK.
+    const description = String(line.description ?? "").trim();
+    if (!description && line.partId === null) {
+      // Impossible in practice — the schema's own CHECK prevents a row
+      // with both fields null from existing — but if a data-migration
+      // ever leaves one, catch it here rather than at the DB error.
+      fail("This line has no description — reload and try again.", await retryPath());
+    }
+    if (line.partId !== null) {
+      // Linked line — verify the Part is still in this garage.
+      const part = await prisma.part.findFirst({
+        where: { id: line.partId, garageId: user.garageId },
+        select: { id: true },
+      });
+      if (!part) fail("Part not found — reload and try again.", await retryPath());
+      linesToCreate.push({
+        partId: part.id,
+        description,
+        qty,
+        unitCost: costResult.value,
+      });
+    } else {
+      // Free-text line (Layer 1). partId stays null; the description
+      // IS the line identity until Layer 5 attaches a Part at receive.
+      linesToCreate.push({
+        partId: null,
+        description,
+        qty,
+        unitCost: costResult.value,
+      });
+    }
   }
 
   // Create the PO + its lines atomically. Nested writes give us that
@@ -742,6 +816,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
       lines: {
         create: linesToCreate.map((l) => ({
           partId: l.partId,
+          description: l.description,
           qty: l.qty,
           unitCost: l.unitCost,
           ...vehicleSnapshot,

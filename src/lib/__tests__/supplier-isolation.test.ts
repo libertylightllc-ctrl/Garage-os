@@ -16,6 +16,7 @@
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { mockSessionAndSeed } from "@/lib/__tests__/helpers/mock-session-and-seed";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -35,10 +36,13 @@ const TEST_PREFIX = "sup-iso-test-";
 const garageA = TEST_PREFIX + "garage-A";
 const garageB = TEST_PREFIX + "garage-B";
 
-function ownerSession(garageId: string) {
-  return { user: { id: TEST_PREFIX + "u", role: "OWNER", garageId, email: "x", name: "x" } };
+async function ownerSession(garageId: string) {
+  return mockSessionAndSeed({
+    id: TEST_PREFIX + "u-owner-" + garageId,
+    garageId,
+    role: "OWNER",
+  });
 }
-
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
@@ -74,6 +78,8 @@ async function cleanup() {
   });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
   await prisma.supplier.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
+  // Users FK to Garage — delete before garages.
+  await prisma.user.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: TEST_PREFIX } } });
 }
 
@@ -90,7 +96,7 @@ afterAll(async () => {
 
 describe("createSupplierAction — isolation + permissions", { retry: 3 }, () => {
   it("creates the supplier in the caller's garage, scoped to it", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(
       createSupplierAction,
       form({ name: "Al Futtaim Parts", contactPerson: "Sara", phone: "050", email: "s@x.com", trn: "100", address: "Deira" })
@@ -106,21 +112,21 @@ describe("createSupplierAction — isolation + permissions", { retry: 3 }, () =>
   });
 
   it("ignores a garageId smuggled in the form — uses the session's garage", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(createSupplierAction, form({ garageId: garageB, name: "Hack Supplier" }));
     expect((await prisma.supplier.findMany({ where: { garageId: garageB } })).length).toBe(0);
     expect((await prisma.supplier.findMany({ where: { garageId: garageA } })).length).toBe(1);
   });
 
   it("requires a name", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(createSupplierAction, form({ name: "  " }));
     expect(to).toContain("/owner/suppliers?error=");
     expect((await prisma.supplier.findMany({ where: { garageId: garageA } })).length).toBe(0);
   });
 
   it("rejects a malformed email", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(createSupplierAction, form({ name: "X", email: "not-an-email" }));
     expect(to).toContain("?error=");
     expect((await prisma.supplier.findMany({ where: { garageId: garageA } })).length).toBe(0);
@@ -139,7 +145,7 @@ describe("createSupplierAction — isolation + permissions", { retry: 3 }, () =>
 describe("updateSupplierAction — isolation", { retry: 3 }, () => {
   it("edits a supplier in the caller's garage", async () => {
     const s = await seedSupplier(garageA, { name: "Old" });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(updateSupplierAction, form({ supplierId: s.id, name: "New", phone: "052" }));
     expect(to).toBe(`/owner/suppliers/${s.id}`);
     const row = await prisma.supplier.findUnique({ where: { id: s.id } });
@@ -149,7 +155,7 @@ describe("updateSupplierAction — isolation", { retry: 3 }, () => {
 
   it("cannot edit another garage's supplier", async () => {
     const sB = await seedSupplier(garageB, { name: "B-Supplier" });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(updateSupplierAction, form({ supplierId: sB.id, name: "HACKED" }));
     expect(to).toContain("/owner/suppliers?error="); // "Supplier not found"
     expect((await prisma.supplier.findUnique({ where: { id: sB.id } }))?.name).toBe("B-Supplier");
@@ -165,13 +171,13 @@ describe("updateSupplierAction — isolation", { retry: 3 }, () => {
 describe("setSupplierActiveAction — soft delete", { retry: 3 }, () => {
   it("deactivates then restores (row survives)", async () => {
     const s = await seedSupplier(garageA, { active: true });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(setSupplierActiveAction, form({ supplierId: s.id, active: "false" }));
     let row = await prisma.supplier.findUnique({ where: { id: s.id } });
     expect(row).not.toBeNull(); // NOT hard-deleted
     expect(row?.active).toBe(false);
 
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(setSupplierActiveAction, form({ supplierId: s.id, active: "true" }));
     row = await prisma.supplier.findUnique({ where: { id: s.id } });
     expect(row?.active).toBe(true);
@@ -179,7 +185,7 @@ describe("setSupplierActiveAction — soft delete", { retry: 3 }, () => {
 
   it("cannot deactivate another garage's supplier", async () => {
     const sB = await seedSupplier(garageB, { active: true });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(setSupplierActiveAction, form({ supplierId: sB.id, active: "false" }));
     expect((await prisma.supplier.findUnique({ where: { id: sB.id } }))?.active).toBe(true); // untouched
   });
@@ -201,7 +207,7 @@ describe("part→supplier optional link — cross-tenant guard", { retry: 3 }, (
   it("links a supplier from the caller's own garage", async () => {
     const p = await seedPart(garageA);
     const s = await seedSupplier(garageA);
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(updatePartAction, form({ partId: p.id, sku: "LINK-1", name: "Linkable", cost: "1", price: "2", supplierId: s.id }));
     expect((await prisma.part.findUnique({ where: { id: p.id } }))?.supplierId).toBe(s.id);
   });
@@ -209,7 +215,7 @@ describe("part→supplier optional link — cross-tenant guard", { retry: 3 }, (
   it("drops a foreign supplier id (does not link across tenants)", async () => {
     const p = await seedPart(garageA);
     const sB = await seedSupplier(garageB); // supplier in the OTHER garage
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(updatePartAction, form({ partId: p.id, sku: "LINK-1", name: "Linkable", cost: "1", price: "2", supplierId: sB.id }));
     expect((await prisma.part.findUnique({ where: { id: p.id } }))?.supplierId).toBeNull();
   });
@@ -219,7 +225,7 @@ describe("part→supplier optional link — cross-tenant guard", { retry: 3 }, (
     const p = await prisma.part.create({
       data: { garageId: garageA, sku: "LINK-2", name: "Prelinked", cost: "1", price: "2", supplierId: s.id },
     });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(updatePartAction, form({ partId: p.id, sku: "LINK-2", name: "Prelinked", cost: "1", price: "2", supplierId: "" }));
     expect((await prisma.part.findUnique({ where: { id: p.id } }))?.supplierId).toBeNull();
   });

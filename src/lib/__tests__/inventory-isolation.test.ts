@@ -14,6 +14,7 @@
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { mockSessionAndSeed } from "@/lib/__tests__/helpers/mock-session-and-seed";
 
 // revalidatePath is a no-op in tests.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -37,8 +38,15 @@ const TEST_PREFIX = "inv-iso-test-";
 const garageA = TEST_PREFIX + "garage-A";
 const garageB = TEST_PREFIX + "garage-B";
 
-function ownerSession(garageId: string) {
-  return { user: { id: TEST_PREFIX + "u", role: "OWNER", garageId, email: "x", name: "x" } };
+// Async now — seeds a matching User row alongside the mocked session so
+// requireAnyRole's sessionUserExists guard finds it. See
+// src/lib/__tests__/helpers/mock-session-and-seed.ts for why.
+async function ownerSession(garageId: string) {
+  return mockSessionAndSeed({
+    id: TEST_PREFIX + "u-owner-" + garageId,
+    garageId,
+    role: "OWNER",
+  });
 }
 
 function form(fields: Record<string, string>): FormData {
@@ -65,6 +73,8 @@ async function cleanup() {
     where: { part: { garageId: { startsWith: TEST_PREFIX } } },
   });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
+  // Users FK to Garage — delete before garages.
+  await prisma.user.deleteMany({ where: { garageId: { startsWith: TEST_PREFIX } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: TEST_PREFIX } } });
 }
 
@@ -85,7 +95,7 @@ afterAll(async () => {
 // Passes 7/7 standalone; retry absorbs the parallel-run flake.
 describe("createPartAction — tenant isolation + permissions", { retry: 3 }, () => {
   it("creates the part in the caller's garage and is scoped to it", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callCreate(
       form({ sku: "BRK-01", name: "Brake pad", cost: "20", price: "45", qtyOnHand: "10", reorderLevel: "3" })
     );
@@ -101,7 +111,7 @@ describe("createPartAction — tenant isolation + permissions", { retry: 3 }, ()
   });
 
   it("ignores a garageId smuggled in the form — uses the session's garage", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     // Attacker owner-of-A tries to create a part in garage B via a form field.
     await callCreate(
       form({ garageId: garageB, sku: "HACK-01", name: "x", cost: "1", price: "1" })
@@ -125,9 +135,9 @@ describe("createPartAction — tenant isolation + permissions", { retry: 3 }, ()
   );
 
   it("refuses a duplicate SKU within the same garage", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callCreate(form({ sku: "DUP-1", name: "First", cost: "1", price: "2" }));
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callCreate(form({ sku: "DUP-1", name: "Second", cost: "1", price: "2" }));
     expect(to).toContain("/owner/inventory?error="); // error redirect
     const inA = await prisma.part.findMany({ where: { garageId: garageA } });
@@ -135,9 +145,9 @@ describe("createPartAction — tenant isolation + permissions", { retry: 3 }, ()
   });
 
   it("allows the SAME SKU in two different garages (per-garage uniqueness)", async () => {
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callCreate(form({ sku: "SAME", name: "A part", cost: "1", price: "2" }));
-    mockAuth.mockResolvedValueOnce(ownerSession(garageB));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageB));
     const to = await callCreate(form({ sku: "SAME", name: "B part", cost: "1", price: "2" }));
     expect(to).toBe("/owner/inventory"); // success — not a clash across garages
     expect((await prisma.part.findMany({ where: { garageId: garageA } })).length).toBe(1);
@@ -175,7 +185,7 @@ async function callAction(action: (fd: FormData) => Promise<void>, fd: FormData)
 describe("updatePartAction — 1b edit", { retry: 3 }, () => {
   it("edits a part in the caller's garage", async () => {
     const p = await seedPart(garageA, { sku: "OLD" });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(updatePartAction, form({ partId: p.id, sku: "NEW", name: "Renamed", cost: "12", price: "25", reorderLevel: "7" }));
     expect(to).toBe(`/owner/inventory/${p.id}`);
     const row = await prisma.part.findUnique({ where: { id: p.id } });
@@ -187,7 +197,7 @@ describe("updatePartAction — 1b edit", { retry: 3 }, () => {
 
   it("cannot edit another garage's part", async () => {
     const pB = await seedPart(garageB, { sku: "B-PART" });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA)); // A tries to edit B's part
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA)); // A tries to edit B's part
     const to = await callAction(updatePartAction, form({ partId: pB.id, sku: "HACKED", name: "x", cost: "1", price: "1" }));
     expect(to).toContain("/owner/inventory?error="); // "Part not found"
     const row = await prisma.part.findUnique({ where: { id: pB.id } });
@@ -204,7 +214,7 @@ describe("updatePartAction — 1b edit", { retry: 3 }, () => {
 describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
   it("adds stock, records a movement, and updates qty", async () => {
     const p = await seedPart(garageA, { qtyOnHand: 5 });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "add", qty: "8", reason: "received" }));
     expect(to).toBe(`/owner/inventory/${p.id}`);
     const row = await prisma.part.findUnique({ where: { id: p.id } });
@@ -217,7 +227,7 @@ describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
 
   it("removes stock (negative delta) and records it", async () => {
     const p = await seedPart(garageA, { qtyOnHand: 5 });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     await callAction(adjustStockAction, form({ partId: p.id, direction: "remove", qty: "2", reason: "damaged" }));
     const row = await prisma.part.findUnique({ where: { id: p.id } });
     expect(row?.qtyOnHand).toBe(3);
@@ -228,7 +238,7 @@ describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
 
   it("refuses to drive stock negative", async () => {
     const p = await seedPart(garageA, { qtyOnHand: 3 });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "remove", qty: "10", reason: "x" }));
     expect(to).toContain("/owner/inventory/" + p.id + "?error=");
     const row = await prisma.part.findUnique({ where: { id: p.id } });
@@ -238,7 +248,7 @@ describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
 
   it("requires a reason", async () => {
     const p = await seedPart(garageA, { qtyOnHand: 5 });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA));
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA));
     const to = await callAction(adjustStockAction, form({ partId: p.id, direction: "add", qty: "1", reason: "" }));
     expect(to).toContain("?error=");
     expect((await prisma.part.findUnique({ where: { id: p.id } }))?.qtyOnHand).toBe(5); // unchanged
@@ -246,7 +256,7 @@ describe("adjustStockAction — 1b manual adjustment", { retry: 3 }, () => {
 
   it("cannot adjust another garage's part", async () => {
     const pB = await seedPart(garageB, { qtyOnHand: 5 });
-    mockAuth.mockResolvedValueOnce(ownerSession(garageA)); // A tries to adjust B's part
+    mockAuth.mockResolvedValueOnce(await ownerSession(garageA)); // A tries to adjust B's part
     await callAction(adjustStockAction, form({ partId: pB.id, direction: "add", qty: "99", reason: "hack" }));
     const row = await prisma.part.findUnique({ where: { id: pB.id } });
     expect(row?.qtyOnHand).toBe(5); // untouched

@@ -12,6 +12,7 @@
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { mockSessionAndSeed } from "@/lib/__tests__/helpers/mock-session-and-seed";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -28,9 +29,16 @@ const P = "est-link-test-";
 const gA = P + "garage-A";
 const gB = P + "garage-B";
 
-const advisor = (garageId: string) => ({
-  user: { id: P + "adv", role: "ADVISOR", garageId, email: "x", name: "x" },
-});
+// Async now — seeds a matching User row alongside the mocked session so
+// requireAnyRole's sessionUserExists guard finds it. Per-garage id so a
+// session for garageA doesn't overwrite the seeded row for garageB.
+async function advisor(garageId: string) {
+  return mockSessionAndSeed({
+    id: P + "adv-" + garageId,
+    garageId,
+    role: "ADVISOR",
+  });
+}
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.set(k, v);
@@ -38,9 +46,8 @@ function form(fields: Record<string, string>): FormData {
 }
 
 async function setup() {
-  for (const g of [gA, gB]) {
-    await prisma.garage.upsert({ where: { id: g }, update: {}, create: { id: g, name: g } });
-  }
+  // Garages are created in beforeEach so advisor()'s User seed has a
+  // valid FK target before the test body runs.
   const customer = await prisma.customer.create({ data: { garageId: gA, name: "C", phone: P + Math.random() } });
   const vehicle = await prisma.vehicle.create({
     data: { customerId: customer.id, make: "T", model: "C", plate: "L-" + Math.random().toString(36).slice(2, 8) },
@@ -70,13 +77,20 @@ async function cleanup() {
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
   await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Users FK to Garage — delete before garages.
+  await prisma.user.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
 }
 
 beforeEach(async () => {
   await cleanup();
   mockAuth.mockReset();
-  mockAuth.mockResolvedValue(advisor(gA));
+  // Garages BEFORE advisor(): the seeded User has an FK to Garage, so
+  // gA / gB must exist before mockSessionAndSeed runs.
+  for (const g of [gA, gB]) {
+    await prisma.garage.upsert({ where: { id: g }, update: {}, create: { id: g, name: g } });
+  }
+  mockAuth.mockResolvedValue(await advisor(gA));
 });
 afterAll(cleanup);
 

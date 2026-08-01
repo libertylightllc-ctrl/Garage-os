@@ -23,15 +23,25 @@ vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
 // Mock every prisma model this test touches. jobPart.create MUST NOT
 // be called for the empty-description path — that's the assertion.
+//
+// `user.count` is mocked to `1` so the sessionUserExists guard added
+// in commit 5e2ed5b4 ("Guard: reject stale JWT before it reaches the
+// DB writes") sees a live user and returns true. Before this fix the
+// mock lacked `user`, so `prisma.user.count` was undefined and every
+// test in this file threw `Cannot read properties of undefined
+// (reading 'count')` at src/lib/session-user.ts:28 — that was the
+// single failure keeping CI red on main since 2026-07-27.
 const jobCardFindFirst = vi.fn();
 const partFindFirst = vi.fn();
 const jobPartCreate = vi.fn();
+const userCount = vi.fn().mockResolvedValue(1);
 
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         jobCard: { findFirst: (...a: unknown[]) => jobCardFindFirst(...a) },
         part: { findFirst: (...a: unknown[]) => partFindFirst(...a) },
         jobPart: { create: (...a: unknown[]) => jobPartCreate(...a) },
+        user: { count: (...a: unknown[]) => userCount(...a) },
     },
 }));
 

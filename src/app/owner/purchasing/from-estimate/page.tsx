@@ -375,9 +375,19 @@ export default async function ConvertFromEstimatePage({
                                             1,
                                             Math.ceil(Number(l.qty)),
                                         );
-                                        const costPrefill = l.part
-                                            ? Number(l.part.cost).toFixed(2)
-                                            : "0.00";
+                                        // Prefill ONLY when the catalogue Part has a
+                                        // genuine non-zero cost. A Part with cost=0
+                                        // means "the shop doesn't know it yet" — the
+                                        // old "0.00" default silently told the
+                                        // supplier the price was zero, which is a
+                                        // lie. Blank leaves it as awaiting-quote
+                                        // (Layer 0: parseMoney reads blank as
+                                        // { ok:true, value:null }, the line writes
+                                        // unitCost NULL, and every downstream
+                                        // surface renders "quote please").
+                                        const partCost = l.part ? Number(l.part.cost) : 0;
+                                        const costPrefill =
+                                            partCost > 0 ? partCost.toFixed(2) : "";
                                         return (
                                             <label
                                                 key={l.id}
@@ -410,14 +420,21 @@ export default async function ConvertFromEstimatePage({
                                                     aria-label={t("colQty")}
                                                     className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                                                 />
+                                                {/* No `required` — a blank input
+                                                    is now a real intent (awaiting
+                                                    quote). The server accepts null
+                                                    from parseMoney's ok-branch and
+                                                    canMarkOrdered blocks committing
+                                                    the PO until every line is
+                                                    priced. */}
                                                 <input
                                                     type="number"
                                                     name={`cost_${l.id}`}
                                                     min="0"
                                                     step="0.01"
-                                                    required
                                                     defaultValue={costPrefill}
                                                     aria-label={t("poUnitCost")}
+                                                    placeholder="—"
                                                     className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                                                 />
                                             </label>

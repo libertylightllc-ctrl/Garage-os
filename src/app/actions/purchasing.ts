@@ -37,13 +37,38 @@ function optional(raw: FormDataEntryValue | null): string | null {
   return s === "" ? null : s;
 }
 
-/** Non-negative money string for Prisma Decimal; null on invalid. */
-function parseMoney(raw: string): string | null {
+/**
+ * Parse a non-negative money string bound for Prisma Decimal.
+ *
+ * Returns a discriminated result so callers can distinguish three
+ * cases that used to collapse into a single `null`:
+ *   { ok: true,  value: string  } — a real, storable non-negative price
+ *   { ok: true,  value: null    } — BLANK input (Layer 0, 2026-08-01:
+ *                                   for PO lines this means "awaiting
+ *                                   a supplier quote" and is written
+ *                                   to the DB as `unitCost: null`,
+ *                                   NOT as an error)
+ *   { ok: false                 } — garbage input the caller must
+ *                                   reject (NaN / Infinity / negative
+ *                                   / non-numeric)
+ *
+ * The previous `string | null` return conflated blank and invalid, so
+ * every caller had to reject blank with "must be a non-negative
+ * number" — which is exactly what the PO/RFQ reshape needs to stop
+ * doing. Zero is admitted as a real price (a supplier warranty
+ * replacement or courtesy line at zero cost) — see isLinePriced
+ * in src/lib/po-doc-kind.ts.
+ */
+type ParsedMoney =
+  | { ok: true; value: string | null }
+  | { ok: false };
+
+function parseMoney(raw: string): ParsedMoney {
   const s = raw.trim();
-  if (s === "") return null;
+  if (s === "") return { ok: true, value: null };
   const n = Number(s);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return s;
+  if (!Number.isFinite(n) || n < 0) return { ok: false };
+  return { ok: true, value: s };
 }
 
 /** Positive integer; null on invalid. */
@@ -102,7 +127,7 @@ export async function addPoLineAction(formData: FormData) {
   const poId = String(formData.get("poId") ?? "").trim();
   const partId = String(formData.get("partId") ?? "").trim();
   const qty = parsePositiveInt(String(formData.get("qty") ?? ""));
-  const unitCost = parseMoney(String(formData.get("unitCost") ?? ""));
+  const unitCostResult = parseMoney(String(formData.get("unitCost") ?? ""));
 
   const back = `/owner/purchasing/${poId}`;
   if (!poId) fail("Missing purchase order.");
@@ -112,7 +137,11 @@ export async function addPoLineAction(formData: FormData) {
   if (po.status !== "DRAFT") fail("Lines can only be changed on a draft order.", back);
   if (!partId) fail("Choose a part.", back);
   if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
-  if (unitCost === null) fail("Unit cost must be a non-negative number.", back);
+  // Blank → { ok:true, value:null } = awaiting a supplier quote (Layer
+  // 0). Garbage → { ok:false } is what we still reject. See parseMoney.
+  if (!unitCostResult.ok)
+    fail("Unit cost must be a non-negative number (or leave blank while waiting for a quote).", back);
+  const unitCost = unitCostResult.value;
 
   // Load the Part with the vehicle-chain include so we can snapshot at
   // creation time. The chain is only present when the Part was auto-
@@ -191,7 +220,7 @@ export async function editPoLineAction(formData: FormData) {
   const poId = String(formData.get("poId") ?? "").trim();
   const lineId = String(formData.get("lineId") ?? "").trim();
   const qty = parsePositiveInt(String(formData.get("qty") ?? ""));
-  const unitCost = parseMoney(String(formData.get("unitCost") ?? ""));
+  const unitCostResult = parseMoney(String(formData.get("unitCost") ?? ""));
   // Stale-write guard — the form renders the row's `updatedAt` (as an
   // ISO string) into a hidden input. We narrow the WHERE by that same
   // timestamp so a save from a stale tab produces count===0 instead of
@@ -209,7 +238,11 @@ export async function editPoLineAction(formData: FormData) {
   if (!po) fail("Purchase order not found.");
   if (po.status !== "DRAFT") fail("Lines can only be changed on a draft order.", back);
   if (qty === null) fail("Quantity must be a whole number greater than 0.", back);
-  if (unitCost === null) fail("Unit cost must be a non-negative number.", back);
+  // Same rule as addPoLineAction: blank unitCost is a legitimate
+  // "awaiting a supplier quote" write. Only garbage rejects.
+  if (!unitCostResult.ok)
+    fail("Unit cost must be a non-negative number (or leave blank while waiting for a quote).", back);
+  const unitCost = unitCostResult.value;
   const expectedUpdatedAt = expectedUpdatedAtRaw ? new Date(expectedUpdatedAtRaw) : null;
   if (!expectedUpdatedAt || Number.isNaN(expectedUpdatedAt.getTime())) {
     // Old client bundle submitting without the hidden input, or a
@@ -670,7 +703,11 @@ export async function createPoFromEstimateAction(formData: FormData) {
   interface LineToCreate {
     partId: string;
     qty: number;
-    unitCost: string; // Prisma Decimal accepts numeric strings
+    // Layer 0 (2026-08-01): null = the advisor left the cost blank
+    // because the supplier quote hasn't landed yet. The resulting PO
+    // line reads as unpriced on every surface and blocks Mark Ordered
+    // until a real price is entered. See parseMoney + canMarkOrdered.
+    unitCost: string | null; // Prisma Decimal accepts numeric strings; null = awaiting quote
   }
   const linesToCreate: LineToCreate[] = [];
   for (const lineId of validIncludedIds) {
@@ -678,8 +715,10 @@ export async function createPoFromEstimateAction(formData: FormData) {
     if (!line || line.partId === null) continue; // already filtered, defensive
     const qty = parsePositiveInt(String(formData.get(`qty_${lineId}`) ?? ""));
     if (qty === null) fail("Invalid quantity.", await retryPath());
-    const cost = parseMoney(String(formData.get(`cost_${lineId}`) ?? ""));
-    if (cost === null) fail("Invalid unit cost.", await retryPath());
+    const costResult = parseMoney(String(formData.get(`cost_${lineId}`) ?? ""));
+    // Blank cost → { ok:true, value:null } is fine (awaiting quote).
+    // Only garbage (NaN / negative / non-numeric) rejects.
+    if (!costResult.ok) fail("Invalid unit cost.", await retryPath());
     // Verify the Part is still in this garage (protects against a part
     // being deleted between page render and submit — rare but real).
     const part = await prisma.part.findFirst({
@@ -687,7 +726,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
       select: { id: true },
     });
     if (!part) fail("Part not found — reload and try again.", await retryPath());
-    linesToCreate.push({ partId: part.id, qty, unitCost: cost });
+    linesToCreate.push({ partId: part.id, qty, unitCost: costResult.value });
   }
 
   // Create the PO + its lines atomically. Nested writes give us that

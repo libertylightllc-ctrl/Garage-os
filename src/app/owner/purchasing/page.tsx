@@ -432,7 +432,7 @@ export default async function PurchasingPage({
             </thead>
             <tbody className="divide-y divide-border">
               {orders.map((o) => {
-                const kind = poDocKind(o.lines);
+                const kind = poDocKind({ status: o.status, orderedAt: o.orderedAt });
                 const docNumber = o.reference?.trim()
                   ? o.reference
                   : `#${o.id.slice(-6).toUpperCase()}`;

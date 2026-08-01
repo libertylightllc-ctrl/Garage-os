@@ -98,7 +98,10 @@ export default async function PublicPurchaseOrder({
     const locale = await getLocale();
     const tz = countryToTimeZone(po.garage.country ?? "UAE");
 
-    const isRfq = poDocKind(po.lines) === "RFQ";
+    // Status-based classifier (2026-08-01, AR). Prices on the lines
+    // do NOT flip the label — only the owner marking the PO ordered
+    // does. See src/lib/po-doc-kind.ts.
+    const isRfq = poDocKind({ status: po.status, orderedAt: po.orderedAt }) === "RFQ";
     const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
     const docNumber = po.reference?.trim()
         ? po.reference
@@ -106,7 +109,12 @@ export default async function PublicPurchaseOrder({
 
     const money = (v: number) =>
         new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED" }).format(v);
-    const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost), 0);
+    // A PO (kind === "PO") is guaranteed all-lines-priced by
+    // canMarkOrdered at DRAFT→ORDERED, and post-order lines are read-
+    // only, so this reduce never sums a null unitCost when the total
+    // row is actually rendered. The RFQ branch below suppresses the
+    // tfoot entirely — no supplier ever sees a partial-sum total.
+    const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost ?? 0), 0);
     const vehicles = resolvePoVehicles(po.lines);
 
     return (
@@ -155,9 +163,14 @@ export default async function PublicPurchaseOrder({
                             return (
                                 <tr key={l.id} className="border-t border-border align-top">
                                     <td className="px-3 py-2 font-medium">
-                                        {l.part.name}{" "}
+                                        {/* Layer 0 free-text RFQ line: no catalog
+                                            Part yet, so fall back to the row's
+                                            own description + sku. Once the shop
+                                            links it (Layer 5), l.part fills in
+                                            and takes precedence. */}
+                                        {l.part?.name ?? l.description}{" "}
                                         <span className="font-mono text-xs text-muted-foreground">
-                                            {l.part.sku}
+                                            {l.part?.sku ?? l.sku ?? ""}
                                         </span>
                                     </td>
                                     <td className="px-3 py-2 text-xs">

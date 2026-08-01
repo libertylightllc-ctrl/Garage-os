@@ -1,96 +1,148 @@
 import { describe, it, expect } from "vitest";
-import { poDocKind, isLinePriced, isLineUnpriced } from "@/lib/po-doc-kind";
+import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 
-describe("isLinePriced / isLineUnpriced", () => {
+describe("isLinePriced", () => {
     it("positive number → priced", () => {
         expect(isLinePriced({ unitCost: 100 })).toBe(true);
-        expect(isLineUnpriced({ unitCost: 100 })).toBe(false);
     });
 
     it("positive numeric string (Prisma Decimal.toString) → priced", () => {
         expect(isLinePriced({ unitCost: "42.50" })).toBe(true);
-        expect(isLineUnpriced({ unitCost: "42.50" })).toBe(false);
     });
 
-    it("zero → unpriced", () => {
-        expect(isLinePriced({ unitCost: 0 })).toBe(false);
-        expect(isLineUnpriced({ unitCost: 0 })).toBe(true);
+    it("zero → priced (2026-08-01: 0 = quoted-as-no-charge, a warranty replacement or courtesy line)", () => {
+        expect(isLinePriced({ unitCost: 0 })).toBe(true);
+        expect(isLinePriced({ unitCost: "0.00" })).toBe(true);
     });
 
-    it("zero as string → unpriced", () => {
-        expect(isLinePriced({ unitCost: "0.00" })).toBe(false);
-        expect(isLineUnpriced({ unitCost: "0.00" })).toBe(true);
-    });
-
-    it("negative → unpriced (defensive — negatives shouldn't happen, treat as needing a quote)", () => {
-        expect(isLinePriced({ unitCost: -5 })).toBe(false);
-        expect(isLineUnpriced({ unitCost: -5 })).toBe(true);
-    });
-
-    it("NaN (empty / unparseable string) → unpriced (defensive; also complement of priced)", () => {
-        expect(isLinePriced({ unitCost: "" })).toBe(false);
-        expect(isLineUnpriced({ unitCost: "" })).toBe(true);
-        expect(isLinePriced({ unitCost: "abc" })).toBe(false);
-        expect(isLineUnpriced({ unitCost: "abc" })).toBe(true);
-    });
-
-    it("undefined / null → unpriced", () => {
-        expect(isLinePriced({ unitCost: undefined })).toBe(false);
-        expect(isLineUnpriced({ unitCost: undefined })).toBe(true);
+    it("null / undefined → unpriced (2026-08-01: null = awaiting a supplier quote)", () => {
         expect(isLinePriced({ unitCost: null })).toBe(false);
-        expect(isLineUnpriced({ unitCost: null })).toBe(true);
+        expect(isLinePriced({ unitCost: undefined })).toBe(false);
     });
 
-    it("Infinity → unpriced (Number.isFinite guard)", () => {
+    it("empty / whitespace string → unpriced (coercion-bug guard: Number('') is 0)", () => {
+        // Naive `Number(x) >= 0` would let "" through as a valid 0.
+        // The type guard rejects strings that trim to "" before
+        // coercion so a blank input is never read as "quoted zero".
+        expect(isLinePriced({ unitCost: "" })).toBe(false);
+        expect(isLinePriced({ unitCost: "   " })).toBe(false);
+        expect(isLinePriced({ unitCost: "\t\n" })).toBe(false);
+    });
+
+    it("negative → unpriced (defensive)", () => {
+        expect(isLinePriced({ unitCost: -5 })).toBe(false);
+        expect(isLinePriced({ unitCost: "-1.00" })).toBe(false);
+    });
+
+    it("NaN / Infinity → unpriced", () => {
+        expect(isLinePriced({ unitCost: NaN })).toBe(false);
         expect(isLinePriced({ unitCost: Infinity })).toBe(false);
-        expect(isLineUnpriced({ unitCost: Infinity })).toBe(true);
+        expect(isLinePriced({ unitCost: -Infinity })).toBe(false);
     });
 
-    it("isLineUnpriced is the exact logical complement of isLinePriced", () => {
-        // The whole "quote please" marker rendering depends on this:
-        // a NaN line must both flip the doc to RFQ AND be tagged
-        // "please quote"; if the two predicates disagreed, a NaN
-        // line would flip the doc but render as if priced, which is
-        // the specific bug the complement contract prevents.
-        const cases = [0, 1, -1, NaN, Infinity, -Infinity, "", "0", "1", "abc", null, undefined];
+    it("unparseable string → unpriced", () => {
+        expect(isLinePriced({ unitCost: "abc" })).toBe(false);
+        expect(isLinePriced({ unitCost: "5abc" })).toBe(false);
+    });
+
+    it("array / boolean / plain object → unpriced (all silently coerce to 0 with naive Number())", () => {
+        // Number([]) === 0, Number([5]) === 5, Number(false) === 0,
+        // Number({}) === NaN. None of these are valid unitCost values.
+        expect(isLinePriced({ unitCost: [] })).toBe(false);
+        expect(isLinePriced({ unitCost: [5] })).toBe(false);
+        expect(isLinePriced({ unitCost: false })).toBe(false);
+        expect(isLinePriced({ unitCost: true })).toBe(false);
+        expect(isLinePriced({ unitCost: {} })).toBe(false);
+    });
+});
+
+describe("isLineUnpriced", () => {
+    it("is the exact inverse of isLinePriced across the key coercion cases", () => {
+        // Every case that pinned isLinePriced above — mirrored, so a
+        // future refactor that drifts the two apart trips this test.
+        const cases: Array<{ unitCost: unknown }> = [
+            { unitCost: 100 },
+            { unitCost: "42.50" },
+            { unitCost: 0 },
+            { unitCost: "0.00" },
+            { unitCost: null },
+            { unitCost: undefined },
+            { unitCost: "" },
+            { unitCost: "   " },
+            { unitCost: -5 },
+            { unitCost: NaN },
+            { unitCost: "abc" },
+            { unitCost: [] },
+            { unitCost: false },
+            { unitCost: {} },
+        ];
         for (const c of cases) {
-            expect(isLineUnpriced({ unitCost: c })).toBe(!isLinePriced({ unitCost: c }));
+            expect(isLineUnpriced(c)).toBe(!isLinePriced(c));
         }
     });
 });
 
+describe("canMarkOrdered", () => {
+    it("empty document → cannot order (same rule as today)", () => {
+        expect(canMarkOrdered([])).toBe(false);
+    });
+
+    it("every line priced with positive numbers → can order", () => {
+        expect(canMarkOrdered([{ unitCost: 10 }, { unitCost: 20 }])).toBe(true);
+    });
+
+    it("zero-cost line admitted — warranty / courtesy lines are real orders", () => {
+        expect(canMarkOrdered([{ unitCost: 100 }, { unitCost: 0 }])).toBe(true);
+    });
+
+    it("null line → cannot order (still awaiting a supplier quote)", () => {
+        expect(canMarkOrdered([{ unitCost: 100 }, { unitCost: null }])).toBe(false);
+    });
+
+    it("undefined line → cannot order (defensive)", () => {
+        expect(canMarkOrdered([{ unitCost: 100 }, { unitCost: undefined }])).toBe(false);
+    });
+
+    it("empty-string line → cannot order (coercion guard; a blank input must not read as zero)", () => {
+        expect(canMarkOrdered([{ unitCost: 100 }, { unitCost: "" }])).toBe(false);
+    });
+
+    it("negative line → cannot order (defensive)", () => {
+        expect(canMarkOrdered([{ unitCost: 100 }, { unitCost: -5 }])).toBe(false);
+    });
+});
+
 describe("poDocKind", () => {
-    it("empty document → RFQ (defensive default; fail toward asking rather than committing)", () => {
-        expect(poDocKind([])).toBe("RFQ");
+    const asOf = new Date("2026-08-01T10:00:00Z");
+
+    it("DRAFT → RFQ, regardless of whether lines are priced", () => {
+        // The whole point of the 2026-08-01 rule: entering supplier
+        // quotes on a DRAFT does NOT flip the label. Only Mark
+        // Ordered does that.
+        expect(poDocKind({ status: "DRAFT", orderedAt: null })).toBe("RFQ");
     });
 
-    it("all lines priced → PO", () => {
-        expect(poDocKind([{ unitCost: 10 }, { unitCost: 20 }, { unitCost: 30 }])).toBe("PO");
+    it("ORDERED → PO", () => {
+        expect(poDocKind({ status: "ORDERED", orderedAt: asOf })).toBe("PO");
     });
 
-    it("all lines zero → RFQ (the classic 'shop has no prices yet' case)", () => {
-        expect(poDocKind([{ unitCost: 0 }, { unitCost: 0 }, { unitCost: 0 }])).toBe("RFQ");
+    it("PARTIALLY_RECEIVED → PO", () => {
+        expect(poDocKind({ status: "PARTIALLY_RECEIVED", orderedAt: asOf })).toBe("PO");
     });
 
-    it("mixed pricing — ANY unpriced line → RFQ (AR's ruling, 2026-07-27)", () => {
-        // Even one 0.00 line means we're asking the supplier to fill
-        // it in. Calling the document a PO would commit to buying
-        // that line at unknown cost.
-        expect(poDocKind([{ unitCost: 100 }, { unitCost: 50 }, { unitCost: 0 }])).toBe("RFQ");
-        // Order doesn't matter; the position of the unpriced line
-        // is not what determines the doc kind.
-        expect(poDocKind([{ unitCost: 0 }, { unitCost: 100 }, { unitCost: 50 }])).toBe("RFQ");
+    it("RECEIVED → PO", () => {
+        expect(poDocKind({ status: "RECEIVED", orderedAt: asOf })).toBe("PO");
     });
 
-    it("mixed with NaN → RFQ (NaN counts as unpriced)", () => {
-        expect(poDocKind([{ unitCost: 100 }, { unitCost: "" }])).toBe("RFQ");
+    it("CANCELLED without orderedAt → RFQ (never committed)", () => {
+        expect(poDocKind({ status: "CANCELLED", orderedAt: null })).toBe("RFQ");
     });
 
-    it("mixed with negative → RFQ (negative counts as unpriced)", () => {
-        expect(poDocKind([{ unitCost: 100 }, { unitCost: -5 }])).toBe("RFQ");
-    });
-
-    it("string prices (Prisma Decimal serialized) — all-positive → PO", () => {
-        expect(poDocKind([{ unitCost: "100.00" }, { unitCost: "50.25" }])).toBe("PO");
+    it("CANCELLED with orderedAt → PO (was committed; supplier may have shipped)", () => {
+        // A supplier who received a PO and may have shipped against
+        // it must not see the document retitled as a quotation after
+        // the shop cancels — the audit trail should read as
+        // "cancelled purchase order", not "cancelled quotation".
+        expect(poDocKind({ status: "CANCELLED", orderedAt: asOf })).toBe("PO");
     });
 });

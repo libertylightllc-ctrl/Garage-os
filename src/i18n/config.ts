@@ -320,6 +320,8 @@ const en = {
   noPoLines: "No lines yet. Add a part above.",
   noPartsForPo: "Add a part to your catalog first, in",
   markOrdered: "Mark as ordered",
+  markOrderedNeedsPricesReason:
+    "Every line needs a supplier price before you can order. A blank price means the quote hasn't landed yet; 0 is fine for a warranty or courtesy replacement.",
   cancelPo: "Cancel order",
   poReceivingSoon: "Receiving into stock arrives next.",
   // 2b partial receiving
@@ -1648,6 +1650,8 @@ const ar: typeof en = {
   noPoLines: "لا توجد بنود بعد. أضف قطعة أعلاه.",
   noPartsForPo: "أضف قطعة إلى الكتالوج أولًا في",
   markOrdered: "تحديد كمطلوب",
+  markOrderedNeedsPricesReason:
+    "يجب إدخال سعر المورد لكل بند قبل الطلب. الحقل الفارغ يعني أن العرض لم يصل بعد؛ السعر صفر مقبول للبنود ضمن الضمان أو المجاملة.",
   cancelPo: "إلغاء الأمر",
   poReceivingSoon: "استلام المخزون قادم لاحقًا.",
   // 2b الاستلام الجزئي

@@ -845,12 +845,36 @@ model PurchaseOrderLine {
   id              String        @id @default(cuid())
   purchaseOrderId String
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  partId          String
-  part            Part          @relation(fields: [partId], references: [id])
+  // Catalog link — NULLABLE from 2026-08-01. A quotation / PO line
+  // may exist as description-only when the Part hasn't yet been
+  // created — the catalogue row is born at goods receipt with the
+  // real SKU and cost (Layer 5). Existing rows are all non-null;
+  // the widen rewrites nothing. Row-level CHECK enforces "at least
+  // one of partId or description".
+  partId          String?
+  part            Part?         @relation(fields: [partId], references: [id])
+  // Free-text description of what's being ordered. Written ONCE at
+  // line create — from the estimate line's description on the
+  // from-estimate path, or from the owner's typed input on a manual
+  // add. Kept even after Layer 5 attaches partId at goods receipt:
+  // the "originally asked for" text survives so the linked
+  // Part.name doesn't erase the record of what the supplier was
+  // actually invoiced for. Render rule everywhere:
+  //   part?.name ?? description ?? "—"
+  description     String?
+  // Supplier SKU. Captured when a supplier quotes their own code,
+  // or when the owner types the real SKU at receive time. Used by
+  // receivePurchaseOrderAction (Layer 5) to link an existing Part
+  // or seed a fresh one.
+  sku             String?
   qty             Int // ordered quantity
   receivedQty     Int           @default(0) // how much has been received so far (2b partial receiving; 0 ≤ receivedQty ≤ qty)
   returnedQty     Int           @default(0) // how much has been returned to the supplier (2c; 0 ≤ returnedQty ≤ receivedQty)
-  unitCost        Decimal       @db.Decimal(12, 2)
+  // NULL = awaiting a supplier quote; 0 = quoted as no-charge (a
+  // warranty replacement, a courtesy line). The two facts are
+  // different — canMarkOrdered admits 0 but rejects null. See
+  // src/lib/po-doc-kind.ts.
+  unitCost        Decimal?      @db.Decimal(12, 2)
 
   // Vehicle assignment — snapshot at line-write time. A PO is a document
   // sent to a supplier; a later Vehicle edit must NOT retroactively change

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
 import { normalizeToE164 } from "@/lib/wa";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
-import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
+import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 import {
   addPoLineAction,
   editPoLineAction,
@@ -143,14 +143,29 @@ export default async function PurchaseOrderDetailPage({
 
   const money = (v: number) =>
     new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED" }).format(v);
-  const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost), 0);
+  // Total = sum of qty * unitCost, but ONLY over lines with a
+  // priced unitCost. A document with any awaiting-quote line renders
+  // total as "—" instead of a number — a quotation must never show a
+  // supplier "Total: 0.00" that includes unpriced lines as zero.
+  // See the render block for the null branch.
+  const anyLineUnpriced = po.lines.some((l) => !isLinePriced(l));
+  const total = anyLineUnpriced
+    ? null
+    : po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost), 0);
+  // Mark Ordered gate — mirrors the server-side canMarkOrdered guard in
+  // setPoStatusAction so the button is visibly disabled when the guard
+  // would refuse. Same rule: empty PO or any unpriced line → false.
+  // The action still enforces this authoritatively; disabling here is
+  // affordance, not security.
+  const canOrder = canMarkOrdered(po.lines);
+  const markOrderedReason = canOrder ? undefined : t("markOrderedNeedsPricesReason");
 
   // ── Print / send derivations ─────────────────────────────────
-  // RFQ/PO classifier — shared with the 4 other document surfaces
-  // via `poDocKind`. AR's rule: ANY unpriced line means the shop
-  // isn't committing to a price on that line, so the whole document
-  // is an RFQ. Only a fully-priced document is a Purchase Order.
-  const isRfq = poDocKind(po.lines) === "RFQ";
+  // Status-based RFQ/PO classifier (2026-08-01, AR). DRAFT is always
+  // RFQ even when every line has a price; the owner marking the PO
+  // ordered is the ONLY thing that turns a quotation into an order.
+  // See src/lib/po-doc-kind.ts.
+  const isRfq = poDocKind({ status: po.status, orderedAt: po.orderedAt }) === "RFQ";
   const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
   // The visible identifier for print / WhatsApp — supplier's own
   // quote reference if they gave us one (helps them match against
@@ -327,7 +342,11 @@ export default async function PurchaseOrderDetailPage({
                     (priced lines only) reads as "the shop's cost" which
                     it isn't; a full sum including 0.00 lines under-counts.
                     Neither is a number worth showing. */}
-                {isRfq ? null : <> · {money(total)}</>}
+                {/* total is guaranteed non-null on the !isRfq branch
+                    (canMarkOrdered enforces all-lines-priced at
+                    DRAFT→ORDERED and edit inputs are DRAFT-only), but
+                    coalesce so TS doesn't have to prove that. */}
+                {isRfq ? null : <> · {money(total ?? 0)}</>}
               </div>
             </div>
           </section>
@@ -340,7 +359,7 @@ export default async function PurchaseOrderDetailPage({
             </span>
             <span>
               {po.lines.length} {t("poLines").toLowerCase()}
-              {isRfq ? null : <> · {money(total)}</>}
+              {isRfq ? null : <> · {money(total ?? 0)}</>}
             </span>
           </div>
           {po.note ? <p className="mt-1 text-sm text-muted-foreground">{po.note}</p> : null}
@@ -397,7 +416,10 @@ export default async function PurchaseOrderDetailPage({
                 return (
                   <tr key={l.id}>
                     <td className="px-4 py-3 font-medium">
-                      {l.part.name} <span className="font-mono text-xs text-muted-foreground">{l.part.sku}</span>
+                      {/* Free-text RFQ lines (Layer 0): l.part is null
+                          until the shop links a catalogue Part (Layer 5).
+                          Fall back to the row's own description/sku. */}
+                      {l.part?.name ?? l.description} <span className="font-mono text-xs text-muted-foreground">{l.part?.sku ?? l.sku ?? ""}</span>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {lineVehicle ? (
@@ -559,7 +581,7 @@ export default async function PurchaseOrderDetailPage({
                 return (
                   <div key={l.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
                     <span className="min-w-0 truncate text-sm">
-                      {l.part.name}
+                      {l.part?.name ?? l.description}
                       <span className="ms-2 text-xs text-muted-foreground">
                         {l.receivedQty}/{l.qty} {t("poReceivedLower")}
                         {outstanding > 0 ? <> · {outstanding} {t("poOutstandingLower")}</> : null}
@@ -604,7 +626,7 @@ export default async function PurchaseOrderDetailPage({
                 return (
                   <div key={l.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
                     <span className="min-w-0 truncate text-sm">
-                      {l.part.name}
+                      {l.part?.name ?? l.description}
                       <span className="ms-2 text-xs text-muted-foreground">
                         {l.returnedQty}/{l.receivedQty} {t("poReturnedLower")}
                         {returnable > 0 ? <> · {returnable} {t("poReturnableLower")}</> : null}
@@ -682,7 +704,20 @@ export default async function PurchaseOrderDetailPage({
               <form action={setPoStatusAction}>
                 <input type="hidden" name="poId" value={po.id} />
                 <input type="hidden" name="status" value="ORDERED" />
-                <Button type="submit" variant="hero">{t("markOrdered")}</Button>
+                <Button
+                  type="submit"
+                  variant="hero"
+                  disabled={!canOrder}
+                  title={markOrderedReason}
+                  aria-disabled={!canOrder}
+                >
+                  {t("markOrdered")}
+                </Button>
+                {markOrderedReason ? (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {markOrderedReason}
+                  </p>
+                ) : null}
               </form>
             ) : null}
             <form action={setPoStatusAction}>

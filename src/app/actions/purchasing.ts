@@ -11,7 +11,7 @@ import {
 } from "@/lib/estimate-to-po";
 import { buildPoLineVehicleSnapshot, resolvePoVehicles } from "@/lib/po-vehicle";
 import { purchaseOrderMessage } from "@/lib/po-message";
-import { poDocKind, isLineUnpriced } from "@/lib/po-doc-kind";
+import { poDocKind, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
 import { signId } from "@/lib/tokens";
 import { appUrl } from "@/lib/whatsapp";
@@ -282,10 +282,26 @@ export async function setPoStatusAction(formData: FormData) {
 
   if (next === "ORDERED") {
     if (po.status !== "DRAFT") fail("Only a draft order can be sent.", back);
-    const lineCount = await prisma.purchaseOrderLine.count({
+    // 2026-08-01 rule: cannot commit to buy while any line is still
+    // awaiting a supplier quote. `canMarkOrdered` admits 0 (a warranty
+    // replacement or courtesy line at zero cost is a real order) but
+    // rejects null unitCost (the quote hasn't landed yet) and rejects
+    // an empty PO. Marking Ordered is the ONLY thing that turns a
+    // quotation into a purchase order; every other surface (title,
+    // WhatsApp body, print, public link) derives from status, not
+    // from prices. See docs/po-doc-kind rule.
+    const lines = await prisma.purchaseOrderLine.findMany({
       where: { purchaseOrderId: po.id },
+      select: { unitCost: true },
     });
-    if (lineCount === 0) fail("Add at least one line before ordering.", back);
+    if (!canMarkOrdered(lines)) {
+      fail(
+        lines.length === 0
+          ? "Add at least one line before ordering."
+          : "Every line needs a supplier price before you can order (blank = still waiting for a quote; 0 is fine).",
+        back,
+      );
+    }
     await prisma.purchaseOrder.update({
       where: { id: po.id },
       data: { status: "ORDERED", orderedAt: new Date() },
@@ -359,7 +375,18 @@ export async function receivePurchaseOrderAction(formData: FormData) {
     if (!Number.isInteger(n) || n < 0) fail("Received quantity must be a whole number of 0 or more.", back);
     const outstanding = l.qty - l.receivedQty;
     if (n > outstanding) fail(`You can't receive more than the ${outstanding} still outstanding on a line.`, back);
-    if (n > 0) receipts.push({ lineId: l.id, partId: l.partId, qty: l.qty, receiveNow: n });
+    // Layer 0 (2026-08-01): partId is nullable — a free-text RFQ line
+    // can go all the way to ORDERED without ever being linked to a
+    // catalogue Part. Those lines aren't stock-tracked, so we can't
+    // move stock on them; the shop needs to link a Part first (Layer
+    // 5 auto-links on the DRAFT → ORDERED transition; until then it
+    // stays a manual step on the line edit form).
+    if (n > 0 && l.partId === null) {
+      fail("Link a catalogue part to this line before receiving stock.", back);
+    }
+    if (n > 0 && l.partId !== null) {
+      receipts.push({ lineId: l.id, partId: l.partId, qty: l.qty, receiveNow: n });
+    }
   }
   if (receipts.length === 0) fail("Enter a quantity to receive on at least one line.", back);
 
@@ -464,7 +491,15 @@ export async function returnPurchaseOrderAction(formData: FormData) {
     if (!Number.isInteger(n) || n < 0) fail("Return quantity must be a whole number of 0 or more.", back);
     const returnable = l.receivedQty - l.returnedQty;
     if (n > returnable) fail(`You can't return more than the ${returnable} received on a line.`, back);
-    if (n > 0) returns.push({ lineId: l.id, partId: l.partId, receivedQty: l.receivedQty, returnNow: n });
+    // Same story as the receive flow above — an unlinked free-text
+    // line has no Part row to move stock against. Refuse rather than
+    // silently drop; the operator needs to know why nothing happened.
+    if (n > 0 && l.partId === null) {
+      fail("Link a catalogue part to this line before returning to supplier.", back);
+    }
+    if (n > 0 && l.partId !== null) {
+      returns.push({ lineId: l.id, partId: l.partId, receivedQty: l.receivedQty, returnNow: n });
+    }
   }
   if (returns.length === 0) fail("Enter a quantity to return on at least one line.", back);
 
@@ -767,7 +802,14 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
   // Capture documentKind + doc metadata BEFORE anything else. The
   // whole point of the snapshot is that a later edit (unpriced line
   // gets a price, RFQ → PO) does NOT rewrite the audit row.
-  const capturedDocKind: "PO" | "RFQ" = poDocKind(po.lines);
+  // Status-based classifier (2026-08-01, AR). A DRAFT sent to a
+  // supplier for pricing is always logged as RFQ; only after the
+  // owner marks the PO ordered does the send-audit log start capturing
+  // "PO". `orderedAt` disambiguates a cancelled-after-ordered doc.
+  const capturedDocKind: "PO" | "RFQ" = poDocKind({
+    status: po.status,
+    orderedAt: po.orderedAt,
+  });
   const t = await getT();
   const locale = await getLocale();
   const docTitle = capturedDocKind === "RFQ" ? t("documentRfq") : t("documentPurchaseOrder");
@@ -784,7 +826,13 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
     doc: { title: docTitle, number: docNumber, isRfq: capturedDocKind === "RFQ" },
     garage: { name: garage?.name ?? "" },
     supplier: { contactPerson: po.supplier.contactPerson },
-    lines: po.lines.map((l) => ({ qty: l.qty, description: l.part.name })),
+    // Render rule (Layer 0, 2026-08-01): Part.name when the line
+    // is linked to a catalogue Part, the line's stored description
+    // otherwise. The row CHECK guarantees at least one of the two.
+    lines: po.lines.map((l) => ({
+      qty: l.qty,
+      description: l.part?.name ?? l.description ?? "",
+    })),
     note: po.note,
     publicUrl,
     perLineVehicle: po.lines.map((l) => vehicles.perLine.get(l.id) ?? null),

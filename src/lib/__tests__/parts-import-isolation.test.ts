@@ -14,6 +14,7 @@ import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { parseInvoiceJson } from "@/lib/ocr";
+import { mockSessionAndSeed } from "@/lib/__tests__/helpers/mock-session-and-seed";
 
 // ---- pure parser (no DB) ----
 describe("parseInvoiceJson — flag, never invent", () => {
@@ -61,8 +62,13 @@ const P = "pimport-test-";
 const gA = P + "garage-A";
 const gB = P + "garage-B";
 
-function owner(garageId: string) {
-  return { user: { id: P + "u", role: "OWNER", garageId, email: "x", name: "x" } };
+// Async now — seeds a matching User row so requireAnyRole's guard finds it.
+async function owner(garageId: string) {
+  return mockSessionAndSeed({
+    id: P + "u-" + garageId,
+    garageId,
+    role: "OWNER",
+  });
 }
 async function call(action: (fd: FormData) => Promise<void>, fd: FormData): Promise<string> {
   try {
@@ -112,6 +118,8 @@ async function cleanup() {
   await prisma.partsImport.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.partMovement.deleteMany({ where: { part: { garageId: { startsWith: P } } } });
   await prisma.part.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Users FK to Garage — delete before garages.
+  await prisma.user.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
 }
 beforeEach(async () => {
@@ -127,7 +135,7 @@ afterAll(async () => {
 describe("confirmPartsImportAction — review → catalog", { retry: 3 }, () => {
   it("creates catalog parts for only the CHECKED rows, in the caller's garage", async () => {
     const imp = await seedImport(gA);
-    mockAuth.mockResolvedValueOnce(owner(gA));
+    mockAuth.mockResolvedValueOnce(await owner(gA));
     const to = await call(
       confirmPartsImportAction,
       reviewForm(imp.id, [
@@ -146,7 +154,7 @@ describe("confirmPartsImportAction — review → catalog", { retry: 3 }, () => 
 
   it("skips a blank-name row and auto-generates a SKU when blank", async () => {
     const imp = await seedImport(gA);
-    mockAuth.mockResolvedValueOnce(owner(gA));
+    mockAuth.mockResolvedValueOnce(await owner(gA));
     await call(
       confirmPartsImportAction,
       reviewForm(imp.id, [
@@ -163,7 +171,7 @@ describe("confirmPartsImportAction — review → catalog", { retry: 3 }, () => 
   it("skips a duplicate SKU rather than overwriting an existing part", async () => {
     await prisma.part.create({ data: { garageId: gA, sku: "DUP", name: "Existing", cost: "1", price: "1" } });
     const imp = await seedImport(gA);
-    mockAuth.mockResolvedValueOnce(owner(gA));
+    mockAuth.mockResolvedValueOnce(await owner(gA));
     const to = await call(
       confirmPartsImportAction,
       reviewForm(imp.id, [{ name: "New One", sku: "DUP", qty: 1, unitCost: 9, include: true }]),
@@ -176,7 +184,7 @@ describe("confirmPartsImportAction — review → catalog", { retry: 3 }, () => 
 
   it("cannot confirm another garage's import", async () => {
     const impB = await seedImport(gB);
-    mockAuth.mockResolvedValueOnce(owner(gA)); // A tries to confirm B's import
+    mockAuth.mockResolvedValueOnce(await owner(gA)); // A tries to confirm B's import
     const to = await call(confirmPartsImportAction, reviewForm(impB.id, [{ name: "Hack", sku: "H", qty: 1, unitCost: 1, include: true }]));
     expect(to).toContain("error=");
     expect((await prisma.part.findMany({ where: { garageId: gA } })).length).toBe(0);
@@ -192,7 +200,7 @@ describe("confirmPartsImportAction — review → catalog", { retry: 3 }, () => 
 
   it("discard marks the import DISCARDED (garage-scoped)", async () => {
     const imp = await seedImport(gA);
-    mockAuth.mockResolvedValueOnce(owner(gA));
+    mockAuth.mockResolvedValueOnce(await owner(gA));
     const fd = new FormData();
     fd.set("importId", imp.id);
     await call(discardPartsImportAction, fd);

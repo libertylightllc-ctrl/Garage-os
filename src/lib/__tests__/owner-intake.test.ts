@@ -186,7 +186,7 @@ describe("intake action — pre-flight branching (Cases A / B / C / default)", (
     expect(await prisma.jobCard.count({ where: { garageId: gA } })).toBe(2);
   });
 
-  it("Case B — same plate under a DIFFERENT customer → redirect, NO writes", async () => {
+  it("Case B — same plate under a DIFFERENT customer → disambiguation panel, NO writes", async () => {
     mockAuth.mockResolvedValue(as("ADVISOR"));
     // Seed the first customer + car.
     const seed = receptionForm();
@@ -201,8 +201,16 @@ describe("intake action — pre-flight branching (Cases A / B / C / default)", (
     collide.set("plate", plate); // different customer randomizes phone
 
     const to = await call(createCustomerVehicleJobAction, collide);
-    expect(to).toBe("/advisor/jobs/new?error=plate_belongs_to_another_customer");
-    // Critical: NO writes happened. Counts unchanged.
+    // Slice 3 (2026-07-31, commit 0551b05) replaced the hard-block
+    // ?error=plate_belongs_to_another_customer redirect with the
+    // disambiguation panel at /advisor/jobs/new/existing-vehicle/<id>.
+    // The advisor now consciously picks one of four choices (same car
+    // same owner / owner changed / different car same plate / wrong
+    // plate) instead of being sent back with a dead-end error.
+    expect(to).toMatch(/^\/advisor\/jobs\/new\/existing-vehicle\/[a-z0-9]+/);
+    // Critical (unchanged since slice 3): NO writes happen on the
+    // panel-redirect path — the writes wait until the advisor picks a
+    // choice and submits the confirm form.
     expect(await prisma.customer.count({ where: { garageId: gA } })).toBe(1);
     expect(await prisma.vehicle.count({ where: { customer: { garageId: gA } } })).toBe(1);
     expect(await prisma.jobCard.count({ where: { garageId: gA } })).toBe(1);

@@ -16,6 +16,7 @@
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { mockSessionAndSeed } from "@/lib/__tests__/helpers/mock-session-and-seed";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -32,8 +33,14 @@ const P = "pr-stock-test-";
 const gA = P + "garage-A";
 const gB = P + "garage-B";
 
-function advisor(garageId: string) {
-  return { user: { id: P + "adv", role: "ADVISOR", garageId, email: "x", name: "x" } };
+// Async now — seeds a matching User row so requireAnyRole's guard finds it.
+// Per-garage id so gA's user doesn't overwrite gB's.
+async function advisor(garageId: string) {
+  return mockSessionAndSeed({
+    id: P + "adv-" + garageId,
+    garageId,
+    role: "ADVISOR",
+  });
 }
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
@@ -92,13 +99,19 @@ async function cleanup() {
   await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
   await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Users FK to Garage — delete before garages.
+  await prisma.user.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
 }
 
 beforeEach(async () => {
   await cleanup();
   mockAuth.mockReset();
-  mockAuth.mockResolvedValue(advisor(gA));
+  // Garages BEFORE advisor(): the seeded User has an FK to Garage.
+  for (const g of [gA, gB]) {
+    await prisma.garage.upsert({ where: { id: g }, update: {}, create: { id: g, name: g } });
+  }
+  mockAuth.mockResolvedValue(await advisor(gA));
 });
 afterAll(cleanup);
 
@@ -160,7 +173,7 @@ describe("3d — fulfilment stock guards", () => {
 
   it("another garage's advisor cannot advance the request", async () => {
     const { req, partId } = await makeRequest(gA, { qtyOnHand: 10, qty: 4, status: "ARRIVED" });
-    mockAuth.mockResolvedValue(advisor(gB));
+    mockAuth.mockResolvedValue(await advisor(gB));
     await prisma.garage.upsert({ where: { id: gB }, update: {}, create: { id: gB, name: gB } });
     await expect(fulfillPartRequestAction(form({ requestId: req.id }))).rejects.toThrow(/not found/i);
     const part = await prisma.part.findUnique({ where: { id: partId! } });

@@ -304,8 +304,21 @@ export default async function PurchasingPage({
     <div>
       <AppNav role="OWNER" active="purchasing" />
       <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <header className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
+        {/* Two-mode purchasing entry (2026-08-02). Two distinct actions
+            from one page: ask a supplier to quote (RFQ) vs. place an
+            order at known prices. Both routes land on the same shell
+            form (/owner/purchasing/new) differentiated by ?mode=; the
+            server writes a DRAFT PO in both cases per AR's rule that
+            Mark Ordered is the ONLY thing turning a quotation into a
+            purchase order.
+
+            Layout: on narrow viewports the header stacks (title on top,
+            buttons below) so the buttons clear the fixed EN/ع language
+            toggle in the top-right of the app. The buttons wrap when
+            the row is too tight — the three-way row (from-estimate,
+            new-quote, new-order) is the widest on this surface. */}
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1 pt-12 sm:pt-0">
             <h1 className="text-2xl font-semibold tracking-tight">
               {t("purchasingTitle")}
             </h1>
@@ -313,11 +326,14 @@ export default async function PurchasingPage({
               {t("purchasingSubtitle")}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
             <ButtonLink href="/owner/purchasing/from-estimate" variant="ghost">
               {t("convertFromEstimate")}
             </ButtonLink>
-            <ButtonLink href="/owner/purchasing/new">
+            <ButtonLink href="/owner/purchasing/new?mode=quote" variant="ghost">
+              {t("newQuotation")}
+            </ButtonLink>
+            <ButtonLink href="/owner/purchasing/new?mode=order">
               {t("newPurchaseOrder")}
             </ButtonLink>
           </div>

@@ -9,16 +9,30 @@ import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 
 export const dynamic = "force-dynamic";
 
-// Inventory 2a — new purchase order. Pick an active supplier; lines are
-// added on the detail page after creation. OWNER-only, garage-scoped.
+// Inventory 2a — new PO shell. Pick an active supplier; lines are added
+// on the detail page after creation. OWNER-only, garage-scoped.
+//
+// Two-mode (2026-08-02): the page reads `?mode=quote|order` and shapes
+// title, hint, submit label, and hidden `mode` form input. Both modes
+// write the same DRAFT PO row — the mode only carries through as a
+// query param to the detail page so the add-line cost input can be
+// `required` on order mode and optional on quote mode. Server-side the
+// create action is agnostic (Layer 0 accepts null unitCost).
 export default async function NewPurchaseOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; mode?: string }>;
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
-  const { error } = await searchParams;
+  const { error, mode: rawMode } = await searchParams;
+  // Whitelist the mode — anything else defaults to `quote` (the safer
+  // shape: cost optional, no committing language). Prevents an
+  // unfamiliar query string from silently steering the UI.
+  const mode: "quote" | "order" = rawMode === "order" ? "order" : "quote";
+  const title = mode === "order" ? t("newPurchaseOrder") : t("newQuotation");
+  const hint = mode === "order" ? t("newPurchaseOrderHint") : t("newQuotationHint");
+  const submitLabel = mode === "order" ? t("createPurchaseOrder") : t("createQuotation");
 
   const suppliers = await prisma.supplier.findMany({
     where: { garageId: session.user.garageId, active: true },
@@ -37,7 +51,8 @@ export default async function NewPurchaseOrderPage({
           >
             {t("backToPurchasing")}
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("newPurchaseOrder")}</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
         </div>
 
         {error ? (
@@ -57,6 +72,11 @@ export default async function NewPurchaseOrderPage({
         ) : (
           <form id="new-po-form" action={createPurchaseOrderAction} className="space-y-4 rounded-xl border border-border p-4">
             <UnsavedChangesGuard formId="new-po-form" />
+            {/* Mode passthrough — the server action reads this to
+                redirect to the detail page with ?mode= so the add-line
+                cost input can render as required (order) or optional
+                (quote). No server-side write difference. */}
+            <input type="hidden" name="mode" value={mode} />
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poSupplier")}</span>
               <select
@@ -83,7 +103,7 @@ export default async function NewPurchaseOrderPage({
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poNote")}</span>
               <input name="note" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
             </label>
-            <Button type="submit">{t("createDraftPo")}</Button>
+            <Button type="submit">{submitLabel}</Button>
           </form>
         )}
       </main>

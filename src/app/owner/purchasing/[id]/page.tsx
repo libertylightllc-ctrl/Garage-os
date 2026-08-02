@@ -39,13 +39,19 @@ export default async function PurchaseOrderDetailPage({
     error?: string;
     emailOk?: string;
     emailError?: string;
+    mode?: string;
   }>;
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
   const locale = await getLocale();
   const { id } = await params;
-  const { error, emailOk, emailError } = await searchParams;
+  const { error, emailOk, emailError, mode: rawMode } = await searchParams;
+  // Two-mode passthrough (2026-08-02). The create action redirects here
+  // with ?mode=quote|order. On order mode the add-line cost input renders
+  // `required` and shows a hint. Whitelist to avoid an arbitrary query
+  // string silently changing behavior.
+  const orderMode = rawMode === "order";
   const garage = await prisma.garage.findUnique({
     where: { id: session.user.garageId },
     select: { name: true, trn: true, country: true, logoUrl: true },
@@ -718,9 +724,26 @@ export default async function PurchaseOrderDetailPage({
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poUnitCost")}</span>
-                {/* No `required` — blank = awaiting a supplier quote
-                    (Layer 0). See parseMoney. */}
-                <input name="unitCost" type="number" step="0.01" min="0" placeholder="—" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
+                {/* Layer 0 rule: blank = awaiting a supplier quote.
+                    Two-mode (2026-08-02) sets `required` on order mode
+                    only — the browser blocks empty submits so a
+                    "purchase order" doesn't accidentally land with a
+                    line the shop hasn't priced. Quote mode stays
+                    optional. Server accepts either via parseMoney. */}
+                <input
+                  name="unitCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="—"
+                  required={orderMode}
+                  className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                />
+                {orderMode ? (
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("orderModeCostRequired")}
+                  </span>
+                ) : null}
               </label>
               <div className="col-span-2 flex items-end sm:col-span-4">
                 <Button type="submit">{t("addPoLine")}</Button>

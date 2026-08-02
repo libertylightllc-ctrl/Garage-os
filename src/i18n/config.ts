@@ -220,6 +220,23 @@ const en = {
   printTotalsLabel: "Totals",
   purchasingSubtitle: "Purchase orders to your suppliers.",
   newPurchaseOrder: "New purchase order",
+  newQuotation: "New quotation",
+  // Copy for the two-mode purchasing entry. Both buttons land on the
+  // same shell form (/owner/purchasing/new?mode=…) then flow into the
+  // detail page. Server behavior is identical — both create a DRAFT
+  // PO — but the UX asks different things:
+  //   quote  — cost blank is fine; we're asking the supplier
+  //   order  — cost required; we're placing an order from a known price
+  // Landing on DRAFT (per AR's rule 2026-08-02): the user reviews +
+  // clicks Mark Ordered themselves. No auto-stamp, so a typo doesn't
+  // force cancel-and-restart on a document that hasn't been sent.
+  newQuotationHint: "Ask a supplier to price parts we haven't quoted yet.",
+  newPurchaseOrderHint:
+    "Place an order at prices you already have — for a regular supplier on a known price list.",
+  createQuotation: "Create quotation",
+  createPurchaseOrder: "Create purchase order",
+  orderModeCostRequired:
+    "This is a purchase order — enter the price from your supplier's list.",
   purchasingOpen: "Open",
   purchasingClosed: "Closed",
   noPurchaseOrders: "No purchase orders yet.",
@@ -1564,6 +1581,13 @@ const ar: typeof en = {
   printTotalsLabel: "الإجماليات",
   purchasingSubtitle: "أوامر الشراء إلى مورديك.",
   newPurchaseOrder: "أمر شراء جديد",
+  newQuotation: "طلب عرض سعر جديد",
+  newQuotationHint: "اطلب من المورد تسعير قطع لم نحصل على عرض لها بعد.",
+  newPurchaseOrderHint:
+    "أنشئ أمر شراء بأسعار معروفة مسبقًا — لمورد ثابت لديك قائمة أسعاره.",
+  createQuotation: "إنشاء طلب عرض سعر",
+  createPurchaseOrder: "إنشاء أمر شراء",
+  orderModeCostRequired: "هذا أمر شراء — أدخل السعر من قائمة أسعار المورد.",
   purchasingOpen: "مفتوحة",
   purchasingClosed: "مغلقة",
   noPurchaseOrders: "لا توجد أوامر شراء بعد.",

@@ -81,18 +81,32 @@ function parsePositiveInt(raw: string): number | null {
 /**
  * Create a DRAFT purchase order for a supplier. Lines are added on the
  * detail page. The supplier must be active and in the caller's garage.
+ *
+ * Two-mode (2026-08-02): the form carries a `mode` field ("quote" |
+ * "order"). Server behavior is identical — both write a DRAFT — but
+ * mode carries through to the detail-page redirect so the add-line
+ * cost input can render `required` on order mode and optional on quote
+ * mode. The redirect anchors to `#add-line` so a mode=order caller
+ * lands with the line-entry form on-screen instead of scrolling to the
+ * top of an empty document. AR's rule stays intact: Mark Ordered is
+ * the ONLY thing that turns a quotation into a purchase order — the
+ * user reviews the DRAFT and clicks it themselves.
  */
 export async function createPurchaseOrderAction(formData: FormData) {
   const user = await requireOperational();
 
   const supplierId = String(formData.get("supplierId") ?? "").trim();
-  if (!supplierId) fail("Choose a supplier.", "/owner/purchasing/new");
+  const rawMode = String(formData.get("mode") ?? "").trim();
+  // Whitelist — quote is the safer default (cost optional).
+  const mode: "quote" | "order" = rawMode === "order" ? "order" : "quote";
+  const backTo = `/owner/purchasing/new?mode=${mode}`;
+  if (!supplierId) fail("Choose a supplier.", backTo);
 
   const supplier = await prisma.supplier.findFirst({
     where: { id: supplierId, garageId: user.garageId, active: true },
     select: { id: true },
   });
-  if (!supplier) fail("Supplier not found.", "/owner/purchasing/new");
+  if (!supplier) fail("Supplier not found.", backTo);
 
   const po = await prisma.purchaseOrder.create({
     data: {
@@ -105,7 +119,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
   });
 
   revalidatePath("/owner/purchasing");
-  redirect(`/owner/purchasing/${po.id}`);
+  redirect(`/owner/purchasing/${po.id}?mode=${mode}`);
 }
 
 /** Load a PO scoped to the caller's garage, or fail. */

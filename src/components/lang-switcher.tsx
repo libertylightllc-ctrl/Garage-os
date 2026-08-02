@@ -68,8 +68,12 @@ export function LangSwitcher({
         </>
     );
     if (inline) {
+        // inline-flex (not flex) so the pill hugs its two-button content
+        // and doesn't stretch to fill the parent block. `flex` would
+        // behave as a block-level element and expand to the sidebar's
+        // 220px width, opening a wide gap between EN and ع.
         return (
-            <div className="flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur print:hidden">
+            <div className="inline-flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur print:hidden">
                 {inner}
             </div>
         );

@@ -120,30 +120,58 @@ async function draftPO(garageId: string) {
 }
 
 describe("addPoLineAction", { retry: 3 }, () => {
-  it("adds a line with the caller's own part", async () => {
+  it("adds a line with the caller's own part (datalist match → linked)", async () => {
+    // Layer 1 (2026-08-02): the form field is `lineText`, not `partId`.
+    // The action does a case-insensitive exact-match against Part.name
+    // in the caller's own garage. A typed name that matches an existing
+    // Part in gA links the PO line to that Part.
     const po = await draftPO(gA);
-    const p = await part(gA, "A1");
+    const p = await part(gA, "A1"); // Part.name is "P A1"
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(addPoLineAction, form({ poId: po.id, partId: p.id, qty: "4", unitCost: "7.50" }));
+    await call(addPoLineAction, form({ poId: po.id, lineText: p.name, qty: "4", unitCost: "7.50" }));
     const lines = await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } });
     expect(lines.length).toBe(1);
     expect(lines[0].qty).toBe(4);
     expect(Number(lines[0].unitCost)).toBe(7.5);
+    // Match linked to the caller's own Part — NOT a free-text write.
+    expect(lines[0].partId).toBe(p.id);
+    expect(lines[0].description).toBe(p.name);
   });
 
-  it("refuses a part from another garage", async () => {
+  it("typing garage B's part name from garage A → free-text line, NEVER a cross-tenant link", async () => {
+    // Cross-garage guard, reshaped for Layer 1. Under the old form
+    // contract this test asserted "cannot smuggle another garage's
+    // partId into the write". That vector no longer exists — there's
+    // no partId field. The new attack surface is name collision: an
+    // owner in gA types the exact name of a Part that only exists in
+    // gB. The garage-scoped findFirst in addPoLineAction returns null
+    // for gA's search (Part.name lives in gB, not gA), and the write
+    // falls into the FREE-TEXT branch with partId null. The typed text
+    // is preserved as the line's description; nothing links across
+    // tenants.
     const po = await draftPO(gA);
-    const pB = await part(gB, "B1");
+    const pB = await part(gB, "B1"); // Part.name is "P B1", scoped to gB
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(addPoLineAction, form({ poId: po.id, partId: pB.id, qty: "1", unitCost: "1" }));
-    expect((await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } })).length).toBe(0);
+    await call(addPoLineAction, form({ poId: po.id, lineText: pB.name, qty: "1", unitCost: "1" }));
+    const lines = await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } });
+    expect(lines.length).toBe(1); // free-text write is legitimate
+    expect(lines[0].partId).toBeNull(); // NEVER linked to gB's Part
+    expect(lines[0].description).toBe(pB.name); // typed text preserved
+    // Belt-and-braces: gB's Part row is untouched by the write from gA.
+    const pBStill = await prisma.part.findUnique({ where: { id: pB.id } });
+    expect(pBStill?.garageId).toBe(gB);
   });
 
   it("cannot add a line to another garage's PO", async () => {
+    // PO ownership scoping is unchanged: `ownedPO(poId, user.garageId)`
+    // still rejects a poId from another garage regardless of what the
+    // line text says. Send gA's own part name to keep the lookup
+    // successful — the block must come from PO ownership, not the
+    // lineText lookup.
     const poB = await draftPO(gB);
     const pA = await part(gA, "A2");
     mockAuth.mockResolvedValueOnce(owner(gA));
-    await call(addPoLineAction, form({ poId: poB.id, partId: pA.id, qty: "1", unitCost: "1" }));
+    await call(addPoLineAction, form({ poId: poB.id, lineText: pA.name, qty: "1", unitCost: "1" }));
     expect((await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: poB.id } })).length).toBe(0);
   });
 
@@ -151,7 +179,7 @@ describe("addPoLineAction", { retry: 3 }, () => {
     const po = await draftPO(gA);
     const p = await part(gA, "A3");
     mockAuth.mockResolvedValueOnce(owner(gA));
-    const to = await call(addPoLineAction, form({ poId: po.id, partId: p.id, qty: "0", unitCost: "1" }));
+    const to = await call(addPoLineAction, form({ poId: po.id, lineText: p.name, qty: "0", unitCost: "1" }));
     expect(to).toContain("error=");
     expect((await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id } })).length).toBe(0);
   });

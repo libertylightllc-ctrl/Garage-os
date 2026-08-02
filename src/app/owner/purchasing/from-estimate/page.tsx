@@ -375,9 +375,19 @@ export default async function ConvertFromEstimatePage({
                                             1,
                                             Math.ceil(Number(l.qty)),
                                         );
-                                        const costPrefill = l.part
-                                            ? Number(l.part.cost).toFixed(2)
-                                            : "0.00";
+                                        // Prefill ONLY when the catalogue Part has a
+                                        // genuine non-zero cost. A Part with cost=0
+                                        // means "the shop doesn't know it yet" — the
+                                        // old "0.00" default silently told the
+                                        // supplier the price was zero, which is a
+                                        // lie. Blank leaves it as awaiting-quote
+                                        // (Layer 0: parseMoney reads blank as
+                                        // { ok:true, value:null }, the line writes
+                                        // unitCost NULL, and every downstream
+                                        // surface renders "quote please").
+                                        const partCost = l.part ? Number(l.part.cost) : 0;
+                                        const costPrefill =
+                                            partCost > 0 ? partCost.toFixed(2) : "";
                                         return (
                                             <label
                                                 key={l.id}
@@ -410,14 +420,21 @@ export default async function ConvertFromEstimatePage({
                                                     aria-label={t("colQty")}
                                                     className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                                                 />
+                                                {/* No `required` — a blank input
+                                                    is now a real intent (awaiting
+                                                    quote). The server accepts null
+                                                    from parseMoney's ok-branch and
+                                                    canMarkOrdered blocks committing
+                                                    the PO until every line is
+                                                    priced. */}
                                                 <input
                                                     type="number"
                                                     name={`cost_${l.id}`}
                                                     min="0"
                                                     step="0.01"
-                                                    required
                                                     defaultValue={costPrefill}
                                                     aria-label={t("poUnitCost")}
+                                                    placeholder="—"
                                                     className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                                                 />
                                             </label>
@@ -512,41 +529,13 @@ export default async function ConvertFromEstimatePage({
                             </form>
                         )}
 
-                        {/* Free-text estimate lines (no linked Part) — READ-
-                            ONLY notice. Removed 2026-07-31: the "Add these
-                            to inventory" panel used to mint catalog Parts
-                            from this screen (writing Part rows with
-                            qtyOnHand:0 + cost:0 + a SKU auto-bumped to
-                            OIL-FILTER-2 when it collided). A quotation / PO
-                            must not change the inventory catalogue — the
-                            owner creates the Part in /owner/inventory first,
-                            then re-visits the estimate to link the line, then
-                            converts. Free-text lines still surface here so
-                            the owner sees what didn't make the PO. */}
-                        {filtered.skippedNoPartId.length > 0 ? (
-                            <div className="rounded-lg border border-warning-500/40 bg-warning-50 p-4 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide">
-                                    {t("skippedFreeTextHeader").replace(
-                                        "{count}",
-                                        String(filtered.skippedNoPartId.length),
-                                    )}
-                                </p>
-                                <p className="mb-2 text-xs">
-                                    {t("skippedFreeTextHint")}
-                                </p>
-                                <ul className="ms-4 list-disc space-y-0.5">
-                                    {filtered.skippedNoPartId.map((l) => (
-                                        <li key={l.id}>{l.description}</li>
-                                    ))}
-                                </ul>
-                                <Link
-                                    href="/owner/inventory"
-                                    className="mt-3 inline-block text-xs font-medium underline"
-                                >
-                                    {t("goToInventory")}
-                                </Link>
-                            </div>
-                        ) : null}
+                        {/* Layer 1 (2026-08-02): free-text estimate lines
+                            (partId null) now flow onto the PO as
+                            description-only rows. The "not in your
+                            catalogue" split has been removed — every
+                            non-declined PART line is convertible. See
+                            filterConvertibleLines + the PO/RFQ reshape
+                            in src/lib/estimate-to-po.ts. */}
                     </>
                 ) : null}
             </main>

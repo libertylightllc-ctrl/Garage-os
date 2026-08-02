@@ -317,9 +317,14 @@ const en = {
   lineUnpricedTag: "quote please",
   approxTotal: "Approx. total",
   addPoLine: "Add line",
+  addPoLinePlaceholder: "Part name, or type free text",
+  addPoLineHint:
+    "Pick from your catalogue, or type free text for a part you don't stock.",
   noPoLines: "No lines yet. Add a part above.",
   noPartsForPo: "Add a part to your catalog first, in",
   markOrdered: "Mark as ordered",
+  markOrderedNeedsPricesReason:
+    "Every line needs a supplier price before you can order. A blank price means the quote hasn't landed yet; 0 is fine for a warranty or courtesy replacement.",
   cancelPo: "Cancel order",
   poReceivingSoon: "Receiving into stock arrives next.",
   // 2b partial receiving
@@ -1645,9 +1650,14 @@ const ar: typeof en = {
   lineUnpricedTag: "برجاء إفادتنا بالسعر",
   approxTotal: "إجمالي تقريبي",
   addPoLine: "إضافة بند",
+  addPoLinePlaceholder: "اسم القطعة، أو اكتب وصفًا حرًا",
+  addPoLineHint:
+    "اختر من الكتالوج، أو اكتب وصفًا حرًا لقطعة غير موجودة في المخزون.",
   noPoLines: "لا توجد بنود بعد. أضف قطعة أعلاه.",
   noPartsForPo: "أضف قطعة إلى الكتالوج أولًا في",
   markOrdered: "تحديد كمطلوب",
+  markOrderedNeedsPricesReason:
+    "يجب إدخال سعر المورد لكل بند قبل الطلب. الحقل الفارغ يعني أن العرض لم يصل بعد؛ السعر صفر مقبول للبنود ضمن الضمان أو المجاملة.",
   cancelPo: "إلغاء الأمر",
   poReceivingSoon: "استلام المخزون قادم لاحقًا.",
   // 2b الاستلام الجزئي

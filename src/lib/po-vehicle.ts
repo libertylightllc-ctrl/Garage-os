@@ -49,6 +49,11 @@ export interface ResolverPoLine {
     vehicleEngineSize?: string | null;
     vehicleFuelType?: string | null;
     vehicleJobNumber?: number | null;
+    // Layer 0 (2026-08-01) made PurchaseOrderLine.partId nullable so a
+    // free-text RFQ line can exist before we have a catalog part to
+    // link against. `part` is null for those lines; the auto-created
+    // chain is unavailable, and the resolver falls back to the snapshot
+    // columns above (or, for lines with neither, yields null).
     part: {
         autoCreatedFromLine: {
             estimate: {
@@ -67,7 +72,7 @@ export interface ResolverPoLine {
                 };
             };
         } | null;
-    };
+    } | null;
 }
 
 export interface ResolvedPoVehicles {
@@ -105,7 +110,7 @@ export function resolvePoVehicles(lines: readonly ResolverPoLine[]): ResolvedPoV
                 jobNumber: l.vehicleJobNumber,
             };
         } else {
-            const jc = l.part.autoCreatedFromLine?.estimate.jobCard;
+            const jc = l.part?.autoCreatedFromLine?.estimate.jobCard;
             if (jc && jc.number != null) {
                 const v = jc.vehicle;
                 ctx = {

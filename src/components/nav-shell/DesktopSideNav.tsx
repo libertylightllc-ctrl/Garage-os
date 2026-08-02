@@ -55,24 +55,26 @@ export async function DesktopSideNav({
             // render the desktop shell. Screen-only navigation.
             className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-border bg-surface md:flex print:hidden"
         >
-            {/* Brand block. Language toggle sits in the same row as the
-                role label so the EN/ع buttons have their own place in
-                the app's top-bar area and never float over page content
-                (the root-layout fixed instance is hidden by
-                globals.css when this shell is present in the DOM). */}
-            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
-                <div className="flex min-w-0 items-center gap-2">
+            {/* Brand block. Two rows so long role labels ("Service
+                Advisor", the Arabic labels) render in full: identity
+                row on top (logo + Garage Os wordmark + role label),
+                language toggle on its own row below. Never truncates
+                the role label to make room for the toggle. */}
+            <div className="border-b border-border px-4 py-3">
+                <div className="flex items-center gap-2">
                     <GarageBrand size="mark" logoUrl={logoUrl} />
                     <div className="flex min-w-0 flex-col leading-tight">
                         {logoUrl ? null : (
-                            <span className="truncate text-[13px] font-semibold tracking-tight">
+                            <span className="text-[13px] font-semibold tracking-tight">
                                 Garage Os
                             </span>
                         )}
-                        <span className="truncate text-[11px] text-text-mute">{roleLabel}</span>
+                        <span className="text-[11px] text-text-mute">{roleLabel}</span>
                     </div>
                 </div>
-                <LangSwitcher locale={locale} inline />
+                <div className="mt-2">
+                    <LangSwitcher locale={locale} inline />
+                </div>
             </div>
 
             {/* Nav items — scrollable if long */}

@@ -22,19 +22,23 @@ export async function MobileTopStrip({
     return (
         // print:hidden — defensive against printable pages that render
         // the mobile shell. Screen-only navigation strip.
-        <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b border-border bg-surface/80 px-4 backdrop-blur md:hidden print:hidden">
-            <div className="flex min-w-0 items-center gap-2">
+        //
+        // Layout: flex-wrap so a long role label ("Service Advisor",
+        // Arabic labels) never crowds the language toggle off-screen.
+        // On a narrow viewport the toggle wraps to a second row and
+        // the strip grows via min-h instead of h. Role label never
+        // truncates.
+        <header className="sticky top-0 z-30 flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-surface/80 px-4 py-1.5 backdrop-blur md:hidden print:hidden">
+            <div className="flex items-center gap-2">
                 <GarageBrand size="mark" logoUrl={logoUrl} />
                 {logoUrl ? null : (
-                    <span className="truncate text-[13px] font-semibold tracking-tight">
+                    <span className="text-[13px] font-semibold tracking-tight">
                         Garage Os
                     </span>
                 )}
+                <span className="text-[12px] font-normal text-text-mute">· {roleLabel}</span>
             </div>
-            <div className="flex items-center gap-2">
-                <span className="truncate text-[12px] font-normal text-text-mute">{roleLabel}</span>
-                <LangSwitcher locale={locale} inline />
-            </div>
+            <LangSwitcher locale={locale} inline />
         </header>
     );
 }

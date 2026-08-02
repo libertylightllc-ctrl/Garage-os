@@ -2,8 +2,28 @@
 
 import { useRouter } from "next/navigation";
 
-// Sets a `lang` cookie and re-renders server components (preserves the current path).
-export function LangSwitcher({ locale }: { locale: string }) {
+/**
+ * EN/ع language toggle.
+ *
+ * Two modes:
+ *   - default (`inline` unset / false) — `fixed end-3 top-3` for non-
+ *     staff pages that have no top-bar shell (login, customer / public /
+ *     home routes). Data attribute `data-lang-switcher-fixed` marks it
+ *     so CSS in globals.css can hide it when a staff shell IS present.
+ *   - `inline` — renders as a normal inline flex block, no positioning.
+ *     Used INSIDE the staff shell (DesktopSideNav brand block +
+ *     MobileTopStrip) so the toggle has a proper place in the app's
+ *     top bar and never floats over page content.
+ *
+ * Toggle cookie handling is unchanged either way.
+ */
+export function LangSwitcher({
+    locale,
+    inline = false,
+}: {
+    locale: string;
+    inline?: boolean;
+}) {
     const router = useRouter();
     function set(l: string) {
         // Cookie scope: parent-domain on prod so the cookie survives
@@ -31,19 +51,35 @@ export function LangSwitcher({ locale }: { locale: string }) {
     const base = "px-2 py-0.5 text-xs rounded";
     const on = "bg-brand-900 text-white dark:bg-white dark:text-brand-900";
     const off = "text-text-mute";
-    return (
-        // print:hidden — the switcher lives in the root layout and paints
-        // on every printed page (over the header on page 1, floating as a
-        // grey pill on overflow pages). It's a screen-only affordance.
-        // Root-layout floaters must always be print-scoped so a printable
-        // page never has to fight the shell for the paper.
-        <div className="fixed end-3 top-3 z-50 flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur print:hidden">
+    // Common visual — used by both fixed and inline shapes. The
+    // `data-lang-switcher-fixed` attribute lets globals.css hide the
+    // root-layout fixed instance when a staff shell (which renders its
+    // own inline instance in the top bar) is present in the DOM.
+    // print:hidden — the switcher paints over headers on printed pages;
+    // always scope to screen-only.
+    const inner = (
+        <>
             <button onClick={() => set("en")} className={`${base} ${locale === "en" ? on : off}`}>
                 EN
             </button>
             <button onClick={() => set("ar")} className={`${base} ${locale === "ar" ? on : off}`}>
                 ع
             </button>
+        </>
+    );
+    if (inline) {
+        return (
+            <div className="flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur print:hidden">
+                {inner}
+            </div>
+        );
+    }
+    return (
+        <div
+            data-lang-switcher-fixed="1"
+            className="fixed end-3 top-3 z-50 flex gap-1 rounded-full border border-border bg-surface/80 p-0.5 backdrop-blur print:hidden"
+        >
+            {inner}
         </div>
     );
 }

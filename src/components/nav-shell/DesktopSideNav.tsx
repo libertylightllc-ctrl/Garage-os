@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { Settings as SettingsIcon, LogOut } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
 import { GarageBrand } from "@/components/garage-brand";
+import { LangSwitcher } from "@/components/lang-switcher";
+import { getLocale } from "@/i18n/server";
 
 export interface SideNavItem {
     key: string;
@@ -23,7 +25,7 @@ export interface SideNavItem {
  * Pages that use AppShell must add left padding on md+ so their
  * content doesn't sit under this nav (see AppShell).
  */
-export function DesktopSideNav({
+export async function DesktopSideNav({
     logoUrl,
     roleLabel,
     settingsLabel,
@@ -38,6 +40,7 @@ export function DesktopSideNav({
     items: SideNavItem[];
     activeKey?: string;
 }) {
+    const locale = await getLocale();
     return (
         <aside
             aria-label="Primary"
@@ -52,17 +55,24 @@ export function DesktopSideNav({
             // render the desktop shell. Screen-only navigation.
             className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-border bg-surface md:flex print:hidden"
         >
-            {/* Brand block */}
-            <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-                <GarageBrand size="mark" logoUrl={logoUrl} />
-                <div className="flex flex-col leading-tight">
-                    {logoUrl ? null : (
-                        <span className="text-[13px] font-semibold tracking-tight">
-                            Garage Os
-                        </span>
-                    )}
-                    <span className="text-[11px] text-text-mute">{roleLabel}</span>
+            {/* Brand block. Language toggle sits in the same row as the
+                role label so the EN/ع buttons have their own place in
+                the app's top-bar area and never float over page content
+                (the root-layout fixed instance is hidden by
+                globals.css when this shell is present in the DOM). */}
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
+                <div className="flex min-w-0 items-center gap-2">
+                    <GarageBrand size="mark" logoUrl={logoUrl} />
+                    <div className="flex min-w-0 flex-col leading-tight">
+                        {logoUrl ? null : (
+                            <span className="truncate text-[13px] font-semibold tracking-tight">
+                                Garage Os
+                            </span>
+                        )}
+                        <span className="truncate text-[11px] text-text-mute">{roleLabel}</span>
+                    </div>
                 </div>
+                <LangSwitcher locale={locale} inline />
             </div>
 
             {/* Nav items — scrollable if long */}

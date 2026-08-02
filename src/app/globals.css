@@ -177,3 +177,18 @@ html, body { overflow-x: hidden; }
 body:has([data-mobile-tab-bar]) {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
 }
+
+/* LangSwitcher — when the staff shell is present in the DOM (desktop
+   side nav or mobile top strip), hide the root-layout fixed instance
+   so the toggle doesn't float over page headers. The shell renders
+   its own INLINE LangSwitcher in the top bar, right next to the role
+   label. Non-staff pages (login, customer /c/*, public booking, home)
+   have no shell marker and therefore keep the fixed floater — those
+   layouts don't have top-right page content that the toggle would
+   overlap.
+
+   Uses data-app-shell as the "any shell rendered" tell — the desktop
+   side nav sets it, and any page rendering the shell renders both
+   (MobileTopStrip on mobile, DesktopSideNav on desktop), so a single
+   marker covers both. */
+body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }

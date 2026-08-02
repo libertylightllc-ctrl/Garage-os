@@ -237,6 +237,16 @@ export default async function PurchaseOrderDetailPage({
             disabledReason={waDisabled ? t("supplierNoPhoneReason") : undefined}
           />
         </div>
+        {/* Visible reason when Send-via-WhatsApp is disabled — the
+            component sets the tooltip via `title=`, but a tooltip is
+            invisible on touch and non-obvious on desktop. The button
+            appeared silently dead until this caption landed. Mirrors
+            the Mark Ordered disabled-reason pattern below. */}
+        {waDisabled ? (
+          <p className="text-xs text-muted-foreground print:hidden">
+            {t("supplierNoPhoneReason")}
+          </p>
+        ) : null}
 
         {/* Email send outcome banners. The failure code comes from
             the action as a small enum — never as the provider's own
@@ -480,13 +490,22 @@ export default async function PurchaseOrderDetailPage({
                     ) : null}
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {isDraft ? (
+                        // Blank = awaiting quote (Layer 0). If the row's
+                        // stored unitCost is null, render an empty input,
+                        // NOT `Number(null).toFixed(2)` = "0.00" — a
+                        // supplier reading a printed draft would read
+                        // 0.00 as a quoted price of zero. `required` is
+                        // dropped for the same reason: the server side
+                        // accepts null via parseMoney's { ok:true,
+                        // value: null } branch, so the browser must not
+                        // block re-saving a legitimately-blank row.
                         <input
                           type="number"
                           name="unitCost"
                           min="0"
                           step="0.01"
-                          required
-                          defaultValue={Number(l.unitCost).toFixed(2)}
+                          defaultValue={isLineUnpriced(l) ? "" : Number(l.unitCost).toFixed(2)}
+                          placeholder="—"
                           form={editFormId}
                           aria-label={t("poUnitCost")}
                           className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"

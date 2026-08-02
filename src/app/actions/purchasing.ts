@@ -181,9 +181,17 @@ export async function addPoLineAction(formData: FormData) {
   // the exact case of the Part.name. `equals + mode:"insensitive"` is
   // an indexable predicate on Postgres; no full-scan risk.
   //
-  // The vehicle-chain include is pulled only on the match — a free-text
-  // line has no chain to snapshot from and the line ships with every
-  // snapshot column null.
+  // Vehicle snapshot (2026-08-02 — AR bug): a manually-added line
+  // NEVER inherits a vehicle from the matched Part's original estimate
+  // chain. The Layer 1 rewrite briefly read
+  // `Part.autoCreatedFromLine.estimate.jobCard.vehicle` here and
+  // snapshotted whatever car the Part was born from — silently
+  // attaching e.g. FORD FOCUS 2014 / JC-79 to a line the owner typed
+  // into a standalone PO with no source job. A supplier could then be
+  // sent a part for the wrong car. The chain is out — manual lines
+  // ship with every vehicle-snapshot column null and the surfaces
+  // render "(no vehicle linked)" until the doc-level default lands
+  // (follow-up: add-vehicle-entry-on-standalone-po).
   const match = await prisma.part.findFirst({
     where: {
       garageId: user.garageId,
@@ -192,41 +200,8 @@ export async function addPoLineAction(formData: FormData) {
     select: {
       id: true,
       name: true,
-      autoCreatedFromLine: {
-        select: {
-          estimate: {
-            select: {
-              jobCard: {
-                select: {
-                  number: true,
-                  vehicle: {
-                    select: {
-                      id: true,
-                      make: true,
-                      model: true,
-                      year: true,
-                      plate: true,
-                      vin: true,
-                      engineSize: true,
-                      fuelType: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
     },
   });
-
-  // Snapshot the vehicle context — written once at line creation and
-  // never refreshed from Vehicle afterwards. See the PurchaseOrderLine
-  // model comment in prisma/schema.prisma for the lifecycle rule.
-  const jc = match?.autoCreatedFromLine?.estimate.jobCard ?? null;
-  const vehicleSnapshot = buildPoLineVehicleSnapshot(
-    jc ? { jobNumber: jc.number, vehicle: jc.vehicle } : null,
-  );
 
   await prisma.purchaseOrderLine.create({
     data: {
@@ -241,7 +216,6 @@ export async function addPoLineAction(formData: FormData) {
       description: match?.name ?? lineText,
       qty,
       unitCost,
-      ...vehicleSnapshot,
     },
   });
 

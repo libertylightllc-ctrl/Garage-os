@@ -40,6 +40,24 @@ export default async function NewPurchaseOrderPage({
     select: { id: true, name: true },
   });
 
+  // Garage vehicles for the plate datalist. The supplier facing side
+  // of the doc needs to know which car — the widget lets the owner
+  // pick a car already in the garage (auto-fills the free-text
+  // fields client-side is nice-to-have; not built here — the server
+  // exact-matches plate and snapshots the full row when it lands).
+  const vehicles = await prisma.vehicle.findMany({
+    where: { customer: { garageId: session.user.garageId } },
+    orderBy: [{ make: "asc" }, { model: "asc" }],
+    select: {
+      id: true,
+      plate: true,
+      make: true,
+      model: true,
+      year: true,
+    },
+    take: 500,
+  });
+
   return (
     <div>
       <AppNav role="OWNER" active="purchasing" />
@@ -99,6 +117,90 @@ export default async function NewPurchaseOrderPage({
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poReference")}</span>
               <input name="reference" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />
             </label>
+
+            {/* Document-level default vehicle (2026-08-02). Two ways to
+                set it: pick an existing garage vehicle by plate
+                (server exact-matches and snapshots the full row) OR
+                type make/model/year/engine/VIN for a car that isn't in
+                the system. Every field is optional individually — an
+                advisor asking a supplier to quote often has only make
+                and model. The values pre-fill each new line's own
+                snapshot at Add-line write time (copied on write, never
+                referenced live). */}
+            <fieldset className="flex flex-col gap-3 rounded-lg border border-border/60 bg-surface-2/40 p-3">
+              <legend className="px-1 text-xs uppercase tracking-wide text-muted-foreground">
+                {t("poDefaultVehicleLegend")}
+              </legend>
+              <p className="text-[11px] text-muted-foreground">
+                {t("poDefaultVehicleHint")}
+              </p>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">{t("vehiclePlateLabel")}</span>
+                <input
+                  name="vehicle_plate"
+                  type="text"
+                  list="new-po-vehicle-plates"
+                  autoComplete="off"
+                  placeholder={t("vehiclePlatePlaceholder")}
+                  className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                />
+                <datalist id="new-po-vehicle-plates">
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.plate}>
+                      {v.make} {v.model}
+                      {v.year ? ` (${v.year})` : ""}
+                    </option>
+                  ))}
+                </datalist>
+              </label>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehicleMakeLabel")}</span>
+                  <input
+                    name="vehicle_make"
+                    type="text"
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehicleModelLabel")}</span>
+                  <input
+                    name="vehicle_model"
+                    type="text"
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehicleYearLabel")}</span>
+                  <input
+                    name="vehicle_year"
+                    type="number"
+                    inputMode="numeric"
+                    min="1900"
+                    max="2100"
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehicleEngineLabel")}</span>
+                  <input
+                    name="vehicle_engineSize"
+                    type="text"
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">{t("vehicleVinLabel")}</span>
+                <input
+                  name="vehicle_vin"
+                  type="text"
+                  maxLength={17}
+                  className="rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono"
+                />
+              </label>
+            </fieldset>
+
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poNote")}</span>
               <input name="note" className="rounded-md border border-border bg-transparent px-3 py-2 text-sm" />

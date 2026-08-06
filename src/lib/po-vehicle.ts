@@ -188,6 +188,130 @@ export function buildPoLineVehicleSnapshot(
 }
 
 /**
+ * Standalone-PO vehicle snapshot input. Everything optional; the caller
+ * has ALREADY parsed the form (plate lookup on garage vehicles + fall-
+ * back to free-text). Unlike SnapshotSource / buildPoLineVehicleSnapshot,
+ * this does NOT require jobNumber — a standalone quotation / purchase
+ * order has no source job.
+ */
+export interface StandaloneVehicleInput {
+    vehicleId?: string | null;
+    make?: string | null;
+    model?: string | null;
+    year?: number | null;
+    plate?: string | null;
+    vin?: string | null;
+    engineSize?: string | null;
+    fuelType?: string | null;
+}
+
+/**
+ * True when at least one meaningful field is present. Used to decide
+ * whether to write anything to the doc-level default columns and
+ * whether a line inherits from the default at write time.
+ */
+export function hasAnyVehicleField(v: StandaloneVehicleInput): boolean {
+    return Boolean(
+        v.vehicleId ||
+        (v.make && v.make.trim()) ||
+        (v.model && v.model.trim()) ||
+        v.year != null ||
+        (v.plate && v.plate.trim()) ||
+        (v.vin && v.vin.trim()) ||
+        (v.engineSize && v.engineSize.trim()) ||
+        (v.fuelType && v.fuelType.trim()),
+    );
+}
+
+/**
+ * Build a snapshot object for spreading into a PurchaseOrder default*
+ * or PurchaseOrderLine vehicle* create. Omits any field that's null /
+ * empty — so an object literal spread never sets `vehicleYear:
+ * undefined` (which would create the own property with value
+ * undefined and confuse downstream nullability checks). Returns `{}`
+ * when the input has no meaningful data (caller should not spread /
+ * write in that case).
+ */
+export function buildStandaloneVehicleSnapshot(
+    v: StandaloneVehicleInput,
+): PoLineVehicleSnapshot {
+    if (!hasAnyVehicleField(v)) return {};
+    const snap: PoLineVehicleSnapshot = {};
+    if (v.vehicleId) snap.vehicleId = v.vehicleId;
+    if (v.make && v.make.trim()) snap.vehicleMake = v.make.trim();
+    if (v.model && v.model.trim()) snap.vehicleModel = v.model.trim();
+    if (v.year != null && Number.isFinite(v.year)) snap.vehicleYear = v.year;
+    if (v.plate && v.plate.trim()) snap.vehiclePlate = v.plate.trim();
+    if (v.vin && v.vin.trim()) snap.vehicleVin = v.vin.trim();
+    if (v.engineSize && v.engineSize.trim()) snap.vehicleEngineSize = v.engineSize.trim();
+    if (v.fuelType && v.fuelType.trim()) snap.vehicleFuelType = v.fuelType.trim();
+    return snap;
+}
+
+/**
+ * Same snapshot shape but for the PO doc-level default columns (they
+ * have the `default` prefix). Same suppress-empty rule.
+ */
+export interface PoDefaultVehicleSnapshot {
+    defaultVehicleId?: string;
+    defaultVehicleMake?: string;
+    defaultVehicleModel?: string;
+    defaultVehicleYear?: number;
+    defaultVehiclePlate?: string;
+    defaultVehicleVin?: string;
+    defaultVehicleEngineSize?: string;
+    defaultVehicleFuelType?: string;
+}
+
+export function buildPoDefaultVehicleSnapshot(
+    v: StandaloneVehicleInput,
+): PoDefaultVehicleSnapshot {
+    if (!hasAnyVehicleField(v)) return {};
+    const snap: PoDefaultVehicleSnapshot = {};
+    if (v.vehicleId) snap.defaultVehicleId = v.vehicleId;
+    if (v.make && v.make.trim()) snap.defaultVehicleMake = v.make.trim();
+    if (v.model && v.model.trim()) snap.defaultVehicleModel = v.model.trim();
+    if (v.year != null && Number.isFinite(v.year)) snap.defaultVehicleYear = v.year;
+    if (v.plate && v.plate.trim()) snap.defaultVehiclePlate = v.plate.trim();
+    if (v.vin && v.vin.trim()) snap.defaultVehicleVin = v.vin.trim();
+    if (v.engineSize && v.engineSize.trim())
+        snap.defaultVehicleEngineSize = v.engineSize.trim();
+    if (v.fuelType && v.fuelType.trim()) snap.defaultVehicleFuelType = v.fuelType.trim();
+    return snap;
+}
+
+/**
+ * Reshape a PO row's `default*` columns into a StandaloneVehicleInput
+ * so it can be fed to buildStandaloneVehicleSnapshot when a new line
+ * inherits from the doc-level default.
+ */
+export interface PoDefaultVehicleRow {
+    defaultVehicleId: string | null;
+    defaultVehicleMake: string | null;
+    defaultVehicleModel: string | null;
+    defaultVehicleYear: number | null;
+    defaultVehiclePlate: string | null;
+    defaultVehicleVin: string | null;
+    defaultVehicleEngineSize: string | null;
+    defaultVehicleFuelType: string | null;
+}
+
+export function poDefaultToStandalone(
+    p: PoDefaultVehicleRow,
+): StandaloneVehicleInput {
+    return {
+        vehicleId: p.defaultVehicleId,
+        make: p.defaultVehicleMake,
+        model: p.defaultVehicleModel,
+        year: p.defaultVehicleYear,
+        plate: p.defaultVehiclePlate,
+        vin: p.defaultVehicleVin,
+        engineSize: p.defaultVehicleEngineSize,
+        fuelType: p.defaultVehicleFuelType,
+    };
+}
+
+/**
  * Compact single-line label for a vehicle in list contexts (the
  * WhatsApp/email header, the multi-vehicle inline suffix). Order:
  * make model year, then plate, then engine variant if we have

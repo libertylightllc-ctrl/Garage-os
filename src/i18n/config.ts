@@ -338,6 +338,23 @@ const en = {
   addPoLinePlaceholder: "Part name, or type free text",
   addPoLineHint:
     "Pick from your catalogue, or type free text for a part you don't stock.",
+  // Doc-level default vehicle widget (2026-08-02) on New quotation +
+  // New purchase order, and per-line override on the detail page's
+  // Add line form.
+  poDefaultVehicleLegend: "For which vehicle?",
+  poDefaultVehicleHint:
+    "Pick a plate already in the garage, or type make and model for a car we haven't seen. All fields optional — an advisor asking a supplier to quote often has only make and model.",
+  vehiclePlateLabel: "Plate",
+  vehiclePlatePlaceholder: "e.g. A 12345",
+  vehicleMakeLabel: "Make",
+  vehicleModelLabel: "Model",
+  vehicleYearLabel: "Year",
+  vehicleEngineLabel: "Engine",
+  vehicleVinLabel: "VIN",
+  poAddLineVehicleFor: "For",
+  poAddLineVehicleChange: "Change",
+  poAddLineVehicleUseDefault: "Use document default",
+  poAddLineNoDefaultVehicle: "No document vehicle. Set one per line if needed.",
   noPoLines: "No lines yet. Add a part above.",
   noPartsForPo: "Add a part to your catalog first, in",
   markOrdered: "Mark as ordered",
@@ -1679,6 +1696,20 @@ const ar: typeof en = {
   addPoLinePlaceholder: "اسم القطعة، أو اكتب وصفًا حرًا",
   addPoLineHint:
     "اختر من الكتالوج، أو اكتب وصفًا حرًا لقطعة غير موجودة في المخزون.",
+  poDefaultVehicleLegend: "لأي مركبة؟",
+  poDefaultVehicleHint:
+    "اختر لوحة موجودة في المرآب، أو اكتب الصنع والموديل لسيارة غير مسجّلة. كل الحقول اختيارية — عادةً ما يعرف الاستشاري الصنع والموديل فقط عند طلب عرض السعر.",
+  vehiclePlateLabel: "اللوحة",
+  vehiclePlatePlaceholder: "مثال: A 12345",
+  vehicleMakeLabel: "الصنع",
+  vehicleModelLabel: "الموديل",
+  vehicleYearLabel: "السنة",
+  vehicleEngineLabel: "المحرك",
+  vehicleVinLabel: "رقم الهيكل",
+  poAddLineVehicleFor: "لـ",
+  poAddLineVehicleChange: "تغيير",
+  poAddLineVehicleUseDefault: "استخدم افتراضي المستند",
+  poAddLineNoDefaultVehicle: "لا توجد مركبة على المستند. أضف واحدة لكل بند عند الحاجة.",
   noPoLines: "لا توجد بنود بعد. أضف قطعة أعلاه.",
   noPartsForPo: "أضف قطعة إلى الكتالوج أولًا في",
   markOrdered: "تحديد كمطلوب",

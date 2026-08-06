@@ -848,6 +848,36 @@ model PurchaseOrder {
   orderedAt  DateTime? // when marked ORDERED (sent to supplier)
   receivedAt DateTime? // when stock was received (2b)
 
+  // Document-level default vehicle (2026-08-02). Snapshot columns —
+  // same shape as PurchaseOrderLine.vehicle*. Set on new-quotation /
+  // new-purchase-order create. Purpose: pre-fill the Add-line form on
+  // the detail page so the owner doesn't have to repick the car for
+  // every line, and to render a header caption when every line
+  // resolves to the same vehicle. Per-line snapshots on
+  // PurchaseOrderLine remain the sole source of truth for what the
+  // supplier saw; the defaults here are copied into each new line at
+  // write time, never referenced live at render.
+  //
+  // All nullable. An owner can skip vehicle entry entirely at
+  // creation time and set it per-line on Add. Fields not carried on
+  // the from-estimate path (the job's vehicle populates line
+  // snapshots directly).
+  //
+  // `defaultVehicleId` is an OPTIONAL soft link to a Vehicle row when
+  // the owner picked a car already in the garage. Kept for the
+  // "which car in your garage?" cross-reference on later reports; a
+  // Vehicle edit does NOT retroactively change the sent supplier
+  // document (that's what the frozen make/model/year/plate/vin/etc.
+  // columns are for). No @relation — snapshot lifecycle only.
+  defaultVehicleId         String?
+  defaultVehicleMake       String?
+  defaultVehicleModel      String?
+  defaultVehicleYear       Int?
+  defaultVehiclePlate      String?
+  defaultVehicleVin        String?
+  defaultVehicleEngineSize String?
+  defaultVehicleFuelType   String?
+
   lines PurchaseOrderLine[]
   sends PurchaseOrderSend[]
 

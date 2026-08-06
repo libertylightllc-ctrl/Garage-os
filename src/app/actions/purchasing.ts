@@ -9,7 +9,15 @@ import {
   pickEstimateForConversion,
   filterConvertibleLines,
 } from "@/lib/estimate-to-po";
-import { buildPoLineVehicleSnapshot, resolvePoVehicles } from "@/lib/po-vehicle";
+import {
+  buildPoLineVehicleSnapshot,
+  buildStandaloneVehicleSnapshot,
+  buildPoDefaultVehicleSnapshot,
+  hasAnyVehicleField,
+  poDefaultToStandalone,
+  resolvePoVehicles,
+} from "@/lib/po-vehicle";
+import type { StandaloneVehicleInput } from "@/lib/po-vehicle";
 import { purchaseOrderMessage } from "@/lib/po-message";
 import { poDocKind, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
@@ -108,6 +116,14 @@ export async function createPurchaseOrderAction(formData: FormData) {
   });
   if (!supplier) fail("Supplier not found.", backTo);
 
+  // Document-level default vehicle (2026-08-02). The form widget lets
+  // the owner either pick a vehicle already in the garage (by plate)
+  // or type free-text. Both flow through the same set of form fields;
+  // the server prefers the picked Vehicle row if the plate matches
+  // one in the caller's garage, else uses the free-text inputs
+  // verbatim.
+  const defaultVehicle = await parseVehicleFormFields(formData, user.garageId, "vehicle_");
+
   const po = await prisma.purchaseOrder.create({
     data: {
       garageId: user.garageId, // from session — never from input
@@ -119,12 +135,96 @@ export async function createPurchaseOrderAction(formData: FormData) {
       intent: mode === "order" ? "ORDER" : "QUOTE",
       reference: optional(formData.get("reference")),
       note: optional(formData.get("note")),
+      ...buildPoDefaultVehicleSnapshot(defaultVehicle),
     },
     select: { id: true },
   });
 
   revalidatePath("/owner/purchasing");
   redirect(`/owner/purchasing/${po.id}?mode=${mode}`);
+}
+
+/**
+ * Parse a set of vehicle form fields (prefixed to avoid collisions —
+ * e.g. `vehicle_plate`, `vehicle_make`, `vehicle_model`, `vehicle_year`,
+ * `vehicle_vin`, `vehicle_engineSize`, `vehicle_fuelType`) into a
+ * StandaloneVehicleInput. When the plate matches an existing Vehicle
+ * in the caller's garage, prefer that Vehicle's snapshot (link + full
+ * fields) so the doc doesn't drift from the garage's own record. When
+ * no plate is given or the plate doesn't match, fall through with the
+ * typed free-text fields.
+ *
+ * All fields optional individually — an advisor asking a supplier to
+ * quote often has only make + model. Year is coerced through
+ * Number.parseInt with a NaN guard.
+ */
+async function parseVehicleFormFields(
+  formData: FormData,
+  garageId: string,
+  prefix: string,
+): Promise<StandaloneVehicleInput> {
+  const get = (k: string) => {
+    const v = formData.get(prefix + k);
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+  };
+  const rawPlate = get("plate");
+  const rawMake = get("make");
+  const rawModel = get("model");
+  const rawYearStr = get("year");
+  const rawVin = get("vin");
+  const rawEngine = get("engineSize");
+  const rawFuel = get("fuelType");
+  const year = rawYearStr ? Number.parseInt(rawYearStr, 10) : null;
+  const yearOk = year != null && Number.isFinite(year) ? year : null;
+
+  // Plate exact-match against garage vehicles — same case-insensitive
+  // shape as the addPoLineAction datalist combo. Only tries when a
+  // plate was typed at all; a blank plate is a valid free-text-only
+  // input.
+  if (rawPlate) {
+    const match = await prisma.vehicle.findFirst({
+      where: {
+        customer: { garageId },
+        plate: { equals: rawPlate, mode: "insensitive" },
+      },
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        year: true,
+        plate: true,
+        vin: true,
+        engineSize: true,
+        fuelType: true,
+      },
+    });
+    if (match) {
+      return {
+        vehicleId: match.id,
+        make: match.make,
+        model: match.model,
+        year: match.year,
+        plate: match.plate,
+        vin: match.vin,
+        engineSize: match.engineSize,
+        fuelType: match.fuelType,
+      };
+    }
+  }
+  // Free-text — no match against the garage. Store whatever the owner
+  // typed. `vehicleId` stays null.
+  return {
+    vehicleId: null,
+    make: rawMake,
+    model: rawModel,
+    year: yearOk,
+    plate: rawPlate,
+    vin: rawVin,
+    engineSize: rawEngine,
+    fuelType: rawFuel,
+  };
 }
 
 /** Load a PO scoped to the caller's garage, or fail. */
@@ -185,18 +285,6 @@ export async function addPoLineAction(formData: FormData) {
   // because the datalist suggestion the user picked may not preserve
   // the exact case of the Part.name. `equals + mode:"insensitive"` is
   // an indexable predicate on Postgres; no full-scan risk.
-  //
-  // Vehicle snapshot (2026-08-02 — AR bug): a manually-added line
-  // NEVER inherits a vehicle from the matched Part's original estimate
-  // chain. The Layer 1 rewrite briefly read
-  // `Part.autoCreatedFromLine.estimate.jobCard.vehicle` here and
-  // snapshotted whatever car the Part was born from — silently
-  // attaching e.g. FORD FOCUS 2014 / JC-79 to a line the owner typed
-  // into a standalone PO with no source job. A supplier could then be
-  // sent a part for the wrong car. The chain is out — manual lines
-  // ship with every vehicle-snapshot column null and the surfaces
-  // render "(no vehicle linked)" until the doc-level default lands
-  // (follow-up: add-vehicle-entry-on-standalone-po).
   const match = await prisma.part.findFirst({
     where: {
       garageId: user.garageId,
@@ -207,6 +295,41 @@ export async function addPoLineAction(formData: FormData) {
       name: true,
     },
   });
+
+  // Vehicle snapshot (2026-08-02, follow-up to the chain-fallback fix).
+  // Line-level vehicle inputs come first; if the owner left them all
+  // blank AND the PO has a doc-level default set at creation, that
+  // default is copied into the line's own snapshot columns (copied on
+  // write, never referenced live — same lifecycle rule as every other
+  // vehicle snapshot). If both are absent the line ships with null
+  // vehicle columns; the customer/supplier surfaces render nothing
+  // (not "(no vehicle linked)" — that's internal wording).
+  const lineVehicle = await parseVehicleFormFields(
+    formData,
+    user.garageId,
+    "vehicle_",
+  );
+  let vehicleSnapshot = buildStandaloneVehicleSnapshot(lineVehicle);
+  if (!hasAnyVehicleField(lineVehicle)) {
+    const poDefault = await prisma.purchaseOrder.findFirst({
+      where: { id: po.id },
+      select: {
+        defaultVehicleId: true,
+        defaultVehicleMake: true,
+        defaultVehicleModel: true,
+        defaultVehicleYear: true,
+        defaultVehiclePlate: true,
+        defaultVehicleVin: true,
+        defaultVehicleEngineSize: true,
+        defaultVehicleFuelType: true,
+      },
+    });
+    if (poDefault) {
+      vehicleSnapshot = buildStandaloneVehicleSnapshot(
+        poDefaultToStandalone(poDefault),
+      );
+    }
+  }
 
   await prisma.purchaseOrderLine.create({
     data: {
@@ -221,6 +344,7 @@ export async function addPoLineAction(formData: FormData) {
       description: match?.name ?? lineText,
       qty,
       unitCost,
+      ...vehicleSnapshot,
     },
   });
 

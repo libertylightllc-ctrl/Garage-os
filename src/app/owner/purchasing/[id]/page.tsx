@@ -113,6 +113,29 @@ export default async function PurchaseOrderDetailPage({
         select: { id: true, name: true, sku: true, cost: true, qtyOnHand: true, reorderLevel: true },
       })
     : [];
+  // Garage vehicles for the Add-line vehicle datalist (per-line
+  // override or set-when-no-default). Same query shape as the new-
+  // quotation form.
+  const vehiclesForPicker = isDraft
+    ? await prisma.vehicle.findMany({
+        where: { customer: { garageId: session.user.garageId } },
+        orderBy: [{ make: "asc" }, { model: "asc" }],
+        select: { id: true, plate: true, make: true, model: true, year: true },
+        take: 500,
+      })
+    : [];
+  // Compact caption for the doc-level default — "FORD FOCUS 2014 · T35970"
+  // — used above the Add-line vehicle widget so the owner can see what
+  // new lines will inherit if they don't override.
+  const docDefaultVehicleLabel = (() => {
+    const bits: string[] = [];
+    const nm = [po.defaultVehicleMake, po.defaultVehicleModel]
+      .filter(Boolean)
+      .join(" ");
+    if (nm) bits.push(nm + (po.defaultVehicleYear ? ` ${po.defaultVehicleYear}` : ""));
+    if (po.defaultVehiclePlate) bits.push(po.defaultVehiclePlate);
+    return bits.length ? bits.join(" · ") : null;
+  })();
   // 3a — read-only stock hint in the line picker (helps decide order qty).
   const stockHint = (p: { qtyOnHand: number; reorderLevel: number }) =>
     stockOptionSuffix(p.qtyOnHand, p.reorderLevel, {
@@ -435,16 +458,25 @@ export default async function PurchaseOrderDetailPage({
                               VIN {lineVehicle.vin}
                             </div>
                           ) : null}
-                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            JC-{lineVehicle.jobNumber}
-                          </div>
+                          {lineVehicle.jobNumber != null ? (
+                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              JC-{lineVehicle.jobNumber}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
+                        // Empty on print (supplier surface) + a subdued
+                        // dash on screen for staff so the column doesn't
+                        // read as broken. The internal "(no vehicle
+                        // linked)" wording is gone as of 2026-08-02 —
+                        // AR's rule: print + supplier surfaces show
+                        // nothing, and the screen inherits the cleaner
+                        // shape.
                         <span
-                          className="text-muted-foreground"
-                          title={t("noVehicleLinkedReason")}
+                          className="text-muted-foreground print:hidden"
+                          aria-hidden="true"
                         >
-                          {t("noVehicleLinkedShort")}
+                          —
                         </span>
                       )}
                     </td>
@@ -732,6 +764,93 @@ export default async function PurchaseOrderDetailPage({
                   </span>
                 ) : null}
               </label>
+              {/* Per-line vehicle (2026-08-02). If the PO has a doc-level
+                  default, show a "For: FORD FOCUS 2014 · T35970 — Change"
+                  caption above the collapsed override — the owner can
+                  expand it to type a different car for this specific
+                  line. Server rule: if the owner leaves the line-level
+                  fields blank AND a doc default exists, that default
+                  is copied into the line's own snapshot at write time
+                  (never referenced live afterwards). If both are absent
+                  the line ships with no vehicle, and public/print
+                  surfaces render nothing rather than "(no vehicle
+                  linked)" — internal wording only. */}
+              <details className="col-span-2 rounded-md border border-border/60 bg-surface-2/40 p-2 sm:col-span-4">
+                <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs text-muted-foreground">
+                  {docDefaultVehicleLabel ? (
+                    <span>
+                      <strong className="font-semibold text-foreground">
+                        {t("poAddLineVehicleFor")}:
+                      </strong>{" "}
+                      {docDefaultVehicleLabel}
+                    </span>
+                  ) : (
+                    <span>{t("poAddLineNoDefaultVehicle")}</span>
+                  )}
+                  <span className="text-[11px] font-medium text-foreground underline-offset-2 hover:underline">
+                    {t("poAddLineVehicleChange")}
+                  </span>
+                </summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      {t("vehiclePlateLabel")}
+                    </span>
+                    <input
+                      name="vehicle_plate"
+                      type="text"
+                      list="po-add-line-vehicle-plates"
+                      autoComplete="off"
+                      placeholder={t("vehiclePlatePlaceholder")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                    <datalist id="po-add-line-vehicle-plates">
+                      {vehiclesForPicker.map((v) => (
+                        <option key={v.id} value={v.plate}>
+                          {v.make} {v.model}
+                          {v.year ? ` (${v.year})` : ""}
+                        </option>
+                      ))}
+                    </datalist>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <input
+                      name="vehicle_make"
+                      type="text"
+                      placeholder={t("vehicleMakeLabel")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      name="vehicle_model"
+                      type="text"
+                      placeholder={t("vehicleModelLabel")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      name="vehicle_year"
+                      type="number"
+                      inputMode="numeric"
+                      min="1900"
+                      max="2100"
+                      placeholder={t("vehicleYearLabel")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                    <input
+                      name="vehicle_engineSize"
+                      type="text"
+                      placeholder={t("vehicleEngineLabel")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                  <input
+                    name="vehicle_vin"
+                    type="text"
+                    maxLength={17}
+                    placeholder={t("vehicleVinLabel")}
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm font-mono"
+                  />
+                </div>
+              </details>
               <div className="col-span-2 flex items-end sm:col-span-4">
                 <Button type="submit">{t("addPoLine")}</Button>
               </div>

@@ -141,7 +141,13 @@ export default async function PublicPurchaseOrder({
                     <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                         <tr>
                             <th className="px-3 py-2 text-left">{t("partName")}</th>
-                            <th className="px-3 py-2 text-left">{t("colVehicle")}</th>
+                            {/* Hide the whole Vehicle column when no line
+                                on this document has a vehicle. Supplier-
+                                facing surfaces show nothing rather than
+                                "(no vehicle linked)" — internal wording. */}
+                            {vehicles.anyResolved ? (
+                                <th className="px-3 py-2 text-left">{t("colVehicle")}</th>
+                            ) : null}
                             <th className="px-3 py-2 text-right">{t("poOrdered")}</th>
                             <th className="px-3 py-2 text-right">{t("poUnitCost")}</th>
                             <th className="px-3 py-2 text-right">{t("poLineTotal")}</th>
@@ -164,30 +170,32 @@ export default async function PublicPurchaseOrder({
                                             {l.part?.sku ?? l.sku ?? ""}
                                         </span>
                                     </td>
-                                    <td className="px-3 py-2 text-xs">
-                                        {lineVehicle ? (
-                                            <div className="space-y-0.5">
-                                                <div className="font-medium">
-                                                    {formatVehicleShort(lineVehicle)}
-                                                </div>
-                                                {lineVehicle.vin ? (
-                                                    <div className="font-mono text-[10px] text-muted-foreground">
-                                                        VIN {lineVehicle.vin}
+                                    {vehicles.anyResolved ? (
+                                        <td className="px-3 py-2 text-xs">
+                                            {lineVehicle ? (
+                                                <div className="space-y-0.5">
+                                                    <div className="font-medium">
+                                                        {formatVehicleShort(lineVehicle)}
                                                     </div>
-                                                ) : null}
-                                                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                                                    JC-{lineVehicle.jobNumber}
+                                                    {lineVehicle.vin ? (
+                                                        <div className="font-mono text-[10px] text-muted-foreground">
+                                                            VIN {lineVehicle.vin}
+                                                        </div>
+                                                    ) : null}
+                                                    {lineVehicle.jobNumber != null ? (
+                                                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                            JC-{lineVehicle.jobNumber}
+                                                        </div>
+                                                    ) : null}
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <span
-                                                className="text-muted-foreground"
-                                                title={t("noVehicleLinkedReason")}
-                                            >
-                                                {t("noVehicleLinkedShort")}
-                                            </span>
-                                        )}
-                                    </td>
+                                            ) : (
+                                                // Empty cell — supplier doesn't
+                                                // see internal wording. Nothing
+                                                // is rendered here.
+                                                <span aria-hidden="true">&nbsp;</span>
+                                            )}
+                                        </td>
+                                    ) : null}
                                     <td className="px-3 py-2 text-right tabular-nums">{l.qty}</td>
                                     {/* Per-LINE decision, not per-document: a
                                         mixed RFQ shows real prices on priced
@@ -218,7 +226,10 @@ export default async function PublicPurchaseOrder({
                     {isRfq ? null : (
                         <tfoot className="border-t border-border bg-surface-2/50 text-sm font-medium">
                             <tr>
-                                <td colSpan={4} className="px-3 py-2 text-right">
+                                <td
+                                    colSpan={vehicles.anyResolved ? 4 : 3}
+                                    className="px-3 py-2 text-right"
+                                >
                                     {t("printTotalsLabel")}
                                 </td>
                                 <td className="px-3 py-2 text-right tabular-nums">

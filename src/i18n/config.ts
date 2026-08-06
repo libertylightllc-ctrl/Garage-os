@@ -186,6 +186,7 @@ const en = {
   // inventory 2a — purchasing (purchase orders)
   purchasingTitle: "Purchasing",
   documentPurchaseOrder: "Purchase order",
+  documentPurchaseOrderDraft: "Purchase Order (draft)",
   documentRfq: "Request for Quotation",
   printPo: "Print",
   sendViaWhatsApp: "Send via WhatsApp",
@@ -1555,6 +1556,7 @@ const ar: typeof en = {
   // inventory 2a — purchasing (purchase orders)
   purchasingTitle: "المشتريات",
   documentPurchaseOrder: "أمر شراء",
+  documentPurchaseOrderDraft: "أمر شراء (مسودة)",
   documentRfq: "طلب عرض سعر",
   printPo: "طباعة",
   sendViaWhatsApp: "إرسال عبر واتساب",

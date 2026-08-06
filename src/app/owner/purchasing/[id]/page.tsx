@@ -141,12 +141,25 @@ export default async function PurchaseOrderDetailPage({
   const markOrderedReason = canOrder ? undefined : t("markOrderedNeedsPricesReason");
 
   // ── Print / send derivations ─────────────────────────────────
-  // Status-based RFQ/PO classifier (2026-08-01, AR). DRAFT is always
-  // RFQ even when every line has a price; the owner marking the PO
-  // ordered is the ONLY thing that turns a quotation into an order.
-  // See src/lib/po-doc-kind.ts.
-  const isRfq = poDocKind({ status: po.status, orderedAt: po.orderedAt }) === "RFQ";
-  const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
+  // Status + intent classifier (2026-08-02). DRAFT with intent=ORDER
+  // reads as "Purchase Order (draft)"; DRAFT with intent=QUOTE (or
+  // pre-intent rows, which backfilled to QUOTE) reads as "Request
+  // for Quotation". Committed rows (status=ORDERED / PARTIALLY_
+  // RECEIVED / RECEIVED / CANCELLED-with-orderedAt) always read as
+  // "Purchase order" — Mark Ordered is still the ONLY thing that
+  // turns a quotation into a committed purchase order.
+  const docKind = poDocKind({
+    status: po.status,
+    orderedAt: po.orderedAt,
+    intent: po.intent,
+  });
+  const isRfq = docKind === "RFQ";
+  const docTitle =
+    docKind === "RFQ"
+      ? t("documentRfq")
+      : docKind === "PO_DRAFT"
+      ? t("documentPurchaseOrderDraft")
+      : t("documentPurchaseOrder");
   // The visible identifier for print / WhatsApp — supplier's own
   // quote reference if they gave us one (helps them match against
   // THEIR record), otherwise the last 6 chars of our PO id as a

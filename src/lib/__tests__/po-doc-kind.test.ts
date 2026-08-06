@@ -115,15 +115,30 @@ describe("canMarkOrdered", () => {
 describe("poDocKind", () => {
     const asOf = new Date("2026-08-01T10:00:00Z");
 
-    it("DRAFT → RFQ, regardless of whether lines are priced", () => {
-        // The whole point of the 2026-08-01 rule: entering supplier
-        // quotes on a DRAFT does NOT flip the label. Only Mark
-        // Ordered does that.
+    it("DRAFT + intent=QUOTE → RFQ", () => {
+        expect(poDocKind({ status: "DRAFT", orderedAt: null, intent: "QUOTE" })).toBe("RFQ");
+    });
+
+    it("DRAFT + intent=ORDER → PO_DRAFT (2026-08-02: 'Purchase Order (draft)')", () => {
+        // Author explicitly created this as a purchase order at known
+        // prices. Title reads "Purchase Order (draft)" so the reader
+        // knows it's uncommitted, but it's not mislabelled as a
+        // quotation. Mark Ordered still flips it to plain PO.
+        expect(poDocKind({ status: "DRAFT", orderedAt: null, intent: "ORDER" })).toBe("PO_DRAFT");
+    });
+
+    it("DRAFT without intent (missing / older rows) → RFQ (safe default)", () => {
+        // Backward compatibility: any caller that hasn't been updated
+        // to fetch the new column, and any pre-2026-08-02 row whose
+        // migration default came through as null via a stale client,
+        // reads as RFQ — the safer default (nothing implies committed
+        // intent).
         expect(poDocKind({ status: "DRAFT", orderedAt: null })).toBe("RFQ");
     });
 
-    it("ORDERED → PO", () => {
-        expect(poDocKind({ status: "ORDERED", orderedAt: asOf })).toBe("PO");
+    it("ORDERED → PO (intent no longer matters — status governs after commit)", () => {
+        expect(poDocKind({ status: "ORDERED", orderedAt: asOf, intent: "QUOTE" })).toBe("PO");
+        expect(poDocKind({ status: "ORDERED", orderedAt: asOf, intent: "ORDER" })).toBe("PO");
     });
 
     it("PARTIALLY_RECEIVED → PO", () => {
@@ -134,8 +149,16 @@ describe("poDocKind", () => {
         expect(poDocKind({ status: "RECEIVED", orderedAt: asOf })).toBe("PO");
     });
 
-    it("CANCELLED without orderedAt → RFQ (never committed)", () => {
-        expect(poDocKind({ status: "CANCELLED", orderedAt: null })).toBe("RFQ");
+    it("CANCELLED without orderedAt + intent=QUOTE → RFQ (never committed)", () => {
+        expect(poDocKind({ status: "CANCELLED", orderedAt: null, intent: "QUOTE" })).toBe("RFQ");
+    });
+
+    it("CANCELLED without orderedAt + intent=ORDER → still RFQ (status governs after cancel)", () => {
+        // Cancelled documents are governed by status + orderedAt, not
+        // intent — the author's original intention doesn't survive a
+        // cancel. This one never made it to ORDERED so it reads as
+        // RFQ regardless of what was originally typed.
+        expect(poDocKind({ status: "CANCELLED", orderedAt: null, intent: "ORDER" })).toBe("RFQ");
     });
 
     it("CANCELLED with orderedAt → PO (was committed; supplier may have shipped)", () => {

@@ -137,6 +137,13 @@ enum PartRequestStatus {
 // (DRAFT), sent (ORDERED), then received (RECEIVED → stock increases, 2b),
 // or CANCELLED. Distinct from PartRequestStatus (the technician job-side
 // request loop) — this is the owner's stock-replenishment document.
+// Author's intent when creating the document. Distinct from status
+// (which tracks lifecycle). Only meaningful while status is DRAFT.
+enum PurchaseOrderIntent {
+  QUOTE // "Ask a supplier to price this" — RFQ, cost optional per line
+  ORDER // "Place an order at these prices" — cost required per line
+}
+
 enum PurchaseOrderStatus {
   DRAFT
   ORDERED
@@ -826,6 +833,16 @@ model PurchaseOrder {
   supplierId String
   supplier   Supplier            @relation(fields: [supplierId], references: [id])
   status     PurchaseOrderStatus @default(DRAFT)
+  // Author's INTENT at document creation. Distinguishes "I asked a
+  // supplier to quote" (QUOTE) from "I'm placing an order at prices I
+  // already know" (ORDER). Set once at creation from the form's
+  // mode= field; never changes afterwards. `poDocKind` uses it to
+  // decide the title while status is DRAFT — a DRAFT+ORDER doc reads
+  // as "Purchase Order (draft)" instead of "Request for Quotation".
+  // Post-DRAFT statuses are governed by status alone (see
+  // src/lib/po-doc-kind.ts). From-estimate flows default to QUOTE
+  // since the estimate might not have final prices yet.
+  intent     PurchaseOrderIntent @default(QUOTE)
   reference  String? // supplier quote / PO reference
   note       String?
   orderedAt  DateTime? // when marked ORDERED (sent to supplier)

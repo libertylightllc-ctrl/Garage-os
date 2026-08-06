@@ -76,11 +76,24 @@ export default async function PublicPurchaseOrder({
     const locale = await getLocale();
     const tz = countryToTimeZone(po.garage.country ?? "UAE");
 
-    // Status-based classifier (2026-08-01, AR). Prices on the lines
-    // do NOT flip the label — only the owner marking the PO ordered
-    // does. See src/lib/po-doc-kind.ts.
-    const isRfq = poDocKind({ status: po.status, orderedAt: po.orderedAt }) === "RFQ";
-    const docTitle = isRfq ? t("documentRfq") : t("documentPurchaseOrder");
+    // Status + intent classifier (2026-08-02). DRAFT with intent=ORDER
+    // reads as "Purchase Order (draft)" so the supplier receiving the
+    // link sees the doc labelled as its author intended, not
+    // misclassified as an RFQ. Committed rows still read as
+    // "Purchase order" — Mark Ordered is what turns quotation into
+    // order. See src/lib/po-doc-kind.ts.
+    const docKind = poDocKind({
+        status: po.status,
+        orderedAt: po.orderedAt,
+        intent: po.intent,
+    });
+    const isRfq = docKind === "RFQ";
+    const docTitle =
+        docKind === "RFQ"
+            ? t("documentRfq")
+            : docKind === "PO_DRAFT"
+            ? t("documentPurchaseOrderDraft")
+            : t("documentPurchaseOrder");
     const docNumber = po.reference?.trim()
         ? po.reference
         : `#${po.id.slice(-6).toUpperCase()}`;

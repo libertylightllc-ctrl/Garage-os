@@ -112,6 +112,11 @@ export async function createPurchaseOrderAction(formData: FormData) {
     data: {
       garageId: user.garageId, // from session — never from input
       supplierId: supplier.id,
+      // Persist the author's intent. Reload no longer drops mode — the
+      // detail page reads intent off the PO row itself and the title
+      // reads "Purchase Order (draft)" for a DRAFT+ORDER doc instead
+      // of falsely calling it a Request for Quotation.
+      intent: mode === "order" ? "ORDER" : "QUOTE",
       reference: optional(formData.get("reference")),
       note: optional(formData.get("note")),
     },
@@ -881,17 +886,27 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
   // Capture documentKind + doc metadata BEFORE anything else. The
   // whole point of the snapshot is that a later edit (unpriced line
   // gets a price, RFQ → PO) does NOT rewrite the audit row.
-  // Status-based classifier (2026-08-01, AR). A DRAFT sent to a
-  // supplier for pricing is always logged as RFQ; only after the
-  // owner marks the PO ordered does the send-audit log start capturing
-  // "PO". `orderedAt` disambiguates a cancelled-after-ordered doc.
-  const capturedDocKind: "PO" | "RFQ" = poDocKind({
+  //
+  // 2026-08-02: also collapses PO_DRAFT into "PO" for the send-audit
+  // column. The audit is a two-way ledger (RFQ / PO), not a three-way
+  // display — a DRAFT+ORDER sent to a supplier is a purchase order
+  // being priced, and belongs in the PO bucket. Title, however, uses
+  // the full three-way classifier so the supplier's copy reads
+  // "Purchase Order (draft)" while it's still uncommitted.
+  const docKind = poDocKind({
     status: po.status,
     orderedAt: po.orderedAt,
+    intent: po.intent,
   });
+  const capturedDocKind: "PO" | "RFQ" = docKind === "RFQ" ? "RFQ" : "PO";
   const t = await getT();
   const locale = await getLocale();
-  const docTitle = capturedDocKind === "RFQ" ? t("documentRfq") : t("documentPurchaseOrder");
+  const docTitle =
+    docKind === "RFQ"
+      ? t("documentRfq")
+      : docKind === "PO_DRAFT"
+      ? t("documentPurchaseOrderDraft")
+      : t("documentPurchaseOrder");
   const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
 
   const publicUrl = `${appUrl()}/c/po/${signId("po", po.id)}`;

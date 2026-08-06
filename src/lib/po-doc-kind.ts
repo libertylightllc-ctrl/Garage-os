@@ -29,7 +29,21 @@
  * client components can all import it.
  */
 
-export type PoDocKind = "PO" | "RFQ";
+/**
+ * Three renderable document kinds:
+ *   PO       — a committed purchase order (status ORDERED /
+ *              PARTIALLY_RECEIVED / RECEIVED, or CANCELLED after a
+ *              real order). Title reads "Purchase Order".
+ *   PO_DRAFT — a DRAFT the author explicitly created as a purchase
+ *              order (intent=ORDER) — prices known up front, but the
+ *              owner hasn't clicked Mark Ordered yet so it's still
+ *              editable and unsent. Title reads "Purchase Order
+ *              (draft)" so nobody thinks it's been committed.
+ *   RFQ      — a quotation (DRAFT with intent=QUOTE, or a CANCELLED
+ *              row that never made it to ORDERED). Title reads
+ *              "Request for Quotation".
+ */
+export type PoDocKind = "PO" | "PO_DRAFT" | "RFQ";
 
 export type PoStatusForDocKind =
     | "DRAFT"
@@ -38,18 +52,24 @@ export type PoStatusForDocKind =
     | "RECEIVED"
     | "CANCELLED";
 
+export type PoIntent = "QUOTE" | "ORDER";
+
 /**
  * Minimum shape needed to classify a PO. `orderedAt` is stamped by
  * setPoStatusAction on the DRAFT → ORDERED transition (see the
  * PurchaseOrder.orderedAt schema comment). Its presence lets a
  * CANCELLED document remember whether it was ever committed.
+ * `intent` is optional for backward compatibility with any caller
+ * that hasn't been updated to fetch the new column; missing intent is
+ * treated as QUOTE (safe default — reads as RFQ while DRAFT).
  */
 export interface PoForDocKind {
     status: PoStatusForDocKind;
     orderedAt: Date | null;
+    intent?: PoIntent;
 }
 
-/** Status-based classifier. See file header for the rule. */
+/** Status + intent classifier. See file header for the rule. */
 export function poDocKind(po: PoForDocKind): PoDocKind {
     if (
         po.status === "ORDERED" ||
@@ -60,6 +80,11 @@ export function poDocKind(po: PoForDocKind): PoDocKind {
     }
     if (po.status === "CANCELLED" && po.orderedAt !== null) {
         return "PO";
+    }
+    // DRAFT or CANCELLED-without-orderedAt. Intent decides between
+    // "draft purchase order" and "request for quotation".
+    if (po.status === "DRAFT" && po.intent === "ORDER") {
+        return "PO_DRAFT";
     }
     return "RFQ";
 }

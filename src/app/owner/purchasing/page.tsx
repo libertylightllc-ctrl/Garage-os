@@ -186,26 +186,45 @@ export default async function PurchasingPage({
 
   // Build the where clause. Kind + sent filters push into Prisma so
   // pagination reflects the filtered set, not the pre-filtered set with
-  // gaps. PoDocKind's rule: any unpriced line → RFQ, empty → RFQ.
-  // Encoded in SQL:
-  //   PO   ≡  lines.some(exists) AND lines.none(unitCost ≤ 0)
-  //   RFQ  ≡  lines.none()  OR  lines.some(unitCost ≤ 0)
-  // Uses `lte: 0` (not `equals: 0`) so a stray negative supplier cost
-  // — shouldn't happen but the type allows it — reads as unpriced,
-  // matching poDocKind's defensive treatment on the read side.
+  // gaps.
+  //
+  // Kind SQL matches poDocKind's list collapse (2026-08-02):
+  //   PO  ≡  status IN (ORDERED, PARTIALLY_RECEIVED, RECEIVED)
+  //          OR (status = CANCELLED AND orderedAt IS NOT NULL)
+  //          OR (status = DRAFT AND intent = ORDER)
+  //   RFQ ≡  (status = DRAFT AND intent = QUOTE)
+  //          OR (status = CANCELLED AND orderedAt IS NULL)
+  //
+  // PO_DRAFT rolls into PO for the list — a DRAFT+ORDER doc belongs
+  // in the PO bucket even before Mark Ordered is clicked (the owner
+  // knows the price and intends to order). The detail-page title
+  // keeps the three-way "Purchase Order (draft)" distinction where it
+  // matters. Older rows without intent backfilled to QUOTE by the
+  // 2026-08-02 migration.
   const where: Prisma.PurchaseOrderWhereInput = {
     garageId,
     status: currentStatus,
   };
   const andClauses: Prisma.PurchaseOrderWhereInput[] = [];
+  const PO_ORDERED_STATUSES: PurchaseOrderStatus[] = [
+    "ORDERED",
+    "PARTIALLY_RECEIVED",
+    "RECEIVED",
+  ];
   if (currentKind === "PO") {
-    andClauses.push({ lines: { some: {} } });
-    andClauses.push({ lines: { none: { unitCost: { lte: 0 } } } });
-  } else if (currentKind === "RFQ") {
-    // OR nested inside an outer AND so it composes cleanly with the
-    // sent filter below.
     andClauses.push({
-      OR: [{ lines: { none: {} } }, { lines: { some: { unitCost: { lte: 0 } } } }],
+      OR: [
+        { status: { in: PO_ORDERED_STATUSES } },
+        { status: "CANCELLED", orderedAt: { not: null } },
+        { status: "DRAFT", intent: "ORDER" },
+      ],
+    });
+  } else if (currentKind === "RFQ") {
+    andClauses.push({
+      OR: [
+        { status: "DRAFT", intent: "QUOTE" },
+        { status: "CANCELLED", orderedAt: null },
+      ],
     });
   }
   if (currentSent === "sent") {
@@ -448,7 +467,19 @@ export default async function PurchasingPage({
             </thead>
             <tbody className="divide-y divide-border">
               {orders.map((o) => {
-                const kind = poDocKind({ status: o.status, orderedAt: o.orderedAt });
+                // 2026-08-02: collapse PO_DRAFT into "PO" for the list
+                // display. The list shows a two-way kind chip (PO / RFQ)
+                // — a DRAFT+ORDER doc belongs in the PO bucket (owner
+                // knows the price and intends to order) even before
+                // Mark Ordered is clicked. The detail page keeps the
+                // three-way title ("Purchase Order (draft)") so the
+                // uncommitted state is still visible where it matters.
+                const rawKind = poDocKind({
+                  status: o.status,
+                  orderedAt: o.orderedAt,
+                  intent: o.intent,
+                });
+                const kind: "PO" | "RFQ" = rawKind === "RFQ" ? "RFQ" : "PO";
                 const docNumber = o.reference?.trim()
                   ? o.reference
                   : `#${o.id.slice(-6).toUpperCase()}`;

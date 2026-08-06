@@ -6,6 +6,7 @@ import { getT } from "@/i18n/server";
 import { Button } from "@/components/ui/button";
 import { createPurchaseOrderAction } from "@/app/actions/purchasing";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
+import { VehicleMatchFill } from "@/components/vehicle-match-fill";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +154,19 @@ export default async function NewPurchaseOrderPage({
                   ))}
                 </datalist>
               </label>
+              <VehicleMatchFill
+                plateName="vehicle_plate"
+                makeName="vehicle_make"
+                modelName="vehicle_model"
+                yearName="vehicle_year"
+                engineName="vehicle_engineSize"
+                vinName="vehicle_vin"
+                labels={{
+                  matchedLabel: t("vehicleMatchLabel"),
+                  dismissLabel: t("vehicleMatchDismiss"),
+                  vinLabel: t("vehicleVinLabel"),
+                }}
+              />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-muted-foreground">{t("vehicleMakeLabel")}</span>

@@ -15,6 +15,7 @@ import { stockOptionSuffix } from "@/lib/stock-label";
 import { normalizeToE164 } from "@/lib/wa";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
 import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
+import { VehicleMatchFill } from "@/components/vehicle-match-fill";
 import {
   addPoLineAction,
   editPoLineAction,
@@ -852,6 +853,19 @@ export default async function PurchaseOrderDetailPage({
                       ))}
                     </datalist>
                   </label>
+                  <VehicleMatchFill
+                    plateName="vehicle_plate"
+                    makeName="vehicle_make"
+                    modelName="vehicle_model"
+                    yearName="vehicle_year"
+                    engineName="vehicle_engineSize"
+                    vinName="vehicle_vin"
+                    labels={{
+                      matchedLabel: t("vehicleMatchLabel"),
+                      dismissLabel: t("vehicleMatchDismiss"),
+                      vinLabel: t("vehicleVinLabel"),
+                    }}
+                  />
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <input
                       name="vehicle_make"

@@ -145,14 +145,26 @@ export async function createPurchaseOrderAction(formData: FormData) {
 }
 
 /**
- * Parse a set of vehicle form fields (prefixed to avoid collisions —
- * e.g. `vehicle_plate`, `vehicle_make`, `vehicle_model`, `vehicle_year`,
- * `vehicle_vin`, `vehicle_engineSize`, `vehicle_fuelType`) into a
- * StandaloneVehicleInput. When the plate matches an existing Vehicle
- * in the caller's garage, prefer that Vehicle's snapshot (link + full
- * fields) so the doc doesn't drift from the garage's own record. When
- * no plate is given or the plate doesn't match, fall through with the
- * typed free-text fields.
+ * Parse a set of vehicle form fields (prefixed — `vehicle_plate`,
+ * `vehicle_make`, `vehicle_model`, `vehicle_year`, `vehicle_vin`,
+ * `vehicle_engineSize`, `vehicle_fuelType`) into a StandaloneVehicleInput.
+ *
+ * Rule — every snapshot field is taken verbatim from the form. Blank
+ * means null; a value the user typed (or cleared) is stored exactly
+ * as they submitted it. The server does NOT autofill blanks from a
+ * matched Vehicle — that would resurrect the "invented VIN" bug where
+ * a plate lookup silently supplied fields the user never saw.
+ *
+ * The plate lookup still runs — but only to resolve `vehicleId` (the
+ * FK back to the garage's Vehicle row). This lets reports still trace
+ * the line to a real Vehicle when the plate matches, without
+ * overriding what the operator chose to record on the doc.
+ *
+ * The client-side match preview handles the actual autofill of the
+ * make/model/year/engine/VIN inputs: on match, the chip appears and
+ * blank inputs are populated (never overwriting a value the user
+ * already typed). The user can dismiss the match or clear any field
+ * before submitting. Whatever ends up in the form is what lands here.
  *
  * All fields optional individually — an advisor asking a supplier to
  * quote often has only make + model. Year is coerced through
@@ -179,44 +191,23 @@ async function parseVehicleFormFields(
   const year = rawYearStr ? Number.parseInt(rawYearStr, 10) : null;
   const yearOk = year != null && Number.isFinite(year) ? year : null;
 
-  // Plate exact-match against garage vehicles — same case-insensitive
-  // shape as the addPoLineAction datalist combo. Only tries when a
-  // plate was typed at all; a blank plate is a valid free-text-only
-  // input.
+  // Plate lookup: only to resolve the FK. The Vehicle's other fields
+  // are NOT read from the row — snapshot columns come from the form
+  // verbatim, and the client-side match preview is what surfaces the
+  // matched values to the operator before submit.
+  let vehicleId: string | null = null;
   if (rawPlate) {
     const match = await prisma.vehicle.findFirst({
       where: {
         customer: { garageId },
         plate: { equals: rawPlate, mode: "insensitive" },
       },
-      select: {
-        id: true,
-        make: true,
-        model: true,
-        year: true,
-        plate: true,
-        vin: true,
-        engineSize: true,
-        fuelType: true,
-      },
+      select: { id: true },
     });
-    if (match) {
-      return {
-        vehicleId: match.id,
-        make: match.make,
-        model: match.model,
-        year: match.year,
-        plate: match.plate,
-        vin: match.vin,
-        engineSize: match.engineSize,
-        fuelType: match.fuelType,
-      };
-    }
+    if (match) vehicleId = match.id;
   }
-  // Free-text — no match against the garage. Store whatever the owner
-  // typed. `vehicleId` stays null.
   return {
-    vehicleId: null,
+    vehicleId,
     make: rawMake,
     model: rawModel,
     year: yearOk,

@@ -105,26 +105,11 @@ describe("buildPoLineVehicleSnapshot", () => {
     });
 });
 
-describe("resolvePoVehicles — snapshot-preferred read path", () => {
-    const chainVehicle = {
-        id: "veh_chain",
-        make: "Honda",
-        model: "Civic",
-        year: 2020,
-        plate: "B 111",
-        vin: null,
-        engineSize: null,
-        fuelType: null,
-    };
-    const chainLine = {
-        estimate: { jobCard: { number: 99, vehicle: chainVehicle } },
-    };
-
-    it("prefers the line's own snapshot over the chain", () => {
-        // The chain still resolves (Honda Civic), but the snapshot on the
-        // line is the source of truth for what the supplier already saw.
-        // The line's snapshot must win — that's the whole freeze-at-send
-        // contract.
+describe("resolvePoVehicles — snapshot IS the source of truth (no chain fallback)", () => {
+    it("reads the line's own snapshot columns as the sole source of truth", () => {
+        // The snapshot on the line is what the supplier already saw
+        // and the resolver returns exactly that, always. There is no
+        // chain fallback since 2026-08-02.
         const line = {
             id: "L1",
             vehicleId: "veh_snap",
@@ -136,7 +121,6 @@ describe("resolvePoVehicles — snapshot-preferred read path", () => {
             vehicleEngineSize: "4.0L",
             vehicleFuelType: "PETROL",
             vehicleJobNumber: 42,
-            part: { autoCreatedFromLine: chainLine },
         };
         const r = resolvePoVehicles([line]);
         const ctx = r.perLine.get("L1")!;
@@ -148,10 +132,14 @@ describe("resolvePoVehicles — snapshot-preferred read path", () => {
         expect(r.distinct[0].vehicleId).toBe("veh_snap");
     });
 
-    it("falls back to the chain when snapshot is empty (pre-migration rows)", () => {
-        // Backfill couldn't reach seed parts (autoCreatedFromLineId is null
-        // for those). Existing rows show the chain if it resolves; new rows
-        // will have snapshot columns written directly.
+    it("returns null when snapshot is empty — NEVER falls back to a Part's chain (2026-08-02)", () => {
+        // Bug fix: the old fallback would walk Part.autoCreatedFromLine
+        // and invent a vehicle at render time from the matched Part's
+        // ORIGIN estimate. For a manually-added line on a standalone
+        // PO/RFQ (no vehicle chosen by the owner) this meant showing
+        // the wrong car to a supplier — the vehicle the Part was born
+        // for, not the car this document is about. The resolver now
+        // reads snapshot columns and only snapshot columns.
         const line = {
             id: "L2",
             vehicleId: null,
@@ -159,13 +147,12 @@ describe("resolvePoVehicles — snapshot-preferred read path", () => {
             vehicleModel: null,
             vehiclePlate: null,
             vehicleJobNumber: null,
-            part: { autoCreatedFromLine: chainLine },
         };
         const r = resolvePoVehicles([line]);
-        const ctx = r.perLine.get("L2")!;
-        expect(ctx.make).toBe("Honda");
-        expect(ctx.jobNumber).toBe(99);
-        expect(ctx.vehicleId).toBe("veh_chain");
+        expect(r.perLine.get("L2")).toBeNull();
+        expect(r.distinct).toHaveLength(0);
+        expect(r.anyResolved).toBe(false);
+        expect(r.allResolved).toBe(false);
     });
 
     it("returns null when both snapshot AND chain are missing", () => {
@@ -178,7 +165,6 @@ describe("resolvePoVehicles — snapshot-preferred read path", () => {
             vehicleModel: null,
             vehiclePlate: null,
             vehicleJobNumber: null,
-            part: { autoCreatedFromLine: null },
         };
         const r = resolvePoVehicles([line]);
         expect(r.perLine.get("L3")).toBeNull();

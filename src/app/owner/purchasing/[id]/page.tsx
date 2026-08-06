@@ -79,37 +79,11 @@ export default async function PurchaseOrderDetailPage({
             select: {
               name: true,
               sku: true,
-              // Vehicle chain — resolves to a vehicle when the
-              // Part was spun up via the from-estimate flow; null
-              // otherwise. See resolvePoVehicles for the rendering
-              // logic that turns this into per-line / per-doc
-              // context. Nested include is intentional — one query
-              // instead of N+1.
-              autoCreatedFromLine: {
-                include: {
-                  estimate: {
-                    include: {
-                      jobCard: {
-                        select: {
-                          number: true,
-                          vehicle: {
-                            select: {
-                              id: true,
-                              make: true,
-                              model: true,
-                              year: true,
-                              plate: true,
-                              vin: true,
-                              engineSize: true,
-                              fuelType: true,
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
+              // No `autoCreatedFromLine` — removed 2026-08-02 with the
+              // resolver's chain fallback. Vehicle resolution now
+              // reads only the line's own snapshot columns
+              // (vehicleId, vehicleMake, …), which is what the
+              // supplier actually saw when the document was sent.
             },
           },
         },

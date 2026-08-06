@@ -53,31 +53,9 @@ export default async function PublicPurchaseOrder({
                         select: {
                             name: true,
                             sku: true,
-                            autoCreatedFromLine: {
-                                select: {
-                                    estimate: {
-                                        select: {
-                                            jobCard: {
-                                                select: {
-                                                    number: true,
-                                                    vehicle: {
-                                                        select: {
-                                                            id: true,
-                                                            make: true,
-                                                            model: true,
-                                                            year: true,
-                                                            plate: true,
-                                                            vin: true,
-                                                            engineSize: true,
-                                                            fuelType: true,
-                                                        },
-                                                    },
-                                                },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
+                            // No `autoCreatedFromLine` — removed
+                            // 2026-08-02 with the resolver's chain
+                            // fallback. See resolvePoVehicles.
                         },
                     },
                 },

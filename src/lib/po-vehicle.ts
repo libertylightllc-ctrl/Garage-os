@@ -37,9 +37,14 @@ export interface VehicleContext {
 export interface ResolverPoLine {
     id: string;
     // Snapshot columns on PurchaseOrderLine — written once at line creation
-    // by buildPoLineVehicleSnapshot(). Preferred over the chain: once a
-    // supplier document goes out, the snapshot is what THEY see, and a
-    // later Vehicle edit must not retroactively change it.
+    // by buildPoLineVehicleSnapshot(). SOLE source of truth for the
+    // resolver as of 2026-08-02: the chain fallback via
+    // Part.autoCreatedFromLine was removed after a bug report — the
+    // fallback was inventing the vehicle at render time from the
+    // matched Part's ORIGIN estimate, which for a manually-added line
+    // on a standalone PO/RFQ meant showing the wrong car to a
+    // supplier. Snapshot present → use it. Snapshot null → line has no
+    // vehicle (correct — the user never picked one).
     vehicleId?: string | null;
     vehicleMake?: string | null;
     vehicleModel?: string | null;
@@ -49,30 +54,6 @@ export interface ResolverPoLine {
     vehicleEngineSize?: string | null;
     vehicleFuelType?: string | null;
     vehicleJobNumber?: number | null;
-    // Layer 0 (2026-08-01) made PurchaseOrderLine.partId nullable so a
-    // free-text RFQ line can exist before we have a catalog part to
-    // link against. `part` is null for those lines; the auto-created
-    // chain is unavailable, and the resolver falls back to the snapshot
-    // columns above (or, for lines with neither, yields null).
-    part: {
-        autoCreatedFromLine: {
-            estimate: {
-                jobCard: {
-                    number: number | null;
-                    vehicle: {
-                        id: string;
-                        make: string;
-                        model: string;
-                        year: number | null;
-                        plate: string;
-                        vin: string | null;
-                        engineSize: string | null;
-                        fuelType: string | null;
-                    };
-                };
-            };
-        } | null;
-    } | null;
 }
 
 export interface ResolvedPoVehicles {
@@ -90,12 +71,13 @@ export function resolvePoVehicles(lines: readonly ResolverPoLine[]): ResolvedPoV
     const perLine = new Map<string, VehicleContext | null>();
     const distinctById = new Map<string, VehicleContext>();
     for (const l of lines) {
-        // Prefer the line's own snapshot columns — that's what the
-        // supplier saw when the document was sent, and the resolver
-        // must return the same view even if the Vehicle was edited
-        // afterwards. Fall back to the auto-created chain only when
-        // the snapshot is empty (pre-migration rows that the backfill
-        // couldn't reach, e.g. seed parts).
+        // The line's own snapshot columns are the SOLE source of truth.
+        // The old fallback to `Part.autoCreatedFromLine.…` was removed
+        // 2026-08-02 after it was found to invent a vehicle at render
+        // time for any manually-added line whose matched catalogue Part
+        // happened to have been auto-created from a previous estimate.
+        // Rule now: snapshot present → resolve. Snapshot null → line
+        // has no vehicle, period.
         let ctx: VehicleContext | null = null;
         if (l.vehicleId && l.vehicleMake && l.vehicleModel && l.vehiclePlate && l.vehicleJobNumber != null) {
             ctx = {
@@ -109,22 +91,6 @@ export function resolvePoVehicles(lines: readonly ResolverPoLine[]): ResolvedPoV
                 fuelType: l.vehicleFuelType ?? null,
                 jobNumber: l.vehicleJobNumber,
             };
-        } else {
-            const jc = l.part?.autoCreatedFromLine?.estimate.jobCard;
-            if (jc && jc.number != null) {
-                const v = jc.vehicle;
-                ctx = {
-                    vehicleId: v.id,
-                    make: v.make,
-                    model: v.model,
-                    year: v.year,
-                    plate: v.plate,
-                    vin: v.vin,
-                    engineSize: v.engineSize,
-                    fuelType: v.fuelType,
-                    jobNumber: jc.number,
-                };
-            }
         }
         perLine.set(l.id, ctx);
         if (ctx && !distinctById.has(ctx.vehicleId)) distinctById.set(ctx.vehicleId, ctx);

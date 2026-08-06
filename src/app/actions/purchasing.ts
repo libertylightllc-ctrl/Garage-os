@@ -858,31 +858,8 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
           part: {
             select: {
               name: true,
-              autoCreatedFromLine: {
-                include: {
-                  estimate: {
-                    include: {
-                      jobCard: {
-                        select: {
-                          number: true,
-                          vehicle: {
-                            select: {
-                              id: true,
-                              make: true,
-                              model: true,
-                              year: true,
-                              plate: true,
-                              vin: true,
-                              engineSize: true,
-                              fuelType: true,
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
+              // No `autoCreatedFromLine` — removed 2026-08-02 with the
+              // resolver's chain fallback. See resolvePoVehicles.
             },
           },
         },

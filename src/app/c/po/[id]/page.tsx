@@ -106,7 +106,21 @@ export default async function PublicPurchaseOrder({
     // row is actually rendered. The RFQ branch below suppresses the
     // tfoot entirely — no supplier ever sees a partial-sum total.
     const total = po.lines.reduce((s, l) => s + l.qty * Number(l.unitCost ?? 0), 0);
-    const vehicles = resolvePoVehicles(po.lines);
+    // Fix #3 followup (2026-08-02): doc-level default falls back for
+    // any line without its own snapshot. That includes rows created
+    // before defaults existed and any line whose write-time copy
+    // silently landed as null (the old resolver's strict predicate
+    // was hiding those).
+    const vehicles = resolvePoVehicles(po.lines, {
+        defaultVehicleId: po.defaultVehicleId,
+        defaultVehicleMake: po.defaultVehicleMake,
+        defaultVehicleModel: po.defaultVehicleModel,
+        defaultVehicleYear: po.defaultVehicleYear,
+        defaultVehiclePlate: po.defaultVehiclePlate,
+        defaultVehicleVin: po.defaultVehicleVin,
+        defaultVehicleEngineSize: po.defaultVehicleEngineSize,
+        defaultVehicleFuelType: po.defaultVehicleFuelType,
+    });
 
     return (
         <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-5 p-6">
@@ -173,10 +187,35 @@ export default async function PublicPurchaseOrder({
                                     {vehicles.anyResolved ? (
                                         <td className="px-3 py-2 text-xs">
                                             {lineVehicle ? (
+                                                // 2026-08-02 (fix #3 followup):
+                                                // each detail on its own row so
+                                                // the supplier can identify the
+                                                // right part. Null rows hide.
                                                 <div className="space-y-0.5">
-                                                    <div className="font-medium">
-                                                        {formatVehicleShort(lineVehicle)}
-                                                    </div>
+                                                    {lineVehicle.make || lineVehicle.model ? (
+                                                        <div className="font-medium">
+                                                            {[lineVehicle.make, lineVehicle.model]
+                                                                .filter(Boolean)
+                                                                .join(" ")}
+                                                        </div>
+                                                    ) : null}
+                                                    {lineVehicle.year != null ? (
+                                                        <div className="text-[11px] text-muted-foreground">
+                                                            {lineVehicle.year}
+                                                        </div>
+                                                    ) : null}
+                                                    {lineVehicle.engineSize || lineVehicle.fuelType ? (
+                                                        <div className="text-[11px] text-muted-foreground">
+                                                            {[lineVehicle.engineSize, lineVehicle.fuelType]
+                                                                .filter(Boolean)
+                                                                .join(" ")}
+                                                        </div>
+                                                    ) : null}
+                                                    {lineVehicle.plate ? (
+                                                        <div className="text-[11px] font-medium">
+                                                            {lineVehicle.plate}
+                                                        </div>
+                                                    ) : null}
                                                     {lineVehicle.vin ? (
                                                         <div className="font-mono text-[10px] text-muted-foreground">
                                                             VIN {lineVehicle.vin}

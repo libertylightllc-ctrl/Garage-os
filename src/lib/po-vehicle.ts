@@ -20,17 +20,26 @@
  */
 
 export interface VehicleContext {
-    /** Vehicle.id — used for dedup across lines in the same PO. */
-    vehicleId: string;
-    make: string;
-    model: string;
+    /**
+     * Vehicle.id when the row was picked from the garage's catalogue;
+     * null for a free-text-typed vehicle (owner typed make + model for
+     * a car we haven't seen). Both are legitimate write shapes as of
+     * 2026-08-02.
+     */
+    vehicleId: string | null;
+    make: string | null;
+    model: string | null;
     year: number | null;
-    plate: string;
+    plate: string | null;
     vin: string | null;
     engineSize: string | null;
     fuelType: string | null;
-    /** JobCard.number — the shop's own reference for the job. */
-    jobNumber: number;
+    /**
+     * JobCard.number — the shop's own reference. Set only when the
+     * vehicle was pulled from a source job (the from-estimate flow).
+     * Null on standalone / free-text vehicles.
+     */
+    jobNumber: number | null;
 }
 
 /** Shape a caller must provide per PO line for the resolver. */
@@ -67,33 +76,119 @@ export interface ResolvedPoVehicles {
     anyResolved: boolean;
 }
 
-export function resolvePoVehicles(lines: readonly ResolverPoLine[]): ResolvedPoVehicles {
+/**
+ * Doc-level default vehicle that a line falls back to at render time
+ * when the line's own snapshot is empty. Same shape as a line's own
+ * snapshot columns but sourced from `PurchaseOrder.default*` (fix #3,
+ * 2026-08-02).
+ *
+ * Snapshot semantics unchanged — the doc default is written ONCE at
+ * PO creation and never mutated; falling back to it at render is not
+ * a "live reference" in the sense the schema comment warns against,
+ * it's still snapshot data, just held at doc scope. This existed
+ * before as a write-time copy INTO the line's own columns, but the
+ * copy was invisible because the old strict predicate below
+ * (`vehicleJobNumber != null`) refused to render standalone / free-
+ * text writes. Doc-level fallback at render is the belt-and-braces
+ * that catches the same shape whether the copy landed or not, and
+ * covers pre-fix rows retroactively.
+ */
+export interface ResolverPoDefault {
+    defaultVehicleId?: string | null;
+    defaultVehicleMake?: string | null;
+    defaultVehicleModel?: string | null;
+    defaultVehicleYear?: number | null;
+    defaultVehiclePlate?: string | null;
+    defaultVehicleVin?: string | null;
+    defaultVehicleEngineSize?: string | null;
+    defaultVehicleFuelType?: string | null;
+}
+
+/** Any identifying field means "this snapshot represents a real vehicle". */
+function anySnapshotField(
+    id: string | null | undefined,
+    plate: string | null | undefined,
+    make: string | null | undefined,
+    model: string | null | undefined,
+    vin: string | null | undefined,
+): boolean {
+    return Boolean(id || plate || make || model || vin);
+}
+
+export function resolvePoVehicles(
+    lines: readonly ResolverPoLine[],
+    docDefault: ResolverPoDefault | null = null,
+): ResolvedPoVehicles {
     const perLine = new Map<string, VehicleContext | null>();
     const distinctById = new Map<string, VehicleContext>();
+
+    // Build the doc-level fallback once. `null` when the doc has no
+    // meaningful default set (all default* columns empty).
+    let docCtx: VehicleContext | null = null;
+    if (
+        docDefault &&
+        anySnapshotField(
+            docDefault.defaultVehicleId,
+            docDefault.defaultVehiclePlate,
+            docDefault.defaultVehicleMake,
+            docDefault.defaultVehicleModel,
+            docDefault.defaultVehicleVin,
+        )
+    ) {
+        docCtx = {
+            vehicleId: docDefault.defaultVehicleId ?? null,
+            make: docDefault.defaultVehicleMake ?? null,
+            model: docDefault.defaultVehicleModel ?? null,
+            year: docDefault.defaultVehicleYear ?? null,
+            plate: docDefault.defaultVehiclePlate ?? null,
+            vin: docDefault.defaultVehicleVin ?? null,
+            engineSize: docDefault.defaultVehicleEngineSize ?? null,
+            fuelType: docDefault.defaultVehicleFuelType ?? null,
+            jobNumber: null,
+        };
+    }
+
     for (const l of lines) {
-        // The line's own snapshot columns are the SOLE source of truth.
-        // The old fallback to `Part.autoCreatedFromLine.…` was removed
-        // 2026-08-02 after it was found to invent a vehicle at render
-        // time for any manually-added line whose matched catalogue Part
-        // happened to have been auto-created from a previous estimate.
-        // Rule now: snapshot present → resolve. Snapshot null → line
-        // has no vehicle, period.
+        // Line's own snapshot wins when it has ANY identifying field —
+        // vehicleId, plate, make, model, or VIN. The old strict
+        // predicate required ALL of vehicleId + make + model + plate +
+        // jobNumber and silently dropped standalone / free-text lines
+        // (fix #3, 2026-08-02 followup). Doc-level fallback catches
+        // lines with no per-line snapshot AND covers pre-fix rows
+        // retroactively.
         let ctx: VehicleContext | null = null;
-        if (l.vehicleId && l.vehicleMake && l.vehicleModel && l.vehiclePlate && l.vehicleJobNumber != null) {
+        if (
+            anySnapshotField(
+                l.vehicleId,
+                l.vehiclePlate,
+                l.vehicleMake,
+                l.vehicleModel,
+                l.vehicleVin,
+            )
+        ) {
             ctx = {
-                vehicleId: l.vehicleId,
-                make: l.vehicleMake,
-                model: l.vehicleModel,
+                vehicleId: l.vehicleId ?? null,
+                make: l.vehicleMake ?? null,
+                model: l.vehicleModel ?? null,
                 year: l.vehicleYear ?? null,
-                plate: l.vehiclePlate,
+                plate: l.vehiclePlate ?? null,
                 vin: l.vehicleVin ?? null,
                 engineSize: l.vehicleEngineSize ?? null,
                 fuelType: l.vehicleFuelType ?? null,
-                jobNumber: l.vehicleJobNumber,
+                jobNumber: l.vehicleJobNumber ?? null,
             };
+        } else if (docCtx) {
+            ctx = docCtx;
         }
         perLine.set(l.id, ctx);
-        if (ctx && !distinctById.has(ctx.vehicleId)) distinctById.set(ctx.vehicleId, ctx);
+        if (ctx) {
+            // Dedup: prefer vehicleId when set; otherwise the snapshot
+            // hash (plate is usually enough, but stringify the whole
+            // shape so a partial free-text ctx doesn't collapse with a
+            // different partial ctx that happens to share a plate).
+            const key = ctx.vehicleId ?? JSON.stringify(ctx);
+            if (!distinctById.has(key)) distinctById.set(key, ctx);
+        }
     }
     const distinct = Array.from(distinctById.values());
     const anyResolved = distinct.length > 0;
@@ -321,10 +416,17 @@ export function poDefaultToStandalone(
  * the field themselves.
  */
 export function formatVehicleShort(v: VehicleContext): string {
+    // All fields nullable as of 2026-08-02 — a standalone / free-text
+    // vehicle may have only make + model, or only a plate.
     const parts: string[] = [];
-    parts.push([v.make, v.model, v.year != null ? String(v.year) : ""].filter(Boolean).join(" "));
-    parts.push(v.plate);
-    const engineBits = [v.engineSize, v.fuelType].filter(Boolean).join(" ");
+    const mmy = [v.make, v.model, v.year != null ? String(v.year) : ""]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
+    if (mmy) parts.push(mmy);
+    if (v.plate) parts.push(v.plate);
+    const engineBits = [v.engineSize, v.fuelType]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
     if (engineBits) parts.push(engineBits);
-    return parts.filter(Boolean).join(" · ");
+    return parts.join(" · ");
 }

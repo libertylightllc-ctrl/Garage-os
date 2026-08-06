@@ -181,20 +181,31 @@ export function purchaseOrderMessage(input: PurchaseOrderMessageInput): string {
     const forLabel = ar ? "لأجل" : "For";
     const jcLabel = (n: number) => (ar ? `بطاقة عمل رقم ${n}` : `JC-${n}`);
     const vehicleLine = (v: import("./po-vehicle").VehicleContext): string => {
+        // All fields nullable as of 2026-08-02 (standalone / free-text
+        // vehicles may have only make + model, or only a plate). Rows
+        // that come back null just don't render.
         const bits: string[] = [];
-        bits.push([v.make, v.model, v.year != null ? String(v.year) : ""].filter(Boolean).join(" "));
-        bits.push(v.plate);
+        const mmy = [v.make, v.model, v.year != null ? String(v.year) : ""]
+            .filter((s): s is string => Boolean(s))
+            .join(" ");
+        if (mmy) bits.push(mmy);
+        if (v.plate) bits.push(v.plate);
         if (v.vin) bits.push(`VIN ${v.vin}`);
-        const engine = [v.engineSize, v.fuelType].filter(Boolean).join(" ");
+        const engine = [v.engineSize, v.fuelType]
+            .filter((s): s is string => Boolean(s))
+            .join(" ");
         if (engine) bits.push(engine);
-        bits.push(jcLabel(v.jobNumber));
-        return bits.filter(Boolean).join(" · ");
+        if (v.jobNumber != null) bits.push(jcLabel(v.jobNumber));
+        return bits.join(" · ");
     };
     const noVehicleTag = ar ? "(لا يوجد مركبة مرتبطة)" : "(no vehicle linked)";
-    const inlineTag = (v: import("./po-vehicle").VehicleContext): string =>
-        ar
-            ? ` (${jcLabel(v.jobNumber)} · ${v.make} ${v.model})`
-            : ` (${jcLabel(v.jobNumber)} · ${v.make} ${v.model})`;
+    const inlineTag = (v: import("./po-vehicle").VehicleContext): string => {
+        const nameBits = [v.make, v.model].filter(Boolean).join(" ");
+        const parts: string[] = [];
+        if (v.jobNumber != null) parts.push(jcLabel(v.jobNumber));
+        if (nameBits) parts.push(nameBits);
+        return parts.length ? ` (${parts.join(" · ")})` : "";
+    };
     const singleVehicle = distinctVehicles.length === 1;
     let vehicleHeader = "";
     if (distinctVehicles.length === 1) {

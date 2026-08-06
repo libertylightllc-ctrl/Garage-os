@@ -199,7 +199,19 @@ export default async function PurchaseOrderDetailPage({
   // shape in the WhatsApp/email body. See resolvePoVehicles for
   // the null semantics (unresolved lines render "—" on the surface
   // and "(no vehicle linked)" in the message body).
-  const vehicles = resolvePoVehicles(po.lines);
+  // Doc-level default is passed to the resolver so lines with no
+  // per-line snapshot (older rows, or any manual add that skipped the
+  // write-time copy) fall back to the doc default at render time.
+  const vehicles = resolvePoVehicles(po.lines, {
+    defaultVehicleId: po.defaultVehicleId,
+    defaultVehicleMake: po.defaultVehicleMake,
+    defaultVehicleModel: po.defaultVehicleModel,
+    defaultVehicleYear: po.defaultVehicleYear,
+    defaultVehiclePlate: po.defaultVehiclePlate,
+    defaultVehicleVin: po.defaultVehicleVin,
+    defaultVehicleEngineSize: po.defaultVehicleEngineSize,
+    defaultVehicleFuelType: po.defaultVehicleFuelType,
+  });
 
   // The shared message body used to be built here for the wa.me href.
   // It now lives inside sendPurchaseOrderWhatsAppAction (and C's email
@@ -449,10 +461,37 @@ export default async function PurchaseOrderDetailPage({
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {lineVehicle ? (
+                        // 2026-08-02 (fix #3 followup): each detail on
+                        // its own row so a supplier can identify the
+                        // right part. "Toyota Land Cruiser 2021" alone
+                        // isn't enough to pick a filter for a specific
+                        // trim; the engine + plate + VIN are what
+                        // matter. Rows that are null just don't render.
                         <div className="space-y-0.5">
-                          <div className="font-medium">
-                            {formatVehicleShort(lineVehicle)}
-                          </div>
+                          {lineVehicle.make || lineVehicle.model ? (
+                            <div className="font-medium">
+                              {[lineVehicle.make, lineVehicle.model]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </div>
+                          ) : null}
+                          {lineVehicle.year != null ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {lineVehicle.year}
+                            </div>
+                          ) : null}
+                          {lineVehicle.engineSize || lineVehicle.fuelType ? (
+                            <div className="text-[11px] text-muted-foreground">
+                              {[lineVehicle.engineSize, lineVehicle.fuelType]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </div>
+                          ) : null}
+                          {lineVehicle.plate ? (
+                            <div className="text-[11px] font-medium">
+                              {lineVehicle.plate}
+                            </div>
+                          ) : null}
                           {lineVehicle.vin ? (
                             <div className="font-mono text-[10px] text-muted-foreground">
                               VIN {lineVehicle.vin}

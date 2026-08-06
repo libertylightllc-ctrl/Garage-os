@@ -1034,7 +1034,16 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
   const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
 
   const publicUrl = `${appUrl()}/c/po/${signId("po", po.id)}`;
-  const vehicles = resolvePoVehicles(po.lines);
+  const vehicles = resolvePoVehicles(po.lines, {
+    defaultVehicleId: po.defaultVehicleId,
+    defaultVehicleMake: po.defaultVehicleMake,
+    defaultVehicleModel: po.defaultVehicleModel,
+    defaultVehicleYear: po.defaultVehicleYear,
+    defaultVehiclePlate: po.defaultVehiclePlate,
+    defaultVehicleVin: po.defaultVehicleVin,
+    defaultVehicleEngineSize: po.defaultVehicleEngineSize,
+    defaultVehicleFuelType: po.defaultVehicleFuelType,
+  });
   const garage = await prisma.garage.findUnique({
     where: { id: user.garageId },
     select: { name: true },

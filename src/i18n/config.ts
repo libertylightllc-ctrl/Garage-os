@@ -351,6 +351,8 @@ const en = {
   vehicleYearLabel: "Year",
   vehicleEngineLabel: "Engine",
   vehicleVinLabel: "VIN",
+  vehicleJobNumberLabel: "Job card #",
+  vehicleJobNumberPlaceholder: "e.g. 42",
   vehicleMatchLabel: "Matched garage record:",
   vehicleMatchDismiss: "Dismiss match",
   // /advisor/customers/[id] — the ONE customer-detail surface.
@@ -1740,6 +1742,8 @@ const ar: typeof en = {
   vehicleYearLabel: "السنة",
   vehicleEngineLabel: "المحرك",
   vehicleVinLabel: "رقم الهيكل",
+  vehicleJobNumberLabel: "رقم بطاقة العمل",
+  vehicleJobNumberPlaceholder: "مثال: 42",
   vehicleMatchLabel: "سجل المرآب المطابق:",
   vehicleMatchDismiss: "تجاهل المطابقة",
   customerDetailKicker: "العميل",

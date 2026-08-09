@@ -120,6 +120,7 @@ export default async function PublicPurchaseOrder({
         defaultVehicleVin: po.defaultVehicleVin,
         defaultVehicleEngineSize: po.defaultVehicleEngineSize,
         defaultVehicleFuelType: po.defaultVehicleFuelType,
+        defaultVehicleJobNumber: po.defaultVehicleJobNumber,
     });
 
     return (

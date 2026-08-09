@@ -135,27 +135,48 @@ export default async function NewPurchaseOrderPage({
               <p className="text-[11px] text-muted-foreground">
                 {t("poDefaultVehicleHint")}
               </p>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">{t("vehiclePlateLabel")}</span>
-                <input
-                  name="vehicle_plate"
-                  type="text"
-                  list="new-po-vehicle-plates"
-                  autoComplete="off"
-                  placeholder={t("vehiclePlatePlaceholder")}
-                  className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                />
-                <datalist id="new-po-vehicle-plates">
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.plate}>
-                      {v.make} {v.model}
-                      {v.year ? ` (${v.year})` : ""}
-                    </option>
-                  ))}
-                </datalist>
-              </label>
+              {/* Two ways to identify the car: plate OR job card
+                  number. Either resolves the vehicle (advisor
+                  usually has the JC# in front of them; the plate is
+                  the fallback when the car has no active job).
+                  Client-side matcher watches BOTH inputs and fills
+                  the other one on match. */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehiclePlateLabel")}</span>
+                  <input
+                    name="vehicle_plate"
+                    type="text"
+                    list="new-po-vehicle-plates"
+                    autoComplete="off"
+                    placeholder={t("vehiclePlatePlaceholder")}
+                    className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                  />
+                  <datalist id="new-po-vehicle-plates">
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.plate}>
+                        {v.make} {v.model}
+                        {v.year ? ` (${v.year})` : ""}
+                      </option>
+                    ))}
+                  </datalist>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("vehicleJobNumberLabel")}</span>
+                  <input
+                    name="vehicle_jobNumber"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    autoComplete="off"
+                    placeholder={t("vehicleJobNumberPlaceholder")}
+                    className="rounded-md border border-border bg-transparent px-3 py-2 text-sm tabular-nums"
+                  />
+                </label>
+              </div>
               <VehicleMatchFill
                 plateName="vehicle_plate"
+                jobNumberName="vehicle_jobNumber"
                 makeName="vehicle_make"
                 modelName="vehicle_model"
                 yearName="vehicle_year"

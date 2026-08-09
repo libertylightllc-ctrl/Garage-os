@@ -3,58 +3,44 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Client-side plate-match preview for the purchasing vehicle widgets.
+ * Client-side match preview for the purchasing vehicle widgets.
  *
- * Behaviour — enforces the "blank means blank" rule from the vehicle
- * autofill spec:
+ * Two ways to identify the car:
+ *   - Plate (calls /api/vehicles/by-plate)
+ *   - Job card number (calls /api/vehicles/by-job)
  *
- *   1. Watches the plate input. When the user stops typing (250ms
- *      debounce) or a datalist option is picked, fetches
- *      /api/vehicles/by-plate?plate=… scoped to the caller's garage.
+ * Both feed the same "matched garage record" chip + autofill of the
+ * make/model/year/engine/VIN inputs, plus the OTHER identifier
+ * (typing a JC# fills the plate; typing a plate fills the JC#).
+ * Rules unchanged from the plate-only version:
  *
- *   2. On match: shows a small chip naming what was matched
- *      (make / model / year / engine · VIN) + a Dismiss button, and
- *      auto-populates ONLY the blank sibling inputs (make, model, year,
- *      engine, VIN). Fields the operator already typed are NEVER
- *      overwritten by the match.
+ *   1. Debounced fetch on input (250ms), immediate on change.
+ *   2. Match → chip + autofill blank sibling inputs (never overwrite
+ *      a value the user typed).
+ *   3. Tracks which inputs THIS component filled (`data-vmf-filled`).
+ *      A manual edit strips the flag so Dismiss leaves the user's
+ *      value alone.
+ *   4. Dismiss / no-match / cleared identifier → clear the
+ *      still-flagged fields only.
  *
- *   3. Tracks which inputs THIS component filled (per-input `data-*`
- *      flag). Dismiss clears just those — anything the user typed
- *      themselves survives. Manually editing an autofilled input strips
- *      its "filled by me" flag so a later Dismiss can't wipe the user's
- *      edit.
- *
- *   4. On no-match / empty plate: chip hides, previously-filled inputs
- *      are cleared. What the user typed is untouched.
- *
- * The server-side `parseVehicleFormFields` no longer autofills from a
- * plate match — the whole preview + edit + submit round-trip runs in
- * the browser, and the server takes the form fields verbatim. That is
- * what makes "leave VIN blank → line stores no VIN" a real invariant:
- * nothing between the browser and the DB substitutes a value.
- *
- * Props are the input `name`s (not element refs) so the component works
- * inside plain `<form action=...>` markup without needing controlled
- * inputs. Sibling inputs are found by `[name="…"]` scoped to the same
- * closest `<form>`, matching the shape the purchasing pages already
- * render.
+ * `jobNumberName` is optional so surfaces that don't want the JC#
+ * path (there aren't any today, but future ones might) can leave it
+ * off with no behavioural change.
  */
 interface Props {
     /** name= on the plate input (usually `vehicle_plate`). */
     plateName: string;
+    /** name= on the job-number input (usually `vehicle_jobNumber`). */
+    jobNumberName?: string;
     /** name=s of the other vehicle inputs to auto-populate on match. */
     makeName: string;
     modelName: string;
     yearName: string;
     engineName: string;
     vinName: string;
-    /** Localised labels. */
     labels: {
-        /** "Matched garage record:" */
         matchedLabel: string;
-        /** "Dismiss" */
         dismissLabel: string;
-        /** "VIN" prefix inside the chip (matches the input label). */
         vinLabel: string;
     };
 }
@@ -68,12 +54,16 @@ interface MatchPayload {
     vin: string | null;
     engineSize: string | null;
     fuelType: string | null;
+    jobNumber?: number | null;
 }
 
 const FILLED_FLAG = "data-vmf-filled";
 
+type LookupSource = "plate" | "job";
+
 export function VehicleMatchFill({
     plateName,
+    jobNumberName,
     makeName,
     modelName,
     yearName,
@@ -84,11 +74,13 @@ export function VehicleMatchFill({
     const rootRef = useRef<HTMLDivElement | null>(null);
     const [match, setMatch] = useState<MatchPayload | null>(null);
     const abortRef = useRef<AbortController | null>(null);
-    const lastQueriedRef = useRef<string>("");
+    // Track the most-recently-queried value per source so a redundant
+    // keystroke doesn't fire another fetch.
+    const lastQueriedRef = useRef<{ plate: string; job: string }>({
+        plate: "",
+        job: "",
+    });
 
-    // Find the plate input in the enclosing form so the component can
-    // wire up without prop drilling refs from the server-rendered
-    // markup. Scope every sibling query the same way.
     function findForm(): HTMLFormElement | null {
         return rootRef.current?.closest("form") ?? null;
     }
@@ -98,18 +90,19 @@ export function VehicleMatchFill({
         return form.querySelector<HTMLInputElement>(`[name="${name}"]`);
     }
 
-    // Auto-populate a blank sibling input with the matched value and
-    // flag it so Dismiss knows this component owns the change. If the
-    // input already has a value the user typed, we leave it alone —
-    // that is the "never overwrite" rule.
-    // Programmatic writes (fill on match, clear on dismiss) MUST NOT
-    // dispatch input events — the sibling `input` listener below
-    // strips the FILLED_FLAG on any input event, and we'd end up
-    // wiping our own flag the instant we set it (so Dismiss then
-    // couldn't tell which fields it had populated). The unsaved-
-    // changes guard on the enclosing form is fine to skip for
-    // autofills: those aren't user changes and shouldn't count
-    // toward "you have unsaved edits."
+    // Every sibling input we may fill. Includes the OTHER identifier
+    // (plate when the match came from job#, and vice versa) so a
+    // dismiss covers everything the match populated.
+    function fillableNames(): string[] {
+        const names = [makeName, modelName, yearName, engineName, vinName, plateName];
+        if (jobNumberName) names.push(jobNumberName);
+        return names;
+    }
+
+    // Programmatic writes MUST NOT dispatch input events — the sibling
+    // `input` listener strips the FILLED_FLAG on any input event, and
+    // we'd end up wiping our own flag the instant we set it (so
+    // Dismiss then couldn't tell which fields it had populated).
     function fillIfBlank(name: string, value: string | null) {
         const el = findInput(name);
         if (!el || value == null || value === "") return;
@@ -117,9 +110,6 @@ export function VehicleMatchFill({
         el.value = value;
         el.setAttribute(FILLED_FLAG, "1");
     }
-    // Clear only inputs THIS component populated. If the user edited
-    // an autofilled field, that field's flag has been stripped by the
-    // change listener below, so it survives dismiss.
     function clearIfFilledByMe(name: string) {
         const el = findInput(name);
         if (!el) return;
@@ -128,86 +118,110 @@ export function VehicleMatchFill({
         el.removeAttribute(FILLED_FLAG);
     }
 
-    // Fetch a match for the current plate value. Debounced by the
-    // caller (via the setTimeout in the input listener).
-    async function lookup(plate: string) {
-        const trimmed = plate.trim();
+    function applyMatch(m: MatchPayload) {
+        setMatch(m);
+        fillIfBlank(makeName, m.make);
+        fillIfBlank(modelName, m.model);
+        fillIfBlank(yearName, m.year != null ? String(m.year) : null);
+        fillIfBlank(engineName, m.engineSize);
+        fillIfBlank(vinName, m.vin);
+        // Cross-fill the other identifier so an operator who typed
+        // JC# sees the plate come back too, and vice versa. Both feed
+        // the server's snapshot columns.
+        fillIfBlank(plateName, m.plate);
+        if (jobNumberName && m.jobNumber != null) {
+            fillIfBlank(jobNumberName, String(m.jobNumber));
+        }
+    }
+
+    function clearAllFilled() {
+        fillableNames().forEach(clearIfFilledByMe);
+    }
+
+    async function lookup(source: LookupSource, raw: string) {
+        const trimmed = raw.trim();
         if (!trimmed) {
-            // Cleared plate: drop any chip and clear the fields WE
-            // populated (user-typed values survive).
+            // Cleared input: drop chip only if the OTHER input is also
+            // empty; otherwise we're mid-edit and the OTHER identifier
+            // may still be a live match. Simpler rule: any clear drops
+            // the chip; user re-types the still-set field to resurface.
             setMatch(null);
-            [makeName, modelName, yearName, engineName, vinName].forEach(
-                clearIfFilledByMe,
-            );
-            lastQueriedRef.current = "";
+            clearAllFilled();
+            lastQueriedRef.current[source] = "";
             return;
         }
-        // Skip a redundant round trip when the user typed something new
-        // but the trimmed value hasn't changed since the last fetch.
-        if (trimmed === lastQueriedRef.current) return;
-        lastQueriedRef.current = trimmed;
-        // Abort any in-flight fetch — the newest keystroke wins.
+        if (trimmed === lastQueriedRef.current[source]) return;
+        lastQueriedRef.current[source] = trimmed;
         abortRef.current?.abort();
         const ctrl = new AbortController();
         abortRef.current = ctrl;
+        const endpoint =
+            source === "plate"
+                ? `/api/vehicles/by-plate?plate=${encodeURIComponent(trimmed)}`
+                : `/api/vehicles/by-job?number=${encodeURIComponent(trimmed)}`;
         try {
-            const resp = await fetch(
-                `/api/vehicles/by-plate?plate=${encodeURIComponent(trimmed)}`,
-                { signal: ctrl.signal, cache: "no-store" },
-            );
+            const resp = await fetch(endpoint, {
+                signal: ctrl.signal,
+                cache: "no-store",
+            });
             if (!resp.ok) return;
             const data = (await resp.json()) as { match: MatchPayload | null };
-            // If the user's typed plate changed while we were fetching,
+            // If the user's typed value changed while we were fetching,
             // discard this stale response.
-            const currentPlate = findInput(plateName)?.value.trim() ?? "";
-            if (currentPlate !== trimmed) return;
-            setMatch(data.match);
+            const currentValue =
+                source === "plate"
+                    ? findInput(plateName)?.value.trim() ?? ""
+                    : (jobNumberName && findInput(jobNumberName)?.value.trim()) ?? "";
+            if (currentValue !== trimmed) return;
             if (data.match) {
-                fillIfBlank(makeName, data.match.make);
-                fillIfBlank(modelName, data.match.model);
-                fillIfBlank(
-                    yearName,
-                    data.match.year != null ? String(data.match.year) : null,
-                );
-                fillIfBlank(engineName, data.match.engineSize);
-                fillIfBlank(vinName, data.match.vin);
+                applyMatch(data.match);
             } else {
-                // Plate typed but not a garage record: clear any
-                // previously-filled fields (from an earlier match).
-                [makeName, modelName, yearName, engineName, vinName].forEach(
-                    clearIfFilledByMe,
-                );
+                // Typed identifier didn't match: drop any chip + clear
+                // fields we'd filled from a previous match.
+                setMatch(null);
+                clearAllFilled();
             }
         } catch (err) {
             if (err instanceof DOMException && err.name === "AbortError") return;
-            // Network hiccup: leave the form as-is. Server-side submit
-            // still works — this is a UX affordance, not a data path.
             // eslint-disable-next-line no-console
             console.warn("[vehicle-match-fill] lookup failed", err);
         }
     }
 
-    // Wire input listeners on mount. Kept in an effect so the plate
-    // input rendered by the server is picked up after hydration.
     useEffect(() => {
         const plateEl = findInput(plateName);
-        if (!plateEl) return;
+        const jobEl = jobNumberName ? findInput(jobNumberName) : null;
         let timer: ReturnType<typeof setTimeout> | null = null;
-        const onPlateInput = () => {
+
+        const debounced = (fn: () => void) => {
             if (timer) clearTimeout(timer);
-            timer = setTimeout(() => lookup(plateEl.value), 250);
+            timer = setTimeout(fn, 250);
         };
-        // Datalist pick fires `change` immediately (no debounce needed).
+
+        const onPlateInput = () => debounced(() => lookup("plate", plateEl!.value));
         const onPlateChange = () => {
             if (timer) clearTimeout(timer);
-            lookup(plateEl.value);
+            lookup("plate", plateEl!.value);
         };
-        plateEl.addEventListener("input", onPlateInput);
-        plateEl.addEventListener("change", onPlateChange);
+        const onJobInput = () => debounced(() => lookup("job", jobEl!.value));
+        const onJobChange = () => {
+            if (timer) clearTimeout(timer);
+            lookup("job", jobEl!.value);
+        };
 
-        // Whenever the user edits an autofilled sibling, strip the
-        // "filled by me" flag so Dismiss can't wipe their change.
-        const siblings = [makeName, modelName, yearName, engineName, vinName]
+        if (plateEl) {
+            plateEl.addEventListener("input", onPlateInput);
+            plateEl.addEventListener("change", onPlateChange);
+        }
+        if (jobEl) {
+            jobEl.addEventListener("input", onJobInput);
+            jobEl.addEventListener("change", onJobChange);
+        }
+
+        // Strip the "filled by me" flag on manual edit so Dismiss
+        // preserves the user's value. Applies to every field we might
+        // have populated — including the cross-filled identifier.
+        const siblings = fillableNames()
             .map(findInput)
             .filter((el): el is HTMLInputElement => el != null);
         const onSiblingInput = (ev: Event) => {
@@ -217,8 +231,14 @@ export function VehicleMatchFill({
         siblings.forEach((el) => el.addEventListener("input", onSiblingInput));
 
         return () => {
-            plateEl.removeEventListener("input", onPlateInput);
-            plateEl.removeEventListener("change", onPlateChange);
+            if (plateEl) {
+                plateEl.removeEventListener("input", onPlateInput);
+                plateEl.removeEventListener("change", onPlateChange);
+            }
+            if (jobEl) {
+                jobEl.removeEventListener("input", onJobInput);
+                jobEl.removeEventListener("change", onJobChange);
+            }
             siblings.forEach((el) =>
                 el.removeEventListener("input", onSiblingInput),
             );
@@ -230,18 +250,13 @@ export function VehicleMatchFill({
 
     function onDismiss() {
         setMatch(null);
-        [makeName, modelName, yearName, engineName, vinName].forEach(
-            clearIfFilledByMe,
-        );
-        // Clear the record so the same plate can re-fetch if the user
-        // triggers another change — otherwise the debounce would treat
-        // "same plate" as no-op and never resurface the chip.
-        lastQueriedRef.current = "";
+        clearAllFilled();
+        // Reset both last-queried caches so re-typing the same value
+        // triggers a fresh fetch (otherwise the debounce would treat
+        // "same input" as no-op and never resurface the chip).
+        lastQueriedRef.current = { plate: "", job: "" };
     }
 
-    // The chip lists the matched vehicle in a single line — make model
-    // year · engine · VIN — with nulls skipped. This is the "what did
-    // it match" surface the operator was missing.
     const chipBits: string[] = [];
     if (match) {
         const mmy = [
@@ -253,7 +268,9 @@ export function VehicleMatchFill({
             .join(" ");
         if (mmy) chipBits.push(mmy);
         if (match.engineSize) chipBits.push(match.engineSize);
+        if (match.plate) chipBits.push(match.plate);
         if (match.vin) chipBits.push(`${labels.vinLabel} ${match.vin}`);
+        if (match.jobNumber != null) chipBits.push(`JC-${match.jobNumber}`);
     }
 
     return (

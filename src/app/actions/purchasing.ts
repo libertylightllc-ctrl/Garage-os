@@ -188,13 +188,28 @@ async function parseVehicleFormFields(
   const rawVin = get("vin");
   const rawEngine = get("engineSize");
   const rawFuel = get("fuelType");
+  const rawJobNumberStr = get("jobNumber");
   const year = rawYearStr ? Number.parseInt(rawYearStr, 10) : null;
   const yearOk = year != null && Number.isFinite(year) ? year : null;
+  const jobNumber = rawJobNumberStr
+    ? Number.parseInt(rawJobNumberStr, 10)
+    : null;
+  const jobNumberOk =
+    jobNumber != null && Number.isFinite(jobNumber) && jobNumber > 0
+      ? jobNumber
+      : null;
 
-  // Plate lookup: only to resolve the FK. The Vehicle's other fields
-  // are NOT read from the row — snapshot columns come from the form
-  // verbatim, and the client-side match preview is what surfaces the
-  // matched values to the operator before submit.
+  // Plate lookup + job-number lookup: only to resolve the vehicleId
+  // FK. The Vehicle's other fields are NOT read from those rows —
+  // snapshot columns come from the form verbatim, and the client-side
+  // match preview is what surfaces the matched values to the operator
+  // before submit. Same rule as the plate-only case that shipped
+  // 2026-08-06: nothing the user didn't see ends up on the row.
+  //
+  // If both plate + job number resolve, plate wins the FK. That
+  // matches operator intent when they've explicitly picked a plate;
+  // the job number then acts as a supplementary reference on the
+  // snapshot only.
   let vehicleId: string | null = null;
   if (rawPlate) {
     const match = await prisma.vehicle.findFirst({
@@ -206,6 +221,13 @@ async function parseVehicleFormFields(
     });
     if (match) vehicleId = match.id;
   }
+  if (!vehicleId && jobNumberOk != null) {
+    const job = await prisma.jobCard.findFirst({
+      where: { garageId, number: jobNumberOk },
+      select: { vehicleId: true },
+    });
+    if (job) vehicleId = job.vehicleId;
+  }
   return {
     vehicleId,
     make: rawMake,
@@ -215,6 +237,7 @@ async function parseVehicleFormFields(
     vin: rawVin,
     engineSize: rawEngine,
     fuelType: rawFuel,
+    jobNumber: jobNumberOk,
   };
 }
 
@@ -313,6 +336,7 @@ export async function addPoLineAction(formData: FormData) {
         defaultVehicleVin: true,
         defaultVehicleEngineSize: true,
         defaultVehicleFuelType: true,
+        defaultVehicleJobNumber: true,
       },
     });
     if (poDefault) {
@@ -1034,6 +1058,7 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
     defaultVehicleVin: po.defaultVehicleVin,
     defaultVehicleEngineSize: po.defaultVehicleEngineSize,
     defaultVehicleFuelType: po.defaultVehicleFuelType,
+    defaultVehicleJobNumber: po.defaultVehicleJobNumber,
   });
   const garage = await prisma.garage.findUnique({
     where: { id: user.garageId },

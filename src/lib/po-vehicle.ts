@@ -102,6 +102,7 @@ export interface ResolverPoDefault {
     defaultVehicleVin?: string | null;
     defaultVehicleEngineSize?: string | null;
     defaultVehicleFuelType?: string | null;
+    defaultVehicleJobNumber?: number | null;
 }
 
 /** Any identifying field means "this snapshot represents a real vehicle". */
@@ -144,7 +145,7 @@ export function resolvePoVehicles(
             vin: docDefault.defaultVehicleVin ?? null,
             engineSize: docDefault.defaultVehicleEngineSize ?? null,
             fuelType: docDefault.defaultVehicleFuelType ?? null,
-            jobNumber: null,
+            jobNumber: docDefault.defaultVehicleJobNumber ?? null,
         };
     }
 
@@ -298,6 +299,12 @@ export interface StandaloneVehicleInput {
     vin?: string | null;
     engineSize?: string | null;
     fuelType?: string | null;
+    // Job card number — captured when the operator identified the car
+    // by JC# in the vehicle picker instead of by plate. Snapshot on
+    // the line / doc-default, purely informational for the supplier
+    // ("this is for the job you know as JC-2026-0007"). Never used as
+    // a live join key.
+    jobNumber?: number | null;
 }
 
 /**
@@ -314,7 +321,8 @@ export function hasAnyVehicleField(v: StandaloneVehicleInput): boolean {
         (v.plate && v.plate.trim()) ||
         (v.vin && v.vin.trim()) ||
         (v.engineSize && v.engineSize.trim()) ||
-        (v.fuelType && v.fuelType.trim()),
+        (v.fuelType && v.fuelType.trim()) ||
+        v.jobNumber != null,
     );
 }
 
@@ -340,6 +348,7 @@ export function buildStandaloneVehicleSnapshot(
     if (v.vin && v.vin.trim()) snap.vehicleVin = v.vin.trim();
     if (v.engineSize && v.engineSize.trim()) snap.vehicleEngineSize = v.engineSize.trim();
     if (v.fuelType && v.fuelType.trim()) snap.vehicleFuelType = v.fuelType.trim();
+    if (v.jobNumber != null && Number.isFinite(v.jobNumber)) snap.vehicleJobNumber = v.jobNumber;
     return snap;
 }
 
@@ -356,6 +365,7 @@ export interface PoDefaultVehicleSnapshot {
     defaultVehicleVin?: string;
     defaultVehicleEngineSize?: string;
     defaultVehicleFuelType?: string;
+    defaultVehicleJobNumber?: number;
 }
 
 export function buildPoDefaultVehicleSnapshot(
@@ -372,6 +382,8 @@ export function buildPoDefaultVehicleSnapshot(
     if (v.engineSize && v.engineSize.trim())
         snap.defaultVehicleEngineSize = v.engineSize.trim();
     if (v.fuelType && v.fuelType.trim()) snap.defaultVehicleFuelType = v.fuelType.trim();
+    if (v.jobNumber != null && Number.isFinite(v.jobNumber))
+        snap.defaultVehicleJobNumber = v.jobNumber;
     return snap;
 }
 
@@ -389,6 +401,7 @@ export interface PoDefaultVehicleRow {
     defaultVehicleVin: string | null;
     defaultVehicleEngineSize: string | null;
     defaultVehicleFuelType: string | null;
+    defaultVehicleJobNumber: number | null;
 }
 
 export function poDefaultToStandalone(
@@ -403,6 +416,7 @@ export function poDefaultToStandalone(
         vin: p.defaultVehicleVin,
         engineSize: p.defaultVehicleEngineSize,
         fuelType: p.defaultVehicleFuelType,
+        jobNumber: p.defaultVehicleJobNumber,
     };
 }
 

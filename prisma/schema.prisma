@@ -900,6 +900,13 @@ model PurchaseOrder {
   defaultVehicleVin        String?
   defaultVehicleEngineSize String?
   defaultVehicleFuelType   String?
+  // Job card number (per-garage sequential) captured at doc-default
+  // time when the operator identified the car by JC# instead of by
+  // plate. Snapshot only — a later JobCard rename or renumber does
+  // NOT retroactively rewrite the supplier document. Copied into each
+  // new line's own `vehicleJobNumber` at Add-line time via the same
+  // default-fallback path as the other vehicle fields.
+  defaultVehicleJobNumber  Int?
 
   lines PurchaseOrderLine[]
   sends PurchaseOrderSend[]

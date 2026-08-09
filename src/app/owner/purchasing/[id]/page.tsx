@@ -212,6 +212,7 @@ export default async function PurchaseOrderDetailPage({
     defaultVehicleVin: po.defaultVehicleVin,
     defaultVehicleEngineSize: po.defaultVehicleEngineSize,
     defaultVehicleFuelType: po.defaultVehicleFuelType,
+    defaultVehicleJobNumber: po.defaultVehicleJobNumber,
   });
 
   // The shared message body used to be built here for the wa.me href.
@@ -853,8 +854,27 @@ export default async function PurchaseOrderDetailPage({
                       ))}
                     </datalist>
                   </label>
+                  {/* Job # — alternate identifier that resolves the
+                      same vehicle. Advisor typically has the JC in
+                      front of them. Client matcher cross-fills the
+                      plate when this hits. */}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground">
+                      {t("vehicleJobNumberLabel")}
+                    </span>
+                    <input
+                      name="vehicle_jobNumber"
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      autoComplete="off"
+                      placeholder={t("vehicleJobNumberPlaceholder")}
+                      className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm tabular-nums"
+                    />
+                  </label>
                   <VehicleMatchFill
                     plateName="vehicle_plate"
+                    jobNumberName="vehicle_jobNumber"
                     makeName="vehicle_make"
                     modelName="vehicle_model"
                     yearName="vehicle_year"

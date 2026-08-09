@@ -720,6 +720,9 @@ const en = {
   invoicePreviewNote: "Review the customer-facing invoice before sending.",
   invoicePreviewButton: "Preview →",
   invoicePreviewGoBack: "← Go Back",
+  invoiceDownloadPdf: "Download PDF",
+  invoiceDownloadPdfHint:
+    "Save a PDF copy — same layout the customer sees, ready to attach anywhere WhatsApp can carry a file.",
   invoicePreviewMockNote:
     "Send via WhatsApp opens the customer's WhatsApp on your phone with the message pre-filled. You still need to press Send there — the customer receives nothing until you do.",
   invoiceSentAt: "Handed to your WhatsApp at",
@@ -2066,6 +2069,9 @@ const ar: typeof en = {
   invoicePreviewNote: "راجع الفاتورة كما يراها العميل قبل الإرسال.",
   invoicePreviewButton: "معاينة ←",
   invoicePreviewGoBack: "← العودة للتعديل",
+  invoiceDownloadPdf: "تحميل PDF",
+  invoiceDownloadPdfHint:
+    "احفظ نسخة PDF — بنفس التنسيق الذي يراه العميل، جاهزة للإرفاق في أي مكان يقبل الملفات.",
   invoicePreviewMockNote:
     "«إرسال عبر واتساب» يفتح محادثة العميل على هاتفك مع الرسالة جاهزة. ما زال عليك الضغط على إرسال داخل واتساب — لن يستلم العميل شيئًا حتى تفعل ذلك.",
   invoiceSentTitle: "تم تسليم الفاتورة إلى واتساب",

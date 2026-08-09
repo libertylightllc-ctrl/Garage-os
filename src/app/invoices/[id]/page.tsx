@@ -204,6 +204,16 @@ export default async function InvoiceView({
         <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
           🖨️ {t("invoicePrintInvoice")}
         </PrintButton>
+        {/* Download PDF — internal staff route. Same PDF the customer
+            gets from /c/invoice/[token]/pdf; this endpoint is
+            garage-scoped via session so a cashier can save a copy
+            without needing to fish out the signed customer link. */}
+        <a
+          href={`/api/invoices/${inv.id}/pdf`}
+          className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+        >
+          📄 {t("invoiceDownloadPdf")}
+        </a>
         {state ==="PAID"? (
           <Link
             href={`/invoices/${inv.id}/receipt`}

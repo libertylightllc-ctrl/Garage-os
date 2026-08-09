@@ -6,13 +6,18 @@ import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { DocumentHeader } from "@/components/document-header";
 import { UAE_VAT_RATE } from "@/lib/vat";
+import Link from "next/link";
 
 export const dynamic ="force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function CustomerInvoice({ params }: { params: Promise<{ id: string }> }) {
-  const { id: token } = await params;
+  const { id: tokenParam } = await params;
+  // Keep the signed token for the Download PDF link below — the PDF
+  // route uses the same public-signed URL scheme so the customer
+  // gets the same auth semantics for downloading as for viewing.
+  const token = tokenParam;
   const id = verifyToken("invoice", token);
   if (!id) notFound();
   const inv = await prisma.invoice.findUnique({
@@ -130,6 +135,19 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           {t("payAtGarage")} · {money(balance)}
         </p>
       )}
+
+      {/* Download PDF — public route, same signed token as this page.
+          The customer can save the tax invoice to their phone /
+          forward it to an accountant / attach it to their expense
+          claim without depending on the browser's Print → Save-as-PDF
+          dance (which many mobile WhatsApp in-app browsers don't
+          expose reliably). */}
+      <Link
+        href={`/c/invoice/${token}/pdf`}
+        className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-surface px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
+      >
+        📄 {t("invoiceDownloadPdf")}
+      </Link>
     </main>
   );
 }

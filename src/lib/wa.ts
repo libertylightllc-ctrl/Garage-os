@@ -24,7 +24,30 @@
  *   - Leading "0" + 9 more digits (local UAE like 0501234567) →
  *     replace the "0" with the default country code (971 for UAE).
  *   - Otherwise: accept if what remains is 8-15 digits.
+ *
+ * Additional GCC gate (2026-08-10, INV-2026-0039 diagnosis): after the
+ * normalization above, the resulting digit string MUST start with a
+ * recognised GCC country code. `509633280` (9 digits, no leading 0,
+ * no country prefix) previously slipped through as valid — wa.me then
+ * opened a chat with a number that doesn't exist, and the send
+ * silently reached nobody. Rejecting up front stops the same bug
+ * class. GarageOS is UAE-only at launch (see AGENTS.md), but the
+ * broader GCC set is accepted because expat customers commonly use
+ * numbers from KSA/Oman/Qatar/Bahrain/Kuwait roaming into the UAE.
  */
+export const GCC_COUNTRY_CODES = [
+    "971", // United Arab Emirates
+    "966", // Saudi Arabia
+    "968", // Oman
+    "974", // Qatar
+    "973", // Bahrain
+    "965", // Kuwait
+] as const;
+
+function startsWithGccCode(digits: string): boolean {
+    return GCC_COUNTRY_CODES.some((c) => digits.startsWith(c));
+}
+
 export function normalizeToE164(
     raw: string | null | undefined,
     defaultCountry = "971",
@@ -56,6 +79,13 @@ export function normalizeToE164(
     // enough for real GCC numbers (~11-12 digits) and reject obvious
     // junk like a 3-digit typo.
     if (digits.length < 8 || digits.length > 15) return null;
+    // Country-code gate — the fix for the AHMED case. A number that
+    // survived every earlier rule but doesn't start with a code we
+    // recognise is almost always a UAE mobile that lost its leading
+    // 0 during copy-paste, or an accidentally-truncated foreign
+    // number. Rather than opening a wa.me chat that goes nowhere,
+    // return null so the caller renders a disabled button.
+    if (!startsWithGccCode(digits)) return null;
 
     return digits;
 }

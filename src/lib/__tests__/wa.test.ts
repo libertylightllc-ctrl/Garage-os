@@ -44,6 +44,31 @@ describe("normalizeToE164 — all 8 cases", () => {
     it("rejects absurdly long input", () => {
         expect(normalizeToE164("+1234567890123456")).toBeNull();
     });
+
+    // Country-code gate added 2026-08-10 after INV-2026-0039 fixture leak.
+    // Before this, 8-15 digits + digit-only was the whole check, so a raw
+    // "509633280" passed straight through and wa.me opened a chat with
+    // nobody. The gate insists on a recognised GCC country code prefix.
+    describe("GCC country-code gate (2026-08-10)", () => {
+        it("rejects 9-digit UAE mobile with the leading 0 lost (the AHMED case)", () => {
+            // Repro of the real INV-2026-0039 recipient we found in prod.
+            expect(normalizeToE164("509633280")).toBeNull();
+        });
+        it("rejects a foreign (UK) E.164 — not in GCC", () => {
+            expect(normalizeToE164("+441234567890")).toBeNull();
+        });
+        it("rejects a bare 8-digit domestic number", () => {
+            expect(normalizeToE164("50123456")).toBeNull();
+        });
+        it("accepts every listed GCC country code", () => {
+            expect(normalizeToE164("971501234567")).toBe("971501234567"); // UAE
+            expect(normalizeToE164("966501234567")).toBe("966501234567"); // KSA
+            expect(normalizeToE164("968901234567")).toBe("968901234567"); // Oman
+            expect(normalizeToE164("974501234567")).toBe("974501234567"); // Qatar
+            expect(normalizeToE164("973301234567")).toBe("973301234567"); // Bahrain
+            expect(normalizeToE164("965501234567")).toBe("965501234567"); // Kuwait
+        });
+    });
 });
 
 describe("buildWaMeUrl — URL encoding correctness", () => {

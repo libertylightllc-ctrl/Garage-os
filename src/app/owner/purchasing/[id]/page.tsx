@@ -9,7 +9,7 @@ import { PrintButton } from "@/components/print-button";
 import { SendPoViaWhatsAppButton } from "@/components/SendPoViaWhatsAppButton";
 import { PoSentHistory } from "@/components/PoSentHistory";
 import { getT, getLocale } from "@/i18n/server";
-import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
+import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
 import { normalizeToE164 } from "@/lib/wa";
@@ -58,6 +58,18 @@ export default async function PurchaseOrderDetailPage({
     select: { name: true, trn: true, country: true, logoUrl: true },
   });
   const tz = countryToTimeZone(garage?.country ?? "UAE");
+
+  // Stock movements written by receipts / returns on this PO. Pulled
+  // in newest-first so the reader sees the most recent activity at
+  // the top. The Part join gives us the SKU + name column; the
+  // PartMovement.purchaseOrderId FK was added 2026-08-09 with the
+  // new writers below (this query returns [] for POs whose only
+  // receipts pre-date the migration).
+  const poMovements = await prisma.partMovement.findMany({
+    where: { purchaseOrderId: id, garageId: session.user.garageId },
+    orderBy: { createdAt: "desc" },
+    include: { part: { select: { name: true, sku: true } } },
+  });
 
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, garageId: session.user.garageId },
@@ -928,6 +940,67 @@ export default async function PurchaseOrderDetailPage({
                 <Button type="submit">{t("addPoLine")}</Button>
               </div>
             </form>
+          </section>
+        ) : null}
+
+        {/* Stock movements from this order (2026-08-09). Rendered
+            when the PO has produced any receipts / returns. Each row
+            links back to the affected Part's detail page, closing
+            the loop with the "From PO" column on that page. */}
+        {poMovements.length > 0 ? (
+          <section className="space-y-3 rounded-xl border border-border p-4 print:hidden">
+            <h2 className="text-base font-semibold tracking-tight">
+              {t("poMovementsTitle")}
+            </h2>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">{t("movementWhen")}</th>
+                    <th className="px-3 py-2">{t("colDescription")}</th>
+                    <th className="px-3 py-2">{t("poMovementsKind")}</th>
+                    <th className="px-3 py-2 text-right">{t("movementChange")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {poMovements.map((m) => (
+                    <tr key={m.id}>
+                      <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                        {fmtDateTime(m.createdAt, locale, tz)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/owner/inventory/${m.partId}`}
+                          className="font-medium hover:underline"
+                        >
+                          {m.part.name}
+                        </Link>
+                        {m.part.sku ? (
+                          <span className="ms-2 font-mono text-xs text-muted-foreground">
+                            {m.part.sku}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
+                        {m.kind === "PO_RECEIPT"
+                          ? t("poMovementsReceipt")
+                          : m.kind === "PO_RETURN"
+                            ? t("poMovementsReturn")
+                            : m.kind}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-right tabular-nums font-medium ${
+                          m.delta >= 0 ? "text-success-700" : "text-danger-700"
+                        }`}
+                      >
+                        {m.delta >= 0 ? "+" : ""}
+                        {m.delta}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
         ) : null}
 

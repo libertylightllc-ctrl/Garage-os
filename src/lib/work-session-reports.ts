@@ -153,6 +153,11 @@ export type CarEntry = {
   vehiclePlate: string;
   totalMin: number;
   stale: boolean;
+  // Raw session boundaries for this car on this day. Ordered
+  // chronologically (earliest first) so the render can walk them
+  // in the order the tech actually worked. endedAt=null means the
+  // tech is still on the car (live session).
+  sessions: { startedAt: Date; endedAt: Date | null }[];
 };
 
 export type DayRow = {
@@ -201,7 +206,14 @@ export function computeTechDailyHistory(
   };
 
   const dayMap = new Map<string, {
-    carMap: Map<string, { jobNumber: number; make: string; plate: string; totalMin: number; stale: boolean }>;
+    carMap: Map<string, {
+      jobNumber: number;
+      make: string;
+      plate: string;
+      totalMin: number;
+      stale: boolean;
+      sessions: { startedAt: Date; endedAt: Date | null }[];
+    }>;
     totalMin: number;
     staleSessions: number;
   }>();
@@ -228,6 +240,7 @@ export function computeTechDailyHistory(
     if (car) {
       car.totalMin += mins;
       if (isStale) car.stale = true;
+      car.sessions.push({ startedAt: s.startedAt, endedAt: s.endedAt });
     } else {
       day.carMap.set(s.jobCardId, {
         jobNumber: s.jobNumber,
@@ -235,6 +248,7 @@ export function computeTechDailyHistory(
         plate: s.vehiclePlate,
         totalMin: mins,
         stale: isStale,
+        sessions: [{ startedAt: s.startedAt, endedAt: s.endedAt }],
       });
     }
   }
@@ -253,6 +267,11 @@ export function computeTechDailyHistory(
           vehiclePlate: c.plate,
           totalMin: c.totalMin,
           stale: c.stale,
+          // Chronological within a car — earliest session first, matches
+          // how the tech actually worked the day.
+          sessions: [...c.sessions].sort(
+            (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
+          ),
         }))
         .sort((a, b) => b.totalMin - a.totalMin),
       staleSessions: d.staleSessions,

@@ -604,7 +604,17 @@ export async function receivePurchaseOrderAction(formData: FormData) {
           data: { qtyOnHand: { increment: r.receiveNow } },
         });
         await tx.partMovement.create({
-          data: { partId: r.partId, delta: r.receiveNow, reason },
+          data: {
+            partId: r.partId,
+            delta: r.receiveNow,
+            reason,
+            // Direct-link fields (2026-08-09). Snapshot of which PO
+            // this movement came from + `kind` for reporting joins.
+            // The old free-text `reason` still holds the human note.
+            garageId: user.garageId,
+            purchaseOrderId: po.id,
+            kind: "PO_RECEIPT",
+          },
         });
       }
 
@@ -720,7 +730,14 @@ export async function returnPurchaseOrderAction(formData: FormData) {
         if (claimStock.count === 0) throw new NegativeStockError();
 
         await tx.partMovement.create({
-          data: { partId: r.partId, delta: -r.returnNow, reason },
+          data: {
+            partId: r.partId,
+            delta: -r.returnNow,
+            reason,
+            garageId: user.garageId,
+            purchaseOrderId: po.id,
+            kind: "PO_RETURN",
+          },
         });
       }
     });

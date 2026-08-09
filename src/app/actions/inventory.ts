@@ -191,7 +191,13 @@ export async function adjustStockAction(formData: FormData) {
   await prisma.$transaction([
     prisma.part.update({ where: { id: part.id }, data: { qtyOnHand: newQty } }),
     prisma.partMovement.create({
-      data: { partId: part.id, delta, reason },
+      data: {
+        partId: part.id,
+        delta,
+        reason,
+        garageId: user.garageId,
+        kind: "MANUAL_ADJUSTMENT",
+      },
     }),
   ]);
 

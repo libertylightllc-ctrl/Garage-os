@@ -57,6 +57,13 @@ export default async function PartDetailPage({
     where: { partId: part.id },
     orderBy: { createdAt: "desc" },
     take: 10,
+    include: {
+      // Pull the PO's short id fragment so the render can link the
+      // movement back to /owner/purchasing/[id] when it came from a
+      // receipt/return. Historical rows have purchaseOrderId=null
+      // (backfill couldn't recover the link) and render as "—".
+      purchaseOrder: { select: { id: true, reference: true } },
+    },
   });
 
   const low = part.qtyOnHand <= part.reorderLevel;
@@ -164,6 +171,7 @@ export default async function PartDetailPage({
                 <tr>
                   <th className="px-4 py-2">{t("movementWhen")}</th>
                   <th className="px-4 py-2 text-right">{t("movementChange")}</th>
+                  <th className="px-4 py-2">{t("movementFromPo")}</th>
                   <th className="px-4 py-2">{t("adjustReason")}</th>
                 </tr>
               </thead>
@@ -181,12 +189,28 @@ export default async function PartDetailPage({
                       {m.delta >= 0 ? "+" : ""}
                       {m.delta}
                     </td>
+                    <td className="px-4 py-2">
+                      {/* Link back to the source PO when this movement
+                          came from a receipt or return. Pre-migration
+                          rows have no link and render as "—". */}
+                      {m.purchaseOrder ? (
+                        <Link
+                          href={`/owner/purchasing/${m.purchaseOrder.id}`}
+                          className="font-mono text-xs text-foreground hover:underline"
+                        >
+                          {m.purchaseOrder.reference?.trim() ||
+                            `#${m.purchaseOrder.id.slice(-6).toUpperCase()}`}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">{m.reason}</td>
                   </tr>
                 ))}
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       {t("noMovements")}
                     </td>
                   </tr>

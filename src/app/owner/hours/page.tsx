@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { techDailyHistory } from "@/lib/work-session-reports";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
+import { countryToTimeZone } from "@/lib/format-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,22 @@ function formatMin(mins: number): string {
   const h = Math.floor(m / 60);
   const rem = m % 60;
   return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
+}
+
+/**
+ * Render a WorkSession clock time in the garage's timezone. Matches
+ * the rest of the app's date formatting (garage tz, not viewer tz) so
+ * a session at 09:15 Dubai reads as 09:15 no matter where the browser
+ * happens to be. 24-hour so an early-morning 09:15 and an evening
+ * 21:15 don't collide.
+ */
+function formatClock(d: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: tz,
+  }).format(d);
 }
 
 export default async function TechHoursLookupPage({
@@ -49,6 +66,15 @@ export default async function TechHoursLookupPage({
     selectedTech && !isNaN(from.getTime()) && !isNaN(to.getTime())
       ? await techDailyHistory(selectedTech.id, [garageId], { from, to })
       : null;
+
+  // Garage's country → tz for the per-session clock rendering. Read
+  // once, applied to every startedAt / endedAt below. Same tz the
+  // dashboard uses for date + timestamp cells elsewhere.
+  const garage = await prisma.garage.findUnique({
+    where: { id: garageId },
+    select: { country: true },
+  });
+  const tz = countryToTimeZone(garage?.country ?? "UAE");
 
   const stats = history
     ? [
@@ -169,39 +195,91 @@ export default async function TechHoursLookupPage({
                     </span>
                   </div>
 
-                  {/* Mobile: card list */}
+                  {/* Mobile: card list with per-session timings.
+                      Each car is a summary line (make · plate · JC# ·
+                      total) with its clock-time sessions under it —
+                      "09:15 → 10:32 · 1h 17m" for each contiguous
+                      stretch the tech spent on the car. A live
+                      (unclosed) session shows "→ in progress". Times
+                      are in the garage's tz, not the viewer's. */}
                   <ul className="flex flex-col gap-2 md:hidden">
                     {day.cars.map((c) => (
-                      <li key={c.jobCardId} className="flex items-center justify-between rounded-lg border border-border/60 p-2.5 text-sm">
-                        <span>
-                          <span className="font-medium">{c.vehicleMake}</span>
-                          <span className="text-text-mute"> · {c.vehiclePlate}</span>
-                          <span className="text-text-mute"> · {t("techHoursJob").replace("{n}", String(c.jobNumber))}</span>
-                        </span>
-                        <span className="tabular-nums text-text-mute">
-                          {formatMin(c.totalMin)}
-                          {c.stale ? " ⚠" : ""}
-                        </span>
+                      <li key={c.jobCardId} className="flex flex-col gap-1 rounded-lg border border-border/60 p-2.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span>
+                            <span className="font-medium">{c.vehicleMake}</span>
+                            <span className="text-text-mute"> · {c.vehiclePlate}</span>
+                            <span className="text-text-mute"> · {t("techHoursJob").replace("{n}", String(c.jobNumber))}</span>
+                          </span>
+                          <span className="tabular-nums text-text-mute">
+                            {formatMin(c.totalMin)}
+                            {c.stale ? " ⚠" : ""}
+                          </span>
+                        </div>
+                        {c.sessions.length > 0 ? (
+                          <ul className="ms-2 flex flex-col gap-0.5 text-xs text-text-mute">
+                            {c.sessions.map((s, sIdx) => {
+                              const sessionMin = s.endedAt
+                                ? (s.endedAt.getTime() - s.startedAt.getTime()) / 60_000
+                                : 0;
+                              return (
+                                <li key={sIdx} className="tabular-nums">
+                                  {formatClock(s.startedAt, tz)}
+                                  {" → "}
+                                  {s.endedAt
+                                    ? formatClock(s.endedAt, tz)
+                                    : t("techHoursSessionLive")}
+                                  {s.endedAt ? ` · ${formatMin(sessionMin)}` : ""}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
 
-                  {/* Desktop: table */}
+                  {/* Desktop: table. Sessions render inside a nested
+                      row per car so the alignment across cars stays
+                      consistent. Same per-session shape as the mobile
+                      card. */}
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border text-xs uppercase tracking-wide text-text-mute">
                           <th className="py-1.5 pe-3 text-start font-semibold">{t("wrenchCars")}</th>
                           <th className="py-1.5 px-2 text-start font-semibold">{t("techHoursJobCol")}</th>
+                          <th className="py-1.5 px-2 text-start font-semibold">{t("techHoursSessionsCol")}</th>
                           <th className="py-1.5 px-2 text-end font-semibold">{t("techHoursTotalTime")}</th>
                           <th className="py-1.5 ps-2 text-end font-semibold">⚠</th>
                         </tr>
                       </thead>
                       <tbody>
                         {day.cars.map((c, i) => (
-                          <tr key={c.jobCardId} className={"border-b border-border/60 " + (i % 2 === 1 ? "bg-surface-2/40" : "")}>
+                          <tr key={c.jobCardId} className={"border-b border-border/60 align-top " + (i % 2 === 1 ? "bg-surface-2/40" : "")}>
                             <td className="py-1.5 pe-3 font-medium">{c.vehicleMake} · {c.vehiclePlate}</td>
                             <td className="py-1.5 px-2 text-text-mute">#{c.jobNumber}</td>
+                            <td className="py-1.5 px-2 text-xs text-text-mute">
+                              {c.sessions.length === 0 ? "—" : (
+                                <ul className="flex flex-col gap-0.5">
+                                  {c.sessions.map((s, sIdx) => {
+                                    const sessionMin = s.endedAt
+                                      ? (s.endedAt.getTime() - s.startedAt.getTime()) / 60_000
+                                      : 0;
+                                    return (
+                                      <li key={sIdx} className="tabular-nums">
+                                        {formatClock(s.startedAt, tz)}
+                                        {" → "}
+                                        {s.endedAt
+                                          ? formatClock(s.endedAt, tz)
+                                          : t("techHoursSessionLive")}
+                                        {s.endedAt ? ` · ${formatMin(sessionMin)}` : ""}
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </td>
                             <td className="py-1.5 px-2 text-end tabular-nums">{formatMin(c.totalMin)}</td>
                             <td className="py-1.5 ps-2 text-end tabular-nums">
                               {c.stale ? <span className="text-amber-600">⚠</span> : "—"}

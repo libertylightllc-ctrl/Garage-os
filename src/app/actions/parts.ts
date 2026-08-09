@@ -197,8 +197,20 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
       if (delta !== 0) {
         const reason =
           to === "ARRIVED" ? "Part order received" : to === "FULFILLED" ? "Used on job" : "Wrong/late part returned";
+        // kind (2026-08-09): FULFILLED = the part left the shelf onto
+        // a job → GOODS_ISSUE. ARRIVED / RETURNED reach the movement
+        // path via a manual-request-flow ledger — MANUAL_ADJUSTMENT
+        // is the safe enum here (they're not receipts against a PO
+        // row we can point at).
         await tx.partMovement.create({
-          data: { partId: req.partId, jobCardId: req.jobCardId, delta, reason },
+          data: {
+            partId: req.partId,
+            jobCardId: req.jobCardId,
+            delta,
+            reason,
+            garageId: user.garageId,
+            kind: to === "FULFILLED" ? "GOODS_ISSUE" : "MANUAL_ADJUSTMENT",
+          },
         });
       }
     }

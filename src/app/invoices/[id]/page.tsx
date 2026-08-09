@@ -288,6 +288,19 @@ export default async function InvoiceView({
           <div className="text-text-mute">{t("billTo")}</div>
           <div className="font-medium">{customer.name}</div>
           <div className="text-text-mute">{customer.phone}</div>
+          {/* Customer TRN — FTA requirement when the customer is
+              VAT-registered. Rendered only when set so a walk-in
+              retail customer's row stays clean. Labelled "Customer
+              TRN" so it reads clearly as theirs, not the garage's
+              TRN in the header. Snapshot on the invoice wins over
+              the live customer field so a later edit doesn't
+              retroactively rewrite historical documents. */}
+          {(inv.customerTrn ?? customer.trn) ? (
+            <div className="text-text-mute">
+              {t("customerTrnLabel")}:{" "}
+              <span className="tabular-nums">{inv.customerTrn ?? customer.trn}</span>
+            </div>
+          ) : null}
           <div className="text-text-mute">
             {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} · {inv.jobCard.vehicle.plate}
             {inv.jobCard.number ? (
@@ -317,13 +330,14 @@ export default async function InvoiceView({
           lands clean on A4. */}
       <div className="overflow-x-auto print:overflow-visible">
         <div
-          className="grid min-w-[36rem] text-sm tabular-nums"
+          className="grid min-w-[42rem] text-sm tabular-nums"
           style={{
             // description=fill, qty=5rem, unit=6rem, amount=6rem,
-            // action=auto. Header + editable + read-only rows all
-            // inherit this via grid-cols-subgrid below.
+            // vat=5rem (FTA-audit column, added 2026-08-07), action=auto.
+            // Header + editable + read-only rows all inherit this via
+            // grid-cols-subgrid below.
             gridTemplateColumns:
-            "minmax(8rem,1fr) 5rem 6rem 6rem auto",
+            "minmax(8rem,1fr) 5rem 6rem 6rem 5rem auto",
           }}
         >
           {/* Header row */}
@@ -332,6 +346,7 @@ export default async function InvoiceView({
             <span className="px-2 text-end font-medium">{t("colQty")}</span>
             <span className="px-2 text-end font-medium">{t("colUnit")}</span>
             <span className="px-2 text-end font-medium">{t("colAmount")}</span>
+            <span className="px-2 text-end font-medium">{t("colVat")}</span>
             <span />
           </div>
 
@@ -379,6 +394,14 @@ export default async function InvoiceView({
                   <span className="px-2 text-end tabular-nums">
                     {Number(l.lineTotal).toFixed(2)}
                   </span>
+                  {/* Per-line VAT — read-only, computed from
+                      lineTotal × 5 %. On a discount line (negative
+                      lineTotal) the VAT renders negative too, which
+                      is the correct FTA representation: total per-line
+                      VAT sums back to inv.vatAmount. */}
+                  <span className="px-2 text-end tabular-nums">
+                    {(Number(l.lineTotal) * 0.05).toFixed(2)}
+                  </span>
                   <button
                     type="submit"
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -414,6 +437,9 @@ export default async function InvoiceView({
                 <span className="px-2 text-end">{Number(l.qty)}</span>
                 <span className="px-2 text-end">{Number(l.unitPrice).toFixed(2)}</span>
                 <span className="px-2 text-end">{Number(l.lineTotal).toFixed(2)}</span>
+                <span className="px-2 text-end">
+                  {(Number(l.lineTotal) * 0.05).toFixed(2)}
+                </span>
                 <span />
               </div>
             ),

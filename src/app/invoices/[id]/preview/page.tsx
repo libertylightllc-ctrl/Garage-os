@@ -111,6 +111,16 @@ export default async function InvoicePreview({
             <div className="text-zinc-500">{t("billTo")}</div>
             <div className="font-medium">{customer.name}</div>
             <div className="text-zinc-500">{customer.phone}</div>
+            {/* Customer TRN — FTA requirement when the customer is
+                VAT-registered. Snapshot on the invoice wins over
+                the live customer field so the preview faithfully
+                shows what will be printed / sent. */}
+            {(inv.customerTrn ?? customer.trn) ? (
+              <div className="text-zinc-500">
+                {t("customerTrnLabel")}:{" "}
+                <span className="tabular-nums">{inv.customerTrn ?? customer.trn}</span>
+              </div>
+            ) : null}
             <div className="text-zinc-500">
               {inv.jobCard.vehicle.make} {inv.jobCard.vehicle.model} ·{""}
               {inv.jobCard.vehicle.plate}
@@ -145,7 +155,8 @@ export default async function InvoicePreview({
               <col />
               <col className="w-16"/>
               <col className="w-24"/>
-              <col className="w-28"/>
+              <col className="w-24"/>
+              <col className="w-20"/>
             </colgroup>
             <thead>
               <tr className="border-b border-black/10 text-zinc-500">
@@ -153,6 +164,7 @@ export default async function InvoicePreview({
                 <th className="px-2 py-1 text-end font-medium">{t("colQty")}</th>
                 <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
                 <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
+                <th className="px-2 py-1 text-end font-medium">{t("colVat")}</th>
               </tr>
             </thead>
             <tbody>
@@ -165,6 +177,14 @@ export default async function InvoicePreview({
                   </td>
                   <td className="px-2 py-1 text-end">
                     {Number(l.lineTotal).toFixed(2)}
+                  </td>
+                  {/* Per-line VAT — 5 % of the VAT-exclusive line
+                      total. Sums to inv.vatAmount (recomputeInvoice
+                      applies VAT to the post-discount subtotal; the
+                      discount row lives in the totals area, not
+                      here, so the sum matches). */}
+                  <td className="px-2 py-1 text-end">
+                    {(Number(l.lineTotal) * 0.05).toFixed(2)}
                   </td>
                 </tr>
               ))}

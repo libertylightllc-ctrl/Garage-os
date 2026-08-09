@@ -523,6 +523,19 @@ export async function generateInvoiceAction(formData: FormData) {
     });
     const seq = g.invoiceSeq;
 
+    // Snapshot the customer's TRN at invoice-issue time. FTA rule: the
+    // TRN printed on a tax invoice is what applied when it was issued;
+    // if the customer's live TRN changes later (mis-typed, updated to
+    // a new registration), historical invoices must not silently
+    // rewrite. Invoice.customerTrn is that snapshot; renders prefer it
+    // over the live customer.trn. Column has existed on Invoice since
+    // 0_init — this is the first writer.
+    const jobForCustomer = await tx.jobCard.findUnique({
+      where: { id: clicked.jobCardId },
+      select: { vehicle: { select: { customer: { select: { trn: true } } } } },
+    });
+    const customerTrnSnapshot = jobForCustomer?.vehicle.customer.trn ?? null;
+
     const inv = await tx.invoice.create({
       data: {
         garageId: user.garageId,
@@ -533,6 +546,8 @@ export async function generateInvoiceAction(formData: FormData) {
         // just inlined in invoice.lines rather than linked by FK.
         estimateId: primaryEstimateId,
         number: seq,
+        // Frozen at issue — never rewritten by a later customer.trn edit.
+        customerTrn: customerTrnSnapshot,
         issuedAt: now,
         dueDate,
         subtotal,

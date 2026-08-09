@@ -1004,16 +1004,24 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
 }
 
 /**
- * Mock 'Email Invoice' — mirrors the WhatsApp mock pattern. Logs the
- * message that would have gone out and redirects back to the invoice
- * page with ?emailed=1 so the cashier sees a green confirmation
- * banner. No persistence change (no JobCard column for emailedAt
- * yet), no real SMTP — that's a separate slice. Per spec:
+ * Mock 'Email Invoice' — the send path when SMTP eventually lands.
+ * KEPT (2026-08-11) but the button is hidden until real email is
+ * wired: business customers ask for emailed invoices, and rebuilding
+ * this action + its role gate + its i18n later would be pure churn.
  *
- *   - If the customer has no email on file the form is disabled at
- *     the UI level, but defending here too: throw so the action
- *     can't silently no-op if someone POSTs around the UI gate.
- *   - Keep the WhatsApp action untouched.
+ * Today this only writes a server-log line. It does NOT stamp any
+ * "sent" flag and it does NOT redirect with a "success" query
+ * parameter — the previous version did both, which is how the UI
+ * ended up claiming "Invoice emailed to customer" while no email
+ * left the box. The bug that flagged this (AR, 2026-08-11): "same
+ * class of problem as the invoice-sent stamp — a cashier telling a
+ * customer their invoice was emailed when it wasn't is worse than
+ * no email option."
+ *
+ * When wiring real SMTP (Resend / SES / Mailgun), reintroduce the
+ * "sent" side effects then — an emailSentAt column on JobCard or
+ * InvoiceSend row, an honest confirmation banner, and finally re-
+ * enable the button in /invoices/[id].
  */
 export async function emailInvoiceAction(formData: FormData) {
   const user = await requireAnyRole(INVOICE_ROLES);
@@ -1030,16 +1038,13 @@ export async function emailInvoiceAction(formData: FormData) {
     throw new Error("Customer has no email on file");
   }
 
-  // Mock send.
+  // Mock — no SMTP yet. See action doc-comment above.
   console.log(
     `[mock-email] would send invoice ${inv.number} to ${customer.email} — ${appUrl()}/c/invoice/${signId("invoice", inv.id)}`,
   );
 
   revalidatePath(`/invoices/${invoiceId}`);
-  // Same URL with a flag so the page renders the green confirmation
-  // banner. Avoids a separate /emailed confirmation route — the
-  // cashier is already on the invoice page and stays there.
-  redirect(`/invoices/${invoiceId}?emailed=1`);
+  redirect(`/invoices/${invoiceId}`);
 }
 
 export async function recordPaymentAction(formData: FormData) {

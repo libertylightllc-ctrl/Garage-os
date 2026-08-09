@@ -192,3 +192,49 @@ body:has([data-mobile-tab-bar]) {
    (MobileTopStrip on mobile, DesktopSideNav on desktop), so a single
    marker covers both. */
 body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }
+
+/* ─── Print stylesheet — hide editing chrome (SCOPED) ─────────────
+   A staff member printing an internal edit surface (invoice /
+   estimate / PO edit pages) got Save / Remove buttons + input
+   borders on the paper (AR, 2026-08-11: "a customer's tax invoice
+   must show plain text values only… hide every editing affordance
+   on all invoice surfaces, and check the estimate and purchase
+   order print layouts for the same problem").
+
+   These rules apply ONLY inside a container marked
+   `data-print-document="…"`. Three surfaces opt in today:
+     - "invoice-edit"  → src/app/invoices/[id]/page.tsx
+     - "estimate-edit" → src/app/estimates/[id]/page.tsx
+     - "po-edit"       → src/app/owner/purchasing/[id]/page.tsx
+   Any future editable printable page opts in by adding the same
+   attribute to its root <main>. Un-scoped pages (owner dashboards,
+   analytics, receipts, customer-facing /c/*) are unaffected — a
+   global button/input reset would have silently reshaped them.
+
+   Inside a scoped container:
+   - `input`, `textarea`, `select` → strip border/padding/background/
+     appearance. Value stays legible; the editing affordance is gone.
+   - `button` → display: none. Buttons on an editable printable
+     surface are always Save / Remove / Add / Cancel — never content.
+   - Escape hatch: `data-print-show` forces a button back into the
+     printed flow (currently unused; reserved for a case where a
+     button really IS content). Tailwind's `print:hidden` continues
+     to work anywhere — it emits `display: none` at higher specificity
+     than these rules.
+*/
+@media print {
+  [data-print-document] input,
+  [data-print-document] textarea,
+  [data-print-document] select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  [data-print-document] button:not([data-print-show]) {
+    display: none !important;
+  }
+}

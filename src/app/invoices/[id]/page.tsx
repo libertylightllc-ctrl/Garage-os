@@ -7,6 +7,10 @@ import {
   updateInvoiceLineAction,
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
+  // emailInvoiceAction — kept for when SMTP is wired. The button
+  // below is intentionally rendered `hidden` (never displayed, never
+  // interactive) so business customers who ask for emailed invoices
+  // can be re-enabled with a one-line flip instead of a rebuild.
   emailInvoiceAction,
   voidInvoiceAction,
   reissueInvoiceAction,
@@ -48,16 +52,10 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function InvoiceView({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  // ?emailed=1 lights up the green 'Invoice emailed to customer'
-  // confirmation banner after emailInvoiceAction redirects back.
-  searchParams: Promise<{ emailed?: string }>;
 }) {
   const { id } = await params;
-  const { emailed } = await searchParams;
-  const justEmailed = emailed ==="1";
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -153,7 +151,7 @@ export default async function InvoiceView({
   })();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
+    <main data-print-document="invoice-edit" className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
       {/* Role-aware Back link — mirrors the /estimates/[id] pattern.
           Cashier (and owner) goes back to the Invoices tab of the
           dashboard; advisor goes back to the parent job. Tech doesn't
@@ -171,16 +169,6 @@ export default async function InvoiceView({
           ? t("backJob")
           : t("invoiceBackToCashier")}
       </Link>
-
-      {/* '?emailed=1' confirmation banner — green strip across the
-          top, click-through to dismiss (just navigate without the
-          searchParam). Hidden on print so it doesn't end up on the
-          customer's PDF. */}
-      {justEmailed ? (
-        <div className="rounded-xl border border-success-500/40 bg-success-50 px-4 py-2.5 text-sm text-success-700 print:hidden dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
-          📧 {t("invoiceEmailedConfirmation")}
-        </div>
-      ) : null}
 
       {/* Workflow stepper — hidden from print so the customer's PDF
           doesn't carry the internal progress UI. */}
@@ -238,26 +226,25 @@ export default async function InvoiceView({
             🧾 {t("invoicePrintReceipt")}
           </Link>
         ) : null}
-        {canEditInvoice(session.user.role) ? (
-          customer.email ? (
-            <form action={emailInvoiceAction} className="contents">
-              <input type="hidden" name="invoiceId" value={inv.id} />
-              <button
-                type="submit"
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-              >
-                📧 {t("invoiceEmailInvoice")}
-              </button>
-            </form>
-          ) : (
-            <span
-              aria-disabled="true"
-              title={t("invoiceEmailNoEmailOnFile")}
-              className="cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text-mute"
+        {/* Email Invoice — DISABLED (hidden=true, no display) until real
+            SMTP is wired. Business customers ask for emailed invoices,
+            so the action + role gate + form wiring is kept intact and
+            just not visible; flip the `hidden` attr off to re-enable
+            once the send provider (Resend / SES / Mailgun) is in place
+            and emailInvoiceAction actually delivers mail. Keeping the
+            form here avoids a rebuild + re-review round-trip later. */}
+        {canEditInvoice(session.user.role) && customer.email ? (
+          <form action={emailInvoiceAction} className="contents" hidden>
+            <input type="hidden" name="invoiceId" value={inv.id} />
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
+              tabIndex={-1}
+              aria-hidden
             >
-              📧 {t("invoiceEmailNoEmailOnFile")}
-            </span>
-          )
+              📧 {t("invoiceEmailInvoice")}
+            </button>
+          </form>
         ) : null}
       </div>
 

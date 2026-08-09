@@ -1237,9 +1237,15 @@ const en = {
   method: "Method",
   invoicePrintInvoice: "Print Invoice",
   invoicePrintReceipt: "Print Receipt",
+  // Kept in the dictionary because the Email Invoice button is still
+  // rendered (behind `hidden`) — the copy lives here so re-enabling
+  // is a one-line UI change once SMTP is wired.
   invoiceEmailInvoice: "Email Invoice",
-  invoiceEmailNoEmailOnFile: "No email on file",
-  invoiceEmailedConfirmation: "Invoice emailed to customer (mock — see server logs).",
+  invoiceLinkInvalidTitle: "This link isn't working",
+  invoiceLinkInvalidBody:
+    "The invoice link you tapped is invalid or expired. Reply to the WhatsApp message you received and ask the garage to send a fresh link.",
+  invoiceLinkInvalidBodyNamed:
+    "The invoice link you tapped is invalid or expired. Reply to the WhatsApp message you received from {garage} and ask them to send a fresh link.",
   invoiceReceiptTitle: "Receipt",
   invoiceReceiptCustomer: "Customer",
   invoiceReceiptInvoiceNumber: "Invoice #",
@@ -2604,8 +2610,11 @@ const ar: typeof en = {
   invoicePrintInvoice: "طباعة الفاتورة",
   invoicePrintReceipt: "طباعة الإيصال",
   invoiceEmailInvoice: "إرسال الفاتورة بالبريد",
-  invoiceEmailNoEmailOnFile: "لا يوجد بريد إلكتروني",
-  invoiceEmailedConfirmation: "تم إرسال الفاتورة بالبريد الإلكتروني (وضع تجريبي — راجع سجلات الخادم).",
+  invoiceLinkInvalidTitle: "هذا الرابط لا يعمل",
+  invoiceLinkInvalidBody:
+    "رابط الفاتورة الذي فتحته غير صالح أو منتهي الصلاحية. الرجاء الرد على رسالة الواتساب التي وصلتك واطلب من الكراج إرسال رابط جديد.",
+  invoiceLinkInvalidBodyNamed:
+    "رابط الفاتورة الذي فتحته غير صالح أو منتهي الصلاحية. الرجاء الرد على رسالة الواتساب التي وصلتك من {garage} واطلب إرسال رابط جديد.",
   invoiceReceiptTitle: "إيصال",
   invoiceReceiptCustomer: "العميل",
   invoiceReceiptInvoiceNumber: "رقم الفاتورة",

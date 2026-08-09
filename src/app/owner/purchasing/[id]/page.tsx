@@ -252,7 +252,7 @@ export default async function PurchaseOrderDetailPage({
       <div className="print:hidden">
         <AppNav role="OWNER" active="purchasing" />
       </div>
-      <main className="mx-auto max-w-3xl space-y-6 p-6 print:max-w-none print:p-0">
+      <main data-print-document="po-edit" className="mx-auto max-w-3xl space-y-6 p-6 print:max-w-none print:p-0">
         {/* Back link — off-print. */}
         <div className="print:hidden">
           <Link

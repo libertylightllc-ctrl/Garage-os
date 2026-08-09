@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
 import { verifyToken } from "@/lib/tokens";
@@ -12,6 +11,94 @@ export const dynamic ="force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
+// Friendly "link isn't working" page — replaces the bare Next.js 404
+// so a customer tapping a stale or preview-signed link sees actionable
+// wording instead of a system error page. AR (2026-08-11): "A customer
+// tapping an invoice link should never see a bare 404. Show a page
+// saying the link is invalid or has expired… a 'not found' screen on a
+// payment link loses money."
+//
+// The token shape is `<invoiceId>~<sig>`. Even when the signature
+// mismatches (Preview vs Prod AUTH_SECRET, secret rotation, etc.), the
+// id half is a real cuid — cheap to look up the invoice's garage from
+// it so we can name the shop the customer was dealing with. If the
+// signature IS valid but the row is missing (rare — nothing deletes
+// invoices today) we treat it the same way.
+// Server-log categorisation for invalid-link hits. AR (2026-08-11):
+// "log those hits with the token that failed, so we can tell a
+// mistyped link from a signature mismatch. A spike in signature
+// failures would mean the secret changed, and right now we'd never
+// know." Categories:
+//   sig_mismatch — id half maps to a real invoice, sig didn't verify.
+//                  Any sustained rate here means AUTH_SECRET rotated
+//                  or a Preview link is being tapped from Prod.
+//   row_missing  — id half looks like a cuid, no invoice with that id.
+//                  Deleted invoice (shouldn't happen) or hand-typed id.
+//   malformed    — token has no `~` at all, or the id half doesn't
+//                  even look like a cuid. Truncation, screenshot copy,
+//                  hand-editing.
+//   sig_ok_row_missing — sig verified but invoice row was gone by
+//                  read time. Race with a delete (currently impossible).
+// Tagged prefix lets grep / Vercel log filters count spikes without a
+// schema change; add a proper table when we have more than console.
+type InvalidLinkKind =
+  | "sig_mismatch"
+  | "row_missing"
+  | "malformed"
+  | "sig_ok_row_missing";
+function logInvalidLink(kind: InvalidLinkKind, token: string) {
+  // Truncate the token so logs stay one-line even with a full cuid.
+  const short = token.length > 40 ? `${token.slice(0, 32)}…(${token.length}ch)` : token;
+  console.warn(`[c/invoice/invalid-link] kind=${kind} token=${short}`);
+}
+
+async function InvalidLinkPage({ rawId, token, kindHint }: {
+  rawId: string;
+  token: string;
+  // Caller already knows whether the signature verified — the page
+  // itself only needs to know whether to attempt the garage-name
+  // lookup. Passed in so we can categorise before the DB hit.
+  kindHint: "bad_sig" | "sig_ok_row_missing";
+}) {
+  const t = await getT();
+  // Best-effort garage lookup — reveals only the garage NAME, never
+  // invoice contents. Fails silently to a generic message if the id
+  // half doesn't map to anything. Cuid v1 starts with `c` + 24 base32
+  // chars — anything shorter is malformed, skip the DB round-trip.
+  const looksLikeCuid = /^c[a-z0-9]{20,}$/.test(rawId);
+  const fallback = looksLikeCuid
+    ? await prisma.invoice.findUnique({
+        where: { id: rawId },
+        select: { garage: { select: { name: true } } },
+      })
+    : null;
+  const garageName = fallback?.garage.name ?? null;
+
+  // Category is derived here so it reflects what the DB actually
+  // said, not just the caller's guess.
+  const kind: InvalidLinkKind =
+    kindHint === "sig_ok_row_missing"
+      ? "sig_ok_row_missing"
+      : !looksLikeCuid
+        ? "malformed"
+        : fallback
+          ? "sig_mismatch"
+          : "row_missing";
+  logInvalidLink(kind, token);
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6 text-center">
+      <div className="text-4xl">🔗</div>
+      <h1 className="text-xl font-semibold">{t("invoiceLinkInvalidTitle")}</h1>
+      <p className="text-sm text-text-mute">
+        {garageName
+          ? t("invoiceLinkInvalidBodyNamed").replace("{garage}", garageName)
+          : t("invoiceLinkInvalidBody")}
+      </p>
+    </main>
+  );
+}
+
 export default async function CustomerInvoice({ params }: { params: Promise<{ id: string }> }) {
   const { id: tokenParam } = await params;
   // Keep the signed token for the Download PDF link below — the PDF
@@ -19,7 +106,12 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   // gets the same auth semantics for downloading as for viewing.
   const token = tokenParam;
   const id = verifyToken("invoice", token);
-  if (!id) notFound();
+  // The id half of the token (before the '~') is used ONLY to look up
+  // the garage name for the friendly fallback page — never trusted for
+  // authorization. verifyToken above is the gate; this variable exists
+  // only so the fallback message can name the shop.
+  const rawId = token.includes("~") ? token.slice(0, token.lastIndexOf("~")) : token;
+  if (!id) return <InvalidLinkPage rawId={rawId} token={token} kindHint="bad_sig" />;
   const inv = await prisma.invoice.findUnique({
     where: { id },
     include: {
@@ -39,7 +131,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
       replacedBy:      { select: { number: true, issuedAt: true } },
     },
   });
-  if (!inv) notFound();
+  if (!inv) return <InvalidLinkPage rawId={id} token={token} kindHint="sig_ok_row_missing" />;
   const t = await getT();
   // Customer-facing locale — when Arabic, swap known service names to
   // their Arabic equivalent via the dictionary (display only; stored
@@ -184,7 +276,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           expose reliably). */}
       <Link
         href={`/c/invoice/${token}/pdf`}
-        className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-surface px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors"
+        className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-surface px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors print:hidden"
       >
         📄 {t("invoiceDownloadPdf")}
       </Link>

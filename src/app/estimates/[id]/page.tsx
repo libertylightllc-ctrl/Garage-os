@@ -203,7 +203,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   const backHref = jobSide ? `/advisor/jobs/${est.jobCardId}` : "/cashier";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
+    <main data-print-document="estimate-edit" className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role={role} active={jobSide ? "jobs" : "accounts"} />
       <div>
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">

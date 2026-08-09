@@ -741,6 +741,16 @@ const en = {
   invoiceDeliveredBanner:
     "Delivered to the customer. Line edits are locked — use Void & correct to issue a replacement.",
   invoiceResendViaWhatsApp: "Resend via WhatsApp →",
+  invoiceBadgeVoid: "VOID",
+  invoiceReplacesLabel: "Replaces",
+  invoiceReplacedByLabel: "Replaced by",
+  invoiceVoidedAt: "Voided at",
+  invoiceVoidCorrectHint:
+    "This invoice has been delivered — lines are locked. Void it to issue a corrected replacement. The void keeps its number for audit; the correction takes the next number.",
+  invoiceVoidCorrectButton: "Void this invoice",
+  invoiceReissueHint:
+    "This invoice was voided. Issue a correction to charge what should have been on the original — the new invoice will reference this one so an auditor can follow the trail.",
+  invoiceReissueButton: "Issue correction →",
   invoiceAlreadySent:
     "Invoice was handed to your WhatsApp — press Send in WhatsApp on your phone if you haven't already.",
   invoiceBackToInvoice: "← Back to invoice",
@@ -2112,6 +2122,16 @@ const ar: typeof en = {
   invoiceDeliveredBanner:
     "تم استلامها من قبل العميل. تعديل البنود مقفل — استخدم إلغاء وإصدار بديل للتصحيح.",
   invoiceResendViaWhatsApp: "إعادة الإرسال عبر واتساب ←",
+  invoiceBadgeVoid: "ملغاة",
+  invoiceReplacesLabel: "بديلة عن",
+  invoiceReplacedByLabel: "استُبدلت بـ",
+  invoiceVoidedAt: "أُلغيت في",
+  invoiceVoidCorrectHint:
+    "تم تسليم هذه الفاتورة — البنود مقفلة. ألغِها لإصدار بديل مصحّح. تحتفظ الملغاة برقمها للتدقيق؛ يأخذ التصحيح الرقم التالي.",
+  invoiceVoidCorrectButton: "إلغاء هذه الفاتورة",
+  invoiceReissueHint:
+    "تم إلغاء هذه الفاتورة. أصدر تصحيحًا يشمل ما كان يجب أن يظهر في الأصل — ستشير الفاتورة الجديدة إلى هذه ليتمكّن المدقق من تتبع المسار.",
+  invoiceReissueButton: "إصدار تصحيح ←",
   invoiceAlreadySent:
     "تم تسليم الفاتورة إلى واتساب — اضغط إرسال في واتساب على هاتفك إن لم تكن قد فعلت ذلك.",
   invoiceBackToInvoice: "← العودة إلى الفاتورة",

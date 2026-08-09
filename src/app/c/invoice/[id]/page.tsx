@@ -31,6 +31,12 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
       // customer is VAT-registered → we must print their TRN on the tax
       // invoice so they can reclaim the VAT.
       jobCard: { include: { vehicle: { include: { customer: true } } } },
+      // Void + reissue cross-references (2026-08-10). We only need
+      // number + issuedAt for the small pill under the header — the
+      // customer's copy doesn't link (they can't reach staff routes),
+      // it just names the other document for their records.
+      previousInvoice: { select: { number: true, issuedAt: true } },
+      replacedBy:      { select: { number: true, issuedAt: true } },
     },
   });
   if (!inv) notFound();
@@ -70,6 +76,27 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           garage={inv.garage}
           logoUrl={inv.garage.logoUrl}
         />
+        {/* Void / replacement cross-references (2026-08-10). Two
+            shapes — this doc is a void that's been replaced, or
+            this doc is the replacement itself. Only one applies
+            per row. Read-only text (no links) — customers can't
+            reach the other document's URL from here anyway. */}
+        {inv.status === "VOID" && inv.replacedBy ? (
+          <p className="rounded-md border border-danger-500/40 bg-danger-50 px-3 py-1.5 text-xs text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
+            {t("invoiceBadgeVoid")} · {t("invoiceReplacedByLabel")}{" "}
+            <span className="font-medium">
+              {formatInvoiceNo(inv.replacedBy.number, inv.replacedBy.issuedAt.getFullYear())}
+            </span>
+          </p>
+        ) : null}
+        {inv.previousInvoice ? (
+          <p className="text-xs text-text-mute">
+            {t("invoiceReplacesLabel")}{" "}
+            <span className="font-medium">
+              {formatInvoiceNo(inv.previousInvoice.number, inv.previousInvoice.issuedAt.getFullYear())}
+            </span>
+          </p>
+        ) : null}
       </div>
 
       {/* Bill-to block — customer name and TRN (when present, VAT-

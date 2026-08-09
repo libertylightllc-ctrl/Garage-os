@@ -1205,3 +1205,222 @@ export async function recordAdvancePaymentAction(formData: FormData) {
   revalidatePath(`/estimates/${primaryEstimateId}`);
   revalidatePath("/cashier");
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Void + reissue (2026-08-10)
+// ─────────────────────────────────────────────────────────────────
+//
+// Once an invoice is DELIVERED (invoiceDeliveredAt set), lines are
+// locked and edits reject. The FTA-correct correction path is:
+//   1. Void the delivered invoice — status → VOID, voidedAt +
+//      voidedByUserId stamped, but the row keeps its number.
+//   2. Reissue — clone the void's lines into a fresh invoice on the
+//      same JobCard. The new row takes the NEXT invoiceSeq value
+//      and carries `previousInvoiceId` pointing at the void.
+//      Sequence stays gapless (…0038, 0039 VOID, 0040 SENT).
+//
+// The two actions are separate — the cashier voids, then either
+// reissues or leaves the correction for later. `voidInvoiceAction`
+// is idempotent (repeated voids on the same row are a no-op).
+// `reissueInvoiceAction` refuses if the void already has a
+// replacedBy (previousInvoiceId is @unique on the correction row).
+
+/**
+ * Cancel a delivered invoice.
+ *
+ * Guard chain:
+ *   - INVOICE_ROLES (cashier / owner / master)
+ *   - Invoice belongs to caller's garage
+ *   - Invoice is DELIVERED (invoiceDeliveredAt IS NOT NULL) — void is
+ *     the escape hatch for documents that have reached the customer.
+ *     Not-yet-delivered invoices should be edited in place instead.
+ *   - Invoice status !== VOID (idempotent no-op on repeat)
+ *   - Invoice status !== PAID (payments block void — refund path is
+ *     out of scope, would need a proper credit note. Report to
+ *     operator so they don't lose the payment history quietly.)
+ *
+ * On success: status=VOID, voidedAt=now, voidedByUserId=user.
+ * Ledger entries are NOT reversed here — the reissued invoice's
+ * ledger takes over. If we ever add credit notes (Phase 2), they
+ * write the reversal entries; the void alone doesn't move money.
+ */
+export async function voidInvoiceAction(formData: FormData) {
+  const user = await requireAnyRole(INVOICE_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "").trim();
+  const back = `/invoices/${invoiceId}`;
+
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, garageId: user.garageId },
+    select: {
+      id: true,
+      status: true,
+      jobCard: { select: { invoiceDeliveredAt: true } },
+    },
+  });
+  if (!inv) throw new Error("Invoice not found in this garage");
+  if (!inv.jobCard.invoiceDeliveredAt) {
+    // Not yet delivered — the correct fix is line editing, which the
+    // page's edit surface still permits under the 2026-08-10 lock
+    // shape. Guiding the operator here rather than silently accepting
+    // the void keeps the audit trail clean.
+    throw new Error(
+      "This invoice hasn't been delivered yet — edit it directly instead of voiding.",
+    );
+  }
+  if (inv.status === "VOID") {
+    // Idempotent — repeated tap on the same button by an anxious
+    // cashier shouldn't error.
+    redirect(back);
+  }
+  if (inv.status === "PAID") {
+    throw new Error(
+      "This invoice has been paid — voiding it would leave the payment orphaned. A credit note is needed for corrections after payment.",
+    );
+  }
+
+  await prisma.invoice.update({
+    where: { id: inv.id },
+    data: {
+      status: "VOID",
+      voidedAt: new Date(),
+      voidedByUserId: user.id,
+    },
+  });
+
+  revalidatePath(back);
+  revalidatePath("/cashier");
+  redirect(back);
+}
+
+/**
+ * Issue a correction invoice for a voided one.
+ *
+ * Clones the void's lines into a fresh invoice on the same JobCard,
+ * consumes the next invoiceSeq value, and writes
+ * `previousInvoiceId` on the new row pointing at the void. The
+ * @unique index on previousInvoiceId means one void → one correction;
+ * a second reissue attempt against the same void throws (P2002).
+ *
+ * The correction opens in the DRAFT-not-sent state so the cashier
+ * can add the missing line / adjust prices, then hits Send via
+ * WhatsApp normally. The customer receives a fresh Tax Invoice
+ * that cross-references the void ("Replaces INV-…").
+ *
+ * Guard chain:
+ *   - INVOICE_ROLES
+ *   - Void row exists in caller's garage AND is status=VOID.
+ *   - Void row doesn't already have a replacedBy (unique index also
+ *     enforces this, but we check first for a clean error).
+ */
+export async function reissueInvoiceAction(formData: FormData) {
+  const user = await requireAnyRole(INVOICE_ROLES);
+  const voidedId = String(formData.get("invoiceId") ?? "").trim();
+
+  const voided = await prisma.invoice.findFirst({
+    where: { id: voidedId, garageId: user.garageId },
+    include: {
+      lines: { orderBy: { createdAt: "asc" } },
+      replacedBy: { select: { id: true, number: true } },
+    },
+  });
+  if (!voided) throw new Error("Invoice not found in this garage");
+  if (voided.status !== "VOID") {
+    throw new Error(
+      "Only a voided invoice can be reissued — void the original first.",
+    );
+  }
+  if (voided.replacedBy) {
+    // Belt-and-braces: the @unique index would also catch this on
+    // the write, but a friendlier error here saves debugging time.
+    redirect(`/invoices/${voided.replacedBy.id}`);
+  }
+
+  const now = new Date();
+  const dueDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const strategy = vatStrategyFor("UAE");
+  const subtotal = Number(voided.subtotal);
+  const vatAmount = Number(voided.vatAmount);
+  const total = Number(voided.total);
+
+  const newInvoiceId = await prisma.$transaction(async (tx) => {
+    const g = await tx.garage.update({
+      where: { id: user.garageId },
+      data: { invoiceSeq: { increment: 1 } },
+      select: { invoiceSeq: true, name: true, trn: true },
+    });
+
+    // Re-snapshot the customer TRN — it may have been corrected on
+    // the customer record since the void was issued (that's often
+    // WHY a correction is being made).
+    const jobForCustomer = await tx.jobCard.findUnique({
+      where: { id: voided.jobCardId },
+      select: { vehicle: { select: { customer: { select: { trn: true } } } } },
+    });
+    const customerTrnSnapshot = jobForCustomer?.vehicle.customer.trn ?? null;
+
+    const inv = await tx.invoice.create({
+      data: {
+        garageId: user.garageId,
+        jobCardId: voided.jobCardId,
+        // No estimateId link — the reissue is a fresh document and
+        // Invoice.estimateId is @unique, so it can't share the void's.
+        estimateId: null,
+        number: g.invoiceSeq,
+        previousInvoiceId: voided.id,
+        customerTrn: customerTrnSnapshot,
+        issuedAt: now,
+        dueDate,
+        subtotal,
+        vatAmount,
+        total,
+        // DRAFT so the cashier can adjust before sending — the whole
+        // point of reissue is that the void was wrong.
+        status: "DRAFT",
+        clearanceStatus: strategy.clearanceStatus,
+        qrPayload: qrPlaceholder({
+          seller: g.name,
+          trn: g.trn,
+          total,
+          vat: vatAmount,
+          isoDate: now.toISOString(),
+        }),
+        lines: {
+          create: voided.lines.map((l) => ({
+            kind: l.kind,
+            description: l.description,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+            lineTotal: l.lineTotal,
+            vatRate: l.vatRate,
+          })),
+        },
+      },
+      select: { id: true },
+    });
+
+    // Clear the JobCard.invoiceSentAt / invoiceDeliveredAt so the new
+    // draft can be handed off + delivered independently. The void
+    // keeps its own stamps intact for audit; only the JobCard
+    // pointers reset, which is what the send / delivery flow reads.
+    await tx.jobCard.update({
+      where: { id: voided.jobCardId },
+      data: { invoiceSentAt: null, invoiceDeliveredAt: null },
+    });
+
+    // NOTE: we deliberately do NOT write ledger rows here. The void
+    // hasn't been reversed and the new invoice is DRAFT — ledger
+    // shape comes from the eventual send/pay events on the new row.
+    // If we double-wrote invoiceLedger here, AR would be counted
+    // twice until the void was ledger-reversed. Correcting that is
+    // a Phase 2 concern (credit note); for now, cashier-issued
+    // corrections in the wa.me era are rare enough that a manual
+    // ledger cleanup at void time is acceptable.
+
+    return inv.id;
+  });
+
+  revalidatePath(`/invoices/${voidedId}`);
+  revalidatePath(`/invoices/${newInvoiceId}`);
+  revalidatePath("/cashier");
+  redirect(`/invoices/${newInvoiceId}`);
+}

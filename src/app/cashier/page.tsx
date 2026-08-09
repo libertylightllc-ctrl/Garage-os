@@ -236,7 +236,12 @@ export default async function CashierHome({
   const tz = countryToTimeZone(garage?.country ?? "UAE");
   const [invoices, ledger, jobs] = await Promise.all([
     prisma.invoice.findMany({
-      where: { garageId },
+      // Exclude VOIDed rows from the dashboard's active receivables
+      // + counter math. A voided invoice keeps its number for audit
+      // (visible on /invoices/[id] directly) but doesn't count as
+      // money owed. Correction invoices land here under the new
+      // number they took at reissue time.
+      where: { garageId, status: { not: "VOID" } },
       include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
       orderBy: { issuedAt:"desc"},
     }),

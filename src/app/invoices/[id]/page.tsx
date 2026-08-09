@@ -8,6 +8,8 @@ import {
   removeInvoiceLineAction,
   setInvoiceDiscountAction,
   emailInvoiceAction,
+  voidInvoiceAction,
+  reissueInvoiceAction,
   // sendInvoiceToCustomerAction → /invoices/[id]/preview only.
   // recordPaymentAction → /cashier Receivables row only.
   // Both moved out so the edit page can only edit; mutations that
@@ -66,6 +68,16 @@ export default async function InvoiceView({
       payments: true,
       garage: true,
       jobCard: { include: { vehicle: { include: { customer: true } } } },
+      // Void + reissue cross-references (2026-08-10). `previousInvoice`
+      // is set on a correction row → the void it replaced.
+      // `replacedBy` is the reverse: set on a void → the correction
+      // that took over. Number + issuedAt are what the header shows.
+      previousInvoice: {
+        select: { id: true, number: true, issuedAt: true },
+      },
+      replacedBy: {
+        select: { id: true, number: true, issuedAt: true },
+      },
     },
   });
   if (!inv) notFound();
@@ -270,6 +282,49 @@ export default async function InvoiceView({
         garage={inv.garage}
         logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
       />
+
+      {/* Void / correction cross-references (2026-08-10). Sits
+          directly under the doc number so an auditor scanning the
+          header sees the linkage before anything else. Two shapes:
+          - This IS the void → red "VOID · replaced by INV-…" pill.
+          - This is the correction → grey "Replaces INV-…" pill.
+          At most one applies (`previousInvoiceId` is @unique so
+          replacedBy can't co-exist with a self-referencing loop). */}
+      {inv.status === "VOID" ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center whitespace-nowrap rounded-full bg-danger-50 px-2 py-0.5 text-xs font-semibold text-danger-700 dark:bg-danger-500/10 dark:text-danger-500">
+            {t("invoiceBadgeVoid")}
+          </span>
+          {inv.replacedBy ? (
+            <span className="text-xs text-text-mute">
+              {t("invoiceReplacedByLabel")}{" "}
+              <Link
+                href={`/invoices/${inv.replacedBy.id}`}
+                className="font-medium text-foreground hover:underline"
+              >
+                {formatInvoiceNo(inv.replacedBy.number, inv.replacedBy.issuedAt.getFullYear())}
+              </Link>
+            </span>
+          ) : null}
+          {inv.voidedAt ? (
+            <span className="text-xs text-text-mute">
+              · {t("invoiceVoidedAt")} {fmtDateTime(inv.voidedAt, locale, tz)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {inv.previousInvoice ? (
+        <div className="mt-1 text-xs text-text-mute">
+          {t("invoiceReplacesLabel")}{" "}
+          <Link
+            href={`/invoices/${inv.previousInvoice.id}`}
+            className="font-medium text-foreground hover:underline"
+          >
+            {formatInvoiceNo(inv.previousInvoice.number, inv.previousInvoice.issuedAt.getFullYear())}
+          </Link>
+        </div>
+      ) : null}
+
       {/* Status pill row below the header — the four billing states
           (overdue / partial / paid) stay visible but drop out of the
           h1 line so the stacked header shape stays consistent across
@@ -755,6 +810,59 @@ export default async function InvoiceView({
           📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{""}
           {fmtDateTime(inv.jobCard.invoiceSentAt, locale, tz)}
         </p>
+      ) : null}
+
+      {/* Void & correct (2026-08-10). Two shapes:
+          - Delivered non-void, non-paid → offer to void it.
+          - VOID with no correction yet → offer to reissue.
+          - VOID with correction already issued → linked in the
+            header cross-reference; no button here.
+          Paid invoices skip the void button entirely — payment
+          history blocks the void until credit-note support arrives
+          (Phase 2). */}
+      {canEditInvoice(session.user.role) &&
+      inv.status !== "VOID" &&
+      inv.status !== "PAID" &&
+      inv.jobCard.invoiceDeliveredAt ? (
+        <form
+          action={voidInvoiceAction}
+          className="flex flex-col gap-2 rounded-xl border border-danger-500/40 bg-danger-50 p-4 print:hidden dark:border-danger-500/30 dark:bg-danger-500/10"
+        >
+          <input type="hidden" name="invoiceId" value={inv.id} />
+          <div className="text-sm text-danger-700 dark:text-danger-500">
+            {t("invoiceVoidCorrectHint")}
+          </div>
+          <div>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-danger-500/60 bg-transparent px-4 text-sm font-semibold text-danger-700 hover:bg-danger-50 dark:text-danger-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500/40"
+            >
+              🗑 {t("invoiceVoidCorrectButton")}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {canEditInvoice(session.user.role) &&
+      inv.status === "VOID" &&
+      !inv.replacedBy ? (
+        <form
+          action={reissueInvoiceAction}
+          className="flex flex-col gap-2 rounded-xl border border-accent-500/40 bg-accent-50 p-4 print:hidden dark:border-accent-500/30 dark:bg-accent-500/10"
+        >
+          <input type="hidden" name="invoiceId" value={inv.id} />
+          <div className="text-sm text-brand-900 dark:text-accent-400">
+            {t("invoiceReissueHint")}
+          </div>
+          <div>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+            >
+              📝 {t("invoiceReissueButton")}
+            </button>
+          </div>
+        </form>
       ) : null}
 
       {/* Mark as Paid removed from this page per spec. Recording an

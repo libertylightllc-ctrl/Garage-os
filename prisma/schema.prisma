@@ -374,6 +374,7 @@ model User {
   workSessions    WorkSession[] @relation("TechWorkSessions")
   purchaseOrderSends PurchaseOrderSend[] @relation("PurchaseOrderSentBy")
   invoiceSends       InvoiceSend[]       @relation("InvoiceSentBy")
+  voidedInvoices     Invoice[]           @relation("InvoiceVoidedBy")
   // Slice 3 audits — separate named relations so the User row can be
   // referenced from any of the three roles on an intake collision:
   // attached / released a plate history row, or performed an
@@ -690,6 +691,22 @@ model Invoice {
   qrPayload       String? // KSA hook — exists day one
   status          InvoiceStatus   @default(DRAFT)
   clearanceStatus ClearanceStatus @default(NA) // KSA hook
+
+  // Void + reissue (2026-08-10). A delivered invoice can't be edited
+  // — corrections happen by voiding the original and issuing a fresh
+  // one that takes the next sequential number. Both documents point
+  // at each other so an auditor can walk the trail in either
+  // direction. `previousInvoiceId` on the corrected row → the void.
+  // The self-relation's back-reference exposes it as
+  // `replacedBy` on the voided row (one row can only be replaced
+  // once, hence @unique). Sequence stays gapless: the VOID row
+  // keeps its number, the correction takes the next number.
+  previousInvoiceId String?  @unique
+  previousInvoice   Invoice? @relation("InvoiceCorrection", fields: [previousInvoiceId], references: [id])
+  replacedBy        Invoice? @relation("InvoiceCorrection")
+  voidedAt          DateTime?
+  voidedByUserId    String?
+  voidedBy          User?    @relation("InvoiceVoidedBy", fields: [voidedByUserId], references: [id])
 
   lines    InvoiceLine[]
   payments Payment[]

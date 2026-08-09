@@ -79,7 +79,13 @@ export default async function InvoicePreview({
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
   const balance = balanceDue(total, paid);
   const customer = inv.jobCard.vehicle.customer;
-  const alreadySent = Boolean(inv.jobCard.invoiceSentAt);
+  // 2026-08-10 timestamp split: the Send button hides once the
+  // customer has confirmed-DELIVERED the invoice. A wa.me hand-off
+  // by itself (invoiceSentAt set, invoiceDeliveredAt null) is
+  // recoverable — the operator can re-open the WhatsApp draft, so
+  // we let them preview + resend rather than freezing the flow.
+  const alreadyDelivered = Boolean(inv.jobCard.invoiceDeliveredAt);
+  const handedOff = Boolean(inv.jobCard.invoiceSentAt);
 
   return (
     // Centered max-width container with a card-like surface so the
@@ -157,6 +163,7 @@ export default async function InvoicePreview({
               <col className="w-24"/>
               <col className="w-24"/>
               <col className="w-20"/>
+              <col className="w-24"/>
             </colgroup>
             <thead>
               <tr className="border-b border-black/10 text-zinc-500">
@@ -165,29 +172,40 @@ export default async function InvoicePreview({
                 <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
                 <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
                 <th className="px-2 py-1 text-end font-medium">{t("colVat")}</th>
+                <th className="px-2 py-1 text-end font-medium">{t("colLineTotal")}</th>
               </tr>
             </thead>
             <tbody>
-              {workLines.map((l) => (
-                <tr key={l.id} className="border-b border-black/5">
-                  <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
-                  <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
-                  <td className="px-2 py-1 text-end">
-                    {Number(l.unitPrice).toFixed(2)}
-                  </td>
-                  <td className="px-2 py-1 text-end">
-                    {Number(l.lineTotal).toFixed(2)}
-                  </td>
-                  {/* Per-line VAT — 5 % of the VAT-exclusive line
-                      total. Sums to inv.vatAmount (recomputeInvoice
-                      applies VAT to the post-discount subtotal; the
-                      discount row lives in the totals area, not
-                      here, so the sum matches). */}
-                  <td className="px-2 py-1 text-end">
-                    {(Number(l.lineTotal) * 0.05).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
+              {workLines.map((l) => {
+                const amt = Number(l.lineTotal);
+                const vat = amt * 0.05;
+                return (
+                  <tr key={l.id} className="border-b border-black/5">
+                    <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
+                    <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
+                    <td className="px-2 py-1 text-end">
+                      {Number(l.unitPrice).toFixed(2)}
+                    </td>
+                    <td className="px-2 py-1 text-end">
+                      {amt.toFixed(2)}
+                    </td>
+                    {/* Per-line VAT — 5 % of the VAT-exclusive line
+                        total. Sums to inv.vatAmount. */}
+                    <td className="px-2 py-1 text-end">
+                      {vat.toFixed(2)}
+                    </td>
+                    {/* Per-line total = Amount + VAT. Matches how the
+                        customer reads the invoice: the rightmost number
+                        on each row is what that item cost inclusive.
+                        Sum still equals invoice total after
+                        discount + VAT because discounts live in the
+                        totals block, not as a row. */}
+                    <td className="px-2 py-1 text-end font-medium">
+                      {(amt + vat).toFixed(2)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -256,13 +274,15 @@ export default async function InvoicePreview({
         </div>
       </div>
 
-      {/* Bottom action bar — Go Back and Send to Customer side by side.
-          'Send to Customer' is the ONLY surface in the app that calls
-          sendInvoiceToCustomerAction now, so the cashier is guaranteed
-          to have seen this layout before the WhatsApp send goes out.
-          Once invoiceSentAt is stamped, the Send button is replaced
-          by a 'already sent' notice so a back-button + re-tap can't
-          re-fire the send. */}
+      {/* Bottom action bar — three states after the 2026-08-10
+          timestamp split:
+            1. Nothing sent yet          → Send via WhatsApp button.
+            2. Handed off, NOT delivered → Resend button + amber
+               note explaining the operator still needs to press Send
+               in WhatsApp (the wa.me draft is still open). Preview
+               remains reachable, so re-preview + re-hand-off is safe.
+            3. Delivered (Meta webhook)  → grey "delivered" pill; no
+               resend. Corrections need void & correct. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href={`/invoices/${inv.id}`}
@@ -270,10 +290,10 @@ export default async function InvoicePreview({
         >
           {t("invoicePreviewGoBack")}
         </Link>
-        {alreadySent ? (
+        {alreadyDelivered ? (
           <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute">
-            📨 {t("invoiceAlreadySent")} ·{""}
-            {fmtDateTime(inv.jobCard.invoiceSentAt!, locale, tz)}
+            ✅ {t("invoiceDeliveredBanner")} ·{""}
+            {fmtDateTime(inv.jobCard.invoiceDeliveredAt!, locale, tz)}
           </p>
         ) : (
           <form action={sendInvoiceToCustomerAction}>
@@ -282,20 +302,21 @@ export default async function InvoicePreview({
               type="submit"
               className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
-              {t("sendInvoiceToCustomer")}
+              {handedOff ? t("invoiceResendViaWhatsApp") : t("sendInvoiceToCustomer")}
             </button>
           </form>
         )}
       </div>
 
-      {/* Mock-note footer — only relevant pre-send. After invoiceSentAt
-          is stamped, the note reads as if Send to Customer is still a
-          live action ('logs the message that would have gone out'), so
-          hide it then. The 'Invoice already sent' notice above replaces
-          it. */}
-      {!alreadySent ? (
+      {/* Footer note — three states matching the CTA above. */}
+      {alreadyDelivered ? null : handedOff ? (
+        <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{""}
+          {fmtDateTime(inv.jobCard.invoiceSentAt!, locale, tz)}
+        </p>
+      ) : (
         <p className="text-xs text-zinc-400">{t("invoicePreviewMockNote")}</p>
-      ) : null}
+      )}
     </main>
   );
 }

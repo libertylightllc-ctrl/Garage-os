@@ -463,12 +463,14 @@ export async function generateInvoiceAction(formData: FormData) {
       where: { id: existingInvoiceId },
       include: {
         lines: true,
-        jobCard: { select: { invoiceSentAt: true } },
+        jobCard: { select: { invoiceDeliveredAt: true } },
       },
     });
     if (existingInvoice) {
-      // Sent → don't touch.
-      if (existingInvoice.jobCard.invoiceSentAt) {
+      // Delivered → don't touch (2026-08-10 timestamp split — see
+      // ownedEditableInvoice above for the reasoning). Handed-off-
+      // only invoices are still safe to top up.
+      if (existingInvoice.jobCard.invoiceDeliveredAt) {
         redirect(`/invoices/${existingInvoiceId}`);
       }
       const sig = (l: { description: string; qty: unknown; unitPrice: unknown }) =>
@@ -672,11 +674,22 @@ export async function generateInvoiceAction(formData: FormData) {
 async function ownedEditableInvoice(invoiceId: string, garageId: string) {
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId },
-    include: { jobCard: { select: { invoiceSentAt: true } } },
+    include: { jobCard: { select: { invoiceDeliveredAt: true } } },
   });
   if (!inv) throw new Error("Invoice not found in this garage");
-  if (inv.jobCard.invoiceSentAt) {
-    throw new Error("Invoice already sent to customer — lines are locked");
+  // Lock on DELIVERED, not handed-off (2026-08-10 timestamp split).
+  // The wa.me hand-off doesn't guarantee the customer received
+  // anything — the operator still has to press Send inside their
+  // WhatsApp. Locking on handed-off froze operators out of fixing
+  // legitimate mistakes (missed labour, wrong plate) even before
+  // the customer saw anything. Once the Meta Cloud API delivery
+  // webhook lands, invoiceDeliveredAt becomes a real signal and
+  // this guard becomes a real lock; until then it's effectively
+  // permissive, which matches the wa.me shape's real capabilities.
+  if (inv.jobCard.invoiceDeliveredAt) {
+    throw new Error(
+      "Invoice already delivered to customer — use Void & correct to issue a replacement.",
+    );
   }
   return inv;
 }

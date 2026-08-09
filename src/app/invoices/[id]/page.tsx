@@ -103,13 +103,15 @@ export default async function InvoiceView({
     invoicePaid: paid >= total - 0.005,
   });
   const timelineEvents = await loadJobTimeline(inv.jobCardId, session.user.garageId);
-  // Line edits are unlocked for cashier/owner only while the invoice
-  // is still 'pre-send'. Once sendInvoiceToCustomerAction stamps
-  // jobCard.invoiceSentAt the inputs disappear and the table falls
-  // back to the existing read-only render (matches what the server-
-  // side ownedEditableInvoice helper enforces).
+  // Line edits stay unlocked while the invoice hasn't been DELIVERED
+  // to the customer (2026-08-10 timestamp split). An operator who
+  // handed off a wa.me draft but hasn't pressed Send inside WhatsApp
+  // can still fix a missed line — the customer got nothing yet.
+  // Once the Meta Cloud API delivery webhook lands and stamps
+  // invoiceDeliveredAt, the lock becomes a real one (mirrors the
+  // ownedEditableInvoice server guard).
   const canEditLines =
-    canEditInvoice(session.user.role) && !inv.jobCard.invoiceSentAt;
+    canEditInvoice(session.user.role) && !inv.jobCard.invoiceDeliveredAt;
 
   // Pull the discount line out of the main line array so the table
   // shows only real work + the totals area shows the discount as a
@@ -340,14 +342,14 @@ export default async function InvoiceView({
           lands clean on A4. */}
       <div className="overflow-x-auto print:overflow-visible">
         <div
-          className="grid min-w-[42rem] text-sm tabular-nums"
+          className="grid min-w-[48rem] text-sm tabular-nums"
           style={{
             // description=fill, qty=5rem, unit=6rem, amount=6rem,
-            // vat=5rem (FTA-audit column, added 2026-08-07), action=auto.
-            // Header + editable + read-only rows all inherit this via
-            // grid-cols-subgrid below.
+            // vat=5rem, total=6rem (2026-08-10 line-total column),
+            // action=auto. Header + editable + read-only rows all
+            // inherit via grid-cols-subgrid below.
             gridTemplateColumns:
-            "minmax(8rem,1fr) 5rem 6rem 6rem 5rem auto",
+            "minmax(8rem,1fr) 5rem 6rem 6rem 5rem 6rem auto",
           }}
         >
           {/* Header row */}
@@ -357,6 +359,7 @@ export default async function InvoiceView({
             <span className="px-2 text-end font-medium">{t("colUnit")}</span>
             <span className="px-2 text-end font-medium">{t("colAmount")}</span>
             <span className="px-2 text-end font-medium">{t("colVat")}</span>
+            <span className="px-2 text-end font-medium">{t("colLineTotal")}</span>
             <span />
           </div>
 
@@ -412,6 +415,10 @@ export default async function InvoiceView({
                   <span className="px-2 text-end tabular-nums">
                     {(Number(l.lineTotal) * 0.05).toFixed(2)}
                   </span>
+                  {/* Per-line total = Amount + VAT (2026-08-10). */}
+                  <span className="px-2 text-end tabular-nums font-medium">
+                    {(Number(l.lineTotal) * 1.05).toFixed(2)}
+                  </span>
                   <button
                     type="submit"
                     className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-xs font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
@@ -449,6 +456,9 @@ export default async function InvoiceView({
                 <span className="px-2 text-end">{Number(l.lineTotal).toFixed(2)}</span>
                 <span className="px-2 text-end">
                   {(Number(l.lineTotal) * 0.05).toFixed(2)}
+                </span>
+                <span className="px-2 text-end font-medium">
+                  {(Number(l.lineTotal) * 1.05).toFixed(2)}
                 </span>
                 <span />
               </div>
@@ -713,8 +723,17 @@ export default async function InvoiceView({
           ToCustomerAction now only fires from /invoices/[id]/preview,
           which means typo'd line items can't reach the customer in
           one accidental click. */}
+      {/* Tri-state banner (2026-08-10 timestamp split):
+          1. Neither handed off nor delivered → "Preview & send" CTA.
+          2. Handed off (wa.me redirect fired), NOT delivered yet →
+             amber banner: still editable, resend from your WhatsApp
+             draft, customer hasn't seen it.
+          3. Delivered (Meta webhook fired — future) → grey banner:
+             locked, use void & correct.
+          canEditLines mirrors this — key rule is `invoiceDeliveredAt`.  */}
       {canEditInvoice(session.user.role) &&
-      !inv.jobCard.invoiceSentAt ? (
+      !inv.jobCard.invoiceSentAt &&
+      !inv.jobCard.invoiceDeliveredAt ? (
         <Link
           href={`/invoices/${inv.id}/preview`}
           className="block rounded-xl border border-accent-500/40 bg-accent-50 p-4 text-center print:hidden dark:border-accent-500/30 dark:bg-accent-500/10"
@@ -726,9 +745,14 @@ export default async function InvoiceView({
             {t("invoicePreviewButton")}
           </span>
         </Link>
-      ) : inv.jobCard.invoiceSentAt ? (
+      ) : inv.jobCard.invoiceDeliveredAt ? (
         <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute print:hidden">
-          📨 {t("invoiceAlreadySent")} · {t("invoiceSentAt")}{""}
+          ✅ {t("invoiceDeliveredBanner")} · {t("invoiceDeliveredAt")}{""}
+          {fmtDateTime(inv.jobCard.invoiceDeliveredAt, locale, tz)}
+        </p>
+      ) : inv.jobCard.invoiceSentAt ? (
+        <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 print:hidden dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{""}
           {fmtDateTime(inv.jobCard.invoiceSentAt, locale, tz)}
         </p>
       ) : null}

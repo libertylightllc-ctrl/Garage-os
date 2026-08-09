@@ -47,6 +47,7 @@ export interface BuildTimelineInput {
         deliveredById: string | null;
         deliveryConfirmedAt: Date | null;
         invoiceSentAt: Date | null;
+        invoiceDeliveredAt: Date | null;
         moulkiaConsentAt: Date | null;
     };
     steps: {
@@ -194,6 +195,17 @@ export function buildJobTimeline(input: BuildTimelineInput): TimelineEvent[] {
     }
     if (job.invoiceSentAt) {
         ev.push({ at: job.invoiceSentAt, kindKey: "tlInvoiceSent", actor: null });
+    }
+    // 2026-08-10 timestamp split — separate event when the invoice
+    // actually reaches the customer. In the wa.me era this field
+    // stays null; the future Meta Cloud API webhook writes it and
+    // the timeline gets a distinct entry.
+    if (job.invoiceDeliveredAt) {
+        ev.push({
+            at: job.invoiceDeliveredAt,
+            kindKey: "tlInvoiceDelivered",
+            actor: null,
+        });
     }
 
     // ── 10. Payments + advance payments (no actor today) ─────────

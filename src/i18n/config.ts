@@ -735,6 +735,12 @@ const en = {
   invoicePreviewMockNote:
     "Send via WhatsApp opens the customer's WhatsApp on your phone with the message pre-filled. You still need to press Send there — the customer receives nothing until you do.",
   invoiceSentAt: "Handed to your WhatsApp at",
+  invoiceDeliveredAt: "Delivered to customer at",
+  invoiceHandedOffBanner:
+    "Handed to your WhatsApp — press Send inside WhatsApp on your phone. The customer hasn't received it yet, and you can still edit the invoice.",
+  invoiceDeliveredBanner:
+    "Delivered to the customer. Line edits are locked — use Void & correct to issue a replacement.",
+  invoiceResendViaWhatsApp: "Resend via WhatsApp →",
   invoiceAlreadySent:
     "Invoice was handed to your WhatsApp — press Send in WhatsApp on your phone if you haven't already.",
   invoiceBackToInvoice: "← Back to invoice",
@@ -1087,6 +1093,7 @@ const en = {
   tlQcPassed: "QC passed",
   tlInvoiceIssued: "Invoice issued",
   tlInvoiceSent: "Invoice handed off to WhatsApp",
+  tlInvoiceDelivered: "Invoice delivered to customer",
   tlAdvancePayment: "Advance payment received",
   tlPaymentRecorded: "Payment recorded",
   tlDelivered: "Delivered to customer",
@@ -1238,6 +1245,7 @@ const en = {
   colCustomer: "Customer",
   colVehicle: "Vehicle",
   colVat: "VAT",
+  colLineTotal: "Total",
   colMethod: "Method",
   colDatePaid: "Paid on",
   paidLower: "paid",
@@ -2098,6 +2106,12 @@ const ar: typeof en = {
   invoiceSentMockNote:
     "سجّل الدفع هنا بمجرد أن يدفع العميل. إذا قال إنه لم يستلم الفاتورة، أعد إرسالها من واتساب — الرسالة لا تزال في مسودّة المحادثة.",
   invoiceSentAt: "تم التسليم إلى واتساب في",
+  invoiceDeliveredAt: "استلمها العميل في",
+  invoiceHandedOffBanner:
+    "تم التسليم إلى واتساب — اضغط إرسال داخل واتساب على هاتفك. لم يستلمها العميل بعد، وما زال بإمكانك تعديل الفاتورة.",
+  invoiceDeliveredBanner:
+    "تم استلامها من قبل العميل. تعديل البنود مقفل — استخدم إلغاء وإصدار بديل للتصحيح.",
+  invoiceResendViaWhatsApp: "إعادة الإرسال عبر واتساب ←",
   invoiceAlreadySent:
     "تم تسليم الفاتورة إلى واتساب — اضغط إرسال في واتساب على هاتفك إن لم تكن قد فعلت ذلك.",
   invoiceBackToInvoice: "← العودة إلى الفاتورة",
@@ -2439,6 +2453,7 @@ const ar: typeof en = {
   tlQcPassed: "تم اجتياز فحص الجودة",
   tlInvoiceIssued: "تم إصدار الفاتورة",
   tlInvoiceSent: "تم تسليم الفاتورة إلى واتساب",
+  tlInvoiceDelivered: "استلم العميل الفاتورة",
   tlAdvancePayment: "تم استلام دفعة مقدمة",
   tlPaymentRecorded: "تم تسجيل الدفع",
   tlDelivered: "تم تسليم المركبة للعميل",
@@ -2586,6 +2601,7 @@ const ar: typeof en = {
   colCustomer: "العميل",
   colVehicle: "المركبة",
   colVat: "الضريبة",
+  colLineTotal: "الإجمالي",
   colMethod: "طريقة الدفع",
   colDatePaid: "تاريخ الدفع",
   paidLower: "مدفوعة",

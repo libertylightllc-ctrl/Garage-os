@@ -24,6 +24,7 @@ function emptyInput(): BuildTimelineInput {
             deliveredById: null,
             deliveryConfirmedAt: null,
             invoiceSentAt: null,
+            invoiceDeliveredAt: null,
             moulkiaConsentAt: null,
         },
         steps: [],

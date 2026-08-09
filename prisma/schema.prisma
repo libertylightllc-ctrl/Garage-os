@@ -531,7 +531,16 @@ model JobCard {
   workNotes         String?    // work-completed notes
   workCompletedAt   DateTime?  // alias for spec's `completedAt` — set when the tech taps 'Mark complete' (Stage 7→8)
   // ----- Invoice send (Stage 8) -----
-  invoiceSentAt     DateTime?  // set when the cashier taps 'Send invoice to customer'
+  invoiceSentAt     DateTime?  // set when the cashier taps 'Send via WhatsApp' — HANDED OFF to the operator's WhatsApp, NOT confirmed delivery
+  // Set only when we KNOW the invoice reached the customer. In the
+  // wa.me era (2026-08-09 → …) this stays null forever — the
+  // operator's local WhatsApp doesn't report delivery back to us.
+  // When the Meta Cloud API commit lands, its webhook writes this
+  // on the `delivered` event. Rule (2026-08-10): the invoice-edit
+  // lock keys off THIS column, not invoiceSentAt — an operator who
+  // handed off a wa.me draft but hasn't pressed Send in WhatsApp
+  // yet can still fix a missed line without a void+reissue dance.
+  invoiceDeliveredAt DateTime?
   // ----- Quality Control -----
   qcChecks          String[]   // checkbox values (REPAIR_COMPLETED, ROAD_TEST, ...)
   qcById            String?    // QC inspector

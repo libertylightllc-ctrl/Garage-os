@@ -96,6 +96,20 @@ export default async function InvoiceSent({
             </>
           ) : null}
 
+          {/* 2026-08-10 timestamp split — separate delivered row when
+              the Meta Cloud API webhook has fired. In the wa.me era
+              this stays hidden (invoiceDeliveredAt is always null). */}
+          {inv.jobCard.invoiceDeliveredAt ? (
+            <>
+              <dt className="text-sm font-medium text-text-mute">
+                {t("invoiceDeliveredAt")}
+              </dt>
+              <dd className="tabular-nums">
+                {fmtDateTime(inv.jobCard.invoiceDeliveredAt, locale, tz)}
+              </dd>
+            </>
+          ) : null}
+
           <dt className="text-sm font-medium text-text-mute">{t("total")}</dt>
           <dd className="font-semibold tabular-nums">AED {Number(inv.total).toFixed(2)}</dd>
         </dl>

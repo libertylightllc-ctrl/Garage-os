@@ -97,23 +97,36 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           clarity. On a single-rate document the aggregate at the
           bottom is technically enough, but per-line matches FTA best
           practice and future-proofs for multi-rate lines. */}
+      {/* Full 5-column layout matches the internal cashier + print
+          surfaces (Qty · Unit · Amount · VAT · Total). Total = Amount
+          + VAT per line — reads naturally right-to-left so a
+          customer scanning "what did I actually pay for this?" lands
+          on the rightmost number. Column widths minimised on mobile
+          via overflow-x-auto. */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs uppercase tracking-wide text-text-mute">
             <tr>
               <th className="py-1 text-start font-medium">{t("colDescription")}</th>
+              <th className="py-1 text-end font-medium tabular-nums">{t("colQty")}</th>
+              <th className="py-1 text-end font-medium tabular-nums">{t("colUnit")}</th>
               <th className="py-1 text-end font-medium tabular-nums">{t("colAmount")}</th>
               <th className="py-1 text-end font-medium tabular-nums">{t("colVat")}</th>
+              <th className="py-1 text-end font-medium tabular-nums">{t("colLineTotal")}</th>
             </tr>
           </thead>
           <tbody>
             {inv.lines.map((l) => {
               const amt = Number(l.lineTotal);
+              const vat = lineVat(amt);
               return (
                 <tr key={l.id} className="border-t border-border">
                   <td className="py-1 pe-2">{translateLineDescription(l.description, locale)}</td>
+                  <td className="py-1 text-end tabular-nums">{Number(l.qty)}</td>
+                  <td className="py-1 text-end tabular-nums">{Number(l.unitPrice).toFixed(2)}</td>
                   <td className="py-1 text-end tabular-nums">{amt.toFixed(2)}</td>
-                  <td className="py-1 text-end tabular-nums">{lineVat(amt).toFixed(2)}</td>
+                  <td className="py-1 text-end tabular-nums">{vat.toFixed(2)}</td>
+                  <td className="py-1 text-end tabular-nums font-medium">{(amt + vat).toFixed(2)}</td>
                 </tr>
               );
             })}

@@ -27,6 +27,7 @@ export async function loadJobTimeline(
                     deliveredById: true,
                     deliveryConfirmedAt: true,
                     invoiceSentAt: true,
+                    invoiceDeliveredAt: true,
                     moulkiaConsentAt: true,
                 },
             }),

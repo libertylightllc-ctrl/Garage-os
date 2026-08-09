@@ -22,6 +22,7 @@ const EVENT_KEYS = [
     "tlQcPassed",
     "tlInvoiceIssued",
     "tlInvoiceSent",
+    "tlInvoiceDelivered",
     "tlAdvancePayment",
     "tlPaymentRecorded",
     "tlDelivered",

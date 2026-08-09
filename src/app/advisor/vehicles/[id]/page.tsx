@@ -9,7 +9,6 @@ import { translateLineDescription } from "@/lib/line-item-translations";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { formatInvoiceNo } from "@/lib/billing";
-import { updateCustomerTrnAction } from "@/app/actions/customer";
 
 export const dynamic = "force-dynamic";
 
@@ -226,7 +225,21 @@ export default async function VehicleHistory({
           <span className="font-semibold tabular-nums text-text">
             {vehicle.plate}
           </span>{" "}
-          · {vehicle.customer.name} · {vehicle.customer.phone}
+          ·{" "}
+          {/* Customer name links to the customer detail surface
+              (/advisor/customers/[id]) — where name / phone / TRN
+              edits and the customer's full history live. The old
+              per-vehicle TRN edit form was removed at the same time:
+              TRN belongs to the customer, not the car, and a
+              customer with three cars used to see the field three
+              times. */}
+          <Link
+            href={`/advisor/customers/${vehicle.customer.id}`}
+            className="font-medium text-foreground hover:underline"
+          >
+            {vehicle.customer.name}
+          </Link>{" "}
+          · {vehicle.customer.phone}
           {vehicle.vin ? (
             <>
               <br />
@@ -235,41 +248,6 @@ export default async function VehicleHistory({
           ) : null}
         </p>
       </div>
-
-      {/* Customer-TRN edit — for VAT-registered customers whose TRN
-          must appear on the tax invoice so they can reclaim the VAT.
-          Optional; blank means walk-in retail. Small form so the
-          advisor can update it in-place without leaving the vehicle
-          view. Guard: requireAdvisor + garage-scoped update. */}
-      <form
-        action={updateCustomerTrnAction}
-        className="flex flex-col gap-2 rounded-xl border border-border p-4"
-      >
-        <input type="hidden" name="customerId" value={vehicle.customer.id} />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-mute">
-            {t("customerTrnEditLegend")}
-          </span>
-          <span className="text-[11px] text-text-mute">
-            {t("customerTrnEditHint")}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            name="trn"
-            defaultValue={vehicle.customer.trn ?? ""}
-            placeholder="100000000000003"
-            aria-label={t("customerTrnLabel")}
-            className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono tabular-nums"
-          />
-          <button
-            type="submit"
-            className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-          >
-            {t("customerTrnSave")}
-          </button>
-        </div>
-      </form>
 
       {/* Summary card — 4-up grid of headline numbers, same shape
           as the owner-dashboard metric cards. tabular-nums on every

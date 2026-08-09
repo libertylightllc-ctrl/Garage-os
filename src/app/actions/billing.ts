@@ -22,6 +22,9 @@ import {
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { signId } from "@/lib/tokens";
+import { buildWaMeUrl, normalizeToE164 } from "@/lib/wa";
+import { invoiceMessage } from "@/lib/po-message";
+import { logInvoiceSend } from "@/lib/invoice-send-log";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
 import { requireAnyRole } from "@/lib/action-guards";
 
@@ -874,43 +877,117 @@ export async function setInvoiceDiscountAction(formData: FormData) {
 }
 
 /**
- * Stage 8 — Cashier taps 'Send invoice to customer' after reviewing items.
- * Stamps the JobCard.invoiceSentAt timestamp + records a 'would-send'
- * WhatsApp log entry (mock per build decision; real Meta send is a
- * separate task). Redirects to a confirmation screen so the cashier
- * knows the handoff happened.
+ * Cashier taps 'Send via WhatsApp' on an invoice. Same pattern as
+ * sendPurchaseOrderWhatsAppAction (`src/app/actions/purchasing.ts`):
+ * we do NOT send anything to Meta. Instead we build the message body
+ * + signed customer-facing URL, log an InvoiceSend audit row, then
+ * redirect the operator to wa.me/<phone>?text=<encoded body> so the
+ * customer's phone number opens in WhatsApp on the operator's device
+ * with the message pre-filled. The operator taps Send inside their
+ * own WhatsApp.
+ *
+ * `JobCard.invoiceSentAt` now means "handed to the operator's
+ * WhatsApp," not "the customer received it." Every read site was
+ * reworded in the same commit that introduced this shape (see the
+ * three i18n keys `invoiceSentAt`, `invoiceAlreadySent`,
+ * `tlInvoiceSent`, and the `/invoices/[id]/sent` title). When the
+ * Meta Cloud API commit follows, the stamp semantics tighten back to
+ * "sent" — the wording flips at the i18n layer, no surface code
+ * changes.
+ *
+ * We write the audit row BEFORE the redirect, and we stamp
+ * `invoiceSentAt` in the same step so the read side ("this row moved
+ * out of To send") tracks the audit. If the redirect never fires
+ * (server crash) the audit row shows HANDED_OFF without a paper
+ * trail on the operator's phone — that's the correct signal that
+ * something went sideways at hand-off time, not a claim we made up.
  */
 export async function sendInvoiceToCustomerAction(formData: FormData) {
   const user = await requireAnyRole(INVOICE_ROLES);
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId: user.garageId },
-    select: { id: true, jobCardId: true, number: true, issuedAt: true },
+    select: {
+      id: true,
+      jobCardId: true,
+      number: true,
+      issuedAt: true,
+      total: true,
+      // Vehicle drives the "your invoice for the {make} {model}" copy
+      // in the message body — pulled here so the message reads
+      // naturally without an extra join at render time.
+      jobCard: {
+        select: {
+          vehicle: {
+            select: {
+              make: true,
+              model: true,
+              customer: {
+                select: { name: true, phone: true, waId: true, lang: true },
+              },
+            },
+          },
+        },
+      },
+    },
   });
   if (!inv) throw new Error("Invoice not found in this garage");
 
-  const customer = await customerForJob(inv.jobCardId, user.garageId);
-  if (!customer) throw new Error("Customer not found for this invoice");
+  const customer = inv.jobCard.vehicle.customer;
+  // wa.me needs an E.164 number without the leading '+'. Prefer waId
+  // (already normalized in the DB when we have it from a chat) then
+  // fall back to `phone`. Refuse to redirect if we can't normalize —
+  // otherwise the wa.me URL fails silently on the operator's phone
+  // and they blame the app for not sending.
+  const rawPhone = customer.waId ?? customer.phone;
+  const phoneE164 = normalizeToE164(rawPhone);
+  if (!phoneE164) {
+    throw new Error(
+      "Customer phone is missing or malformed — can't open WhatsApp for the send.",
+    );
+  }
 
-  // Stamp the send + flip the job to its invoice-sent state. We don't
-  // change job.status (it's already INVOICED from generateInvoiceAction);
-  // the friendly badge picks up AWAITING_PAYMENT from invoicePaidInFull.
+  const body = invoiceMessage({
+    customer: { name: customer.name, lang: customer.lang },
+    vehicle: {
+      make: inv.jobCard.vehicle.make,
+      model: inv.jobCard.vehicle.model,
+    },
+    invoice: { total: Number(inv.total), number: inv.number },
+    appUrl: appUrl(),
+    invoiceId: signId("invoice", inv.id),
+  });
+  const waHref = buildWaMeUrl(phoneE164, body);
+
+  // Stamp the "handed off" timestamp + flip the row out of the
+  // dashboard "To send" bucket in the same transaction. Once the Meta
+  // Cloud API commit lands this becomes "sent" outright; today it's
+  // an operator-hand-off stamp and every read site is reworded to
+  // match.
   await prisma.jobCard.update({
     where: { id: inv.jobCardId },
     data: { invoiceSentAt: new Date() },
   });
 
-  // MOCK send — log what we would have sent over WhatsApp. Real Meta wiring
-  // happens in a follow-up task per the user's build decision.
-  console.log(
-    `[mock-whatsapp] would send invoice ${inv.number} to ${customer.waId ?? customer.phone} — ${appUrl()}/c/invoice/${signId("invoice", inv.id)}`,
-  );
+  // Sender name snapshot — the JWT's `name` field, else email. Frozen
+  // on the audit row so a rename or offboarding can't rewrite who
+  // handed the invoice off.
+  const senderName = user.name?.trim() || user.email || "unknown";
+  await logInvoiceSend({
+    invoiceId: inv.id,
+    garageId: user.garageId,
+    channel: "WHATSAPP",
+    recipient: phoneE164,     // snapshot of the number wa.me opened
+    sentByUserId: user.id,
+    sentByName: senderName,
+    status: "HANDED_OFF",     // wa.me can't observe delivery
+  });
 
   revalidatePath("/cashier");
   revalidatePath("/advisor");
   revalidatePath(`/invoices/${invoiceId}`);
   revalidatePath(`/advisor/jobs/${inv.jobCardId}`);
-  redirect(`/invoices/${invoiceId}/sent`);
+  redirect(waHref);
 }
 
 /**

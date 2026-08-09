@@ -353,6 +353,19 @@ const en = {
   vehicleVinLabel: "VIN",
   vehicleMatchLabel: "Matched garage record:",
   vehicleMatchDismiss: "Dismiss match",
+  // /advisor/customers/[id] — the ONE customer-detail surface.
+  customerDetailKicker: "Customer",
+  customerEditLegend: "Customer details",
+  customerEditHint:
+    "Fields belong to the customer, not the car — updating here changes every vehicle they own in one step.",
+  customerNameLabel: "Name",
+  customerPhoneLabel: "Phone",
+  customerSaveButton: "Save",
+  customerVehiclesHeading: "Vehicles",
+  customerNoVehicles: "No vehicles on this customer yet.",
+  customerJobsHeading: "Job history",
+  customerNoJobs: "No visits yet.",
+  customerTotalPaid: "Total paid:",
   poAddLineVehicleFor: "For",
   poAddLineVehicleChange: "Change",
   poAddLineVehicleUseDefault: "Use document default",
@@ -692,16 +705,26 @@ const en = {
   // role rather than "Jobs" (which is what non-MASTER advisors see).
   tabAdvisor: "Advisor",
   // Cashier 'Send invoice to customer' button + confirmation screen (Stage 8)
-  sendInvoiceToCustomer: "Send to Customer →",
-  invoiceSentTitle: "Invoice sent to customer",
-  invoiceSentSubtitle: "We'll record payment here once the customer pays.",
-  invoiceSentMockNote: "WhatsApp delivery is mocked in this build — see server logs for what would have gone out.",
+  sendInvoiceToCustomer: "Send via WhatsApp →",
+  // Handed-off wording (2026-08-09). The Send button now opens
+  // wa.me pre-filled with the invoice message; the operator taps Send
+  // inside their own WhatsApp. Until that Send is tapped the customer
+  // has NOTHING. When the Meta Cloud API commit lands and the send
+  // becomes real, this reverts to "sent" — one-line i18n change, no
+  // surface code.
+  invoiceSentTitle: "Invoice handed to WhatsApp",
+  invoiceSentSubtitle:
+    "Open WhatsApp on your phone and press Send. Until you do, the customer hasn't received anything.",
+  invoiceSentMockNote:
+    "Record payment here once the customer pays. If they say they never got the invoice, resend from WhatsApp — the message is still in the chat draft.",
   invoicePreviewNote: "Review the customer-facing invoice before sending.",
   invoicePreviewButton: "Preview →",
   invoicePreviewGoBack: "← Go Back",
-  invoicePreviewMockNote: "WhatsApp delivery is mocked in this build — Send to Customer logs the message that would have gone out.",
-  invoiceSentAt: "Sent at",
-  invoiceAlreadySent: "Invoice already sent to customer.",
+  invoicePreviewMockNote:
+    "Send via WhatsApp opens the customer's WhatsApp on your phone with the message pre-filled. You still need to press Send there — the customer receives nothing until you do.",
+  invoiceSentAt: "Handed to your WhatsApp at",
+  invoiceAlreadySent:
+    "Invoice was handed to your WhatsApp — press Send in WhatsApp on your phone if you haven't already.",
   invoiceBackToInvoice: "← Back to invoice",
   invoiceBackToCashier: "← Back to accounts",
   // Workflow duration captions (claim → send-for-estimate → estimate-sent)
@@ -1051,7 +1074,7 @@ const en = {
   tlWorkCompleted: "Work completed",
   tlQcPassed: "QC passed",
   tlInvoiceIssued: "Invoice issued",
-  tlInvoiceSent: "Invoice sent to customer",
+  tlInvoiceSent: "Invoice handed off to WhatsApp",
   tlAdvancePayment: "Advance payment received",
   tlPaymentRecorded: "Payment recorded",
   tlDelivered: "Delivered to customer",
@@ -1136,7 +1159,7 @@ const en = {
   cashierWorkInProgressTitle: "Work in progress (customer approved)",
   cashierWorkInProgressCaption: "Work in progress — waiting for technician to complete.",
   cashierToSendInvoiceTitle: "Invoice ready — send to customer",
-  cashierSendInvoiceToCustomer: "Send to Customer →",
+  cashierSendInvoiceToCustomer: "Send via WhatsApp →",
   // Phase 5: read-only roll-up of advisor-owned estimate work shown
   // to the cashier so they see what's queued, without any actionable
   // button (pricing / sending all live on [[/advisor/estimates]]).
@@ -1716,6 +1739,18 @@ const ar: typeof en = {
   vehicleVinLabel: "رقم الهيكل",
   vehicleMatchLabel: "سجل المرآب المطابق:",
   vehicleMatchDismiss: "تجاهل المطابقة",
+  customerDetailKicker: "العميل",
+  customerEditLegend: "بيانات العميل",
+  customerEditHint:
+    "هذه الحقول تخصّ العميل وليس السيارة — تحديثها هنا يسري على كل مركباته دفعة واحدة.",
+  customerNameLabel: "الاسم",
+  customerPhoneLabel: "الهاتف",
+  customerSaveButton: "حفظ",
+  customerVehiclesHeading: "المركبات",
+  customerNoVehicles: "لا توجد مركبات لهذا العميل بعد.",
+  customerJobsHeading: "سجل الزيارات",
+  customerNoJobs: "لا توجد زيارات بعد.",
+  customerTotalPaid: "إجمالي المدفوع:",
   poAddLineVehicleFor: "لـ",
   poAddLineVehicleChange: "تغيير",
   poAddLineVehicleUseDefault: "استخدم افتراضي المستند",
@@ -2027,16 +2062,20 @@ const ar: typeof en = {
   waSend: "إرسال عبر واتساب",
   tabAdvisor: "استشاري",
   waSendDisabled: "رقم هاتف العميل غير متوفر أو غير صحيح",
-  sendInvoiceToCustomer: "إرسال للعميل ←",
+  sendInvoiceToCustomer: "إرسال عبر واتساب ←",
   invoicePreviewNote: "راجع الفاتورة كما يراها العميل قبل الإرسال.",
   invoicePreviewButton: "معاينة ←",
   invoicePreviewGoBack: "← العودة للتعديل",
-  invoicePreviewMockNote: "إرسال واتساب وضعٌ تجريبي — زر «إرسال للعميل» يسجِّل الرسالة التي كانت ستُرسل.",
-  invoiceSentTitle: "تم إرسال الفاتورة للعميل",
-  invoiceSentSubtitle: "سنسجّل الدفع هنا فور دفع العميل.",
-  invoiceSentMockNote: "إرسال واتساب وضعٌ تجريبي في هذه النسخة — راجع سجلات الخادم لمحتوى الرسالة المفترضة.",
-  invoiceSentAt: "أُرسلت في",
-  invoiceAlreadySent: "تم إرسال الفاتورة للعميل من قبل.",
+  invoicePreviewMockNote:
+    "«إرسال عبر واتساب» يفتح محادثة العميل على هاتفك مع الرسالة جاهزة. ما زال عليك الضغط على إرسال داخل واتساب — لن يستلم العميل شيئًا حتى تفعل ذلك.",
+  invoiceSentTitle: "تم تسليم الفاتورة إلى واتساب",
+  invoiceSentSubtitle:
+    "افتح واتساب على هاتفك واضغط إرسال. لن يستلم العميل شيئًا حتى تفعل ذلك.",
+  invoiceSentMockNote:
+    "سجّل الدفع هنا بمجرد أن يدفع العميل. إذا قال إنه لم يستلم الفاتورة، أعد إرسالها من واتساب — الرسالة لا تزال في مسودّة المحادثة.",
+  invoiceSentAt: "تم التسليم إلى واتساب في",
+  invoiceAlreadySent:
+    "تم تسليم الفاتورة إلى واتساب — اضغط إرسال في واتساب على هاتفك إن لم تكن قد فعلت ذلك.",
   invoiceBackToInvoice: "← العودة إلى الفاتورة",
   invoiceBackToCashier: "← العودة إلى الحسابات",
   durDiagnosis: "الفحص",
@@ -2375,7 +2414,7 @@ const ar: typeof en = {
   tlWorkCompleted: "اكتمل العمل",
   tlQcPassed: "تم اجتياز فحص الجودة",
   tlInvoiceIssued: "تم إصدار الفاتورة",
-  tlInvoiceSent: "تم إرسال الفاتورة إلى العميل",
+  tlInvoiceSent: "تم تسليم الفاتورة إلى واتساب",
   tlAdvancePayment: "تم استلام دفعة مقدمة",
   tlPaymentRecorded: "تم تسجيل الدفع",
   tlDelivered: "تم تسليم المركبة للعميل",
@@ -2458,7 +2497,7 @@ const ar: typeof en = {
   cashierWorkInProgressTitle: "العمل جارٍ (وافق العميل على التقدير)",
   cashierWorkInProgressCaption: "العمل جارٍ — بانتظار اكتمال عمل الفني.",
   cashierToSendInvoiceTitle: "الفاتورة جاهزة — أرسلها للعميل",
-  cashierSendInvoiceToCustomer: "إرسال للعميل ←",
+  cashierSendInvoiceToCustomer: "إرسال عبر واتساب ←",
   // Phase 5 — read-only "Coming up" rollup.
   cashierComingUpTitle: "قادمة قريبًا",
   cashierComingUpHint: "يقوم المستشار بالتسعير أو ينتظر العميل — ستظهر هنا بعد الموافقة واكتمال عمل الفني.",

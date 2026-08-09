@@ -162,6 +162,26 @@ enum PurchaseOrderSendChannel {
   EMAIL
 }
 
+// Invoice send channel — mirrors PurchaseOrderSendChannel. Kept as its
+// own enum (not shared) so a future channel (SMS?) can be added on one
+// side without side-effects on the other. WHATSAPP today is a wa.me
+// hand-off; when the Meta Cloud API lands the channel value doesn't
+// change, only the status semantics do (HANDED_OFF → SENT after the
+// API accepts).
+enum InvoiceSendChannel {
+  WHATSAPP
+  EMAIL
+}
+
+// See PurchaseOrderSendStatus for the same shape. Present here as a
+// parallel enum so InvoiceSend rows don't cross-reference a PO-scoped
+// name.
+enum InvoiceSendStatus {
+  HANDED_OFF
+  SENT
+  FAILED
+}
+
 // HANDED_OFF (not "OPENED") is the WhatsApp shape: the wa.me intent left
 // our hands, the outcome is unknown. "OPENED" would read like email
 // open-tracking, which is the opposite. Every WHATSAPP row terminates at
@@ -262,6 +282,7 @@ model Garage {
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
   purchaseOrderSends PurchaseOrderSend[]
+  invoiceSends       InvoiceSend[]
   partsImports   PartsImport[]
   partRequests   PartRequest[]
   reminders      Reminder[]
@@ -351,6 +372,7 @@ model User {
   aiEvents        AiEvent[]
   workSessions    WorkSession[] @relation("TechWorkSessions")
   purchaseOrderSends PurchaseOrderSend[] @relation("PurchaseOrderSentBy")
+  invoiceSends       InvoiceSend[]       @relation("InvoiceSentBy")
   // Slice 3 audits — separate named relations so the User row can be
   // referenced from any of the three roles on an intake collision:
   // attached / released a plate history row, or performed an
@@ -661,6 +683,7 @@ model Invoice {
 
   lines    InvoiceLine[]
   payments Payment[]
+  sends    InvoiceSend[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1031,6 +1054,41 @@ model PurchaseOrderSend {
   createdAt DateTime @default(now())
 
   @@index([purchaseOrderId])
+  @@index([garageId])
+}
+
+// Send audit log for customer invoices — parallels PurchaseOrderSend
+// exactly. Motivation: `JobCard.invoiceSentAt` on its own says "we
+// stamped it," but when a customer says "I never got the invoice" a
+// month later the cashier needs to see WHICH number the message was
+// handed off to, WHO handed it off, and WHEN. A boolean-with-timestamp
+// on the parent row can't answer any of those.
+//
+// The row is written BEFORE the wa.me redirect fires (mirrors PO). If
+// the wa.me redirect never fires (server crash, etc.), the row exists
+// and the read side sees "handed_off" without a corresponding paper
+// trail on WhatsApp — that's the correct signal to the operator that
+// something went sideways at send time, not a claim we made up.
+model InvoiceSend {
+  id                String              @id @default(cuid())
+  invoiceId         String
+  invoice           Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  garageId          String
+  garage            Garage              @relation(fields: [garageId], references: [id])
+  channel           InvoiceSendChannel
+  recipient         String              // snapshot at send time — email address or phone, per channel
+  sentByUserId      String
+  sentBy            User                @relation("InvoiceSentBy", fields: [sentByUserId], references: [id])
+  // Sender's display name AT SEND TIME. Same snapshot rule as
+  // PurchaseOrderSend.sentByName.
+  sentByName        String?
+  status            InvoiceSendStatus
+  providerMessageId String?             // reserved for the Meta Cloud API commit; null on wa.me hand-off
+  errorCode         String?             // our own enum only, never provider text
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
   @@index([garageId])
 }
 

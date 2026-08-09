@@ -43,13 +43,18 @@ export default async function InvoiceSent({
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <AppNav role={session.user.role as"CASHIER"|"OWNER"|"ADVISOR"} active="accounts"/>
 
-      <section className="rounded-xl border border-success-500/40 bg-success-50 p-6 text-center dark:border-success-500/30 dark:bg-success-500/10">
-        <div className="text-5xl">📨</div>
+      {/* Amber (warning) not green (success) — because the send isn't
+          complete yet. The wa.me redirect fired; the operator still
+          has to press Send inside WhatsApp on their phone. Using
+          success tone here would repeat the "customer got it" lie the
+          old copy carried. */}
+      <section className="rounded-xl border border-warning-500/40 bg-warning-50 p-6 text-center dark:border-warning-500/30 dark:bg-warning-500/10">
+        <div className="text-5xl">📱</div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">{t("invoiceSentTitle")}</h1>
         <p className="mt-2 text-base text-text">
           {t("invoiceSentSubtitle")}
         </p>
-        <p className="mt-2 inline-block rounded-xl border border-success-500/40 bg-success-50 px-3 py-2 text-xs text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">
+        <p className="mt-2 inline-block rounded-xl border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
           {t("invoiceSentMockNote")}
         </p>
       </section>

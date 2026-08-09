@@ -5,41 +5,56 @@ import { requireAdvisor } from "@/lib/action-guards";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Customer-scoped updates initiated from the advisor's vehicle detail
- * page. Owner-of-the-vehicle edits (name, phone, TRN) all belong on
- * that surface because that is where the advisor is actually looking
- * at "this car's owner."
+ * Update the customer's editable identity fields — name, phone, TRN.
+ * Fired from /advisor/customers/[id] (the sole customer-detail
+ * surface).
  *
- * For the compliance commit only `trn` ships. Name / phone edits are
- * covered by AGENTS.md ("advisor can edit owner name + mobile") but
- * are a separate slice — bundling more here would widen the PR beyond
- * the FTA-compliance intent.
+ * Motivation: the customer, not the vehicle, owns these fields.
+ * Editing them on a vehicle page produces the "three cars, three
+ * TRN forms" bug that AR flagged. Consolidating here means:
+ *   - one form, one save; the change applies to every vehicle the
+ *     customer owns automatically (there is only one row);
+ *   - the plate-transfer workflow (AGENTS.md "vehicle sold →
+ *     advisor can edit owner name + mobile") has its natural home.
+ *
+ * Every field is optional-with-blank-means-clear semantics:
+ *   - name empty → error (name is required on Customer)
+ *   - phone empty → error (phone is required on Customer)
+ *   - trn empty → stored as null (walk-in retail, not VAT-registered)
  *
  * Guard: requireAdvisor (ADVISOR + OWNER + MASTER). Garage-scoped by
- * joining Customer → this action's user.garageId; a stale/forged
- * customerId that belongs to another garage produces count === 0 and
- * we return silently rather than throwing, so an unlucky race can't
- * leak "customer X exists in another garage" via the error text.
+ * WHERE id + garageId; a stale/forged customerId that belongs to
+ * another garage produces count === 0 and we return silently rather
+ * than throwing, so an unlucky race can't leak cross-garage existence
+ * via error text.
  */
-export async function updateCustomerTrnAction(formData: FormData) {
+export async function updateCustomerAction(formData: FormData) {
     const user = await requireAdvisor();
     const customerId = String(formData.get("customerId") ?? "").trim();
-    // Trim + normalise to null on empty. UAE TRNs are 15 digits but we
-    // accept whatever the shop enters — GCC TRNs, KSA TRNs later, and
-    // hand-written spacing all round-trip cleanly. Validation is a
-    // separate concern from persistence; wrong-format TRN is a data-
-    // quality issue, not a save-time error.
-    const raw = String(formData.get("trn") ?? "").trim();
-    const trn = raw === "" ? null : raw;
+    const rawName = String(formData.get("name") ?? "").trim();
+    const rawPhone = String(formData.get("phone") ?? "").trim();
+    // Trim + normalise TRN to null on empty. UAE TRNs are 15 digits
+    // but we accept whatever the shop enters — GCC TRNs, KSA TRNs
+    // later, hand-written spacing all round-trip cleanly. Wrong-
+    // format TRN is a data-quality issue, not a save-time error.
+    const rawTrn = String(formData.get("trn") ?? "").trim();
 
     if (!customerId) return;
+    if (!rawName) throw new Error("Customer name is required.");
+    if (!rawPhone) throw new Error("Customer phone is required.");
 
-    // Garage-scoped update. `updateMany` with a scoped where returns
-    // count === 0 for cross-garage attempts — no throw, no leak.
     await prisma.customer.updateMany({
         where: { id: customerId, garageId: user.garageId },
-        data: { trn },
+        data: {
+            name: rawName,
+            phone: rawPhone,
+            trn: rawTrn === "" ? null : rawTrn,
+        },
     });
 
+    // The customer detail page + any vehicle detail page that shows
+    // the customer's name will restat on next visit; nothing else on
+    // the app reads Customer.trn/name/phone dynamically.
+    revalidatePath(`/advisor/customers/${customerId}`);
     revalidatePath(`/advisor/vehicles`);
 }

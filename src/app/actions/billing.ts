@@ -21,7 +21,7 @@ import {
   type LineKind,
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
-import { signId } from "@/lib/tokens";
+import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { buildWaMeUrl, normalizeToE164 } from "@/lib/wa";
 import { invoiceMessage } from "@/lib/po-message";
 import { logInvoiceSend } from "@/lib/invoice-send-log";
@@ -100,6 +100,7 @@ export async function createEstimateAction(formData: FormData) {
         vatAmount: clonedFromRejection ? lastEstimate!.vatAmount : 0,
         total: clonedFromRejection ? lastEstimate!.total : 0,
         status: "DRAFT",
+        publicToken: newPublicToken(),
         // Lines are cloned via nested-create so we never need a second
         // round-trip per row. partId/declined preserved verbatim so the
         // cashier sees the original mix (incl. customer-declined items
@@ -374,12 +375,19 @@ export async function setEstimateStatusAction(formData: FormData) {
     // Send the customer the WhatsApp approval link (mock if no Meta token).
     const customer = await customerForJob(est.jobCardId, user.garageId);
     if (customer) {
+      // Phase 2 (2026-08-10): raw publicToken instead of HMAC signId.
+      // ensurePublicToken is a no-op when the row already has a token
+      // (Phase-1 backfill covered every existing row); it generates
+      // one for the rare row created between backfill and this
+      // deploy landing. Belt-and-braces so no send emits a link that
+      // can't be verified.
+      const publicToken = await ensurePublicToken("estimate", est);
       await sendWhatsApp({
         garageId: user.garageId,
         customerId: customer.id,
         waId: customer.waId ?? customer.phone,
         template: "estimate_approval",
-        body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${signId("estimate", est.id)}`,
+        body: `Your estimate is ready. Review & approve: ${appUrl()}/c/estimate/${publicToken}`,
       });
     }
     // Quote-approval gate: if this revised quote exceeds an already-approved total,
@@ -560,6 +568,7 @@ export async function generateInvoiceAction(formData: FormData) {
         total,
         status: "SENT",
         clearanceStatus: strategy.clearanceStatus,
+        publicToken: newPublicToken(),
         qrPayload: qrPlaceholder({
           seller: g.name,
           trn: g.trn,
@@ -926,6 +935,8 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
       number: true,
       issuedAt: true,
       total: true,
+      // Phase 2: publicToken is the customer URL segment (see below).
+      publicToken: true,
       // Vehicle drives the "your invoice for the {make} {model}" copy
       // in the message body — pulled here so the message reads
       // naturally without an extra join at render time.
@@ -960,6 +971,13 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
     );
   }
 
+  // Phase 2 (2026-08-10): raw publicToken in the URL, not an HMAC of
+  // inv.id. ensurePublicToken is a no-op when the row already carries
+  // one (Phase-1 backfill covered every existing row); it generates
+  // for rows created between backfill and this deploy. The
+  // `invoiceMessage` builder's field is still named `invoiceId` for
+  // now — it's the URL segment, whatever shape.
+  const publicToken = await ensurePublicToken("invoice", inv);
   const body = invoiceMessage({
     customer: { name: customer.name, lang: customer.lang },
     vehicle: {
@@ -968,7 +986,7 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
     },
     invoice: { total: Number(inv.total), number: inv.number },
     appUrl: appUrl(),
-    invoiceId: signId("invoice", inv.id),
+    invoiceId: publicToken,
   });
   const waHref = buildWaMeUrl(phoneE164, body);
 
@@ -1028,7 +1046,8 @@ export async function emailInvoiceAction(formData: FormData) {
   const invoiceId = String(formData.get("invoiceId") ?? "");
   const inv = await prisma.invoice.findFirst({
     where: { id: invoiceId, garageId: user.garageId },
-    select: { id: true, jobCardId: true, number: true, issuedAt: true },
+    // Phase 2: publicToken needed to build the customer URL.
+    select: { id: true, jobCardId: true, number: true, issuedAt: true, publicToken: true },
   });
   if (!inv) throw new Error("Invoice not found in this garage");
 
@@ -1039,8 +1058,9 @@ export async function emailInvoiceAction(formData: FormData) {
   }
 
   // Mock — no SMTP yet. See action doc-comment above.
+  const publicToken = await ensurePublicToken("invoice", inv);
   console.log(
-    `[mock-email] would send invoice ${inv.number} to ${customer.email} — ${appUrl()}/c/invoice/${signId("invoice", inv.id)}`,
+    `[mock-email] would send invoice ${inv.number} to ${customer.email} — ${appUrl()}/c/invoice/${publicToken}`,
   );
 
   revalidatePath(`/invoices/${invoiceId}`);
@@ -1378,6 +1398,7 @@ export async function reissueInvoiceAction(formData: FormData) {
         subtotal,
         vatAmount,
         total,
+        publicToken: newPublicToken(),
         // DRAFT so the cashier can adjust before sending — the whole
         // point of reissue is that the void was wrong.
         status: "DRAFT",

@@ -1,7 +1,8 @@
 import type { Browser } from "puppeteer-core";
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import { signId } from "@/lib/tokens";
+import { prisma } from "@/lib/prisma";
+import { ensurePublicToken } from "@/lib/document-tokens";
 import { appUrl } from "@/lib/whatsapp";
 
 /**
@@ -88,7 +89,17 @@ async function getBrowser(): Promise<Browser> {
  * token verification for auth; the staff route uses requireAnyRole.
  */
 export async function renderInvoicePdf(invoiceId: string): Promise<Buffer> {
-    const token = signId("invoice", invoiceId);
+    // Phase 2 (2026-08-10): the PDF renderer hits the customer-facing
+    // URL, which now expects a raw publicToken. Fetch/generate the
+    // token for this invoice so the URL verifies at the other end via
+    // resolveDocumentToken's publicToken path. Cheap 2-column read;
+    // ensurePublicToken is a no-op for the common (backfilled) case.
+    const row = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { id: true, publicToken: true },
+    });
+    if (!row) throw new Error(`renderInvoicePdf: invoice ${invoiceId} not found`);
+    const token = await ensurePublicToken("invoice", row);
     const url = `${appUrl()}/c/invoice/${token}`;
 
     const browser = await getBrowser();

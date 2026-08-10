@@ -12,6 +12,7 @@ import {
   LogoValidationError,
 } from "@/lib/storage";
 import { requireAdvisor } from "@/lib/action-guards";
+import { newPublicToken } from "@/lib/document-tokens";
 
 // PUBLIC — customer booking (no auth; this is the WhatsApp/web booking surface).
 export async function createBookingPublic(formData: FormData) {
@@ -102,6 +103,7 @@ export async function confirmBookingAction(formData: FormData) {
       advisorId: user.id,
       bookingId: booking.id,
       status: "ARRIVED",
+      publicToken: newPublicToken(),
     },
     select: { id: true },
   });

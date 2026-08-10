@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { transition, skipTo, type JobAction, type JobStatus } from "@/lib/jobcard-status";
 import { saveUpload, validateImageUpload, AUTH_PHOTO_MAX_BYTES } from "@/lib/storage";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
-import { signId } from "@/lib/tokens";
+import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { clampPriority } from "@/lib/priority";
 import { canJoinAsHelper, canLogWork } from "@/lib/claim";
 import { requireAdvisor, requireAnyRole, requireTech } from "@/lib/action-guards";
@@ -46,6 +46,9 @@ export async function createJobCardAction(formData: FormData) {
       advisorId: user.id,
       status: "ARRIVED",
       assignedToId,
+      // Phase 2: fill at create so the delivery-link send never has
+      // to run ensurePublicToken's safety-net update path.
+      publicToken: newPublicToken(),
     },
     select: { id: true },
   });
@@ -296,6 +299,7 @@ export async function sendForReestimateAction(formData: FormData) {
         vatAmount: 0,
         total: 0,
         status: "DRAFT",
+        publicToken: newPublicToken(),
         lines: {
           create: job.jobParts.map((p) => ({
             // The cashier sets unitPrice; the tech only specifies what.
@@ -600,13 +604,17 @@ export async function nudgeCollectionAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "");
   const job = await prisma.jobCard.findFirst({
     where: { id: jobId, garageId: user.garageId },
-    include: { vehicle: { include: { customer: true } }, invoices: { select: { id: true }, take: 1 } },
+    // Phase 2: pull the invoice's publicToken so the wa.me link uses
+    // it as the URL segment (raw token, no HMAC).
+    include: { vehicle: { include: { customer: true } }, invoices: { select: { id: true, publicToken: true }, take: 1 } },
   });
   if (!job) throw new Error("Job not found in this garage");
 
   const customer = job.vehicle.customer;
-  const invId = job.invoices[0]?.id;
-  const link = invId ? ` ${appUrl()}/c/invoice/${signId("invoice", invId)}` : "";
+  const inv = job.invoices[0];
+  const link = inv
+    ? ` ${appUrl()}/c/invoice/${await ensurePublicToken("invoice", inv)}`
+    : "";
   await sendWhatsApp({
     garageId: user.garageId,
     customerId: customer.id,

@@ -23,6 +23,7 @@ import {
   VALUABLES_OPTIONS,
 } from "@/lib/jobcard-fields";
 import { requireAdvisor } from "@/lib/action-guards";
+import { newPublicToken } from "@/lib/document-tokens";
 import { clampPriority } from "@/lib/priority";
 import { normalizeVin, normalizeUaePhone, normalizePlate } from "@/lib/normalize";
 
@@ -617,6 +618,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
         complaint,
         exteriorCondition,
         exteriorRemarks,
+        publicToken: newPublicToken(),
         interiorCondition,
         interiorRemarks,
         valuables,

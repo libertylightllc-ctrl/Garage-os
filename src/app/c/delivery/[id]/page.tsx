@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { confirmCollectionPublic } from "@/app/actions/delivery";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 import { getT } from "@/i18n/server";
 import { DocumentHeader } from "@/components/document-header";
 
@@ -15,7 +15,7 @@ export default async function CustomerCollection({
   params: Promise<{ id: string }>;
 }) {
   const { id: token } = await params;
-  const id = verifyToken("delivery", token);
+  const id = await resolveDocumentToken("delivery", token);
   if (!id) notFound();
   const job = await prisma.jobCard.findUnique({
     where: { id },

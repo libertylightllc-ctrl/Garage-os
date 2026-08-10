@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { DocumentHeader } from "@/components/document-header";
@@ -101,16 +101,21 @@ async function InvalidLinkPage({ rawId, token, kindHint }: {
 
 export default async function CustomerInvoice({ params }: { params: Promise<{ id: string }> }) {
   const { id: tokenParam } = await params;
-  // Keep the signed token for the Download PDF link below — the PDF
-  // route uses the same public-signed URL scheme so the customer
-  // gets the same auth semantics for downloading as for viewing.
+  // Keep the raw URL segment for the Download PDF link below — the
+  // PDF route accepts the same dual-shape token (Phase-2 raw
+  // publicToken OR Phase-1 HMAC), so passing whatever segment the
+  // customer arrived with works for both.
   const token = tokenParam;
-  const id = verifyToken("invoice", token);
-  // The id half of the token (before the '~') is used ONLY to look up
-  // the garage name for the friendly fallback page — never trusted for
-  // authorization. verifyToken above is the gate; this variable exists
-  // only so the fallback message can name the shop.
-  const rawId = token.includes("~") ? token.slice(0, token.lastIndexOf("~")) : token;
+  // Phase 2 (2026-08-10): accepts both raw publicToken and Phase-1
+  // HMAC-signed `<id>~<sig>`. Dispatch is inside resolveDocumentToken.
+  const id = await resolveDocumentToken("invoice", token);
+  // For the friendly fallback page, we want to still surface a garage
+  // name when we can. HMAC tokens carry the id in the segment before
+  // "~" (safe cheap lookup); raw publicTokens can only be resolved
+  // via the same DB path that just failed, so the fallback is generic
+  // for that shape. `rawId` is used ONLY for that name lookup, never
+  // for authorization — resolveDocumentToken above is the gate.
+  const rawId = token.includes("~") ? token.slice(0, token.lastIndexOf("~")) : "";
   if (!id) return <InvalidLinkPage rawId={rawId} token={token} kindHint="bad_sig" />;
   const inv = await prisma.invoice.findUnique({
     where: { id },

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { approveEstimatePublic, rejectEstimatePublic, toggleLinePublic } from "@/app/actions/public";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
@@ -14,7 +14,7 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function CustomerEstimate({ params }: { params: Promise<{ id: string }> }) {
   const { id: token } = await params;
-  const id = verifyToken("estimate", token);
+  const id = await resolveDocumentToken("estimate", token);
   if (!id) notFound();
   const est = await prisma.estimate.findUnique({
     where: { id },

@@ -21,7 +21,7 @@ import type { StandaloneVehicleInput } from "@/lib/po-vehicle";
 import { purchaseOrderMessage } from "@/lib/po-message";
 import { poDocKind, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
-import { signId } from "@/lib/tokens";
+import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { appUrl } from "@/lib/whatsapp";
 import { getLocale, getT } from "@/i18n/server";
 import { logPoSend } from "@/lib/po-send-log";
@@ -136,6 +136,7 @@ export async function createPurchaseOrderAction(formData: FormData) {
       reference: optional(formData.get("reference")),
       note: optional(formData.get("note")),
       ...buildPoDefaultVehicleSnapshot(defaultVehicle),
+      publicToken: newPublicToken(),
     },
     select: { id: true },
   });
@@ -962,6 +963,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
       supplierId: supplier.id,
       reference: optional(formData.get("reference")),
       note: optional(formData.get("note")),
+      publicToken: newPublicToken(),
       lines: {
         create: linesToCreate.map((l) => ({
           partId: l.partId,
@@ -1065,7 +1067,8 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
       : t("documentPurchaseOrder");
   const docNumber = po.reference?.trim() ? po.reference : `#${po.id.slice(-6).toUpperCase()}`;
 
-  const publicUrl = `${appUrl()}/c/po/${signId("po", po.id)}`;
+  // Phase 2 (2026-08-10): raw publicToken as the URL segment.
+  const publicUrl = `${appUrl()}/c/po/${await ensurePublicToken("po", po)}`;
   const vehicles = resolvePoVehicles(po.lines, {
     defaultVehicleId: po.defaultVehicleId,
     defaultVehicleMake: po.defaultVehicleMake,

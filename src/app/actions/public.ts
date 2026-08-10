@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { totalsFor, type LineKind } from "@/lib/billing";
 import { recordInbound } from "@/lib/whatsapp";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 
 // These are the customer's surface (reached via a WhatsApp link). No staff auth;
 // authorization is the unguessable record id acting as a capability token.
@@ -16,7 +16,7 @@ async function logInbound(garageId: string, customerId: string, waId: string, bo
 }
 
 export async function approveEstimatePublic(formData: FormData) {
-  const id = verifyToken("estimate", String(formData.get("token") ?? ""));
+  const id = await resolveDocumentToken("estimate", String(formData.get("token") ?? ""));
   if (!id) return;
   const est = await prisma.estimate.findUnique({
     where: { id },
@@ -38,7 +38,7 @@ export async function approveEstimatePublic(formData: FormData) {
 }
 
 export async function rejectEstimatePublic(formData: FormData) {
-  const id = verifyToken("estimate", String(formData.get("token") ?? ""));
+  const id = await resolveDocumentToken("estimate", String(formData.get("token") ?? ""));
   if (!id) return;
   const est = await prisma.estimate.findUnique({
     where: { id },
@@ -55,7 +55,7 @@ export async function rejectEstimatePublic(formData: FormData) {
 // Customer skips/restores a line on their estimate (while it's awaiting their decision).
 export async function toggleLinePublic(formData: FormData) {
   const token = String(formData.get("token") ?? "");
-  const estId = verifyToken("estimate", token);
+  const estId = await resolveDocumentToken("estimate", token);
   if (!estId) return;
   const lineId = String(formData.get("lineId") ?? "");
 

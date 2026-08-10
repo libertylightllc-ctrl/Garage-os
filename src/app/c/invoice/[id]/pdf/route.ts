@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 import { formatInvoiceNo } from "@/lib/billing";
 import { renderInvoicePdf } from "@/lib/invoice-pdf";
 
@@ -36,7 +36,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> },
 ) {
     const { id: token } = await params;
-    const id = verifyToken("invoice", token);
+    const id = await resolveDocumentToken("invoice", token);
     if (!id) return new NextResponse("Not Found", { status: 404 });
 
     // We only need `number` + `issuedAt` to build the filename — the

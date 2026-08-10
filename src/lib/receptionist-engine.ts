@@ -11,7 +11,7 @@ import {
   type Intent,
   type Lang,
 } from "@/lib/receptionist";
-import { signId } from "@/lib/tokens";
+import { ensurePublicToken } from "@/lib/document-tokens";
 import { messages, statusKey } from "@/i18n/config";
 
 const SUPPORTED: Lang[] = ["ar", "en", "hi", "ur"];
@@ -41,9 +41,12 @@ async function buildAutoReply(
     const inv = await prisma.invoice.findFirst({
       where: { garageId, jobCard: { vehicle: { customerId } } },
       orderBy: { issuedAt: "desc" },
-      select: { id: true },
+      // Phase 2 (2026-08-10): publicToken becomes the URL segment.
+      select: { id: true, publicToken: true },
     });
-    const link = inv ? `${appUrl()}/c/invoice/${signId("invoice", inv.id)}` : undefined;
+    const link = inv
+      ? `${appUrl()}/c/invoice/${await ensurePublicToken("invoice", inv)}`
+      : undefined;
     return autoReply("INVOICE", lang, { link });
   }
   if (intent === "BOOKING") {

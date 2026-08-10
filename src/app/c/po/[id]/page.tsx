@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/tokens";
+import { resolveDocumentToken } from "@/lib/document-tokens";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { DocumentHeader } from "@/components/document-header";
@@ -37,7 +37,7 @@ export default async function PublicPurchaseOrder({
     params: Promise<{ id: string }>;
 }) {
     const { id: token } = await params;
-    const id = verifyToken("po", token);
+    const id = await resolveDocumentToken("po", token);
     if (!id) notFound();
 
     const po = await prisma.purchaseOrder.findUnique({

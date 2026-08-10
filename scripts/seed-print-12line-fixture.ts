@@ -1,12 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import dotenv from "dotenv";
-const envLocal = path.resolve(".env.local");
-if (fs.existsSync(envLocal)) {
-  dotenv.config({ path: envLocal, override: true });
-} else {
-  dotenv.config();
-}
+import "./lib/target-local.mjs";
 
 // 12-line-complaint fixture — matches the shape of the real JC-2026-0078
 // job AR flagged as overflowing to page 2 by just the signature block.

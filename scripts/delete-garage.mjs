@@ -14,7 +14,7 @@
 // garage name + createdAt for the operator to sanity-check the right
 // row before approving --execute.
 
-import "dotenv/config";
+import "./lib/target-prod.mjs";
 import { Client } from "pg";
 
 function parseArgs(argv) {

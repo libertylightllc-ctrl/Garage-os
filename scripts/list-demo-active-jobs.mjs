@@ -4,7 +4,7 @@
 //
 //   node scripts/list-demo-active-jobs.mjs
 
-import "dotenv/config";
+import "./lib/target-local.mjs";
 import { Client } from "pg";
 
 const NON_TERMINAL = [

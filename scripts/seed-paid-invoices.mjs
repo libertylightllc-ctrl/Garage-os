@@ -5,7 +5,7 @@
 //
 // Refuses to run against a non-localhost DATABASE_URL.
 
-import "dotenv/config";
+import "./lib/target-local.mjs";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 

@@ -150,11 +150,39 @@ Two env files:
   - `prisma.config.ts` (every `prisma` CLI command) — explicit shim
   - `prisma/seed.ts` — explicit shim
   - `vitest.setup.ts` (every test run) — explicit shim
-- `.env` — git-ignored. `DATABASE_URL` = the Supabase Singapore pooler.
-  Production credentials. Only loaded as a FALLBACK when `.env.local` is
-  absent. Each fallback prints a `[prisma.config] .env.local not found …
-  production target` warning to stderr so a missing-`.env.local` mistake
-  is loud.
+- `.env` — git-ignored. Carries `PROD_DATABASE_URL` (renamed from
+  DATABASE_URL 2026-08-10) and `AUTH_SECRET`. **There is NO fallback** —
+  removing `.env.local` no longer silently points ambient Node processes at
+  Prod. Only scripts that explicitly opt in via `scripts/lib/target-prod.mjs`
+  re-bind `PROD_DATABASE_URL` → `DATABASE_URL` for the script's lifetime.
+  See "Prod-DB isolation" below.
+
+**Prod-DB isolation (2026-08-10 incident-driven).** After INV-2026-0039
+(a local `npm run dev` inheriting `.env`'s DATABASE_URL wrote a real customer
+invoice to Prod and signed a wa.me link with a non-Prod secret), three guards
+close the class of "local machine reaches Prod DB":
+
+1. `.env` variable renamed to `PROD_DATABASE_URL`. Ambient
+   `import "dotenv/config"` no longer resolves a Prod URL under the
+   well-known name. `prisma.config.ts` + `vitest.setup.ts` load ONLY
+   `.env.local` (no fallback).
+2. `next.config.ts` refuses to boot the dev server when NODE_ENV=development
+   AND resolved DATABASE_URL points at supabase.co/.com. Throws with an
+   incident-referencing error.
+3. `prisma.config.ts` refuses `migrate dev` / `migrate reset` / `db push`
+   against any Supabase-hosted DB, regardless of environment. `migrate
+   deploy` (pre-declared migration files) remains the only Prisma path to
+   Prod schema.
+
+To run any Prod-touching operation from a local machine:
+- Operator scripts (`scripts/*.ts`, `scripts/*.mjs`): `import
+  "./lib/target-prod.mjs"` as the FIRST import. That module reads
+  `PROD_DATABASE_URL` from `.env`, sets `process.env.DATABASE_URL`, and
+  prints a red-banner "TARGETING PRODUCTION" line to stderr.
+- Fixture/seed scripts: `import "./lib/target-local.mjs"`. Refuses if
+  `.env.local` is missing or if the resolved URL isn't localhost.
+- One-off `prisma migrate deploy` against Prod: `DATABASE_URL="$PROD_DATABASE_URL"
+  npx prisma migrate deploy`.
 
 NPM scripts targeting the local DB (all read `.env.local`):
 - `npm run db:init` — one-shot create the `garageos` `prisma dev` server (fresh install / after `prisma dev rm`).
@@ -170,16 +198,19 @@ See `docs/dev-db-proxy-spec.md` for how the port pinning actually works
 comes from the "exactly one server named `garageos`" invariant).
 
 Production targets — explicit, intentional:
-- `npx prisma migrate deploy` — runs from the Vercel build step; manually
-  invoked locally with `.env.local` removed/renamed temporarily. Hand-write
-  the migration SQL when possible; do NOT use `prisma migrate dev` against
-  prod.
+- `npx prisma migrate deploy` — runs from the Vercel build step. For a
+  manual local run against Prod: `DATABASE_URL="$PROD_DATABASE_URL" npx
+  prisma migrate deploy`. Hand-write migration SQL when possible; the
+  destructive-command guard in `prisma.config.ts` already refuses
+  `prisma migrate dev` / `migrate reset` / `db push` against any hosted
+  DB regardless of what env you set.
 - `scripts/create-garage.ts`, `scripts/delete-garage.mjs`, etc. — operator
-  one-offs. They use `import "dotenv/config"` directly (NOT the prisma.config
-  shim) so they always hit prod. Read the script + confirm DATABASE_URL host
-  in the comment header before running.
-- `db:push` is still in package.json but should NEVER target prod — schema
-  changes need a migration file.
+  one-offs. Every one starts with `import "./lib/target-prod.mjs";` (or
+  `target-local.mjs` for seeders) so the target is a compile-time choice,
+  not a filesystem accident. The wrapper prints the target host to stderr
+  before any Prisma call.
+- `db:push` is still in package.json but is blocked against any hosted DB
+  by the `prisma.config.ts` guard — schema changes need a migration file.
 
 ## How we work
 1. I give you ONE focused task referencing a spec file.

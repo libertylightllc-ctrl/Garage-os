@@ -15,11 +15,12 @@
 // Optional:
 //   --trn "100123456700003"
 //
-// Reuses .env (DATABASE_URL) via "dotenv/config" — same DB the running
-// app talks to. Run against production by pointing .env at production,
-// against staging by pointing it at staging.
+// Opts into Prod via scripts/lib/target-prod.mjs — reads PROD_DATABASE_URL
+// from .env and sets DATABASE_URL. Renamed from `dotenv/config` on
+// 2026-08-10 so no ambient .env fallback can carry a Prod URL into
+// unrelated processes.
 
-import "dotenv/config";
+import "./lib/target-prod.mjs";
 import {
   createGarageWithOwner,
   CreateGarageError,

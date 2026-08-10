@@ -11,14 +11,16 @@
 // Usage:  node scripts/prod-migrate.mjs status   (read-only)
 //         node scripts/prod-migrate.mjs deploy   (applies pending migrations)
 
+// target-prod.mjs reads PROD_DATABASE_URL from .env and sets
+// DATABASE_URL. Renamed from `dotenv.config()` on 2026-08-10 so
+// that no Next.js dev server or Prisma CLI can pick up Prod creds
+// by falling back to the well-known name in .env.
+import "./lib/target-prod.mjs";
 import { spawnSync } from "node:child_process";
-import dotenv from "dotenv";
-
-dotenv.config(); // .env (since .env.local is renamed away for prod ops)
 
 let raw = process.env.DATABASE_URL;
 if (!raw) {
-  console.error("[prod-migrate] no DATABASE_URL in .env");
+  console.error("[prod-migrate] no DATABASE_URL — target-prod.mjs failed to resolve PROD_DATABASE_URL");
   process.exit(1);
 }
 

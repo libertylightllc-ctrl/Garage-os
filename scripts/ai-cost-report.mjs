@@ -1,6 +1,6 @@
 // READ-ONLY report: real AiEvent usage from PROD (.env DATABASE_URL).
 // SELECT queries only — no writes anywhere.
-import "dotenv/config";
+import "./lib/target-prod.mjs";
 import { Client } from "pg";
 
 const url = process.env.DATABASE_URL;

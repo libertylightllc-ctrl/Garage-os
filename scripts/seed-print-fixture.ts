@@ -1,12 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import dotenv from "dotenv";
-const envLocal = path.resolve(".env.local");
-if (fs.existsSync(envLocal)) {
-  dotenv.config({ path: envLocal, override: true });
-} else {
-  dotenv.config();
-}
+import "./lib/target-local.mjs";
 
 async function main() {
   const { prisma } = await import("../src/lib/prisma");

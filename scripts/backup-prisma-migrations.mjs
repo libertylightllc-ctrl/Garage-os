@@ -9,7 +9,7 @@
 //
 // Output: backups/_prisma_migrations.before-baseline-reset.<timestamp>.sql
 
-import "dotenv/config";
+import "./lib/target-prod.mjs";
 import { Client } from "pg";
 import fs from "node:fs";
 import path from "node:path";

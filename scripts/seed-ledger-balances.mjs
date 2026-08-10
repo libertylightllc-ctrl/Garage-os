@@ -13,7 +13,7 @@
 // --wipe first deletes any existing LedgerEntry rows on the demo garage
 // (deterministic reruns).
 
-import "dotenv/config";
+import "./lib/target-local.mjs";
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 

@@ -1,11 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import dotenv from "dotenv";
-const envLocal = path.resolve(".env.local");
-if (fs.existsSync(envLocal)) {
-  dotenv.config({ path: envLocal, override: true });
-}
-dotenv.config({ path: path.resolve(".env") });
+import "./lib/target-local.mjs";
 
 // 30-line-complaint fixture — deliberately over the ~14-line cutoff so
 // the print form MUST overflow to page 2. Used to verify the @page

@@ -16,7 +16,7 @@
 // rows it WOULD insert + the parameterized INSERT it'd run, but does
 // NOT touch any data. Run dry-run first to confirm the script works.
 
-import "dotenv/config";
+import "./lib/target-prod.mjs";
 import fs from "node:fs";
 import { Client } from "pg";
 

@@ -1,14 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import dotenv from "dotenv";
-// Load `.env.local` for DATABASE_URL, then `.env` for AUTH_SECRET
-// (base secret only lives in .env). Order matters — .env.local wins
-// on DATABASE_URL because of `override: true` on the first call.
-const envLocal = path.resolve(".env.local");
-if (fs.existsSync(envLocal)) {
-  dotenv.config({ path: envLocal, override: true });
-}
-dotenv.config({ path: path.resolve(".env") });
+import "./lib/target-local.mjs";
 
 // Seeds an Estimate on the 12-line print fixture so the DocumentHeader
 // sweep is verifiable on a real staff-side page (/estimates/[id]) and

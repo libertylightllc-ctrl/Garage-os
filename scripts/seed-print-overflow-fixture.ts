@@ -1,12 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import dotenv from "dotenv";
-const envLocal = path.resolve(".env.local");
-if (fs.existsSync(envLocal)) {
-  dotenv.config({ path: envLocal, override: true });
-} else {
-  dotenv.config();
-}
+import "./lib/target-local.mjs";
 
 // Long-complaint fixture — forces the print form to spill onto page 2 so
 // the @page repeating-header strip actually shows up in print preview.

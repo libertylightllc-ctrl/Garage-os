@@ -12,32 +12,34 @@
 //     --name "AR" \
 //     --password "min-12-chars-please"
 //
-// Env precedence (matches prisma.config.ts + seed.ts):
-//   - .env.local present → LOCAL DB (Prisma 7 bundled Postgres)
-//   - .env.local absent  → .env, which is PRODUCTION
-// The target DATABASE host is printed before any write — read it.
+// Explicit target — 2026-08-10 rewrite. Silent .env fallback was
+// removed after INV-2026-0039 (a local dev session hit Prod DB and
+// signed a wa.me link with a non-Prod secret). Every invocation must
+// declare its target with --target=local or --target=prod:
+//   npx tsx scripts/create-admin.ts --target=local ...
+//   npx tsx scripts/create-admin.ts --target=prod  ...
+// Neither → refuse to run.
 //
-// Phase 1 local-first: run this against the local DB to bootstrap an
-// admin for testing. Later, to add an admin against production, rename
-// .env.local out of the way (or pass DATABASE_URL inline) and run again.
+// Wrapped in an async main() because tsx transpiles this file to CJS
+// where top-level await is forbidden. The dynamic import of the
+// target wrapper AND the lazy Prisma import both live inside main()
+// so ordering is deterministic: target sets DATABASE_URL first, then
+// Prisma instantiates.
 
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import dotenv from "dotenv";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, "..");
-const localEnv = path.join(root, ".env.local");
-const prodEnv = path.join(root, ".env");
-
-if (existsSync(localEnv)) {
-  dotenv.config({ path: localEnv });
-} else {
-  console.warn(
-    "[create-admin] .env.local not found — falling back to .env (PRODUCTION target)"
-  );
-  dotenv.config({ path: prodEnv });
+async function selectTarget(): Promise<"local" | "prod"> {
+  const flag = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
+  if (flag !== "local" && flag !== "prod") {
+    console.error(
+      "[create-admin] missing --target=local or --target=prod flag.\n" +
+      "  A silent .env fallback was removed on 2026-08-10; every invocation\n" +
+      "  must state its target so a prod-vs-local mistake is a compile-time\n" +
+      "  requirement, not a filesystem accident.\n",
+    );
+    process.exit(1);
+  }
+  if (flag === "prod") await import("./lib/target-prod.mjs");
+  else await import("./lib/target-local.mjs");
+  return flag;
 }
 
 // Prisma singleton + bcrypt are imported lazily inside main() — tsx
@@ -105,6 +107,11 @@ async function main(): Promise<number> {
     printUsage();
     return 0;
   }
+
+  // Select target BEFORE the lazy Prisma import — sets DATABASE_URL
+  // from PROD_DATABASE_URL (target-prod) or from .env.local (target-local).
+  // Exits with code 1 if the flag is missing.
+  await selectTarget();
 
   const missing = (["email", "name", "password"] as const).filter(
     (k) => !args[k]

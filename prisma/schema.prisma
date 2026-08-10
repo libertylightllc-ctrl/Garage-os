@@ -566,6 +566,15 @@ model JobCard {
   advancePayments AdvancePayment[]
   workSessions  WorkSession[]
 
+  // Per-document customer link token (Phase 1) — used for the delivery
+  // confirmation link /c/delivery/<publicToken>. Named publicToken to
+  // match Invoice/Estimate/PurchaseOrder even though the current
+  // consumer is only delivery — a JobCard only ever gets ONE outbound
+  // customer link, so re-using the column for future outbound flows
+  // (satisfaction survey, warranty ref) is fine. See Invoice.publicToken
+  // for the full Phase 1/2/3 plan.
+  publicToken String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -639,6 +648,11 @@ model Estimate {
   approvedAt     DateTime? // audit: when the customer approved (dispute shield)
   approvedAmount Decimal?  @db.Decimal(12, 2)
 
+  // Per-document customer link token (Phase 1) — see Invoice.publicToken
+  // for the full doc. Dormant during Phase 1; Phase 2 flips /c/estimate
+  // to use this column instead of the HMAC of estimate.id.
+  publicToken String? @unique
+
   lines   EstimateLine[]
   invoice Invoice?
 
@@ -707,6 +721,15 @@ model Invoice {
   voidedAt          DateTime?
   voidedByUserId    String?
   voidedBy          User?    @relation("InvoiceVoidedBy", fields: [voidedByUserId], references: [id])
+
+  // Per-document customer link token (Phase 1, 2026-08-10). Random
+  // opaque string stored server-side, used as the URL segment for
+  // /c/invoice/<publicToken> once Phase 2 flips the signers. HMAC-based
+  // signing (see @/lib/tokens) remains the active path for now — this
+  // column is dormant, populated only by backfill so it's ready when
+  // Phase 2 lands. Nullable during rollout; Phase 2's write path fills
+  // it at create time; Phase 3 removes HMAC entirely.
+  publicToken       String? @unique
 
   lines    InvoiceLine[]
   payments Payment[]
@@ -934,6 +957,11 @@ model PurchaseOrder {
   // new line's own `vehicleJobNumber` at Add-line time via the same
   // default-fallback path as the other vehicle fields.
   defaultVehicleJobNumber  Int?
+
+  // Per-document supplier link token (Phase 1) — see Invoice.publicToken
+  // for the full doc. Used for /c/po/<publicToken> once Phase 2 flips
+  // the sender action; dormant during Phase 1.
+  publicToken String? @unique
 
   lines     PurchaseOrderLine[]
   sends     PurchaseOrderSend[]

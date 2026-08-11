@@ -407,14 +407,34 @@ export default async function InvoiceView({
           when all 5 cols are at their natural widths). On print,
           overflow-visible drops the scroll wrapper so the document
           lands clean on A4. */}
+      {/*
+       * Print-fit fix (AR 2026-08-11): the screen grid is 48rem wide
+       * minimum (needs room for the Save button + full 6-digit money
+       * strings), which overflows A4's printable width (~7in = 672px
+       * usable after browser default margins). That was clipping the
+       * right "Total" column on paper.
+       *
+       * Fix — on print only:
+       *   - drop `min-w-[48rem]` so the grid can shrink to the paper
+       *   - narrow every fixed column
+       *   - collapse the action (Save button) column to 0 (already
+       *     print:hidden, so no content is dropped)
+       *
+       * Screen behavior untouched.
+       */}
       <div className="overflow-x-auto print:overflow-visible">
         <div
+          data-print-lines-grid
           className="grid min-w-[48rem] text-sm tabular-nums"
           style={{
             // description=fill, qty=5rem, unit=6rem, amount=6rem,
             // vat=5rem, total=6rem (2026-08-10 line-total column),
             // action=auto. Header + editable + read-only rows all
             // inherit via grid-cols-subgrid below.
+            // Print override lives in globals.css keyed on the
+            // [data-print-lines-grid] attribute above — it narrows
+            // every column so the whole grid fits A4 without clipping
+            // the rightmost Total column (AR 2026-08-11).
             gridTemplateColumns:
             "minmax(8rem,1fr) 5rem 6rem 6rem 5rem 6rem auto",
           }}

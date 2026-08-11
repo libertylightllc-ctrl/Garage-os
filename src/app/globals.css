@@ -237,4 +237,25 @@ body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }
   [data-print-document] button:not([data-print-show]) {
     display: none !important;
   }
+
+  /* Invoice edit page — the line-item grid is 48rem min-width for the
+     screen (needs room for the Save/Remove buttons + long Arabic
+     descriptions). On A4 (7in usable ≈ 672px), 48rem overflows and
+     clips the rightmost Total column. On print only: drop the min
+     width and narrow every fixed column. The Save/Remove buttons in
+     the action column are already display:none via the rule above,
+     so collapsing that column to 0 costs nothing. AR 2026-08-11. */
+  [data-print-document="invoice-edit"] [data-print-lines-grid] {
+    min-width: 0 !important;
+    width: 100% !important;
+    /* Money columns sized to fit the widest string we render:
+       Unit / Amount / Line-total may hold "-172.80" (discount lines
+       are negative and 7 chars), so 5rem (80px) covers text + the
+       parent px-2 padding at text-sm. VAT is always <100 in AED at
+       5% → 4rem is enough for "48.00" + padding. Description takes
+       the remainder via 1fr with a 4rem floor so it never disappears
+       on ultra-narrow paper. */
+    grid-template-columns:
+      minmax(4rem, 1fr) 2.5rem 5rem 5rem 4rem 5rem 0 !important;
+  }
 }

@@ -272,6 +272,12 @@ model Garage {
   jobSeq       Int     @default(0) // per-garage gapless Job Card No counter
   isPilot      Boolean @default(true) // pilots are NEVER charged (subscription billing)
   logoUrl      String? // garage-uploaded brand logo (Supabase public URL); null = use default GarageOS brand. Set via uploadGarageLogoAction; appears on dashboard nav + invoice + estimate + customer-facing links.
+  // Shop-wide default markup applied to catalogue + cost-based estimate
+  // lines (AR 2026-08-12). Null → advisor enters markup per line. Set
+  // via Owner Settings → Pricing defaults. Only a hint at line-create
+  // time — the per-line markupPct is what actually prices the line, so
+  // an owner can change this later without disturbing existing estimates.
+  defaultPartsMarkupPct Decimal? @db.Decimal(5, 2)
 
   users        User[]
   customers    Customer[]
@@ -671,6 +677,21 @@ model EstimateLine {
   part        Part?    @relation(fields: [partId], references: [id])
   description String
   qty         Decimal  @db.Decimal(10, 2)
+  // Cost-based pricing (AR 2026-08-12). unitCost = supplier per-unit
+  // price the shop pays (from a PO / catalogue Part.cost / manual
+  // entry). markupPct = the % the advisor set at price time. Both
+  // nullable — labor + fee lines don't have a "cost" concept, and
+  // legacy rows from before this feature have neither. unitPrice
+  // stays the authoritative selling price. Relationship:
+  //   unitPrice = round(unitCost × (1 + markupPct/100), 2)
+  // In the line editor the three inputs (cost / markup / price) are
+  // two-way bound: change cost or markup → price recomputes; type a
+  // new price → markup recomputes. Persistence saves whatever the
+  // advisor last committed on the row, which keeps the derived
+  // relationship implicit + auditable. Cost + markup are INTERNAL —
+  // customer-facing surfaces render only unitPrice + lineTotal.
+  unitCost    Decimal? @db.Decimal(12, 2)
+  markupPct   Decimal? @db.Decimal(5, 2)
   unitPrice   Decimal  @db.Decimal(12, 2)
   lineTotal   Decimal  @db.Decimal(12, 2)
   vatRate     Decimal  @default(0.05) @db.Decimal(5, 4)
@@ -750,6 +771,13 @@ model InvoiceLine {
   kind        LineKind
   description String
   qty         Decimal  @db.Decimal(10, 2)
+  // Cost snapshot at invoice-generation time (AR 2026-08-12). Copied
+  // from the source EstimateLine so realized-margin reports work off
+  // the immutable invoice, not the still-editable estimate. Nullable
+  // for lines with no cost concept (labor / fee) + legacy rows.
+  // Never rendered to the customer — see /c/invoice for the select:
+  // allowlist that keeps this out of the RSC payload.
+  unitCost    Decimal? @db.Decimal(12, 2)
   unitPrice   Decimal  @db.Decimal(12, 2)
   lineTotal   Decimal  @db.Decimal(12, 2)
   vatRate     Decimal  @default(0.05) @db.Decimal(5, 4)

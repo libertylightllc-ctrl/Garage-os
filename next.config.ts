@@ -46,6 +46,24 @@ if (process.env.NODE_ENV === "development") {
 }
 
 const nextConfig: NextConfig = {
+  // @sparticuz/chromium ships its Chromium binary as loose files under
+  // its own node_modules/@sparticuz/chromium/bin/ directory and reads
+  // them at runtime via `executablePath()`. Turbopack's default
+  // behavior bundles server dependencies, which strips those loose
+  // files — the deploy layer ends up with the JS but no bin/, and
+  // every PDF render throws:
+  //   The input directory "/var/task/node_modules/@sparticuz/chromium/
+  //   bin" does not exist.
+  // (AR 2026-08-11, staff invoice PDF download.)
+  //
+  // Externalizing the package tells Next.js to leave it as a plain
+  // node_modules require at runtime — Vercel then ships the full
+  // package tree (including bin/) with the function bundle.
+  //
+  // puppeteer-core is externalized too, defensively: it's the loader
+  // that reaches into @sparticuz/chromium's binary, and future puppeteer
+  // versions may also ship native deps that don't survive bundling.
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   experimental: {
     serverActions: {
       // Photo uploads (Moulkia, check-in, tech, customer booking) flow through

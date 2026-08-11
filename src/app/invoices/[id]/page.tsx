@@ -220,9 +220,11 @@ export default async function InvoiceView({
           });
           return (
             <SendViaWhatsAppButton
-              href={phone ? buildWaMeUrl(phone, msg) : null}
+              // Always tappable after 2026-08-11 (AR). When phone is
+              // valid → direct chat with customer; null → WhatsApp
+              // opens contact picker, cashier picks recipient.
+              href={buildWaMeUrl(phone, msg)}
               label={t("waSend")}
-              disabledReason={t("waSendDisabled")}
             />
           );
         })()}

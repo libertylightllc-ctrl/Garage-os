@@ -978,16 +978,12 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   const customer = inv.jobCard.vehicle.customer;
   // wa.me needs an E.164 number without the leading '+'. Prefer waId
   // (already normalized in the DB when we have it from a chat) then
-  // fall back to `phone`. Refuse to redirect if we can't normalize —
-  // otherwise the wa.me URL fails silently on the operator's phone
-  // and they blame the app for not sending.
+  // fall back to `phone`. Bad phone no longer throws (AR, 2026-08-11) —
+  // buildWaMeUrl falls back to the contact-picker URL so the cashier
+  // can still send the invoice, they just pick the recipient inside
+  // WhatsApp. The customer-record cleanup happens as its own concern.
   const rawPhone = customer.waId ?? customer.phone;
   const phoneE164 = normalizeToE164(rawPhone);
-  if (!phoneE164) {
-    throw new Error(
-      "Customer phone is missing or malformed — can't open WhatsApp for the send.",
-    );
-  }
 
   // Phase 2 (2026-08-10): raw publicToken in the URL, not an HMAC of
   // inv.id. ensurePublicToken is a no-op when the row already carries
@@ -1042,7 +1038,11 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
     invoiceId: inv.id,
     garageId: user.garageId,
     channel: "WHATSAPP",
-    recipient: phoneE164,     // snapshot of the number wa.me opened
+    // Recipient snapshot: the normalized E.164 when the phone was
+    // valid, else the raw stored value, else the picker marker.
+    // The audit row's job is "who did we tell WhatsApp to open" —
+    // for the picker path we didn't tell it anyone, so record that.
+    recipient: phoneE164 ?? rawPhone ?? "(picker)",
     sentByUserId: user.id,
     sentByName: senderName,
     status: "HANDED_OFF",     // wa.me can't observe delivery

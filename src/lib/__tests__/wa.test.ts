@@ -95,6 +95,33 @@ describe("buildWaMeUrl — URL encoding correctness", () => {
             "https://wa.me/971501234567?text=line1%0Aline2%7Cend",
         );
     });
+
+    // Contact-picker branch — added 2026-08-11 after AR flagged the
+    // dead-end button on bad customer phones. `null` phone → wa.me
+    // opens its native contact picker with the message pre-filled;
+    // the sender chooses who to send to before tapping Send.
+    describe("contact-picker branch (phone = null)", () => {
+        it("null phone → picker URL, no number segment", () => {
+            expect(buildWaMeUrl(null, "Hi there")).toBe(
+                "https://wa.me/?text=Hi%20there",
+            );
+        });
+        it("null phone still encodes the message correctly", () => {
+            expect(buildWaMeUrl(null, "AED 100 & 50%")).toBe(
+                "https://wa.me/?text=AED%20100%20%26%2050%25",
+            );
+        });
+        it("null phone with Arabic message survives decode round-trip", () => {
+            const out = buildWaMeUrl(null, "مرحباً");
+            expect(out.startsWith("https://wa.me/?text=")).toBe(true);
+            expect(decodeURIComponent(out.split("?text=")[1])).toBe("مرحباً");
+        });
+        it("valid-phone case still returns direct-chat URL — no regression", () => {
+            expect(buildWaMeUrl("971501234567", "Hi")).toBe(
+                "https://wa.me/971501234567?text=Hi",
+            );
+        });
+    });
 });
 
 describe("invoiceMessage — structured template (matches PO pattern, AR 2026-08-10)", () => {

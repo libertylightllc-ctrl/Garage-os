@@ -91,10 +91,30 @@ export function normalizeToE164(
 }
 
 /**
- * Build the wa.me URL for a given normalized phone + message. Callers
- * should pass the OUTPUT of normalizeToE164 for `phoneE164`. The text
- * is URL-encoded here so callers can pass the raw template output.
+ * Build the wa.me URL for a message + optional phone.
+ *
+ * Two shapes, both official WhatsApp:
+ *   - With phone: `https://wa.me/{E164}?text={message}` — WhatsApp
+ *     opens the chat with that number directly, message pre-filled.
+ *   - Without phone (null): `https://wa.me/?text={message}` — WhatsApp
+ *     opens its native CONTACT PICKER with the message pre-filled;
+ *     the sender chooses who to send to before tapping Send.
+ *
+ * The picker shape was added 2026-08-11 after AR flagged that a bad
+ * customer phone left the cashier with a dead-end button (see the
+ * SendViaWhatsAppButton doc). Rather than block the send, we hand the
+ * cashier a picker: they can pick the customer via a different
+ * number, forward to a colleague, or send to their own phone as a
+ * copy. The customer-data cleanup that used to be forced by the
+ * disabled state now happens as a separate concern.
+ *
+ * Callers should pass the OUTPUT of normalizeToE164 for `phoneE164`.
+ * The text is URL-encoded here so callers can pass the raw template
+ * output verbatim.
  */
-export function buildWaMeUrl(phoneE164: string, text: string): string {
-    return `https://wa.me/${phoneE164}?text=${encodeURIComponent(text)}`;
+export function buildWaMeUrl(phoneE164: string | null, text: string): string {
+    const encoded = encodeURIComponent(text);
+    if (phoneE164) return `https://wa.me/${phoneE164}?text=${encoded}`;
+    // Contact-picker variant — no number segment before `?`.
+    return `https://wa.me/?text=${encoded}`;
 }

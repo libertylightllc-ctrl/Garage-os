@@ -51,11 +51,6 @@ export async function GET(
         });
     } catch (err) {
         console.error("[invoice-pdf] staff render failed", err);
-        const msg = err instanceof Error ? err.message : String(err);
-        const stack = err instanceof Error ? err.stack?.slice(0, 2000) : "";
-        return new NextResponse(
-            `PDF generation failed\n\n--- diagnostic ---\n${msg}\n\n${stack}`,
-            { status: 502 },
-        );
+        return new NextResponse("PDF generation failed", { status: 502 });
     }
 }

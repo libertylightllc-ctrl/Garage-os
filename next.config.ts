@@ -64,6 +64,21 @@ const nextConfig: NextConfig = {
   // that reaches into @sparticuz/chromium's binary, and future puppeteer
   // versions may also ship native deps that don't survive bundling.
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  // Force Vercel's node-file-trace to include Chromium's loose binary
+  // files under node_modules/@sparticuz/chromium/bin. Without this,
+  // serverExternalPackages alone leaves the JS but drops bin/ (the
+  // .tar.br binaries `executablePath()` extracts at cold start), and
+  // every render throws:
+  //   The input directory "/var/task/node_modules/@sparticuz/chromium/
+  //   bin" does not exist.
+  outputFileTracingIncludes: {
+    "/api/invoices/**": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/c/invoice/**": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+  },
   experimental: {
     serverActions: {
       // Photo uploads (Moulkia, check-in, tech, customer booking) flow through

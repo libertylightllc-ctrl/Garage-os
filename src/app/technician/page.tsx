@@ -172,37 +172,65 @@ export default async function TechnicianHome({
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {waiting.map((j) => (
-              <li
-                key={j.id}
-                className="flex items-center justify-between rounded-xl border border-border p-4"
-              >
-                <span>
-                  <span className="block text-lg font-medium">
-                    {priorityMeta(j.priority).badge} {carLine(j)}
+            {waiting.map((j) => {
+              const row = (
+                <>
+                  <span className="flex-1 text-left">
+                    <span className="block text-lg font-medium">
+                      {priorityMeta(j.priority).badge} {carLine(j)}
+                    </span>
+                    <span className="mt-1 inline-flex items-center gap-2 text-xs text-text-mute">
+                      <FriendlyStatusBadge
+                        status={friendlyStatus({
+                          status: j.status as JobStatus,
+                          claimedById: j.claimedById,
+                          latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
+                            |"DRAFT"|"SENT"|"APPROVED"|"REJECTED"| null,
+                        })}
+                        t={t}
+                        size="sm"
+                      />
+                      {j.assignedToId === me ? ` · ${t("forYou")}` :""}
+                    </span>
                   </span>
-                  <span className="mt-1 inline-flex items-center gap-2 text-xs text-text-mute">
-                    <FriendlyStatusBadge
-                      status={friendlyStatus({
-                        status: j.status as JobStatus,
-                        claimedById: j.claimedById,
-                        latestEstimateStatus: (j.estimates?.[0]?.status ?? null) as
-                          |"DRAFT"|"SENT"|"APPROVED"|"REJECTED"| null,
-                      })}
-                      t={t}
-                      size="sm"
-                    />
-                    {j.assignedToId === me ? ` · ${t("forYou")}` :""}
-                  </span>
-                </span>
-                <form action={claimJobAction}>
-                  <input type="hidden" name="jobId" value={j.id} />
-                  <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-                    {t("take")}
-                  </button>
-                </form>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={j.id}>
+                  {/*
+                   * MASTER = advisor + tech + cashier under one login. The
+                   * two-step "look at the row, then find and tap Take" is
+                   * pure friction — MASTER always wants to open the car.
+                   * The whole row is one submit target: single tap → claim
+                   * + navigate to the job. TECH keeps the explicit Take
+                   * button so a passing glance doesn't accidentally claim
+                   * someone else's soft-assignment (AR, 2026-08-11).
+                   */}
+                  {isMaster ? (
+                    <form action={claimJobAction}>
+                      <input type="hidden" name="jobId" value={j.id} />
+                      <button
+                        type="submit"
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-4 text-left transition-colors hover:bg-accent-500/5 hover:border-accent-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                      >
+                        {row}
+                        <span aria-hidden="true" className="text-xl text-text-mute">→</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-xl border border-border p-4">
+                      {row}
+                      <form action={claimJobAction}>
+                        <input type="hidden" name="jobId" value={j.id} />
+                        <button className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                          {t("take")}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -110,13 +110,25 @@ export async function claimJobAction(formData: FormData) {
   // changes from 'Waiting for technician' to 'Technician diagnosing' the
   // moment the tech tap-claims it. updateMany with status guard means we
   // never overwrite a hand-set ON_HOLD / ESTIMATE / etc.
+  //
+  // Pre-assignment guard: TECH can only claim jobs unassigned or
+  // pre-assigned to them (respects the advisor's soft-assignment).
+  // MASTER is the do-everything operational login (AGENTS.md) and
+  // must be able to claim any waitable job — otherwise the
+  // tap-to-open row on the workshop page (AR 2026-08-11 UX fix)
+  // redirects to ?taken=1 whenever the car has an advisor
+  // pre-assignment. Mirrors the same MASTER widening in
+  // src/app/technician/page.tsx.
+  const isMaster = user.role === "MASTER";
   const res = await prisma.jobCard.updateMany({
     where: {
       id: jobId,
       garageId: user.garageId,
       claimedById: null, // the guard
       status: { notIn: ["DELIVERED", "CANCELLED"] },
-      OR: [{ assignedToId: null }, { assignedToId: user.id }],
+      ...(isMaster
+        ? {}
+        : { OR: [{ assignedToId: null }, { assignedToId: user.id }] }),
     },
     data: { claimedById: user.id, claimedAt: new Date() },
   });
@@ -134,6 +146,11 @@ export async function claimJobAction(formData: FormData) {
   revalidatePath("/technician");
   revalidatePath("/advisor");
   if (res.count === 0) redirect("/technician?taken=1"); // already taken / not eligible
+  // MASTER's tap-to-open UX (AR 2026-08-11): the whole row is a submit
+  // button, tapping it MEANS "open the job". TECH keeps the queue-stay
+  // behavior (they may want to Take then take another) — MASTER lands
+  // straight on the job card to start work.
+  if (isMaster) redirect(`/technician/jobs/${jobId}`);
 }
 
 /**

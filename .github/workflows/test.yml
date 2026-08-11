@@ -13,10 +13,17 @@ name: Tests
 # before any test even tries to run.
 
 on:
+  # `production` added 2026-08-11 alongside the deploy-protection work:
+  # `main` is staging, `production` serves garageos.shop, and promotion
+  # is a fast-forward `main` → `production` push. The CI check is bound
+  # as a required status on the `production` branch protection rule, so
+  # this workflow must also run when `production` is updated (both on
+  # PR into production, and on push after merge). Same-SHA runs on main
+  # and production dedupe via the `concurrency` block below.
   pull_request:
-    branches: [main]
+    branches: [main, production]
   push:
-    branches: [main]
+    branches: [main, production]
 
 # Cancel an older run on the same PR/branch if a new push lands while
 # the first is still running.

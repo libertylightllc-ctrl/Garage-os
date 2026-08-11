@@ -97,3 +97,47 @@ export async function updateProfileEmailAction(formData: FormData) {
   revalidatePath("/settings");
   redirect("/settings?ok=email");
 }
+
+/**
+ * Owner-only: shop-wide default markup for parts on estimate lines
+ * (AR 2026-08-12). The stored value is a HINT used to prefill the
+ * per-line markupPct at line-create time. Existing lines are never
+ * touched. Cleared (empty input) → nullable, back to "advisor sets
+ * per line".
+ *
+ * Constraints (matched to schema Decimal(5,2)):
+ *   - 0 ≤ value ≤ 999.99 %
+ *   - up to 2 decimal places (form input coerces via toFixed)
+ *
+ * Role gate: only OWNER may change shop-wide pricing config. MASTER
+ * runs the shop day-to-day but this is a finance-touching setting;
+ * we keep it owner-only per the same rule as billing / TRN edits.
+ * Non-owner callers get a role-error redirect; the form isn't
+ * rendered on their /settings page in the first place.
+ */
+export async function updateDefaultPartsMarkupAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  if (session.user.role !== "OWNER") back("role");
+
+  const raw = String(formData.get("defaultPartsMarkupPct") ?? "").trim();
+  // Empty → clear (nullable). Blank input is a valid intent: "no
+  // shop-wide default, advisor enters per line."
+  let value: number | null = null;
+  if (raw !== "") {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) back("markup-invalid");
+    if (parsed < 0 || parsed > 999.99) back("markup-range");
+    value = Math.round(parsed * 100) / 100; // clamp to 2 dp
+  }
+
+  // Scoped to the caller's own garage — never trusts a garageId in
+  // formData, same pattern as the other owner-scoped actions above.
+  await prisma.garage.update({
+    where: { id: session.user.garageId },
+    data: { defaultPartsMarkupPct: value },
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?ok=markup");
+}

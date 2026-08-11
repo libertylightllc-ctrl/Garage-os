@@ -4,7 +4,11 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { Button } from "@/components/ui/button";
-import { updateProfileNameAction, updateProfileEmailAction } from "@/app/actions/settings";
+import {
+  updateProfileNameAction,
+  updateProfileEmailAction,
+  updateDefaultPartsMarkupAction,
+} from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
 import { getT } from "@/i18n/server";
@@ -37,6 +41,10 @@ const ERR_KEY: Record<string, MessageKey> = {
   "logo-bad_mime": "settingsErrLogoBadMime",
   "logo-bad_magic": "settingsErrLogoBadMagic",
   "logo-mime_mismatch": "settingsErrLogoMimeMismatch",
+  // Owner-only markup edit
+  "role": "settingsErrRole",
+  "markup-invalid": "settingsErrMarkupInvalid",
+  "markup-range": "settingsErrMarkupRange",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
@@ -44,6 +52,7 @@ const OK_KEY: Record<string, MessageKey> = {
   "email-unchanged": "settingsOkEmailUnchanged",
   "logo-saved": "settingsOkLogoSaved",
   "logo-removed": "settingsOkLogoRemoved",
+  "markup": "settingsOkMarkup",
 };
 
 export default async function SettingsPage({
@@ -74,7 +83,7 @@ export default async function SettingsPage({
   const garage = isOwner
     ? await prisma.garage.findUnique({
         where: { id: session.user.garageId },
-        select: { logoUrl: true },
+        select: { logoUrl: true, defaultPartsMarkupPct: true },
       })
     : null;
 
@@ -212,6 +221,55 @@ export default async function SettingsPage({
                 </form>
               ) : null}
             </div>
+          </section>
+
+          {/* Pricing defaults — cost-based estimate pricing hint used
+              by the advisor's line editor at line-create time. Internal
+              to the shop; never appears on customer-facing surfaces.
+              (AR 2026-08-12.) */}
+          <section className="rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold">
+              {t("settingsSecPricing")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-mute">
+              {t("settingsSecPricingHint")}
+            </p>
+            <form
+              action={updateDefaultPartsMarkupAction}
+              className="mt-3 flex flex-col gap-2"
+            >
+              <label
+                htmlFor="defaultPartsMarkupPct"
+                className="text-sm font-medium"
+              >
+                {t("settingsPricingMarkupLabel")}
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="defaultPartsMarkupPct"
+                  name="defaultPartsMarkupPct"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  max="999.99"
+                  placeholder={t("settingsPricingMarkupPlaceholder")}
+                  defaultValue={
+                    garage?.defaultPartsMarkupPct != null
+                      ? String(garage.defaultPartsMarkupPct)
+                      : ""
+                  }
+                  className="h-10 w-32 rounded-lg border border-border bg-transparent px-3 text-base tabular-nums focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+                />
+                <span className="text-sm text-text-mute">%</span>
+                <Button type="submit" variant="primary">
+                  {t("settingsSave")}
+                </Button>
+              </div>
+              <p className="text-xs text-text-mute">
+                {t("settingsPricingMarkupHint")}
+              </p>
+            </form>
           </section>
 
           <section className="rounded-xl border border-border p-4">

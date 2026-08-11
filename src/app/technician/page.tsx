@@ -32,6 +32,17 @@ export default async function TechnicianHome({
   const { taken } = await searchParams;
   const me = session.user.id;
   const garageId = session.user.garageId;
+  // MASTER is the do-everything operational login (see AGENTS.md
+  // §"MASTER"). A TECH viewer only sees waiting jobs that are
+  // unassigned or pre-assigned to them — that keeps their queue
+  // clean and respects the advisor's soft-assignment. MASTER runs
+  // the shop and must see every waitable job regardless of who it
+  // was intended for, so the pre-assignment filter is dropped for
+  // MASTER. Without this, cars pre-assigned to a specific tech were
+  // invisible to MASTER, matching AR's 2026-08-11 report where an
+  // AUDI A4 pre-assigned to Ahmed didn't appear on the MASTER's
+  // Workshop → Waiting section.
+  const isMaster = session.user.role === "MASTER";
 
   const [waiting, mine, others] = await Promise.all([
     prisma.jobCard.findMany({
@@ -47,7 +58,9 @@ export default async function TechnicianHome({
         status: {
           notIn: ["TECH_COMPLETE","INVOICED","DELIVERED","CANCELLED"],
         },
-        OR: [{ assignedToId: null }, { assignedToId: me }],
+        ...(isMaster
+          ? {}
+          : { OR: [{ assignedToId: null }, { assignedToId: me }] }),
       },
       include: {
         vehicle: true,

@@ -105,13 +105,19 @@ export async function renderInvoicePdf(invoiceId: string): Promise<Buffer> {
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
-        // networkidle0 waits until fewer than 0 network connections for
-        // 500ms — the customer invoice loads its logo async, so this
-        // ensures the logo lands before we snapshot. 20 s cap so a
-        // hanging DB query can't tie up the whole function.
+        // "load" waits for the load event — DOM + all sub-resources
+        // (logo, fonts, CSS) fired their load listeners. Previously
+        // "networkidle0" (zero connections for 500 ms) was timing out
+        // on Vercel prod (AR 2026-08-11); analytics / font subsets /
+        // Vercel Speed Insights keep the connection count above zero
+        // long past the point the invoice is fully painted. The load
+        // event fires as soon as the page's initial resources have
+        // settled, which is what we actually care about for the PDF
+        // snapshot. 25 s cap gives cold-start headroom for the
+        // customer page's Prisma read + template render.
         await page.goto(url, {
-            waitUntil: "networkidle0",
-            timeout: 20_000,
+            waitUntil: "load",
+            timeout: 25_000,
         });
         // emulateMediaType('print') so the page uses its `print:` CSS
         // (which the existing invoice already carries — same layout

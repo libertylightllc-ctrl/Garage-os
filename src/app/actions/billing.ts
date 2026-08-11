@@ -175,11 +175,17 @@ export async function addEstimateLineAction(formData: FormData) {
   // to this garage; the line then stores partId so it "knows" which real part
   // it is. Link + display only — stock is NOT moved here. No pick → free-text
   // line, byte-identical to before.
+  //
+  // Also pull cost + price (AR 2026-08-12 Step 4) so a catalog-linked PART
+  // line prefills unitCost + derives an initial markup — either from the
+  // catalogue's own price/cost ratio (which preserves whatever markup the
+  // owner set on the Part row) or, if the catalogue only has a price with
+  // no cost, from Garage.defaultPartsMarkupPct.
   const partIdRaw = String(formData.get("partId") ?? "").trim();
   const linkedPart = partIdRaw
     ? await prisma.part.findFirst({
         where: { id: partIdRaw, garageId: user.garageId },
-        select: { id: true, name: true, sku: true },
+        select: { id: true, name: true, sku: true, cost: true, price: true },
       })
     : null;
   if (partIdRaw && !linkedPart) throw new Error("Part not found in this garage");
@@ -199,6 +205,36 @@ export async function addEstimateLineAction(formData: FormData) {
   const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
+  // Cost-based prefill (AR 2026-08-12) — only meaningful for PART lines.
+  // Priority:
+  //   1. Catalog-linked with cost>0 → unitCost = Part.cost.
+  //      markupPct = round((price/cost - 1)*100, 2) so the catalogue's
+  //      implied markup is what the advisor sees on first open.
+  //   2. Catalog-linked with cost=0/null but Garage.defaultPartsMarkupPct
+  //      set → use the shop-wide markup as a hint (unitCost null).
+  //   3. Free-text PART line → both null; advisor fills them in edit.
+  let unitCost: number | null = null;
+  let markupPct: number | null = null;
+  if (kind === "PART" && linkedPart) {
+    const c = Number(linkedPart.cost);
+    const p = Number(linkedPart.price);
+    if (Number.isFinite(c) && c > 0) {
+      unitCost = c;
+      if (Number.isFinite(p) && p > 0) {
+        markupPct = Math.round((p / c - 1) * 100 * 100) / 100;
+      }
+    }
+  }
+  if (kind === "PART" && markupPct == null) {
+    const g = await prisma.garage.findUnique({
+      where: { id: user.garageId },
+      select: { defaultPartsMarkupPct: true },
+    });
+    if (g?.defaultPartsMarkupPct != null) {
+      markupPct = Number(g.defaultPartsMarkupPct);
+    }
+  }
+
   await prisma.estimateLine.create({
     data: {
       estimateId,
@@ -206,6 +242,8 @@ export async function addEstimateLineAction(formData: FormData) {
       partId: linkedPart?.id ?? null,
       description,
       qty,
+      unitCost,
+      markupPct,
       unitPrice,
       lineTotal: lineTotal(qty, unitPrice),
     },
@@ -225,12 +263,38 @@ export async function addLineFromPartAction(formData: FormData) {
 
   const jp = await prisma.jobPart.findFirst({
     where: { id: jobPartId, jobCardId: est.jobCardId },
-    include: { part: { select: { price: true } } },
+    // AR 2026-08-12 Step 4 — also pull cost so the created PART line
+    // prefills unitCost + implied markupPct from the catalogue.
+    include: { part: { select: { cost: true, price: true } } },
   });
   if (!jp) throw new Error("Part not found on this job");
 
   const qty = Math.max(1, jp.qty);
   const unitPrice = jp.part ? Number(jp.part.price) : 0; // catalog price, else cashier sets it
+
+  // Cost-based prefill — same logic as addEstimateLineAction above.
+  let unitCost: number | null = null;
+  let markupPct: number | null = null;
+  if (jp.part) {
+    const c = Number(jp.part.cost);
+    const p = Number(jp.part.price);
+    if (Number.isFinite(c) && c > 0) {
+      unitCost = c;
+      if (Number.isFinite(p) && p > 0) {
+        markupPct = Math.round((p / c - 1) * 100 * 100) / 100;
+      }
+    }
+  }
+  if (markupPct == null) {
+    const g = await prisma.garage.findUnique({
+      where: { id: user.garageId },
+      select: { defaultPartsMarkupPct: true },
+    });
+    if (g?.defaultPartsMarkupPct != null) {
+      markupPct = Number(g.defaultPartsMarkupPct);
+    }
+  }
+
   await prisma.estimateLine.create({
     data: {
       estimateId,
@@ -238,6 +302,8 @@ export async function addLineFromPartAction(formData: FormData) {
       partId: jp.partId,
       description: jobPartLineDescription(jp.partNo, jp.description),
       qty,
+      unitCost,
+      markupPct,
       unitPrice,
       lineTotal: lineTotal(qty, unitPrice),
     },

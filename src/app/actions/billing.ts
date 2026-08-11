@@ -317,13 +317,29 @@ export async function updateEstimateLineAction(formData: FormData) {
     description: formData.get("description"),
     qty: formData.get("qty"),
     unitPrice: formData.get("unitPrice"),
+    // Cost-based inputs (AR 2026-08-12) — only present when the
+    // advisor edited a PART line; parseLineEditInput nulls them out
+    // for non-PART kinds so a mid-edit LABOR ↔ PART swap doesn't
+    // stash stale cost data.
+    unitCost: formData.get("unitCost"),
+    markupPct: formData.get("markupPct"),
   });
   if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
-  const { kind, description, qty, unitPrice } = parsed;
+  const { kind, description, qty, unitPrice, unitCost, markupPct } = parsed;
 
   await prisma.estimateLine.update({
     where: { id: lineId },
-    data: { kind, description, qty, unitPrice, lineTotal: lineTotal(qty, unitPrice) },
+    data: {
+      kind,
+      description,
+      qty,
+      unitPrice,
+      lineTotal: lineTotal(qty, unitPrice),
+      // Persist verbatim. When kind !== PART parseLineEditInput
+      // already forced both to null, so a kind swap clears them.
+      unitCost,
+      markupPct,
+    },
   });
   await recomputeEstimate(estimateId);
   revalidatePath(`/estimates/${estimateId}`);

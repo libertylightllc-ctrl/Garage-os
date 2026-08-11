@@ -1022,6 +1022,12 @@ const en = {
   colQty: "Qty",
   colUnit: "Unit",
   colTotal: "Total",
+  // Cost-based pricing (AR 2026-08-12) — advisor-only labels on the
+  // estimate line editor's tri-input mode for PART lines. Never
+  // rendered on customer or invoice surfaces.
+  costLabel: "Cost",
+  markupLabel: "Markup %",
+  marginLabel: "Margin",
   colAmount: "Amount",
   colDescription: "Description",
   colKind: "Type",
@@ -2410,6 +2416,9 @@ const ar: typeof en = {
   baysInUse: "قيد الاستخدام",
   bayExists: "اسم المنصة موجود بالفعل.",
 
+  costLabel: "التكلفة",
+  markupLabel: "نسبة الربح ٪",
+  marginLabel: "الهامش",
   colItem: "البند",
   colQty: "الكمية",
   colUnit: "السعر",

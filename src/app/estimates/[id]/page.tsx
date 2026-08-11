@@ -309,6 +309,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   kind: l.kind,
                   description: l.description,
                   qty: Number(l.qty),
+                  // AR 2026-08-12 — cost + markup pass through as
+                  // nullable numbers; the client component decides
+                  // whether to render the tri-input based on kind.
+                  unitCost: l.unitCost == null ? null : Number(l.unitCost),
+                  markupPct: l.markupPct == null ? null : Number(l.markupPct),
                   unitPrice: Number(l.unitPrice),
                   lineTotal: Number(l.lineTotal),
                   declined: l.declined,
@@ -326,6 +331,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   kindPart: t("part"),
                   kindFee: t("fee"),
                   kindDiscount: t("discount"),
+                  qty: t("colQty"),
+                  cost: t("costLabel"),
+                  markup: t("markupLabel"),
+                  unit: t("colUnit"),
+                  margin: t("marginLabel"),
                 }}
               />
             ))}
@@ -371,6 +381,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       kind: l.kind,
                       description: l.description,
                       qty: Number(l.qty),
+                      // AR 2026-08-12 — cost + markup pass through as
+                      // nullable numbers; the client component decides
+                      // whether to render the tri-input based on kind.
+                      unitCost: l.unitCost == null ? null : Number(l.unitCost),
+                      markupPct: l.markupPct == null ? null : Number(l.markupPct),
                       unitPrice: Number(l.unitPrice),
                       lineTotal: Number(l.lineTotal),
                       declined: l.declined,
@@ -388,6 +403,11 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       kindPart: t("part"),
                       kindFee: t("fee"),
                       kindDiscount: t("discount"),
+                      qty: t("colQty"),
+                      cost: t("costLabel"),
+                      markup: t("markupLabel"),
+                      unit: t("colUnit"),
+                      margin: t("marginLabel"),
                     }}
                   />
                 ))}

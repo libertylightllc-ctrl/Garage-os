@@ -8,6 +8,7 @@ import {
 } from "@/app/actions/billing";
 import { ConfirmButton } from "@/components/confirm-button";
 import { stripVehicleLabel } from "@/lib/jobcard-fields";
+import { CostPricedInputs } from "@/components/cost-priced-inputs";
 
 export interface CardProps {
     line: {
@@ -15,6 +16,10 @@ export interface CardProps {
         kind: string;
         description: string;
         qty: number;
+        // Cost-based pricing (AR 2026-08-12); see estimate-line-row.tsx
+        // for the shape rationale.
+        unitCost: number | null;
+        markupPct: number | null;
         unitPrice: number;
         lineTotal: number;
         declined: boolean;
@@ -40,6 +45,12 @@ export interface CardProps {
         kindPart: string;
         kindFee: string;
         kindDiscount: string;
+        // Cost-based inputs (PART lines)
+        qty: string;
+        cost: string;
+        markup: string;
+        unit: string;
+        margin: string;
     };
 }
 
@@ -131,32 +142,50 @@ export function EstimateLineCard({
                             className={`${FIELD} min-w-40 flex-1`}
                         />
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <label className="flex flex-col text-xs text-text-mute">
-                            Qty
-                            <input
-                                name="qty"
-                                type="number"
-                                step="any"
-                                min="0"
-                                inputMode="decimal"
-                                defaultValue={line.qty}
-                                className={`${FIELD} mt-1 w-24 text-right`}
-                            />
-                        </label>
-                        <label className="flex flex-col text-xs text-text-mute">
-                            Unit (AED)
-                            <input
-                                name="unitPrice"
-                                type="number"
-                                step="any"
-                                min="0"
-                                inputMode="decimal"
-                                defaultValue={priceForInput}
-                                className={`${FIELD} mt-1 flex-1 text-right`}
-                            />
-                        </label>
-                    </div>
+                    {isPart ? (
+                        <CostPricedInputs
+                            initial={{
+                                qty: line.qty,
+                                unitCost: line.unitCost,
+                                markupPct: line.markupPct,
+                                unitPrice: Math.abs(line.unitPrice),
+                            }}
+                            labels={{
+                                qty: labels.qty,
+                                cost: labels.cost,
+                                markup: labels.markup,
+                                unit: labels.unit,
+                                margin: labels.margin,
+                            }}
+                        />
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            <label className="flex flex-col text-xs text-text-mute">
+                                {labels.qty}
+                                <input
+                                    name="qty"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    inputMode="decimal"
+                                    defaultValue={line.qty}
+                                    className={`${FIELD} mt-1 w-24 text-right`}
+                                />
+                            </label>
+                            <label className="flex flex-col text-xs text-text-mute">
+                                {labels.unit}
+                                <input
+                                    name="unitPrice"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    inputMode="decimal"
+                                    defaultValue={priceForInput}
+                                    className={`${FIELD} mt-1 flex-1 text-right`}
+                                />
+                            </label>
+                        </div>
+                    )}
                     <div className="flex gap-2">
                         <button
                             type="submit"

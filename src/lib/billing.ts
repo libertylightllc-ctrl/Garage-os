@@ -34,7 +34,19 @@ export type LineEditError =
   | "unknown-kind";
 
 export type LineEditResult =
-  | { ok: true; kind: LineKind; description: string; qty: number; unitPrice: number }
+  | {
+      ok: true;
+      kind: LineKind;
+      description: string;
+      qty: number;
+      unitPrice: number;
+      // Cost-based pricing (AR 2026-08-12) — both nullable; only PART
+      // lines meaningfully set them. Persisted as-typed; the client's
+      // two-way binding is what keeps them consistent with unitPrice,
+      // so the server doesn't re-derive.
+      unitCost: number | null;
+      markupPct: number | null;
+    }
   | { ok: false; error: LineEditError };
 
 export function parseLineEditInput(input: {
@@ -42,6 +54,8 @@ export function parseLineEditInput(input: {
   description: unknown;
   qty: unknown;
   unitPrice: unknown;
+  unitCost?: unknown;
+  markupPct?: unknown;
 }): LineEditResult {
   const rawKind = String(input.kind ?? "").toUpperCase();
   if (!["LABOR", "PART", "FEE", "DISCOUNT"].includes(rawKind)) {
@@ -64,7 +78,28 @@ export function parseLineEditInput(input: {
   const priceAbs = Math.abs(price);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
-  return { ok: true, kind, description, qty, unitPrice };
+  // Cost + markup (PART lines only; ignored + nulled on other kinds).
+  // Blank input → null (advisor deliberately cleared the field, which
+  // means "no cost data" not "zero cost"). Non-numeric input → null.
+  let unitCost: number | null = null;
+  let markupPct: number | null = null;
+  if (kind === "PART") {
+    const rawCost = String(input.unitCost ?? "").trim();
+    if (rawCost !== "") {
+      const c = Number(rawCost);
+      if (Number.isFinite(c) && c >= 0) unitCost = c;
+    }
+    const rawMarkup = String(input.markupPct ?? "").trim();
+    if (rawMarkup !== "") {
+      const m = Number(rawMarkup);
+      // Range mirrors Garage.defaultPartsMarkupPct in schema (5,2).
+      // Negative markup (selling at a loss) is allowed — advisor may
+      // still want to record it. Cap high end for sanity.
+      if (Number.isFinite(m) && m >= -100 && m <= 999.99) markupPct = m;
+    }
+  }
+
+  return { ok: true, kind, description, qty, unitPrice, unitCost, markupPct };
 }
 
 /** Sum lines (VAT-exclusive) → {subtotal, vatAmount, total} at the given country's rate. */

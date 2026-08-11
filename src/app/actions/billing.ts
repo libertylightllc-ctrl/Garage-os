@@ -17,6 +17,7 @@ import {
   isQuoteIncrease,
   jobPartLineDescription,
   parseLineEditInput,
+  formatInvoiceNo,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -934,18 +935,35 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
       jobCardId: true,
       number: true,
       issuedAt: true,
+      subtotal: true,
+      vatAmount: true,
       total: true,
       // Phase 2: publicToken is the customer URL segment (see below).
       publicToken: true,
-      // Vehicle drives the "your invoice for the {make} {model}" copy
-      // in the message body — pulled here so the message reads
-      // naturally without an extra join at render time.
+      // Line items — rendered in the WhatsApp body as "qty × description"
+      // to match the supplier PO message shape (AR, 2026-08-10).
+      lines: {
+        select: { qty: true, description: true },
+        orderBy: { createdAt: "asc" },
+      },
+      // Garage name goes into the message header line
+      // ("Tax Invoice INV-… — from {garage name}").
+      garage: { select: { name: true } },
+      // JobCard number for the "JC-N" tail on the vehicle line, plus
+      // the full vehicle snapshot (year/plate/VIN/engine/fuel) that
+      // the new structured header renders.
       jobCard: {
         select: {
+          number: true,
           vehicle: {
             select: {
               make: true,
               model: true,
+              year: true,
+              plate: true,
+              vin: true,
+              engineSize: true,
+              fuelType: true,
               customer: {
                 select: { name: true, phone: true, waId: true, lang: true },
               },
@@ -980,11 +998,27 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   const publicToken = await ensurePublicToken("invoice", inv);
   const body = invoiceMessage({
     customer: { name: customer.name, lang: customer.lang },
+    garage: { name: inv.garage.name },
     vehicle: {
       make: inv.jobCard.vehicle.make,
       model: inv.jobCard.vehicle.model,
+      year: inv.jobCard.vehicle.year ?? null,
+      plate: inv.jobCard.vehicle.plate ?? null,
+      vin: inv.jobCard.vehicle.vin ?? null,
+      engineSize: inv.jobCard.vehicle.engineSize ?? null,
+      fuelType: inv.jobCard.vehicle.fuelType ?? null,
+      jobNumber: inv.jobCard.number ?? null,
     },
-    invoice: { total: Number(inv.total), number: inv.number },
+    invoice: {
+      number: formatInvoiceNo(inv.number, inv.issuedAt.getFullYear()),
+      subtotal: Number(inv.subtotal),
+      vatAmount: Number(inv.vatAmount),
+      total: Number(inv.total),
+      lines: inv.lines.map((l) => ({
+        qty: Number(l.qty),
+        description: l.description,
+      })),
+    },
     appUrl: appUrl(),
     invoiceId: publicToken,
   });

@@ -31,31 +31,140 @@ function formatMoney(total: number, lang: Lang | string | null | undefined): str
 
 export interface InvoiceMessageInput {
     customer: { name: string; lang?: string | null };
-    vehicle: { make: string; model: string };
-    invoice: { total: number; number: number | string };
+    garage: { name: string };
+    /**
+     * Vehicle snapshot for the "For:" header line. Same field shape as
+     * PurchaseOrderMessageInput's per-line vehicle context so both
+     * message types render vehicles the same way (`make model year ·
+     * plate · VIN … · engineSize fuelType · JC-N`). All fields
+     * nullable — an intake-only vehicle may have make+model+plate
+     * with year/VIN/engine missing, which just drops those bits from
+     * the render.
+     */
+    vehicle: {
+        make: string;
+        model: string;
+        year: number | null;
+        plate: string | null;
+        vin: string | null;
+        engineSize: string | null;
+        fuelType: string | null;
+        jobNumber: number | null;
+    };
+    invoice: {
+        /**
+         * Already-formatted invoice number (e.g. "INV-2026-0001").
+         * Caller formats via formatInvoiceNo(number, year) — the
+         * builder stays year-agnostic.
+         */
+        number: string;
+        subtotal: number;
+        vatAmount: number;
+        total: number;
+        lines: Array<{ qty: number; description: string }>;
+    };
     /** Origin without trailing slash (e.g. "https://garageos.shop"). */
     appUrl: string;
-    /** Invoice id — becomes /c/invoice/{id}. */
+    /**
+     * URL segment for the customer view — the Phase-2 publicToken
+     * (raw base64url) or a Phase-1 HMAC-signed `<id>~<sig>`. The
+     * builder doesn't care which; the resolver on the receive side
+     * handles both. Field name kept for API compat.
+     */
     invoiceId: string;
 }
 
 /**
- * "Hi {name}, your invoice for the {make} {model} is ready. Total
- *  AED {total}. View & pay: {link}"  — or the Arabic equivalent.
+ * Structured customer-facing invoice message — same pattern as
+ * purchaseOrderMessage (AR, 2026-08-10): "I need this same thing for
+ * invoice as well the same pattern and method". Body is paragraph-
+ * separated so it reads well on WhatsApp:
  *
- * Deliberately does NOT include the invoice NUMBER in the body — the
- * link opens a page that shows it, and shorter WhatsApp messages get
- * higher engagement in pilot. If you want the number in the message
- * later, add it here.
+ *   Hi {name},
+ *
+ *   Tax Invoice {number} — from {garage}
+ *
+ *   For: {vehicle · plate · VIN · engine · JC-N}
+ *
+ *   {qty} × {description}   (one per line)
+ *
+ *   Subtotal: {subtotal}
+ *   VAT (5%): {vat}
+ *   Total: {total}
+ *
+ *   Please pay at the garage (cash or card).
+ *
+ *   View invoice: {url}
+ *
+ * Arabic mirror uses `مرحباً`, `فاتورة ضريبية`, `لأجل`, `عرض الفاتورة`.
+ * Numbers stay Latin (same as the purchaseOrderMessage convention and
+ * matches how invoice totals render on the customer page).
  */
 export function invoiceMessage(input: InvoiceMessageInput): string {
-    const { customer, vehicle, invoice, appUrl, invoiceId } = input;
+    const { customer, garage, vehicle, invoice, appUrl, invoiceId } = input;
+    const ar = isArabic(customer.lang);
     const link = `${appUrl}/c/invoice/${invoiceId}`;
-    const money = formatMoney(invoice.total, customer.lang);
-    if (isArabic(customer.lang)) {
-        return `مرحباً ${customer.name}، فاتورتك لـ ${vehicle.make} ${vehicle.model} جاهزة. الإجمالي ${money}. عرض والدفع: ${link}`;
-    }
-    return `Hi ${customer.name}, your invoice for the ${vehicle.make} ${vehicle.model} is ready. Total ${money}. View & pay: ${link}`;
+
+    // Greeting.
+    const greeting = ar ? `مرحباً ${customer.name}،` : `Hi ${customer.name},`;
+
+    // Header line — matches PO's "{title} {number} — from {garage}".
+    // Arabic drops the "from" preposition, matching purchaseOrderMessage's
+    // Arabic branch which also renders the heading as
+    // `${doc.title} ${doc.number} — ${garage.name}`.
+    const invoiceLabel = ar ? "فاتورة ضريبية" : "Tax Invoice";
+    const heading = ar
+        ? `${invoiceLabel} ${invoice.number} — ${garage.name}`
+        : `${invoiceLabel} ${invoice.number} — from ${garage.name}`;
+
+    // Vehicle line — reuses PO's shape:
+    //   {make} {model} {year} · {plate} · VIN {vin} · {engineSize} {fuelType} · JC-{n}
+    // Any nullable field just drops out.
+    const forLabel = ar ? "لأجل" : "For";
+    const jcLabel = (n: number) => (ar ? `بطاقة عمل رقم ${n}` : `JC-${n}`);
+    const mmy = [vehicle.make, vehicle.model, vehicle.year != null ? String(vehicle.year) : ""]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
+    const vehicleBits: string[] = [];
+    if (mmy) vehicleBits.push(mmy);
+    if (vehicle.plate) vehicleBits.push(vehicle.plate);
+    if (vehicle.vin) vehicleBits.push(`VIN ${vehicle.vin}`);
+    const engine = [vehicle.engineSize, vehicle.fuelType]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
+    if (engine) vehicleBits.push(engine);
+    if (vehicle.jobNumber != null) vehicleBits.push(jcLabel(vehicle.jobNumber));
+    const vehicleLine = vehicleBits.length ? `${forLabel}: ${vehicleBits.join(" · ")}` : "";
+
+    // Items — "qty × description", one per line. Qty rendered as a
+    // plain number so 1 shows as "1", not "1.00". Matches PO builder.
+    const items = invoice.lines
+        .map((l) => `${l.qty} × ${l.description}`)
+        .join("\n");
+
+    // Totals block — three-line paragraph. Money rendered via the
+    // same formatMoney helper the customer's screen uses.
+    const subtotalLabel = ar ? "المجموع الفرعي" : "Subtotal";
+    const vatLabel = ar ? "ضريبة القيمة المضافة (٥٪)" : "VAT (5%)";
+    const totalLabel = ar ? "الإجمالي" : "Total";
+    const totals = [
+        `${subtotalLabel}: ${formatMoney(invoice.subtotal, customer.lang)}`,
+        `${vatLabel}: ${formatMoney(invoice.vatAmount, customer.lang)}`,
+        `${totalLabel}: ${formatMoney(invoice.total, customer.lang)}`,
+    ].join("\n");
+
+    // Closing action prompt.
+    const closing = ar
+        ? "يرجى الدفع في الكراج (نقداً أو بالبطاقة)."
+        : "Please pay at the garage (cash or card).";
+
+    // URL line — labelled so the URL doesn't dangle on a bare line,
+    // matching PO's `View document: {url}` shape.
+    const linkLine = ar ? `عرض الفاتورة: ${link}` : `View invoice: ${link}`;
+
+    return [greeting, heading, vehicleLine, items, totals, closing, linkLine]
+        .filter((s) => s.length > 0)
+        .join("\n\n");
 }
 
 // ── Supplier-facing PO / RFQ message ──────────────────────────────

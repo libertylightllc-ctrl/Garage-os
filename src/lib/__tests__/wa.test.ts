@@ -97,53 +97,130 @@ describe("buildWaMeUrl — URL encoding correctness", () => {
     });
 });
 
-describe("invoiceMessage — template rendering", () => {
+describe("invoiceMessage — structured template (matches PO pattern, AR 2026-08-10)", () => {
     const base = {
         customer: { name: "Ahmed", lang: "en" as const },
-        vehicle: { make: "Toyota", model: "Land Cruiser" },
-        invoice: { total: 535.5, number: 42 },
+        garage: { name: "Deira Central Motors" },
+        vehicle: {
+            make: "Mercedes",
+            model: "300",
+            year: 2013,
+            plate: "B 22583",
+            vin: null,
+            engineSize: null,
+            fuelType: null,
+            jobNumber: 2,
+        },
+        invoice: {
+            number: "INV-2026-0001",
+            subtotal: 1245.0,
+            vatAmount: 62.25,
+            total: 1307.25,
+            lines: [
+                { qty: 1, description: "Front brake pad" },
+                { qty: 1, description: "Rear brake pads" },
+                { qty: 6, description: "Engine oil 6 litter" },
+            ],
+        },
         appUrl: "https://garageos.shop",
-        invoiceId: "abc123",
+        invoiceId: "4G5CopWK95wRCb-6PfSXx7yAmkuknA_m",
     };
 
-    it("English format", () => {
+    it("EN: paragraphs = greeting, heading, For:, items, totals, closing, link (paragraph order)", () => {
         const msg = invoiceMessage(base);
-        expect(msg).toBe(
-            "Hi Ahmed, your invoice for the Toyota Land Cruiser is ready. Total AED 535.50. View & pay: https://garageos.shop/c/invoice/abc123",
-        );
+        // Seven paragraphs joined by blank lines — matches PO shape.
+        const paras = msg.split("\n\n");
+        expect(paras[0]).toBe("Hi Ahmed,");
+        expect(paras[1]).toBe("Tax Invoice INV-2026-0001 — from Deira Central Motors");
+        expect(paras[2]).toBe("For: Mercedes 300 2013 · B 22583 · JC-2");
+        expect(paras[3]).toBe("1 × Front brake pad\n1 × Rear brake pads\n6 × Engine oil 6 litter");
+        expect(paras[4]).toBe("Subtotal: AED 1245.00\nVAT (5%): AED 62.25\nTotal: AED 1307.25");
+        expect(paras[5]).toBe("Please pay at the garage (cash or card).");
+        expect(paras[6]).toBe("View invoice: https://garageos.shop/c/invoice/4G5CopWK95wRCb-6PfSXx7yAmkuknA_m");
     });
 
-    it("Arabic format", () => {
+    it("AR: mirrors the EN paragraphs with `مرحباً`, `فاتورة ضريبية`, `لأجل`, totals block, closing prompt, `عرض الفاتورة`", () => {
+        const msg = invoiceMessage({ ...base, customer: { name: "أحمد", lang: "ar" } });
+        expect(msg).toContain("مرحباً أحمد،");
+        expect(msg).toContain("فاتورة ضريبية INV-2026-0001 — Deira Central Motors");
+        expect(msg).toContain("لأجل: Mercedes 300 2013 · B 22583 · بطاقة عمل رقم 2");
+        // AR money format: `1245.00 درهم` (word after digits), per the
+        // existing formatMoney helper — matches the purchaseOrderMessage
+        // Arabic branch and the customer invoice page's Arabic rendering.
+        expect(msg).toContain("المجموع الفرعي: 1245.00 درهم");
+        expect(msg).toContain("ضريبة القيمة المضافة (٥٪): 62.25 درهم");
+        expect(msg).toContain("الإجمالي: 1307.25 درهم");
+        expect(msg).toContain("يرجى الدفع في الكراج (نقداً أو بالبطاقة).");
+        expect(msg).toMatch(/عرض الفاتورة: https:\/\/garageos\.shop\/c\/invoice\//);
+    });
+
+    it("VIN + engine + fuel: each optional field lands in the vehicle line when present", () => {
+        // Regression pin for the "For:" shape matching the PO sample AR
+        // sent: "Toyota Cammary 2014 · Y12345 · VIN WF0BB2KF1ELY11017 ·
+        // 1.8 PETROL · JC-81". The invoice builder now mirrors it.
         const msg = invoiceMessage({
             ...base,
-            customer: { name: "أحمد", lang: "ar" },
+            vehicle: {
+                make: "Toyota",
+                model: "Cammary",
+                year: 2014,
+                plate: "Y12345",
+                vin: "WF0BB2KF1ELY11017",
+                engineSize: "1.8",
+                fuelType: "PETROL",
+                jobNumber: 81,
+            },
         });
-        expect(msg).toBe(
-            "مرحباً أحمد، فاتورتك لـ Toyota Land Cruiser جاهزة. الإجمالي 535.50 درهم. عرض والدفع: https://garageos.shop/c/invoice/abc123",
-        );
+        expect(msg).toContain("For: Toyota Cammary 2014 · Y12345 · VIN WF0BB2KF1ELY11017 · 1.8 PETROL · JC-81");
     });
 
     it("falls back to English when lang is missing or unknown", () => {
-        const msg1 = invoiceMessage({
-            ...base,
-            customer: { name: "Ahmed", lang: null },
-        });
-        expect(msg1).toContain("Hi Ahmed");
-        expect(msg1).toContain("AED 535.50");
+        const msg1 = invoiceMessage({ ...base, customer: { name: "Ahmed", lang: null } });
+        expect(msg1).toContain("Hi Ahmed,");
+        expect(msg1).toContain("Tax Invoice INV-2026-0001");
 
-        const msg2 = invoiceMessage({
-            ...base,
-            customer: { name: "Ahmed", lang: "hi" },
-        });
-        expect(msg2).toContain("Hi Ahmed");
+        const msg2 = invoiceMessage({ ...base, customer: { name: "Ahmed", lang: "hi" } });
+        expect(msg2).toContain("Hi Ahmed,");
     });
 
-    it("formats money to 2 decimals even with whole numbers", () => {
+    it("money renders with 2 decimals even for whole numbers", () => {
         const msg = invoiceMessage({
             ...base,
-            invoice: { total: 300, number: 1 },
+            invoice: { ...base.invoice, subtotal: 300, vatAmount: 15, total: 315 },
         });
-        expect(msg).toContain("AED 300.00");
+        expect(msg).toContain("Subtotal: AED 300.00");
+        expect(msg).toContain("VAT (5%): AED 15.00");
+        expect(msg).toContain("Total: AED 315.00");
+    });
+
+    it("empty vehicle bits → no 'For:' paragraph (never render a naked 'For:')", () => {
+        const msg = invoiceMessage({
+            ...base,
+            vehicle: {
+                make: "", model: "", year: null, plate: null, vin: null,
+                engineSize: null, fuelType: null, jobNumber: null,
+            },
+        });
+        expect(msg).not.toContain("For:");
+        // Adjacent paragraphs (heading + items) still separated by \n\n,
+        // never left with a stray blank line where "For:" would go.
+        expect(msg).not.toMatch(/\n\n\n\n/);
+    });
+
+    it("qty renders as plain number (1 not 1.00, 6 not 6.00) — matches PO builder", () => {
+        const msg = invoiceMessage(base);
+        expect(msg).toContain("1 × Front brake pad");
+        expect(msg).toContain("6 × Engine oil 6 litter");
+        expect(msg).not.toContain("1.00 ×");
+        expect(msg).not.toContain("6.00 ×");
+    });
+
+    it("URL matches whichever token shape the caller passes — no interpretation of shape", () => {
+        // Phase-2 raw publicToken (base64url, no ~).
+        expect(invoiceMessage(base)).toContain("View invoice: https://garageos.shop/c/invoice/4G5CopWK95wRCb-6PfSXx7yAmkuknA_m");
+        // Phase-1 HMAC-shaped token (has ~) survives through unchanged.
+        const withHmac = invoiceMessage({ ...base, invoiceId: "cmrj7l1lz000004jy27dhe88a~OEuUaMU7I3GHZDKmJszug1DV" });
+        expect(withHmac).toContain("View invoice: https://garageos.shop/c/invoice/cmrj7l1lz000004jy27dhe88a~OEuUaMU7I3GHZDKmJszug1DV");
     });
 });
 

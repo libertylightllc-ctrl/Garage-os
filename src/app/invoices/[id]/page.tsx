@@ -190,10 +190,33 @@ export default async function InvoiceView({
           const phone = normalizeToE164(customer.waId ?? customer.phone);
           const msg = invoiceMessage({
             customer: { name: customer.name, lang: customer.lang },
-            vehicle: { make: inv.jobCard.vehicle.make, model: inv.jobCard.vehicle.model },
-            invoice: { total, number: inv.number },
+            garage: { name: inv.garage.name },
+            vehicle: {
+              make: inv.jobCard.vehicle.make,
+              model: inv.jobCard.vehicle.model,
+              year: inv.jobCard.vehicle.year ?? null,
+              plate: inv.jobCard.vehicle.plate ?? null,
+              vin: inv.jobCard.vehicle.vin ?? null,
+              engineSize: inv.jobCard.vehicle.engineSize ?? null,
+              fuelType: inv.jobCard.vehicle.fuelType ?? null,
+              jobNumber: inv.jobCard.number ?? null,
+            },
+            invoice: {
+              number: formatInvoiceNo(inv.number, inv.issuedAt.getFullYear()),
+              subtotal: Number(inv.subtotal),
+              vatAmount: Number(inv.vatAmount),
+              total,
+              lines: inv.lines.map((l) => ({
+                qty: Number(l.qty),
+                description: l.description,
+              })),
+            },
             appUrl: appUrl(),
-            invoiceId: inv.id,
+            // Fallback to inv.id when a row somehow has no publicToken —
+            // the resolver's HMAC fallback path handles this cleanly.
+            // For the internal page's draft link (staff hasn't clicked
+            // Send yet), publicToken from Phase-1 backfill is always set.
+            invoiceId: inv.publicToken ?? inv.id,
           });
           return (
             <SendViaWhatsAppButton

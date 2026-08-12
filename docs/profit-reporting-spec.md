@@ -80,3 +80,35 @@ and a non-zero `Part.cost` on every referenced part.
   customer PDF — enforced at the DB `select:` allowlist, not just at
   CSS `hidden`. Regression pin at
   `src/lib/__tests__/customer-invoice-line-fields.test.ts`.
+
+## Related — one-time part-catalogue cleanup script
+
+`scripts/merge-parts.ts` — never run, kept for the day it is needed.
+
+Built 2026-08-13 after AR found 7 AUTO Parts on Prod's Demo Garage (all
+created before 2026-08-02, the day the Layer 1 refactor stopped the
+auto-Part-create flow). Real customer garages had none, but the residue
+existed for a week between the AUTO-create flow launching and Layer 1
+landing, and another tenant could have picked some up in that window.
+
+What it does: takes a JSON input file of merge pairs
+(`{ garageId, keepPartId, retirePartId }`), one transaction per pair.
+Repoints every FK that references the retiring Part onto the keeper
+(5 tables — `JobPart`, `PartRequest`, `EstimateLine`,
+`PurchaseOrderLine`, `PartMovement`; `InvoiceLine` deliberately
+excluded, it stores a frozen snapshot with no `partId` column), rolls
+qty forward, blends cost via a REPLACE-vs-weighted-average rule
+mirroring `blendPartCost`, soft-retires the loser (never hard-deletes
+— the row stays for audit).
+
+Defaults to `--dry-run`. Refuses to write without an explicit
+`--commit` flag. Targets Prod via `./lib/target-prod.mjs`.
+
+When to reach for it: a real customer garage develops two Parts that
+represent the same physical product (any origin — AUTO residue, CSV
+import duplicate, manual add typo) and one needs to be retired without
+losing the history that points at it. Not the Demo Garage AUTO case —
+AR chose reseed for that (see above section).
+
+Usage: `npx tsx scripts/merge-parts.ts --input <path.json> --dry-run`
+then, only after reading the planned effect, `--commit`.

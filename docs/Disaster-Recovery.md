@@ -138,15 +138,22 @@ Then:
 
 ```powershell
 npm run dev
-# In another window:
-curl http://localhost:3000/api/health
+# In another window — sign in as an OWNER, then:
+curl -b cookies.txt http://localhost:3000/api/diagnose/db
 ```
 
-`/api/health` should return `{"ok":true,"db":"connected","tableCount":30,"garageCount":6,...}`.
+`/api/diagnose/db` returns a plain-text table-vs-code column comparison
+plus a garage count. It's auth-gated (any signed-in user), so grab the
+`next-auth.session-token` cookie from your browser after signing in, or
+use `curl -c cookies.txt` on the login POST first.
 
-That confirms the app is reading real prod data from the restore. Sign in
-with any production user email + password (you have those) and walk the
-owner dashboard to be sure.
+The bare-liveness `/api/health` (public) will also return `ok`, but it
+tells you nothing about DB shape — use `/api/diagnose/db` for the
+"restore looks right" check. If the endpoint is unreachable because
+the app can't find a signed-in session, walk the owner dashboard by
+hand instead — same signal, more clicks.
+
+That confirms the app is reading real prod data from the restore.
 
 ### 3d. Real disaster — swap Vercel onto the restored DB
 

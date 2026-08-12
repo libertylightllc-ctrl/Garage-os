@@ -7,11 +7,18 @@ name: Keep Vercel function warm
 # floor, that translates to "the first tap after the morning coffee
 # break is broken" — visibly the most-complained-about UX.
 #
-# This workflow pings /api/health every 5 minutes during UAE business
+# This workflow pings /api/keepwarm every 5 minutes during UAE business
 # hours (07:00 - 22:00 Asia/Dubai = 03:00 - 18:00 UTC) so the function
-# stays warm across the working day. /api/health does a real Prisma
-# query (table list + garage count) so the pooler connection stays
-# warm too, not just the function process.
+# stays warm across the working day. /api/keepwarm does a real Prisma
+# query so the pooler connection stays warm too, not just the function
+# process. The response is a bare 200 with no body content — the
+# warming happens because the SQL ran, not because the response
+# carried anything.
+#
+# The endpoint moved from /api/health to /api/keepwarm on 2026-08-12
+# after AR flagged that /api/health was publicly returning the full
+# table list and garage count (schema reconnaissance for anyone who
+# hit the URL). /api/health is now a bare "ok" liveness probe.
 #
 # Cost: free (GitHub Actions cron is free on public repos and within
 # the generous monthly minute allowance on private repos).
@@ -50,11 +57,11 @@ concurrency:
 
 jobs:
   ping:
-    name: Ping /api/health
+    name: Ping /api/keepwarm
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: GET /api/health
+      - name: GET /api/keepwarm
         env:
           # The production preview URL. Update if the project alias
           # changes, or move this to a repo Variable
@@ -66,19 +73,12 @@ jobs:
           # --max-time 30: cap any one ping at 30s so a slow cold
           #                start can't tie up the runner
           # Capture status + time so the action log is grep-able.
-          tmp=$(mktemp)
-          status=$(curl -fsS --max-time 30 -o "$tmp" \
+          # /api/keepwarm returns a bare 200 with no JSON body — the
+          # warming happens because the Prisma query ran. Status code
+          # is the entire signal; no body-shape check to do here.
+          status=$(curl -fsS --max-time 30 -o /dev/null \
                    -w "%{http_code}|%{time_total}" \
-                   "$PROD_URL/api/health")
+                   "$PROD_URL/api/keepwarm")
           http=${status%%|*}
           time=${status#*|}
           echo "::notice title=keep-warm ping::status=$http time=${time}s"
-          # Soft check on the payload shape so a regression in
-          # /api/health (e.g. db disconnected, garage count zero on a
-          # broken seed) surfaces as a failed run rather than
-          # silently 'succeeding' with a 200 + error JSON.
-          if ! grep -q '"ok":true' "$tmp"; then
-            echo "::error::/api/health returned 200 but ok!=true"
-            cat "$tmp"
-            exit 1
-          fi

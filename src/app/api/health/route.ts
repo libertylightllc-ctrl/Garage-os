@@ -1,27 +1,15 @@
-import { prisma } from "@/lib/prisma";
-
-// Proves the full stack: Next route handler -> Prisma -> Postgres.
-export async function GET() {
-  try {
-    const rows = await prisma.$queryRaw<{ table_name: string }[]>`
-      SELECT table_name FROM information_schema.tables
-      WHERE table_schema = 'public' ORDER BY table_name;`;
-    const garageCount = await prisma.garage.count();
-    return Response.json({
-      ok: true,
-      db: "connected",
-      tableCount: rows.length,
-      tables: rows.map((r) => r.table_name),
-      garageCount,
-      // Boolean status ONLY — never the key value. Lets us confirm whether
-      // vision OCR (Moulkia + the upcoming invoice import) runs for real in
-      // an environment, or silently falls back to mock data.
-      ocr: process.env.ANTHROPIC_API_KEY ? "configured" : "missing",
-    });
-  } catch (err) {
-    return Response.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 },
-    );
-  }
+// Public liveness probe — AR 2026-08-12.
+//
+// Reachable from any client on any origin. Returns exactly one thing:
+// HTTP 200 + the string "ok". No JSON, no version, no commit SHA, no
+// DB shape, no environment name — because whoever's watching this URL
+// gets ONE bit of information out of it. Anything else is
+// reconnaissance material handed out for free.
+//
+// The DB-touching diagnostic that used to live here has moved to
+// /api/keepwarm (public but response-blind) for the Supabase warming
+// job, and /api/diagnose/db (auth-gated) for the schema comparison
+// the DR runbook uses.
+export function GET() {
+  return new Response("ok", { status: 200 });
 }

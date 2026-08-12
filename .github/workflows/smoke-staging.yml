@@ -68,11 +68,22 @@ jobs:
       STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need full history so smoke-quarantine-lint's git blame
+          # can find the fixme line's original author timestamp for
+          # the 7-day TTL check. Shallow clone breaks that.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
           cache: npm
       - run: npm ci
+      # Quarantine lint runs BEFORE the smoke suite. A fixme without a
+      # linked GH issue, or a fixme older than 7 days, fails the job
+      # here — so a quarantine can't quietly extend forever. Runs
+      # cheap: pure JS + git blame, no browser.
+      - name: Lint quarantined tests
+        run: node scripts/smoke-quarantine-lint.mjs
       - run: npx playwright install --with-deps chromium
       - name: Run smoke suite
         run: npx playwright test

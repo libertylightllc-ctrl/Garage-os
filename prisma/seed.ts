@@ -109,6 +109,25 @@ async function main() {
     });
   }
 
+  // One demo supplier — Flow D of the smoke suite (RFQ conversion)
+  // needs at least one supplier to pick from in the from-estimate
+  // form. Supplier has no unique constraint on (garageId, name), so
+  // we findFirst before create to stay idempotent across seed reruns.
+  const supplierName = "Demo Parts Supplier";
+  const existingSupplier = await prisma.supplier.findFirst({
+    where: { garageId: garage.id, name: supplierName },
+  });
+  if (!existingSupplier) {
+    await prisma.supplier.create({
+      data: {
+        garageId: garage.id,
+        name: supplierName,
+        phone: "+971500000099",
+        active: true,
+      },
+    });
+  }
+
   // Subscription plans (prices live in the DB; map stripePriceId per env when wiring Stripe).
   const plans = [
     { code: "STARTER", name: "Starter", priceMonthly: 299 },

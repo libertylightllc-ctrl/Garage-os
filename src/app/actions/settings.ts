@@ -141,3 +141,43 @@ export async function updateDefaultPartsMarkupAction(formData: FormData) {
   revalidatePath("/settings");
   redirect("/settings?ok=markup");
 }
+
+/**
+ * Owner-only: shop-wide default hourly cost of labour (AR 2026-08-12,
+ * profit reporting Phase 1, option B). Used to convert WorkSession
+ * time-on-job into a labour cost so parts + labour profit can be
+ * reported per job / period. See schema comment on
+ * Garage.defaultLaborHourlyCost.
+ *
+ * Constraints (matched to schema Decimal(12,2)):
+ *   - 0 ≤ value; upper bound is generous (up to 999999.99) because a
+ *     shop's currency isn't fixed here — AED, USD, whatever — and we
+ *     shouldn't reject a plausible one just because we didn't imagine
+ *     it. Realistically < 500 in AED, but no hard cap in code.
+ *   - Up to 2 dp.
+ *
+ * Blank → clears to null (owner deliberately opts out of labour cost
+ * → labour profit rendered as "unknown", not zero).
+ */
+export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+  if (session.user.role !== "OWNER") back("role");
+
+  const raw = String(formData.get("defaultLaborHourlyCost") ?? "").trim();
+  let value: number | null = null;
+  if (raw !== "") {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) back("labor-cost-invalid");
+    if (parsed < 0) back("labor-cost-range");
+    value = Math.round(parsed * 100) / 100; // clamp to 2 dp
+  }
+
+  await prisma.garage.update({
+    where: { id: session.user.garageId },
+    data: { defaultLaborHourlyCost: value },
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?ok=labor-cost");
+}

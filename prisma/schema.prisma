@@ -278,6 +278,23 @@ model Garage {
   // time — the per-line markupPct is what actually prices the line, so
   // an owner can change this later without disturbing existing estimates.
   defaultPartsMarkupPct Decimal? @db.Decimal(5, 2)
+  // Shop-wide default hourly cost of labour (AR 2026-08-12, profit
+  // reporting Phase 1, option B). Used to convert WorkSession minutes
+  // into a labour-cost estimate for the profit calc on invoices +
+  // owner reports. Null → labour profit cannot be calculated for that
+  // job / period; the report renders it as "unknown" rather than
+  // assuming zero (which would read as 100 % margin, which is worse
+  // than "unknown"). Set via Owner Settings → Pricing defaults.
+  //
+  // Deliberately shop-wide, not per-tech. AR's decision: start with
+  // one number for the shop (option B in the plan); a per-tech
+  // override on User.hourlyCost is a later phase if it turns out
+  // techs at DCM cost meaningfully different amounts.
+  //
+  // Snapshotted onto WorkSession at close so a later rate change
+  // doesn't rewrite historical labour cost — same "frozen at emit"
+  // discipline as Invoice.customerTrn.
+  defaultLaborHourlyCost Decimal? @db.Decimal(12, 2)
 
   users        User[]
   customers    Customer[]

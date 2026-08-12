@@ -8,6 +8,7 @@ import {
   updateProfileNameAction,
   updateProfileEmailAction,
   updateDefaultPartsMarkupAction,
+  updateDefaultLaborHourlyCostAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -45,6 +46,8 @@ const ERR_KEY: Record<string, MessageKey> = {
   "role": "settingsErrRole",
   "markup-invalid": "settingsErrMarkupInvalid",
   "markup-range": "settingsErrMarkupRange",
+  "labor-cost-invalid": "settingsErrLaborCostInvalid",
+  "labor-cost-range": "settingsErrLaborCostRange",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
@@ -53,6 +56,7 @@ const OK_KEY: Record<string, MessageKey> = {
   "logo-saved": "settingsOkLogoSaved",
   "logo-removed": "settingsOkLogoRemoved",
   "markup": "settingsOkMarkup",
+  "labor-cost": "settingsOkLaborCost",
 };
 
 export default async function SettingsPage({
@@ -83,7 +87,11 @@ export default async function SettingsPage({
   const garage = isOwner
     ? await prisma.garage.findUnique({
         where: { id: session.user.garageId },
-        select: { logoUrl: true, defaultPartsMarkupPct: true },
+        select: {
+          logoUrl: true,
+          defaultPartsMarkupPct: true,
+          defaultLaborHourlyCost: true,
+        },
       })
     : null;
 
@@ -268,6 +276,47 @@ export default async function SettingsPage({
               </div>
               <p className="text-xs text-text-mute">
                 {t("settingsPricingMarkupHint")}
+              </p>
+            </form>
+
+            {/* Labour hourly cost — Phase 1 of profit reporting.
+                Shop-wide, not per-tech (per AR's option B in the
+                report). Sits in the same Pricing defaults section
+                because both feed the same profit calc downstream. */}
+            <form
+              action={updateDefaultLaborHourlyCostAction}
+              className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
+            >
+              <label
+                htmlFor="defaultLaborHourlyCost"
+                className="text-sm font-medium"
+              >
+                {t("settingsPricingLaborCostLabel")}
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-text-mute">AED</span>
+                <input
+                  id="defaultLaborHourlyCost"
+                  name="defaultLaborHourlyCost"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder={t("settingsPricingLaborCostPlaceholder")}
+                  defaultValue={
+                    garage?.defaultLaborHourlyCost != null
+                      ? String(garage.defaultLaborHourlyCost)
+                      : ""
+                  }
+                  className="h-10 w-32 rounded-lg border border-border bg-transparent px-3 text-base tabular-nums focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+                />
+                <span className="text-sm text-text-mute">/ hr</span>
+                <Button type="submit" variant="primary">
+                  {t("settingsSave")}
+                </Button>
+              </div>
+              <p className="text-xs text-text-mute">
+                {t("settingsPricingLaborCostHint")}
               </p>
             </form>
           </section>

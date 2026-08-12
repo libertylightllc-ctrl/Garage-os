@@ -107,8 +107,30 @@ Defaults to `--dry-run`. Refuses to write without an explicit
 When to reach for it: a real customer garage develops two Parts that
 represent the same physical product (any origin — AUTO residue, CSV
 import duplicate, manual add typo) and one needs to be retired without
-losing the history that points at it. Not the Demo Garage AUTO case —
-AR chose reseed for that (see above section).
+losing the history that points at it. Not the Demo Garage AUTO case
+below.
 
 Usage: `npx tsx scripts/merge-parts.ts --input <path.json> --dry-run`
 then, only after reading the planned effect, `--commit`.
+
+## Demo Garage AUTO-Parts residue (harmless, left in place)
+
+The 2026-08-13 Prod audit found 7 AUTO Parts in the seeded Demo Garage
+on Prod, all created 2026-07-25 → 2026-07-27 — before the Layer 1
+refactor on 2026-08-02 shut off the auto-Part-create flow. Real
+customer garages have none.
+
+State on each: `qtyOnHand = 0`, `cost = 0.00`. No new AUTO Parts have
+been minted since Layer 1; the source is fixed. The residue does
+nothing but sit in the inventory table with an "Auto" chip.
+
+AR decision (2026-08-13): leave them in place. 28 tables' worth of
+deletion + a bespoke reseed script isn't worth removing 7 harmless
+rows from a disposable tenant.
+
+**If Demo Garage ever needs to be presentable** (a demo video, a
+walkthrough for a pilot, screenshots for marketing), the fix is a
+wipe + reseed of Demo Garage — never merge on demo data. The wipe
+scope + FK-safe deletion order + preflight count queries were
+captured in the 2026-08-13 conversation; retrieve from git history
+if needed.

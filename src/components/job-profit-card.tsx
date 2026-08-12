@@ -110,17 +110,28 @@ export function JobProfitCard(props: JobProfitCardProps) {
             {/* Coverage banner for the headline. When either side is
                 incomplete, the em-dashes above need an explanation
                 the owner can act on — otherwise it just looks broken.
-                Kept as a mid-emphasis line under the headline, not
-                buried in a footnote. */}
+                Rendered as its own bordered alert row (matches the
+                warning tone of the labour-rate CTA below) with real
+                padding + margin, so on narrow viewports the two-line
+                wrap doesn't visually crowd the Parts / Labour boxes
+                (AR cosmetic report 2026-08-13 — the plain-paragraph
+                version got clipped by the boxes underneath). */}
             {(partsIncomplete || laborIncomplete) && (
-                <p className="mt-2 text-xs text-warning-700 dark:text-warning-500">
+                <div
+                    role="status"
+                    className="mt-3 rounded-lg border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+                >
                     {t("profitCardHeadlineIncomplete")}
-                </p>
+                </div>
             )}
 
             {/* Split — Parts + Labour. Each carries its own coverage line
-                so the owner sees the confidence next to the number. */}
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                so the owner sees the confidence next to the number.
+                Bumped from mt-4 → mt-5 so the boxes sit clearly below
+                the headline (and below the coverage banner when it's
+                present), matching the visual rhythm of the rest of
+                the card. */}
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {/* Parts side. Hidden entirely when the job has no
                     parts revenue AND no parts lines — nothing to say. */}
                 {(c.partsTotal > 0 || !profit.partsRevenue.isZero()) && (

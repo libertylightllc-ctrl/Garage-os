@@ -69,7 +69,7 @@ const en = {
   profitCardParts: "Parts",
   profitCardLabour: "Labour",
   profitCardHeadlineIncomplete:
-    "Cost, profit and margin are hidden — some lines have no cost data. See the coverage lines below.",
+    "Cost and profit can't be calculated — some lines have no cost data. See the coverage lines below.",
   profitCardCoverageParts: "{covered} of {total} parts have cost data",
   profitCardCoverageLabour: "{covered} of {total} work sessions have cost data",
   profitCardNoLabourSessions: "No work sessions recorded on this job.",
@@ -1566,7 +1566,7 @@ const ar: typeof en = {
   profitCardParts: "قطع الغيار",
   profitCardLabour: "العمالة",
   profitCardHeadlineIncomplete:
-    "التكلفة والربح والهامش مخفية — بعض البنود بدون بيانات تكلفة. راجع سطور التغطية أدناه.",
+    "لا يمكن احتساب التكلفة والربح — بعض البنود بدون بيانات تكلفة. راجع سطور التغطية أدناه.",
   profitCardCoverageParts: "{covered} من {total} قطع بها بيانات تكلفة",
   profitCardCoverageLabour: "{covered} من {total} جلسات عمل بها بيانات تكلفة",
   profitCardNoLabourSessions: "لا توجد جلسات عمل مسجلة على هذه المهمة.",

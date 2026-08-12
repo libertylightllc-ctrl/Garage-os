@@ -117,23 +117,85 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   // for authorization — resolveDocumentToken above is the gate.
   const rawId = token.includes("~") ? token.slice(0, token.lastIndexOf("~")) : "";
   if (!id) return <InvalidLinkPage rawId={rawId} token={token} kindHint="bad_sig" />;
+  // AR 2026-08-12 (Step 5) — belt-and-braces hardening. Every field
+  // is spelled out explicitly. The internal-only cost/margin columns
+  // (EstimateLine.unitCost, EstimateLine.markupPct, InvoiceLine.unitCost)
+  // introduced in the cost-based-pricing feature are DELIBERATELY NOT
+  // listed here, so they never enter the RSC payload even if a future
+  // dev adds a <ClientTotals inv={inv}/> that echoes props to the
+  // browser. Adding a new customer-visible field means adding it to
+  // this list — a pinned test in
+  // src/lib/__tests__/customer-invoice-line-fields.test.ts asserts
+  // this select doesn't leak "unitCost" or "markupPct". A future
+  // dev who reverts to `include: { lines: true }` fires that test.
   const inv = await prisma.invoice.findUnique({
     where: { id },
-    include: {
-      lines: { orderBy: { createdAt:"asc"} },
-      payments: true,
-      garage: true,
+    select: {
+      id: true,
+      number: true,
+      issuedAt: true,
+      dueDate: true,
+      subtotal: true,
+      vatAmount: true,
+      total: true,
+      status: true,
+      clearanceStatus: true,
+      qrPayload: true,
+      voidedAt: true,
+      customerTrn: true,
+      lines: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          kind: true,
+          description: true,
+          qty: true,
+          unitPrice: true,
+          lineTotal: true,
+          vatRate: true,
+          // NB: unitCost is INTENTIONALLY OMITTED.
+        },
+      },
+      payments: { select: { id: true, amount: true, method: true, paidAt: true } },
+      garage: {
+        select: {
+          id: true,
+          name: true,
+          country: true,
+          trn: true,
+          logoUrl: true,
+        },
+      },
       // Pull customer for Bill-to block + FTA-required customer TRN when
       // set. Customer.trn was added to Customer for B2B invoices; the
       // customer is VAT-registered → we must print their TRN on the tax
       // invoice so they can reclaim the VAT.
-      jobCard: { include: { vehicle: { include: { customer: true } } } },
+      jobCard: {
+        select: {
+          number: true,
+          createdAt: true,
+          vehicle: {
+            select: {
+              make: true,
+              model: true,
+              year: true,
+              plate: true,
+              vin: true,
+              engineSize: true,
+              fuelType: true,
+              customer: {
+                select: { name: true, phone: true, trn: true, lang: true },
+              },
+            },
+          },
+        },
+      },
       // Void + reissue cross-references (2026-08-10). We only need
       // number + issuedAt for the small pill under the header — the
       // customer's copy doesn't link (they can't reach staff routes),
       // it just names the other document for their records.
       previousInvoice: { select: { number: true, issuedAt: true } },
-      replacedBy:      { select: { number: true, issuedAt: true } },
+      replacedBy: { select: { number: true, issuedAt: true } },
     },
   });
   if (!inv) return <InvalidLinkPage rawId={id} token={token} kindHint="sig_ok_row_missing" />;

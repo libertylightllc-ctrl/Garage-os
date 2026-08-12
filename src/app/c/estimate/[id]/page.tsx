@@ -16,11 +16,63 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
   const { id: token } = await params;
   const id = await resolveDocumentToken("estimate", token);
   if (!id) notFound();
+  // AR 2026-08-12 (Step 5) — explicit customer allowlist. The advisor-
+  // internal fields (unitCost, markupPct) added for cost-based pricing
+  // are DELIBERATELY OMITTED so they never enter the RSC payload. Pinned
+  // by src/lib/__tests__/customer-invoice-line-fields.test.ts.
   const est = await prisma.estimate.findUnique({
     where: { id },
-    include: {
-      lines: { orderBy: { createdAt:"asc"} },
-      jobCard: { include: { vehicle: { include: { customer: true } }, garage: true } },
+    select: {
+      id: true,
+      status: true,
+      subtotal: true,
+      vatAmount: true,
+      total: true,
+      sentAt: true,
+      approvedAt: true,
+      lines: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          kind: true,
+          description: true,
+          qty: true,
+          unitPrice: true,
+          lineTotal: true,
+          vatRate: true,
+          declined: true,
+          // NB: unitCost + markupPct INTENTIONALLY OMITTED.
+        },
+      },
+      jobCard: {
+        select: {
+          number: true,
+          createdAt: true,
+          vehicle: {
+            select: {
+              make: true,
+              model: true,
+              year: true,
+              plate: true,
+              vin: true,
+              engineSize: true,
+              fuelType: true,
+              customer: {
+                select: { name: true, phone: true, lang: true, trn: true },
+              },
+            },
+          },
+          garage: {
+            select: {
+              id: true,
+              name: true,
+              country: true,
+              trn: true,
+              logoUrl: true,
+            },
+          },
+        },
+      },
     },
   });
   if (!est) notFound();

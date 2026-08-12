@@ -122,8 +122,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   // (EstimateLine.unitCost, EstimateLine.markupPct, InvoiceLine.unitCost)
   // introduced in the cost-based-pricing feature are DELIBERATELY NOT
   // listed here, so they never enter the RSC payload even if a future
-  // dev adds a <ClientTotals inv={inv}/> that echoes props to the
-  // browser. Adding a new customer-visible field means adding it to
+  // dev adds a client component that echoes props (e.g. a `Totals`
+  // panel receiving the invoice) to the browser.
+  // Adding a new customer-visible field means adding it to
   // this list — a pinned test in
   // src/lib/__tests__/customer-invoice-line-fields.test.ts asserts
   // this select doesn't leak "unitCost" or "markupPct". A future

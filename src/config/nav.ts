@@ -71,6 +71,12 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
       { key: "suppliers", href: "/owner/suppliers", labelKey: "tabSuppliers", icon: Truck },
       { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
+      // Accounts (cashier) — the customer-invoice list. Page guard at
+      // /cashier already admits OWNER; adding it here closes the
+      // nav-vs-guard inconsistency AR caught 2026-08-12. Placed with
+      // the money-side entries (billing, ledger) so the money surfaces
+      // sit together in the More sheet.
+      { key: "accounts", href: "/cashier", labelKey: "tabAccounts", icon: CreditCard },
       { key: "billing", href: "/owner/billing", labelKey: "tabBilling", icon: Receipt },
       { key: "ledger", href: "/owner/ledger", labelKey: "tabLedger", icon: BookOpen },
       { key: "whatsapp", href: "/owner/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },

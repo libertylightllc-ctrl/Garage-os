@@ -48,6 +48,10 @@ describe("NAV config", () => {
             "/owner/hours",
             "/owner/suppliers",
             "/owner/purchasing",
+            // Accounts (customer invoice list) — added 2026-08-12
+            // after AR flagged that the /cashier page guard already
+            // admits OWNER but the nav offered no way to reach it.
+            "/cashier",
             "/owner/billing",
             "/owner/ledger",
             "/owner/whatsapp",

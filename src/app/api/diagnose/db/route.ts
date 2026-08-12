@@ -8,8 +8,11 @@ import { prisma } from "@/lib/prisma";
  * able to copy a hidden error.digest off a red error page.
  *
  * Plain-text response so even a phone browser can render it cleanly.
- * Auth-gated to any signed-in user (any role) — it doesn't reveal
- * row data, only the schema shape.
+ * Auth-gated to OWNER + MASTER only (AR 2026-08-12, audit finding).
+ * Row data isn't returned, but the schema shape (table + column list)
+ * is still internal detail — a cashier or tech at a customer garage
+ * has no reason to learn how Invoice or Estimate is structured. Same
+ * bar as the other operational + financial diagnostics.
  *
  * Compares actual columns to a hand-curated 'expected' list. The
  * expected list mirrors what the Prisma client SELECTs by default
@@ -106,6 +109,16 @@ export async function GET(req: Request) {
       status: 401,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
+  }
+  // AR 2026-08-12 audit — tighten to OWNER + MASTER. Signed-in cashiers
+  // and techs at a customer garage have no need to see the schema
+  // shape; a 403 with a plain-text explanation matches the tone of the
+  // rest of the response.
+  if (session.user.role !== "OWNER" && session.user.role !== "MASTER") {
+    return new NextResponse(
+      "Not authorized — this diagnostic is OWNER / MASTER only.\n",
+      { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+    );
   }
   // ?apply=1 → actually run the ALTER statements for any JobCard
   // columns missing from the live DB. OWNER role only — we don't want

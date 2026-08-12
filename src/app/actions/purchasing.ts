@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOperational } from "@/lib/action-guards";
+import { blendPartCost } from "@/lib/part-cost-blend";
 import {
   pickEstimateForConversion,
   filterConvertibleLines,
@@ -555,7 +556,20 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   const po = await prisma.purchaseOrder.findFirst({
     where: { id: poId, garageId: user.garageId },
     include: {
-      lines: { select: { id: true, partId: true, qty: true, receivedQty: true } },
+      lines: {
+        select: {
+          id: true,
+          partId: true,
+          qty: true,
+          receivedQty: true,
+          // AR 2026-08-12 (profit reporting Step 3): pull unitCost so
+          // we can blend it into Part.cost at receipt. Nullable — a
+          // legacy line placed before Layer 0 (RFQ → PO) may still
+          // have null cost; the blend helper defensively no-ops in
+          // that case rather than clobbering the catalogue.
+          unitCost: true,
+        },
+      },
       supplier: { select: { name: true } },
     },
   });
@@ -565,7 +579,16 @@ export async function receivePurchaseOrderAction(formData: FormData) {
 
   // Parse the per-line "receive now" quantities. Each must be a whole
   // number between 0 and that line's outstanding (ordered − alreadyReceived).
-  const receipts: { lineId: string; partId: string; qty: number; receiveNow: number }[] = [];
+  const receipts: {
+    lineId: string;
+    partId: string;
+    qty: number;
+    receiveNow: number;
+    // Cost blend input (Step 3). Pulled straight from POLine.unitCost
+    // — the supplier's per-unit price captured at PO time. Null →
+    // don't touch Part.cost (blend helper no-ops in that case).
+    unitCost: typeof po.lines[number]["unitCost"];
+  }[] = [];
   for (const l of po.lines) {
     const raw = String(formData.get(`recv_${l.id}`) ?? "").trim();
     const n = raw === "" ? 0 : Number(raw);
@@ -582,7 +605,13 @@ export async function receivePurchaseOrderAction(formData: FormData) {
       fail("Link a catalogue part to this line before receiving stock.", back);
     }
     if (n > 0 && l.partId !== null) {
-      receipts.push({ lineId: l.id, partId: l.partId, qty: l.qty, receiveNow: n });
+      receipts.push({
+        lineId: l.id,
+        partId: l.partId,
+        qty: l.qty,
+        receiveNow: n,
+        unitCost: l.unitCost,
+      });
     }
   }
   if (receipts.length === 0) fail("Enter a quantity to receive on at least one line.", back);
@@ -600,9 +629,39 @@ export async function receivePurchaseOrderAction(formData: FormData) {
         });
         if (claim.count === 0) throw new OverReceiveError();
 
+        // AR 2026-08-12 (Step 3) — read the current Part state, blend
+        // the received unit cost into Part.cost with the shop-agreed
+        // rule (REPLACE when qtyOnHand <= 0 or current cost is 0,
+        // else weighted average), and write cost + qtyOnHand in a
+        // single update. Reading before the increment matters: we
+        // need the cost + qty AS THEY WERE at the start of this
+        // receipt, not the (already-incremented) state. Prisma's
+        // findUnique-inside-tx is a linearized read against the same
+        // transaction's writes, so this is race-safe as long as the
+        // receipt itself runs inside the outer $transaction (which
+        // it does).
+        const before = await tx.part.findUnique({
+          where: { id: r.partId },
+          select: { cost: true, qtyOnHand: true },
+        });
+        const blendedCost = before
+          ? blendPartCost({
+              currentCost: before.cost,
+              qtyOnHand: before.qtyOnHand,
+              receivedUnitCost: r.unitCost,
+              receivedQty: r.receiveNow,
+            })
+          : null;
         await tx.part.update({
           where: { id: r.partId },
-          data: { qtyOnHand: { increment: r.receiveNow } },
+          data: {
+            qtyOnHand: { increment: r.receiveNow },
+            // Skip the cost write when the line had no unitCost (rare
+            // legacy pre-Layer-0 case) or the row went missing between
+            // the findUnique + update (impossible today, but keeps
+            // the branch total).
+            ...(blendedCost !== null ? { cost: blendedCost } : {}),
+          },
         });
         await tx.partMovement.create({
           data: {

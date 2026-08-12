@@ -1,0 +1,112 @@
+name: Smoke tests (staging)
+# ↑↑↑ REQUIRED-STATUS-CHECK CONTRACT — do not rename without also
+#     updating the branch protection rule on `production`. The exact
+#     string "Smoke tests (staging)" is what GitHub matches against
+#     the required checks list. Renaming here without renaming there
+#     silently opens the gate.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to test (defaults to main HEAD)"
+        required: false
+
+concurrency:
+  # Same-SHA reruns cancel in-flight; different-SHA runs proceed
+  # in parallel (they don't collide — per-run STAGING_SMOKE_RUN_ID
+  # namespaces every DB row they create).
+  group: smoke-staging-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  wait-for-vercel:
+    name: Wait for Vercel commit deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      url: ${{ steps.resolve.outputs.url }}
+    steps:
+      - id: resolve
+        env:
+          SHA: ${{ github.event.inputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          # Vercel commit-alias slug: garage-os-<first-12-of-sha>-libertylightllc-ctrls-projects.vercel.app
+          SHORT=${SHA:0:12}
+          URL="https://garage-os-${SHORT}-libertylightllc-ctrls-projects.vercel.app"
+          echo "Polling $URL/api/health…"
+          # Retry every 5s for up to 3 min. /api/health is now a bare
+          # 200 OK (dc5b36c) — the exact response body doesn't matter,
+          # only the status code.
+          for i in $(seq 1 36); do
+            if curl -fsS --max-time 8 -o /dev/null "$URL/api/health"; then
+              echo "url=$URL" >> "$GITHUB_OUTPUT"
+              echo "::notice title=vercel ready::$URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Vercel deploy for $SHA never reached Ready in 3 min."
+          exit 1
+
+  smoke:
+    # ↑↑↑ This is the job name that appears in the required-check
+    # list — GitHub concatenates workflow name + job name as
+    # "Smoke tests (staging) / smoke". Keep the workflow name stable
+    # so the concat stays stable.
+    name: smoke
+    needs: wait-for-vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STAGING_URL: ${{ needs.wait-for-vercel.outputs.url }}
+      # Namespace every DB row this run creates + is expected to
+      # clean up. Used by flow specs' unique-per-run identifiers.
+      STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run smoke suite
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          retention-days: 14
+
+  cleanup:
+    # Best-effort DB cleanup of the run's tagged rows. Always runs,
+    # even if the smoke job failed — leaving debris is the noisy
+    # failure mode (weekly reseed picks it up but slower).
+    #
+    # Missing secret → fail loudly. AR asked for this specifically:
+    # "I don't want cleanup quietly not running for weeks." The
+    # ::error:: below plus exit 1 makes the run fail visibly, which
+    # surfaces on the commit as red.
+    name: Cleanup smoke test rows
+    needs: smoke
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - name: Delete rows tagged with this run id
+        run: node scripts/smoke-cleanup.mjs

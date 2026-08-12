@@ -98,3 +98,8 @@ backups/
 # scripts/ or docs/.
 scratchpad/
 diff.txt
+
+# Playwright — auth cookies + reports are per-run, never committed
+.auth/
+playwright-report/
+test-results/

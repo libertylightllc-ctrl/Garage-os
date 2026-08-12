@@ -1,0 +1,168 @@
+import Link from "next/link";
+import type { JobProfit } from "@/lib/job-profit";
+import type { getT } from "@/i18n/server";
+
+/**
+ * Per-job profit card (AR 2026-08-12 profit reporting Step 5).
+ *
+ * Advisor / Owner / Master only. GATED BY THE CALLER via
+ * canSeeMargin(role) — this component does NOT check the role itself
+ * so it stays a pure presenter. Never rendered on any customer surface
+ * (customer allowlists in /c/invoice/[id] and /c/estimate/[id] omit
+ * cost + markup fields at the DB level; belt-and-braces).
+ *
+ * Layout: three-line headline (Revenue / Cost / Gross + margin %),
+ * two breakdowns (Parts, Labour), and two footnotes explaining the
+ * accounting basis of the numbers. Prints hidden by default —
+ * customer PDFs must not carry it.
+ */
+
+interface JobProfitCardProps {
+    profit: JobProfit;
+    t: Awaited<ReturnType<typeof getT>>;
+    /**
+     * Whether the garage currently has a labour hourly rate configured.
+     * Distinguishes "no rate set → point owner to settings" from "old
+     * rows with no snapshot". Today they overlap (Step 4 is the first
+     * write), but the affordance differs.
+     */
+    hasLabourRate: boolean;
+    /** Where to send the owner when they need to set the labour rate. */
+    settingsHref?: string;
+    className?: string;
+}
+
+const AED = (v: string) => `AED ${v}`;
+
+function money(d: JobProfit["revenue"]): string {
+    return AED(d.toFixed(2));
+}
+
+function pct(d: JobProfit["grossMarginPct"], fallback: string): string {
+    if (d === null) return fallback;
+    return `${d.toFixed(1)}%`;
+}
+
+export function JobProfitCard(props: JobProfitCardProps) {
+    const { profit, t, hasLabourRate, settingsHref = "/settings", className } = props;
+    const c = profit.coverage;
+
+    const partsCoverageText = t("profitCardCoverageParts")
+        .replace("{covered}", String(c.partsCovered))
+        .replace("{total}", String(c.partsTotal));
+    const laborCoverageText = t("profitCardCoverageLabour")
+        .replace("{covered}", String(c.laborCovered))
+        .replace("{total}", String(c.laborTotal));
+
+    return (
+        <section
+            className={
+                "rounded-xl border border-border bg-surface-2 p-4 text-sm print:hidden " +
+                (className ?? "")
+            }
+            data-testid="job-profit-card"
+            aria-label={t("profitCardTitle")}
+        >
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-mute">
+                {t("profitCardTitle")}
+            </h2>
+
+            {/* Headline: Revenue → Cost → Gross profit + margin.
+                tabular-nums so long amounts line up cleanly. */}
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 tabular-nums">
+                <dt className="text-text-mute">{t("profitCardRevenue")}</dt>
+                <dd className="text-end">{money(profit.revenue)}</dd>
+
+                <dt className="text-text-mute">{t("profitCardCost")}</dt>
+                <dd className="text-end">{money(profit.totalCost)}</dd>
+
+                <dt className="text-base font-semibold">{t("profitCardGross")}</dt>
+                <dd className="text-end text-base font-semibold">
+                    {money(profit.grossProfit)}
+                    <span className="ms-2 text-sm font-normal text-text-mute">
+                        · {t("profitCardMargin")} {pct(profit.grossMarginPct, "—")}
+                    </span>
+                </dd>
+            </dl>
+
+            {/* Split — Parts + Labour. Each carries its own coverage line
+                so the owner sees the confidence next to the number. */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {/* Parts side. */}
+                <div className="rounded-lg border border-border/60 bg-surface p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                        {t("profitCardParts")}
+                    </div>
+                    <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-0.5 text-xs tabular-nums">
+                        <dt className="text-text-mute">{t("profitCardRevenue")}</dt>
+                        <dd className="text-end">{money(profit.partsRevenue)}</dd>
+                        <dt className="text-text-mute">{t("profitCardCost")}</dt>
+                        <dd className="text-end">{money(profit.partsCost)}</dd>
+                        <dt className="font-medium">{t("profitCardMargin")}</dt>
+                        <dd className="text-end font-medium">
+                            {pct(profit.partsMarginPct, "—")}
+                        </dd>
+                    </dl>
+                    {c.partsTotal > 0 ? (
+                        <p className="mt-2 text-xs text-text-mute">{partsCoverageText}</p>
+                    ) : null}
+                </div>
+
+                {/* Labour side.
+                    Three states:
+                      1. No sessions recorded → grey empty line.
+                      2. Sessions exist but no rate set → CTA to settings.
+                         (this is where every shop lands today until the
+                         owner types a rate)
+                      3. Sessions + rate → normal breakdown + coverage. */}
+                <div className="rounded-lg border border-border/60 bg-surface p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                        {t("profitCardLabour")}
+                    </div>
+                    {c.laborTotal === 0 ? (
+                        <p className="mt-1 text-xs text-text-mute">
+                            {t("profitCardNoLabourSessions")}
+                        </p>
+                    ) : !hasLabourRate ? (
+                        <div className="mt-1 flex flex-col gap-2">
+                            <p className="text-xs text-warning-700 dark:text-warning-500">
+                                {t("profitCardLabourRateMissing")}
+                            </p>
+                            <Link
+                                href={settingsHref}
+                                className="inline-flex w-fit items-center rounded-md border border-warning-500/40 bg-warning-50 px-2 py-1 text-xs font-semibold text-warning-700 hover:bg-warning-100 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+                            >
+                                {t("profitCardLabourRateMissingCta")} →
+                            </Link>
+                        </div>
+                    ) : (
+                        <>
+                            <dl className="mt-1 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-0.5 text-xs tabular-nums">
+                                <dt className="text-text-mute">{t("profitCardRevenue")}</dt>
+                                <dd className="text-end">{money(profit.laborRevenue)}</dd>
+                                <dt className="text-text-mute">{t("profitCardCost")}</dt>
+                                <dd className="text-end">{money(profit.laborCost)}</dd>
+                                <dt className="font-medium">{t("profitCardMargin")}</dt>
+                                <dd className="text-end font-medium">
+                                    {pct(profit.laborMarginPct, "—")}
+                                </dd>
+                            </dl>
+                            <p className="mt-2 text-xs text-text-mute">
+                                {laborCoverageText}
+                            </p>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Footnotes — what these numbers actually mean.
+                AR 2026-08-12: labour is the configured rate × time,
+                not cash out the door (matters for salaried shops);
+                parts cost is the weighted average, not per-unit. */}
+            <ul className="mt-3 flex flex-col gap-1 text-[11px] leading-snug text-text-mute">
+                <li>· {t("profitCardNotePartsCost")}</li>
+                <li>· {t("profitCardNoteLabourCost")}</li>
+            </ul>
+        </section>
+    );
+}

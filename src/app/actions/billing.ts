@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import {
   totalsFor,
   lineTotal,
@@ -28,6 +29,7 @@ import { invoiceMessage } from "@/lib/po-message";
 import { logInvoiceSend } from "@/lib/invoice-send-log";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
 import { requireAnyRole } from "@/lib/action-guards";
+import { resolveInvoiceLineCost } from "@/lib/invoice-cost-snapshot";
 
 // Defense-in-depth: even though every caller passes a jobCardId that's
 // already been garage-verified (via ownedEstimate / ownedInvoice / the
@@ -536,6 +538,37 @@ export async function generateInvoiceAction(formData: FormData) {
     e.lines.filter((l) => !l.declined),
   );
 
+  // Cost-at-invoicing snapshot (AR 2026-08-12, corrects Step 6 of
+  // cost-based pricing). For any PART line with a catalog partId,
+  // read Part.cost RIGHT NOW and use that as the InvoiceLine.unitCost.
+  // Fall back to the estimate's stored EstimateLine.unitCost only when
+  // there's no partId (free-text lines have nothing to look up).
+  //
+  // The previous code copied EstimateLine.unitCost verbatim. That
+  // snapshotted the cost as it was when the ADVISOR priced the line,
+  // which could be days or weeks before the invoice. If a PO receipt
+  // between approval and invoicing shifted Part.cost (Step 3's blend),
+  // the invoice would reflect a stale number and per-invoice profit
+  // would silently be wrong.
+  //
+  // Reading here-and-now writes the correct value into InvoiceLine
+  // once and freezes it. Any later receipt affects only future
+  // invoices — closed invoices never rewrite. That's exactly the
+  // invariant AR asked for on 2026-08-12.
+  const partIdsInInvoice = Array.from(
+    new Set(mergedLines.map((l) => l.partId).filter((id): id is string => !!id)),
+  );
+  const partCostAtInvoicing = new Map<string, Prisma.Decimal>();
+  if (partIdsInInvoice.length > 0) {
+    const parts = await prisma.part.findMany({
+      where: { id: { in: partIdsInInvoice }, garageId: user.garageId },
+      select: { id: true, cost: true },
+    });
+    for (const p of parts) partCostAtInvoicing.set(p.id, p.cost);
+  }
+  const resolveLineCost = (l: (typeof mergedLines)[number]) =>
+    resolveInvoiceLineCost(l, partCostAtInvoicing);
+
   // ── Top-up path ───────────────────────────────────────────────────
   // If an invoice already exists for this job — typically because the
   // OLD pre-merge code generated one with only the clicked estimate's
@@ -573,17 +606,18 @@ export async function generateInvoiceAction(formData: FormData) {
         redirect(`/invoices/${existingInvoiceId}`);
       }
       // Add the missing lines + recompute totals + replace ledger rows.
-      // Cost snapshot (AR 2026-08-12 Step 6): copy EstimateLine.unitCost
-      // → InvoiceLine.unitCost so realized-margin reports work off the
-      // frozen invoice, not the still-editable estimate. Nullable — a
-      // line without cost data stays null.
+      // Cost snapshot (AR 2026-08-12, corrected): resolveLineCost re-reads
+      // Part.cost RIGHT NOW for lines with a catalog part, and falls back
+      // to the estimate's stored value only for free-text lines. Freezes
+      // the correct cost into the invoice so a later PO receipt never
+      // rewrites the profit on a job already closed.
       await prisma.invoiceLine.createMany({
         data: missing.map((l) => ({
           invoiceId: existingInvoiceId,
           kind: l.kind,
           description: l.description,
           qty: l.qty,
-          unitCost: l.unitCost,
+          unitCost: resolveLineCost(l),
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
           vatRate: l.vatRate,
@@ -665,15 +699,16 @@ export async function generateInvoiceAction(formData: FormData) {
           isoDate: now.toISOString(),
         }),
         lines: {
-          // AR 2026-08-12 Step 6 — cost snapshot. See the top-up path
-          // above for the reasoning. Both create sites carry the same
-          // shape so the invoice's cost data is consistent whether it
-          // was born fresh here or topped up from an earlier row.
+          // AR 2026-08-12, corrected — cost snapshot via resolveLineCost:
+          // re-reads Part.cost live for lines with a catalog part, so a
+          // PO receipt landing between estimate approval and invoicing
+          // flows through into this invoice's frozen unitCost. See the
+          // helper defined above for the full reasoning.
           create: mergedLines.map((l) => ({
             kind: l.kind,
             description: l.description,
             qty: l.qty,
-            unitCost: l.unitCost,
+            unitCost: resolveLineCost(l),
             unitPrice: l.unitPrice,
             lineTotal: l.lineTotal,
             vatRate: l.vatRate,

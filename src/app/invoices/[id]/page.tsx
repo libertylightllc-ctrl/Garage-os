@@ -35,7 +35,9 @@ import { appUrl } from "@/lib/whatsapp";
 // triggering the server-action export check.
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
-import { canEditInvoice } from "@/lib/permissions";
+import { canEditInvoice, canSeeMargin } from "@/lib/permissions";
+import { computeJobProfit } from "@/lib/job-profit";
+import { JobProfitCard } from "@/components/job-profit-card";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
@@ -149,6 +151,35 @@ export default async function InvoiceView({
     if (m) return { mode:"PERCENT"as const, value: Number(m[1]) };
     return { mode:"AMOUNT"as const, value: discountAmount };
   })();
+
+  // AR 2026-08-12 profit reporting Step 5 — per-job profit card.
+  // Advisor / owner / master only; canSeeMargin() gates the render.
+  // Data source is FROZEN (invoice lines' unitCost snapshotted at
+  // invoice generation, work-session snapshots frozen at close), so
+  // a later PO receipt or rate change never rewrites this number.
+  const canShowProfit = canSeeMargin(session.user.role);
+  const [workSessionsForProfit] = canShowProfit
+    ? await Promise.all([
+        prisma.workSession.findMany({
+          where: { jobCardId: inv.jobCardId, endedAt: { not: null } },
+          select: { laborCostSnapshot: true },
+        }),
+      ])
+    : [[] as { laborCostSnapshot: import("@/generated/prisma/client").Prisma.Decimal | null }[]];
+  const profit = canShowProfit
+    ? computeJobProfit(
+        inv.lines.map((l) => ({
+          kind: l.kind,
+          qty: l.qty,
+          lineTotal: l.lineTotal,
+          unitCost: l.unitCost,
+        })),
+        workSessionsForProfit,
+      )
+    : null;
+  const hasLabourRate =
+    inv.garage.defaultLaborHourlyCost !== null &&
+    inv.garage.defaultLaborHourlyCost !== undefined;
 
   return (
     <main data-print-document="invoice-edit" className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
@@ -803,6 +834,15 @@ export default async function InvoiceView({
           <dd className="text-end text-base font-semibold">{money(balance)}</dd>
         </dl>
       </div>
+
+      {/* Per-job profit card — advisor / owner / master only. Gated on
+          canSeeMargin(); print:hidden inside the component so it never
+          reaches paper. Never rendered on the customer /c/invoice/[id]
+          view (that page has a narrower DB select allowlist AND a
+          different render tree). */}
+      {profit ? (
+        <JobProfitCard profit={profit} t={t} hasLabourRate={hasLabourRate} />
+      ) : null}
 
       {/* Preview gate — replaces the direct Send-to-customer button per
           spec. The cashier must review the customer-facing render

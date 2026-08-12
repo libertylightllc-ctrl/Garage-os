@@ -94,4 +94,17 @@ describe("customer-facing pages — no cost/markup leakage", () => {
             expect(src, "whole estimate row passed as prop → cost leak surface").not.toMatch(/<[A-Z]\w*[^>]*\best=\{est\}/);
         },
     );
+
+    it.each(CUSTOMER_PAGES)(
+        "%s never renders the internal JobProfitCard",
+        (file) => {
+            const src = fs.readFileSync(path.resolve(file), "utf8");
+            // The profit card is advisor / owner / master only. It reads
+            // cost + margin figures that must not appear on any
+            // customer surface, even if a future dev accidentally imports
+            // the component here. Blocked by name so the pin lands in
+            // the same PR as the leak.
+            expect(src, "JobProfitCard imported on customer page").not.toMatch(/JobProfitCard/);
+        },
+    );
 });

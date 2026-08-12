@@ -32,6 +32,9 @@ import { loadJobTimeline } from "@/lib/job-timeline-server";
 import { buildTimelineLabels } from "@/lib/job-timeline-labels";
 import { jobTimeSummary } from "@/lib/work-session-reports";
 import { JobTimePanel } from "@/components/job-time-panel";
+import { canSeeMargin } from "@/lib/permissions";
+import { computeJobProfit } from "@/lib/job-profit";
+import { JobProfitCard } from "@/components/job-profit-card";
 
 export const dynamic ="force-dynamic";
 
@@ -116,6 +119,35 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     loadJobTimeline(job.id, session.user.garageId),
     jobTimeSummary(job.id),
   ]);
+
+  // AR 2026-08-12 profit reporting Step 5 — per-job profit card on
+  // the internal job page. Only rendered once an invoice exists —
+  // that's when InvoiceLine.unitCost is frozen, so before that the
+  // "profit" would just be an estimate against live catalog costs
+  // that could still move. Post-invoice numbers are stable.
+  const canShowProfit = canSeeMargin(session.user.role);
+  const profitInvoice = canShowProfit
+    ? await prisma.invoice.findFirst({
+        where: { jobCardId: id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          lines: { select: { kind: true, qty: true, lineTotal: true, unitCost: true } },
+          garage: { select: { defaultLaborHourlyCost: true } },
+        },
+      })
+    : null;
+  const profitSessions = profitInvoice
+    ? await prisma.workSession.findMany({
+        where: { jobCardId: id, endedAt: { not: null } },
+        select: { laborCostSnapshot: true },
+      })
+    : [];
+  const profit = profitInvoice
+    ? computeJobProfit(profitInvoice.lines, profitSessions)
+    : null;
+  const hasLabourRate =
+    profitInvoice?.garage.defaultLaborHourlyCost !== null &&
+    profitInvoice?.garage.defaultLaborHourlyCost !== undefined;
 
   const status = job.status as JobStatus;
   const heldFrom = (job.heldFrom ?? null) as JobStatus | null;
@@ -649,6 +681,14 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             </ul>
           ) : null}
         </div>
+      ) : null}
+
+      {/* Per-job profit card (advisor / owner / master only) — shown
+          once the job has an invoice (that's when unitCost is frozen).
+          Data-level gated by `profit` being non-null, which requires
+          canSeeMargin(role) AND profitInvoice existing. */}
+      {profit ? (
+        <JobProfitCard profit={profit} t={t} hasLabourRate={hasLabourRate} />
       ) : null}
 
       <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />

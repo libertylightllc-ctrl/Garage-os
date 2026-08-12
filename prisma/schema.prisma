@@ -1336,6 +1336,15 @@ model WorkSession {
   endedAt   DateTime? // null = live segment
   endReason String?   // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED
 
+  // AR 2026-08-12 profit reporting Step 4 — labour cost frozen at
+  // session close. Value = hours(session) × Garage.defaultLaborHourlyCost
+  // at the moment endedAt is written. Later rate changes never touch
+  // a closed session, so historical profit reports stay stable. Null
+  // means unknown (no rate set at close time, or a pre-Step-4 row);
+  // the profit card counts these into its Unknown bucket, never as
+  // "zero cost / 100% margin".
+  laborCostSnapshot Decimal? @db.Decimal(12, 2)
+
   @@index([jobCardId])
   @@index([techId, endedAt])
   @@index([garageId, endedAt])

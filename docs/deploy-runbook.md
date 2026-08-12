@@ -14,8 +14,36 @@ production **from a merge**. Both are needed.
 
 | | Branch | Domain | DB (Supabase project) | Purpose |
 |---|---|---|---|---|
-| **Staging** | `main` | `staging.garageos.shop` | `garageos-preview` (set up 2026-08-01) | Every push lands here first. Uses seeded demo data, not real customer records. |
+| **Staging** | `main` | Vercel auto-alias (see below) — `staging.garageos.shop` **not wired yet** | `garageos-preview` (set up 2026-08-01) | Every push lands here first. Uses seeded demo data, not real customer records. |
 | **Production** | `production` | `www.garageos.shop` / `garageos.shop` | `garageos` (Prod) | Only moves on an explicit fast-forward from `main`. Serves real shops. |
+
+**Staging URL — until the custom domain is wired.** Vercel auto-aliases
+every deployment. For `main` HEAD:
+
+- Branch alias (latest `main` deploy):
+  `https://garage-os-git-main-libertylightllc-ctrls-projects.vercel.app`
+- Commit-specific alias (pinned SHA):
+  `https://garage-os-<12-char-hash>-libertylightllc-ctrls-projects.vercel.app`
+
+If either 404s, the exact URLs are on the Vercel dashboard row for that
+deployment — the "URL" column shows both.
+
+**To make `staging.garageos.shop` real (one-time):**
+
+1. Vercel dashboard → `garage-os` project → **Settings** → **Domains** →
+   **Add** → `staging.garageos.shop` → attach to the **`main` branch**
+   (NOT Production).
+2. Add a CNAME at the DNS host for `garageos.shop`:
+
+   | Type  | Host      | Value                    |
+   |-------|-----------|--------------------------|
+   | CNAME | `staging` | `cname.vercel-dns.com`   |
+
+   Propagation is minutes. Vercel's Domains screen shows a "Valid" badge
+   once the CNAME resolves.
+
+After it's wired, delete this block and put the real URL back in the
+table above.
 
 The `production` branch is protected: no direct push, no force-push,
 no deletion, no admin override. Required check: `typecheck + vitest`

@@ -573,12 +573,17 @@ export async function generateInvoiceAction(formData: FormData) {
         redirect(`/invoices/${existingInvoiceId}`);
       }
       // Add the missing lines + recompute totals + replace ledger rows.
+      // Cost snapshot (AR 2026-08-12 Step 6): copy EstimateLine.unitCost
+      // → InvoiceLine.unitCost so realized-margin reports work off the
+      // frozen invoice, not the still-editable estimate. Nullable — a
+      // line without cost data stays null.
       await prisma.invoiceLine.createMany({
         data: missing.map((l) => ({
           invoiceId: existingInvoiceId,
           kind: l.kind,
           description: l.description,
           qty: l.qty,
+          unitCost: l.unitCost,
           unitPrice: l.unitPrice,
           lineTotal: l.lineTotal,
           vatRate: l.vatRate,
@@ -660,10 +665,15 @@ export async function generateInvoiceAction(formData: FormData) {
           isoDate: now.toISOString(),
         }),
         lines: {
+          // AR 2026-08-12 Step 6 — cost snapshot. See the top-up path
+          // above for the reasoning. Both create sites carry the same
+          // shape so the invoice's cost data is consistent whether it
+          // was born fresh here or topped up from an earlier row.
           create: mergedLines.map((l) => ({
             kind: l.kind,
             description: l.description,
             qty: l.qty,
+            unitCost: l.unitCost,
             unitPrice: l.unitPrice,
             lineTotal: l.lineTotal,
             vatRate: l.vatRate,

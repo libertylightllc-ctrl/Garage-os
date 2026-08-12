@@ -51,3 +51,32 @@ export function canEditInvoice(role: string | null | undefined): boolean {
 export function canSendEstimate(role: string | null | undefined): boolean {
   return !!role && SEND_ROLES.includes(role);
 }
+
+/**
+ * Margin visibility gate (AR 2026-08-12, profit-reporting Phase 1).
+ *
+ * Per AR's explicit rule: advisors and owners see cost + margin figures
+ * (advisors price + negotiate, so margin has to be visible while they
+ * work; owners run the shop and read the reports). Technicians and
+ * cashiers must never see cost or margin. And none of it ever appears
+ * on a customer-facing document, regardless of who's logged in — the
+ * customer-side gate is handled at the customer routes with select:
+ * allowlists (see src/lib/__tests__/customer-invoice-line-fields.
+ * test.ts), NOT by this helper.
+ *
+ * MASTER is included because AGENTS.md § MASTER makes it "advisor +
+ * tech + cashier under one login" — the advisor half of that is where
+ * pricing decisions happen, so the margin has to be visible for
+ * MASTER too. Same reason MASTER is in ESTIMATE_CREATE_ROLES above.
+ *
+ * Every current and future surface that could render cost, markup, or
+ * margin — the estimate line editor, the job profit card, the owner
+ * period widget, the per-part report — MUST call this helper before
+ * rendering the relevant column / row / value. String-grep-friendly
+ * name so a code review can find every gate site quickly.
+ */
+export const MARGIN_VIEW_ROLES: string[] = ["ADVISOR", "OWNER", "MASTER"];
+
+export function canSeeMargin(role: string | null | undefined): boolean {
+  return !!role && MARGIN_VIEW_ROLES.includes(role);
+}

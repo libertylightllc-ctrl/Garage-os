@@ -50,7 +50,7 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
     await page.fill('input[name="unitPrice"]', "300");
     await page
         .locator(
-            'form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button[type="submit"]',
+            'form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])',
         )
         .first()
         .click();
@@ -117,7 +117,7 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         // don't assert the button label — the doc kind on the
         // resulting PO is what matters — but scoping the click to
         // this form's submit prevents cross-form clicks.
-        await conversionForm.locator('button[type="submit"]').click();
+        await conversionForm.locator('button:not([type="button"])').click();
 
         // Step 12 — redirected to the new PO page.
         await ownerPage.waitForURL(/\/owner\/purchasing\/[a-z0-9]+$/, { timeout: 15_000 });

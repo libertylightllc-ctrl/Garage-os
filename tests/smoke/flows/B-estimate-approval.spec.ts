@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
-import { bookManualIntake } from "../support/flows";
+import {
+    bookManualIntake,
+    sendEstimateToCustomer,
+    sendJobForEstimate,
+} from "../support/flows";
 
 /**
  * Flow B — Estimate reaches APPROVED via the customer approval link.
@@ -27,6 +31,11 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     // Step 1 — intake.
     const { jobCardId } = await bookManualIntake(page, "B");
 
+    // Step 1b — tech claims + submits, so the job status flips to
+    // ESTIMATE and the advisor's "Create estimate" button appears.
+    // See sendJobForEstimate for why this is a separate context.
+    await sendJobForEstimate(browser, jobCardId);
+
     // Step 2 — advisor creates estimate. The button on the job detail
     // page submits createEstimateAction and redirects to /estimates/<id>.
     await page.goto(`/advisor/jobs/${jobCardId}`);
@@ -43,16 +52,17 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     await page.fill('input[name="unitPrice"]', "150");
     // Submit the add-line form (the button doesn't have a stable text
     // key, so scope by form action).
-    await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button[type="submit"]').first().click();
+    await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
     await page.waitForLoadState("networkidle");
 
-    // Step 4 — advisor clicks Send. The button has data-status="SENT"
-    // in the hidden input; scope by that.
-    await page.locator('form:has(input[name="status"][value="SENT"]) button').first().click();
-    await page.waitForLoadState("networkidle");
+    // Step 4 — advisor clicks Send. Send only fires from the preview
+    // page now (post-workflow-flip: prevents accidental one-tap sends
+    // from the edit view). Helper navigates there + submits.
+    await sendEstimateToCustomer(page, estimateId);
 
-    // Step 5 — grab the customer /c/estimate/<token> link. The advisor
-    // page renders it as part of the WhatsApp-send affordance.
+    // Step 5 — grab the customer /c/estimate/<token> link. It's on the
+    // preview page (where sendEstimateToCustomer left us) — no need
+    // to go back to the estimate editor for it.
     const customerHref = await page
         .locator('a[href*="/c/estimate/"]')
         .first()

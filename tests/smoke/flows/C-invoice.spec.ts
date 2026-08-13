@@ -34,7 +34,7 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     await page.selectOption('select[name="kind"]', "LABOR");
     await page.fill('input[name="description"], textarea[name="description"]', "Smoke C — labour line");
     await page.fill('input[name="unitPrice"]', "200");
-    await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button[type="submit"]').first().click();
+    await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
     await page.waitForLoadState("networkidle");
 
     // Step 4 — SEND.
@@ -87,7 +87,7 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
             .first();
         await paymentForm.locator('input[name="amount"]').fill("210.00");
         await paymentForm.locator('select[name="method"]').selectOption("CASH");
-        await paymentForm.locator('button[type="submit"]').click();
+        await paymentForm.locator('button:not([type="button"])').click();
         await cashierPage.waitForLoadState("networkidle");
 
         // Step 9 — assert PAID on the invoice detail page.

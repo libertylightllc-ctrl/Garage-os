@@ -397,11 +397,16 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                       kind: l.kind,
                       description: l.description,
                       qty: Number(l.qty),
-                      // AR 2026-08-12 — cost + markup pass through as
-                      // nullable numbers; the client component decides
-                      // whether to render the tri-input based on kind.
-                      unitCost: l.unitCost == null ? null : Number(l.unitCost),
-                      markupPct: l.markupPct == null ? null : Number(l.markupPct),
+                      // Role-gated (same rule as the mobile-card mapping
+                      // ~line 330). Cashier + tech get null so the RSC
+                      // payload for the desktop table row carries no
+                      // supplier cost or markup. Missing this gate was
+                      // the second-mapping leak that shipped in commit
+                      // 7b3b8c9 — mobile was fixed, desktop was not,
+                      // and the RSC payload contains BOTH regardless of
+                      // which one CSS reveals.
+                      unitCost: canShowCost && l.unitCost != null ? Number(l.unitCost) : null,
+                      markupPct: canShowCost && l.markupPct != null ? Number(l.markupPct) : null,
                       unitPrice: Number(l.unitPrice),
                       lineTotal: Number(l.lineTotal),
                       declined: l.declined,

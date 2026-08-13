@@ -1,9 +1,9 @@
 name: Smoke tests (staging)
-# ↑↑↑ REQUIRED-STATUS-CHECK CONTRACT — do not rename without also
-#     updating the branch protection rule on `production`. The exact
-#     string "Smoke tests (staging)" is what GitHub matches against
-#     the required checks list. Renaming here without renaming there
-#     silently opens the gate.
+# ↑↑↑ Workflow display name — shown in the Actions UI, but this is
+#     NOT what branch protection matches against. The required-status-
+#     check name comes from the JOB name (see the `smoke:` block below),
+#     which for us is the string `smoke`. Rename this line freely; the
+#     required check binding lives on the job, not here.
 
 on:
   push:
@@ -53,10 +53,24 @@ jobs:
           exit 1
 
   smoke:
-    # ↑↑↑ This is the job name that appears in the required-check
-    # list — GitHub concatenates workflow name + job name as
-    # "Smoke tests (staging) / smoke". Keep the workflow name stable
-    # so the concat stays stable.
+    # ↑↑↑ REQUIRED-STATUS-CHECK CONTRACT.
+    #
+    # This job's `name` (below) is what GitHub Actions publishes as the
+    # check-run name, and that string is what branch protection on
+    # `production` matches against. The exact required context is:
+    #
+    #     smoke
+    #
+    # NOT "Smoke tests (staging)" (that's the workflow display name),
+    # and NOT "Smoke tests (staging) / smoke" (that's the concatenated
+    # label GitHub shows on the PR UI — the check API only carries the
+    # bare job name).
+    #
+    # If branch protection is configured against the workflow name or
+    # the display concat, no check will ever match, and every merge to
+    # `production` is silently blocked forever (the required context
+    # never appears green). Renaming this job — or its `name:` field —
+    # is what would actually break the gate.
     name: smoke
     needs: wait-for-vercel
     runs-on: ubuntu-latest

@@ -68,7 +68,7 @@ async function isFirstInWindow(): Promise<boolean> {
     return priorBilling === 0;
 }
 
-interface AlertPayload {
+interface ExhaustedPayload {
     type: "AI_CREDIT_EXHAUSTED";
     at: string;
     garageId: string;
@@ -78,7 +78,20 @@ interface AlertPayload {
     hint: string;
 }
 
-function buildPayload(ctx: BillingAlertContext): AlertPayload {
+interface LowBalancePayload {
+    type: "AI_CREDIT_LOW";
+    at: string;
+    topupUsd: number;
+    spentUsd: number;
+    remainingUsd: number;
+    dailyBurnUsd: number;
+    daysLeft: number;
+    hint: string;
+}
+
+type AlertPayload = ExhaustedPayload | LowBalancePayload;
+
+function buildPayload(ctx: BillingAlertContext): ExhaustedPayload {
     // Trim the API message — Anthropic error strings can carry ~500
     // chars of guidance; the webhook consumer doesn't need all of it.
     const msg = ctx.apiMessage.slice(0, 300);
@@ -145,5 +158,42 @@ export async function sendBillingAlertIfNeeded(
     } catch (e) {
         const m = e instanceof Error ? e.message : String(e);
         console.error(`[GARAGE_OS_ALERT] sendBillingAlertIfNeeded threw: ${m}`);
+    }
+}
+
+/**
+ * Option B — proactive low-balance alert. Called from the nightly
+ * cron endpoint after computing the projection. NO dedup here: the
+ * cron runs once daily by construction, so at most one alert per day
+ * per environment, which is the right cadence for "you should top up
+ * this week" reminders. Same two channels as the reactive alert
+ * (console.error prefix + optional webhook), same never-throws
+ * contract, same JSON payload shape modulo `type`.
+ */
+export async function sendLowBalanceAlert(projection: {
+    topupUsd: number;
+    spentUsd: number;
+    remainingUsd: number;
+    dailyBurnUsd: number;
+    daysLeft: number;
+}): Promise<void> {
+    try {
+        const payload: LowBalancePayload = {
+            type: "AI_CREDIT_LOW",
+            at: new Date().toISOString(),
+            topupUsd: projection.topupUsd,
+            spentUsd: projection.spentUsd,
+            remainingUsd: projection.remainingUsd,
+            dailyBurnUsd: projection.dailyBurnUsd,
+            daysLeft: projection.daysLeft,
+            hint: `Estimated ${projection.daysLeft.toFixed(1)} days of Anthropic credit left at current burn (~$${projection.dailyBurnUsd.toFixed(2)}/day). Top up before OCR starts refusing intakes.`,
+        };
+        console.error(
+            `[GARAGE_OS_ALERT] AI_CREDIT_LOW daysLeft=${payload.daysLeft.toFixed(1)} remainingUsd=${payload.remainingUsd.toFixed(2)} dailyBurnUsd=${payload.dailyBurnUsd.toFixed(2)}`,
+        );
+        await postWebhook(payload);
+    } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        console.error(`[GARAGE_OS_ALERT] sendLowBalanceAlert threw: ${m}`);
     }
 }

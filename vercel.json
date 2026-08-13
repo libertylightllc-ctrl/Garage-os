@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["sin1"],
-  "installCommand": "npm ci"
+  "installCommand": "npm ci",
+  "crons": [
+    {
+      "path": "/api/cron/ai-credit-check",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }

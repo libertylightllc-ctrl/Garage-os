@@ -80,11 +80,17 @@ export default async function SettingsPage({
 
   const role = session.user.role as StaffRole;
   const isOwner = role === "OWNER";
+  // OWNER + MASTER may set the Pricing defaults (parts markup + labour
+  // hourly cost). MASTER runs the shop day-to-day and sees the profit
+  // card on the invoice page; if MASTER can't set the two inputs the
+  // card depends on, the "set labour rate" link becomes a dead-end
+  // (AR 2026-08-14, widened via requireOperational() on both actions).
+  const isOperational = isOwner || role === "MASTER";
 
-  // Owners see the Garage details section, which currently surfaces the
-  // logoUrl. Reading conditionally so non-owners' page render doesn't
-  // hit the DB for a value they wouldn't see anyway.
-  const garage = isOwner
+  // Load garage row for either owner section (logo) or operational
+  // section (pricing defaults). Single query covers both — the three
+  // fields are tiny and it keeps the branching in the JSX below.
+  const garage = isOperational
     ? await prisma.garage.findUnique({
         where: { id: session.user.garageId },
         select: {
@@ -190,9 +196,9 @@ export default async function SettingsPage({
         </div>
       </section>
 
-      {/* Owner-only sections — gated server-side. Non-owners never see this
+      {/* Owner-only: Garage details (logo). Non-owners never see this
           markup at all, so there's no information leak even before the
-          owner-only actions independently verify role. */}
+          removeGarageLogoAction verifies role. */}
       {isOwner ? (
         <>
           {/* Garage details — Phase C of the per-garage logo upload.
@@ -230,11 +236,19 @@ export default async function SettingsPage({
               ) : null}
             </div>
           </section>
+        </>
+      ) : null}
 
-          {/* Pricing defaults — cost-based estimate pricing hint used
-              by the advisor's line editor at line-create time. Internal
-              to the shop; never appears on customer-facing surfaces.
-              (AR 2026-08-12.) */}
+      {/* Pricing defaults — cost-based estimate pricing hint used by
+          the advisor's line editor at line-create time, and the labour
+          hourly cost that feeds the profit card. Internal to the shop;
+          never appears on customer-facing surfaces. Widened to MASTER
+          2026-08-14 (AR): MASTER creates estimates AND sees the profit
+          card on the invoice page, so both inputs need to be reachable
+          from that seat. Actions guarded by requireOperational();
+          pinned by master-owner-boundary.test.ts. */}
+      {isOperational ? (
+        <>
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">
               {t("settingsSecPricing")}
@@ -320,7 +334,13 @@ export default async function SettingsPage({
               </p>
             </form>
           </section>
+        </>
+      ) : null}
 
+      {/* Team management — links to /owner/staff, which stays strictly
+          OWNER-only (staff CRUD is admin, not operational). */}
+      {isOwner ? (
+        <>
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">{t("settingsSecTeam")}</h2>
             <p className="mt-0.5 text-xs text-text-mute">{t("settingsSecTeamHint")}</p>

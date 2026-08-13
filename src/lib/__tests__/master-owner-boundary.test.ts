@@ -79,6 +79,13 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // Estimate → PO conversion (docs/Estimate-to-PO-Spec.md). MASTER runs
   // the operational floor and owns the from-estimate flow end-to-end.
   { file: "src/app/actions/purchasing.ts", action: "createPoFromEstimateAction" },
+  // Pricing defaults on /settings (parts markup %, labour hourly cost).
+  // Both feed the profit card on the invoice page, which MASTER sees;
+  // AR 2026-08-14 hit the "set labour rate" link as MASTER and found
+  // an owner-only /settings page with no field. Widening the page
+  // without the actions makes the form a trap — pin it here.
+  { file: "src/app/actions/settings.ts", action: "updateDefaultPartsMarkupAction" },
+  { file: "src/app/actions/settings.ts", action: "updateDefaultLaborHourlyCostAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER

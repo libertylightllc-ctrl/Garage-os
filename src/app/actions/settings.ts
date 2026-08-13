@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireOperational } from "@/lib/action-guards";
 
 // Self-serve account/garage settings. Each action is keyed to
 // session.user.id (or session.user.garageId for owner-only actions) —
@@ -99,26 +100,25 @@ export async function updateProfileEmailAction(formData: FormData) {
 }
 
 /**
- * Owner-only: shop-wide default markup for parts on estimate lines
- * (AR 2026-08-12). The stored value is a HINT used to prefill the
- * per-line markupPct at line-create time. Existing lines are never
- * touched. Cleared (empty input) → nullable, back to "advisor sets
- * per line".
+ * Operational: shop-wide default markup for parts on estimate lines
+ * (AR 2026-08-12; widened to MASTER 2026-08-14). The stored value is
+ * a HINT used to prefill the per-line markupPct at line-create time.
+ * Existing lines are never touched. Cleared (empty input) → nullable,
+ * back to "advisor sets per line".
  *
  * Constraints (matched to schema Decimal(5,2)):
  *   - 0 ≤ value ≤ 999.99 %
  *   - up to 2 decimal places (form input coerces via toFixed)
  *
- * Role gate: only OWNER may change shop-wide pricing config. MASTER
- * runs the shop day-to-day but this is a finance-touching setting;
- * we keep it owner-only per the same rule as billing / TRN edits.
- * Non-owner callers get a role-error redirect; the form isn't
- * rendered on their /settings page in the first place.
+ * Role gate: OWNER + MASTER via requireOperational() — MASTER is the
+ * do-everything operational login and MASTER-signed-in users create
+ * estimates too, so the default has to be reachable from that seat or
+ * the profit-card link on the invoice page becomes a dead-end (AR
+ * 2026-08-14). Pinned by master-owner-boundary.test.ts. The form
+ * isn't rendered on non-operational /settings pages in the first place.
  */
 export async function updateDefaultPartsMarkupAction(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  if (session.user.role !== "OWNER") back("role");
+  const session = await requireOperational();
 
   const raw = String(formData.get("defaultPartsMarkupPct") ?? "").trim();
   // Empty → clear (nullable). Blank input is a valid intent: "no
@@ -134,7 +134,7 @@ export async function updateDefaultPartsMarkupAction(formData: FormData) {
   // Scoped to the caller's own garage — never trusts a garageId in
   // formData, same pattern as the other owner-scoped actions above.
   await prisma.garage.update({
-    where: { id: session.user.garageId },
+    where: { id: session.garageId },
     data: { defaultPartsMarkupPct: value },
   });
 
@@ -143,11 +143,13 @@ export async function updateDefaultPartsMarkupAction(formData: FormData) {
 }
 
 /**
- * Owner-only: shop-wide default hourly cost of labour (AR 2026-08-12,
- * profit reporting Phase 1, option B). Used to convert WorkSession
- * time-on-job into a labour cost so parts + labour profit can be
- * reported per job / period. See schema comment on
- * Garage.defaultLaborHourlyCost.
+ * Operational: shop-wide default hourly cost of labour (AR 2026-08-12,
+ * profit reporting Phase 1, option B; widened to MASTER 2026-08-14
+ * after AR — signed in as MASTER — hit the profit-card "set labour
+ * rate" link and found an OWNER-only /settings page with no field).
+ * Used to convert WorkSession time-on-job into a labour cost so parts
+ * + labour profit can be reported per job / period. See schema
+ * comment on Garage.defaultLaborHourlyCost.
  *
  * Constraints (matched to schema Decimal(12,2)):
  *   - 0 ≤ value; upper bound is generous (up to 999999.99) because a
@@ -158,11 +160,12 @@ export async function updateDefaultPartsMarkupAction(formData: FormData) {
  *
  * Blank → clears to null (owner deliberately opts out of labour cost
  * → labour profit rendered as "unknown", not zero).
+ *
+ * Role gate: OWNER + MASTER via requireOperational(). Pinned by
+ * master-owner-boundary.test.ts.
  */
 export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-  if (session.user.role !== "OWNER") back("role");
+  const session = await requireOperational();
 
   const raw = String(formData.get("defaultLaborHourlyCost") ?? "").trim();
   let value: number | null = null;
@@ -174,7 +177,7 @@ export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
   }
 
   await prisma.garage.update({
-    where: { id: session.user.garageId },
+    where: { id: session.garageId },
     data: { defaultLaborHourlyCost: value },
   });
 

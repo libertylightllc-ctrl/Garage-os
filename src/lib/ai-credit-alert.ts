@@ -89,7 +89,17 @@ interface LowBalancePayload {
     hint: string;
 }
 
-type AlertPayload = ExhaustedPayload | LowBalancePayload;
+interface StaleTopupPayload {
+    type: "AI_CREDIT_TOPUP_STALE";
+    at: string;
+    topupUsd: number;
+    spentUsd: number;
+    /** Always negative when this alert fires — that's the whole trigger. */
+    remainingUsd: number;
+    hint: string;
+}
+
+type AlertPayload = ExhaustedPayload | LowBalancePayload | StaleTopupPayload;
 
 function buildPayload(ctx: BillingAlertContext): ExhaustedPayload {
     // Trim the API message — Anthropic error strings can carry ~500
@@ -170,6 +180,41 @@ export async function sendBillingAlertIfNeeded(
  * (console.error prefix + optional webhook), same never-throws
  * contract, same JSON payload shape modulo `type`.
  */
+/**
+ * Fires when computed `remainingUsd` goes negative — a hard signal
+ * that `AI_CREDIT_TOTAL_TOPUP_USD` is stale. The cron uses this
+ * INSTEAD of the low-balance alert in that case; a stale figure
+ * makes daysLeft meaningless, so pinging "you have 0 days left"
+ * every night is worse than useless. Same never-throws contract.
+ *
+ * No dedup at helper level — cron fires once per day by construction,
+ * and while the figure remains stale a daily nag is exactly the right
+ * cadence (get AR to update the env var).
+ */
+export async function sendStaleTopupAlert(context: {
+    topupUsd: number;
+    spentUsd: number;
+    remainingUsd: number;
+}): Promise<void> {
+    try {
+        const payload: StaleTopupPayload = {
+            type: "AI_CREDIT_TOPUP_STALE",
+            at: new Date().toISOString(),
+            topupUsd: context.topupUsd,
+            spentUsd: context.spentUsd,
+            remainingUsd: context.remainingUsd,
+            hint: `AI_CREDIT_TOTAL_TOPUP_USD ($${context.topupUsd.toFixed(2)}) is less than measured spend ($${context.spentUsd.toFixed(2)}). Either a top-up wasn't recorded, or the env var lags behind reality. Update it (Vercel env → redeploy) to restore the daysLeft projection.`,
+        };
+        console.error(
+            `[GARAGE_OS_ALERT] AI_CREDIT_TOPUP_STALE topupUsd=${payload.topupUsd.toFixed(2)} spentUsd=${payload.spentUsd.toFixed(2)} remainingUsd=${payload.remainingUsd.toFixed(2)}`,
+        );
+        await postWebhook(payload);
+    } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        console.error(`[GARAGE_OS_ALERT] sendStaleTopupAlert threw: ${m}`);
+    }
+}
+
 export async function sendLowBalanceAlert(projection: {
     topupUsd: number;
     spentUsd: number;

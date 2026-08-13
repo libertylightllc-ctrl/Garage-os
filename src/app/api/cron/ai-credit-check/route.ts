@@ -21,7 +21,10 @@
  */
 import { NextResponse } from "next/server";
 import { computeAiCreditProjection } from "@/lib/ai-credit-balance";
-import { sendLowBalanceAlert } from "@/lib/ai-credit-alert";
+import {
+    sendLowBalanceAlert,
+    sendStaleTopupAlert,
+} from "@/lib/ai-credit-alert";
 
 const DEFAULT_ALERT_DAYS = 7;
 
@@ -52,19 +55,35 @@ export async function GET(req: Request): Promise<Response> {
     // Decide alert vs skip. Reason string is returned in the response
     // so a manual GET tells ops exactly why an alert did or didn't
     // fire — same shape as the projection field for easy JSON parsing.
-    let alerted = false;
+    //
+    // Two mutually-exclusive alert types:
+    //   AI_CREDIT_TOPUP_STALE — fires when remainingUsd < 0, meaning
+    //     measured spend exceeds the recorded topup total. Almost
+    //     always: AR topped up but forgot to bump the env var.
+    //     Firing low-balance in that state would spam nightly with a
+    //     meaningless "0 days left" — replace it with a "your figure
+    //     is stale" nag instead (defense-in-depth against the manual
+    //     env-var-lags-reality failure mode AR flagged 2026-08-14).
+    //   AI_CREDIT_LOW — the normal projection alert.
+    let alerted: false | "low" | "stale" = false;
     let reason: string;
     if (!projection.topupConfigured) {
         reason =
             "AI_CREDIT_TOTAL_TOPUP_USD is not set — projection meaningless, alert skipped.";
     } else if (!thresholdValid) {
         reason = `AI_CREDIT_ALERT_DAYS_THRESHOLD is invalid ("${rawThreshold}") — alert skipped.`;
+    } else if (projection.remainingUsd < 0) {
+        // Stale figure. Fire the distinct stale-topup alert; skip
+        // the low-balance one entirely.
+        await sendStaleTopupAlert(projection);
+        alerted = "stale";
+        reason = `remainingUsd ($${projection.remainingUsd.toFixed(2)}) is negative — AI_CREDIT_TOTAL_TOPUP_USD looks stale (measured spend exceeds recorded topups). Stale-topup alert sent; low-balance alert suppressed.`;
     } else if (!Number.isFinite(projection.daysLeft)) {
         reason =
             "No AiEvent activity in the last 7 days — daily burn is zero, projection meaningless, alert skipped.";
     } else if (projection.daysLeft < threshold) {
         await sendLowBalanceAlert(projection);
-        alerted = true;
+        alerted = "low";
         reason = `daysLeft (${projection.daysLeft.toFixed(1)}) < threshold (${threshold}) — alert sent.`;
     } else {
         reason = `daysLeft (${projection.daysLeft.toFixed(1)}) >= threshold (${threshold}) — no alert needed.`;

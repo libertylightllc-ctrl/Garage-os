@@ -20,6 +20,7 @@ import { balanceDue } from "@/lib/billing";
 import {
   canEditEstimate as roleCanEditEstimate,
   canEditInvoice as roleCanEditInvoice,
+  canSeeMargin,
 } from "@/lib/permissions";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { EstimateLineRow } from "@/components/estimate-line-row";
@@ -84,6 +85,14 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
   // estimate editor (and how incident ref 3426515655 happened server-side).
   const canEditEstimate = roleCanEditEstimate(role);
   const canInvoice = roleCanEditInvoice(role);
+  // AR 2026-08-14 — cost / markup / margin are advisor + owner + master
+  // only. Cashier can open this page to generate an invoice, but MUST
+  // NOT see supplier cost or margin (same rule as the customer surface,
+  // just enforced role-side instead of token-side). Data-level: when
+  // false, the server nulls unitCost + markupPct BEFORE handing the
+  // line to the client component, so RSC payload carries no cost
+  // number for the cashier's browser to view-source out of.
+  const canShowCost = canSeeMargin(role);
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -298,6 +307,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                 key={l.id}
                 estimateId={est.id}
                 editable={editable}
+                canShowCost={canShowCost}
                 canDecline={canDecline}
                 vehicle={{
                   make: est.jobCard.vehicle.make,
@@ -312,8 +322,13 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                   // AR 2026-08-12 — cost + markup pass through as
                   // nullable numbers; the client component decides
                   // whether to render the tri-input based on kind.
-                  unitCost: l.unitCost == null ? null : Number(l.unitCost),
-                  markupPct: l.markupPct == null ? null : Number(l.markupPct),
+                  // AR 2026-08-14 — role-gated. Cashier + tech get
+                  // null here so the RSC payload carries no supplier
+                  // cost or markup. The client component honours
+                  // canShowCost as belt-and-braces (renders the
+                  // plain qty+unit form when false).
+                  unitCost: canShowCost && l.unitCost != null ? Number(l.unitCost) : null,
+                  markupPct: canShowCost && l.markupPct != null ? Number(l.markupPct) : null,
                   unitPrice: Number(l.unitPrice),
                   lineTotal: Number(l.lineTotal),
                   declined: l.declined,
@@ -369,6 +384,7 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
                     key={l.id}
                     estimateId={est.id}
                     editable={editable}
+                    canShowCost={canShowCost}
                     canDecline={canDecline}
                     vehicle={{
                       make: est.jobCard.vehicle.make,

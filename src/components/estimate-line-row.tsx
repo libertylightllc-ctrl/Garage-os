@@ -39,6 +39,16 @@ export interface LineProps {
     estimateId: string;
     editable: boolean;
     canDecline: boolean;
+    /**
+     * Whether the current viewer is allowed to see cost + markup +
+     * margin. False for cashier + tech; true for advisor + owner +
+     * master. When false, PART lines render the plain qty + unit
+     * price form (same shape as LABOR / FEE) — no cost, markup, or
+     * margin cell — AND the server-side prop map has already nulled
+     * out `line.unitCost` and `line.markupPct` so the RSC payload
+     * itself carries no cost number. Belt-and-braces (AR 2026-08-14).
+     */
+    canShowCost: boolean;
     /** Total number of columns in the parent table — used by the
      *  editing-mode row's <td colspan> so the inline form spans the
      *  full width without breaking the column grid. */
@@ -88,6 +98,7 @@ export function EstimateLineRow({
     estimateId,
     editable,
     canDecline,
+    canShowCost,
     columnCount,
     labels,
 }: LineProps) {
@@ -112,7 +123,11 @@ export function EstimateLineRow({
     // exactly what's in the DB.
     const editDefault = stripVehicleLabel(line.description, vehicle.make, vehicle.model);
 
-    const isPart = line.kind === "PART";
+    // isPart drives the cost/markup/margin tri-input branch. A PART
+    // line viewed by cashier / tech (canShowCost === false) routes to
+    // the plain qty + unit form instead, so no cost cell renders and
+    // no cost value reaches the DOM.
+    const isPart = line.kind === "PART" && canShowCost;
     const valueClass = line.declined
         ? "line-through text-text-mute"
         : "";

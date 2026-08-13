@@ -33,6 +33,16 @@ export interface CardProps {
     estimateId: string;
     editable: boolean;
     canDecline: boolean;
+    /**
+     * Whether the current viewer is allowed to see cost + markup +
+     * margin. False for cashier + tech; true for advisor + owner +
+     * master. When false, PART lines render the plain qty + unit
+     * price form (same shape as LABOR / FEE) — no cost, markup, or
+     * margin cell — AND the server-side prop map has already nulled
+     * out `line.unitCost` and `line.markupPct` so the RSC payload
+     * itself carries no cost number. Belt-and-braces (AR 2026-08-14).
+     */
+    canShowCost: boolean;
     labels: {
         edit: string;
         delete: string;
@@ -88,6 +98,7 @@ export function EstimateLineCard({
     estimateId,
     editable,
     canDecline,
+    canShowCost,
     labels,
 }: CardProps) {
     const [editing, setEditing] = useState(false);
@@ -104,7 +115,11 @@ export function EstimateLineCard({
     );
     const editDefault = stripVehicleLabel(line.description, vehicle.make, vehicle.model);
 
-    const isPart = line.kind === "PART";
+    // isPart drives the cost/markup/margin tri-input branch. A PART
+    // line viewed by cashier / tech (canShowCost === false) routes to
+    // the plain qty + unit form instead, so no cost cell renders and
+    // no cost value reaches the DOM.
+    const isPart = line.kind === "PART" && canShowCost;
     const valueClass = line.declined ? "line-through text-text-mute" : "";
 
     // Compact one-line vehicle label for the card header. Hide entirely

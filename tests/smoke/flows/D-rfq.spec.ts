@@ -132,13 +132,15 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         }
         await conversionForm.locator('select[name="supplierId"]').selectOption({ label: "Demo Parts Supplier" });
 
-        // Step 11 — submit. The button label switches to "Create
-        // request for quotation" when at least one included line is
-        // unpriced (client component from-estimate-submit.tsx). We
-        // don't assert the button label — the doc kind on the
-        // resulting PO is what matters — but scoping the click to
-        // this form's submit prevents cross-form clicks.
-        await conversionForm.locator('button:not([type="button"])').click();
+        // Step 11 — submit. Two buttons now (AR 2026-08-14): "Create
+        // quotation" (always enabled) and "Create purchase order"
+        // (disabled while any included line has no cost). Flow D's
+        // hand-typed line has NO unitCost, so the PO button is
+        // disabled and we click Quotation — the intent this flow
+        // is testing.
+        await conversionForm
+            .getByRole("button", { name: /Create quotation/i })
+            .click();
 
         // Step 12 — redirected to the new PO page.
         await ownerPage.waitForURL(/\/owner\/purchasing\/[a-z0-9]+$/, { timeout: 15_000 });

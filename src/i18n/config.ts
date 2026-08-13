@@ -371,6 +371,11 @@ const en = {
   skippedDeclinedHeader: "{count} part(s) declined by the customer",
   createDraftPoFromEstimate: "Create draft PO",
   createRfqFromEstimate: "Create request for quotation",
+  // Rendered under the "Create purchase order" button on
+  // /owner/purchasing/from-estimate when any included line is
+  // unpriced. `{n}` is substituted client-side with the count.
+  poRequiresAllPricedReason:
+    "Purchase order needs every included line priced — {n} still without a cost. Type a cost, or click Create quotation to send a request instead.",
   lineUnpricedTag: "quote please",
   approxTotal: "Approx. total",
   addPoLine: "Add line",
@@ -1845,6 +1850,8 @@ const ar: typeof en = {
   skippedDeclinedHeader: "{count} قطعة رفضها العميل",
   createDraftPoFromEstimate: "إنشاء مسودة أمر شراء",
   createRfqFromEstimate: "إنشاء طلب عرض سعر",
+  poRequiresAllPricedReason:
+    "أمر الشراء يتطلب سعرًا لكل بند مضمّن — {n} بدون سعر حتى الآن. أدخل السعر، أو انقر إنشاء طلب عرض سعر لإرسال طلب بدلاً من ذلك.",
   lineUnpricedTag: "برجاء إفادتنا بالسعر",
   approxTotal: "إجمالي تقريبي",
   addPoLine: "إضافة بند",

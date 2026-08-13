@@ -4,42 +4,59 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /**
- * The from-estimate conversion screen's submit control + approx-total.
+ * The from-estimate conversion screen's submit controls + approx-total.
  *
- * Uniquely among the five PO/RFQ surfaces, this one reads a form
- * IN PROGRESS: the advisor may edit prefilled costs before clicking.
- * A server-rendered label computed from prefills gets stale the
- * moment the advisor touches a cost input. This component subscribes
- * to the form's live cost inputs and re-classifies each render — so
- * the button reads "Create draft PO" the instant every cost goes
- * positive, and "Create request for quotation" if even one line
- * still reads 0 (or blank / negative / non-numeric).
+ * Two-button UX (AR 2026-08-14). Matches /owner/purchasing's index,
+ * where "New quotation" and "New purchase order" are separate buttons
+ * that steer /owner/purchasing/new via ?mode=. Here they're two
+ * submits on the same form, differentiated by name="intent":
  *
- * The classifier itself is not duplicated: the rule (any unpriced
- * line → RFQ, empty → RFQ) is the same as `poDocKind` in
- * @/lib/po-doc-kind, applied to the currently-typed values. The
- * empty-total suppression matches the other four surfaces' rule.
+ *   Quotation  — always enabled. Owner is asking the supplier what it
+ *                costs; blanks are legitimate. Server accepts blank
+ *                unitCost on any included line.
+ *   Purchase   — disabled while any INCLUDED line has no cost. Reason
+ *   Order        rendered below the button (not just in the disabled
+ *                tooltip) so a touch-first user sees exactly why they
+ *                can't tap it. Server also rejects intent=po with any
+ *                blank cost as belt-and-braces against a client bypass.
  *
- * Both the button and the approx-total live inside the same form,
- * so this component is placed inside the form JSX. It listens to
- * "input" events on the form's `input[name^="cost_"]` boxes.
+ * The include-checkbox state is watched too — unchecking a blank-cost
+ * line re-enables the PO button, because that line no longer counts.
  *
- * Initial render is server-side: `document` is not defined, so the
- * classifier defaults to RFQ (the empty-doc default). Once the
- * client hydrates and the effect runs, the state jumps to the true
- * live values.
+ * Initial (SSR) state is passed in as `unpricedIncludedInitial` /
+ * `approxTotalInitial` so the buttons render correctly before hydration
+ * — otherwise the PO button flickers enabled → disabled on load.
+ * After hydration, the effect subscribes to form input + change events
+ * and recomputes on every keystroke / tick.
+ *
+ * The `id="from-estimate-form"` attribute on the parent form is what
+ * this component's effect keys off — if the page renames or drops
+ * that id, this component's cost-live-view stops working (buttons
+ * stay in their SSR-computed state).
  */
 export function FromEstimateSubmit(props: {
+    /** Overall disable (e.g., no suppliers configured). Beats intent-specific gates. */
     disabled: boolean;
-    /** "Approx. total" label — parent passes t("approxTotal") value. */
+    /** "Create quotation" — parent passes t("createQuotation"). */
+    labelRfq: string;
+    /** "Create purchase order" — parent passes t("createPurchaseOrder"). */
+    labelPo: string;
+    /** "Approx. total" — parent passes t("approxTotal"). */
     approxTotalLabel: string;
-    /** BCP-47 locale for the currency formatter (e.g. "en-AE" / "ar-AE"). */
+    /**
+     * Template for the visible reason under the PO button when any
+     * included line has no cost. Must contain the literal "{n}", which
+     * this component substitutes with the count.
+     */
+    poDisabledReasonTemplate: string;
+    /** SSR-time count of included lines with no prefilled cost. */
+    unpricedIncludedInitial: number;
+    /** SSR-time sum of qty × cost across priced included lines. */
+    approxTotalInitial: number;
+    /** BCP-47 locale for the currency formatter (e.g. "en-AE"). */
     locale: string;
     /** ISO 4217 currency code (AED for the UAE-only Phase 1). */
     currency: string;
-    /** Button labels — parent passes both, we swap live. */
-    labelPo: string;
-    labelRfq: string;
 }) {
     const formatMoney = useMemo(
         () =>
@@ -50,78 +67,112 @@ export function FromEstimateSubmit(props: {
         [props.locale, props.currency],
     );
 
-    // Doc kind + total live in state — recomputed by the effect on
-    // every keystroke, never during render. Initial (SSR + first
-    // client render) defaults to RFQ / 0 so we don't touch `document`
-    // where it isn't defined; the effect runs after mount and updates
-    // to the true live values.
-    const [state, setState] = useState<{ isRfq: boolean; total: number }>({
-        isRfq: true,
-        total: 0,
+    const [state, setState] = useState<{
+        unpricedIncluded: number;
+        total: number;
+    }>({
+        unpricedIncluded: props.unpricedIncludedInitial,
+        total: props.approxTotalInitial,
     });
 
     useEffect(() => {
-        const btn = document.getElementById("from-estimate-submit-btn");
-        const form = btn?.closest("form");
+        const form = document.getElementById(
+            "from-estimate-form",
+        ) as HTMLFormElement | null;
         if (!form) return;
         const reclassify = () => {
             const costEls = Array.from(
                 form.querySelectorAll<HTMLInputElement>('input[name^="cost_"]'),
             );
-            if (costEls.length === 0) {
-                setState({ isRfq: true, total: 0 });
-                return;
-            }
-            let allPriced = true;
+            let unpriced = 0;
             let sum = 0;
             for (const el of costEls) {
                 const suffix = el.name.slice("cost_".length);
+                // Skip lines the owner unchecked — the server also
+                // filters against `include`, so an unchecked line
+                // shouldn't gate the PO button.
+                const includeEl = form.querySelector<HTMLInputElement>(
+                    `input[name="include"][value="${suffix}"]`,
+                );
+                if (includeEl && !includeEl.checked) continue;
                 const qtyEl = form.querySelector<HTMLInputElement>(
                     `input[name="qty_${suffix}"]`,
                 );
                 const cost = Number(el.value);
                 const qty = qtyEl ? Number(qtyEl.value) : 1;
-                // `Number.isFinite(n) && n > 0` matches `isLinePriced`
-                // in @/lib/po-doc-kind: NaN, negative, blank → unpriced
-                // → RFQ. Empty form (no cost inputs) → RFQ, same as
-                // `poDocKind`'s empty-default rule.
-                if (!(Number.isFinite(cost) && cost > 0)) allPriced = false;
-                if (Number.isFinite(cost) && Number.isFinite(qty)) sum += cost * qty;
+                // `Number.isFinite(n) && n > 0` matches the isLinePriced
+                // rule in @/lib/po-doc-kind: NaN, negative, blank → unpriced.
+                if (!(Number.isFinite(cost) && cost > 0)) {
+                    unpriced++;
+                } else if (Number.isFinite(qty)) {
+                    sum += cost * qty;
+                }
             }
-            setState({ isRfq: !allPriced, total: sum });
+            setState({ unpricedIncluded: unpriced, total: sum });
         };
         reclassify();
         form.addEventListener("input", reclassify);
+        // Include-checkbox tick is a `change` event, not `input` — a
+        // blank line unchecked should immediately enable the PO button.
+        form.addEventListener("change", reclassify);
         return () => {
             form.removeEventListener("input", reclassify);
+            form.removeEventListener("change", reclassify);
         };
     }, []);
 
+    const poBlockedByUnpriced = state.unpricedIncluded > 0;
+    const poDisabled = props.disabled || poBlockedByUnpriced;
+    const poReason = poBlockedByUnpriced
+        ? props.poDisabledReasonTemplate.replace(
+              "{n}",
+              String(state.unpricedIncluded),
+          )
+        : "";
+
     return (
-        <>
-            <div className="pt-1">
+        <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+                {/* Quotation — always available. Owner is asking the
+                    supplier what the parts cost; blanks are the intent. */}
                 <Button
-                    id="from-estimate-submit-btn"
                     type="submit"
-                    variant="hero"
+                    name="intent"
+                    value="rfq"
+                    variant="ghost"
                     disabled={props.disabled}
                 >
-                    {state.isRfq ? props.labelRfq : props.labelPo}
+                    {props.labelRfq}
+                </Button>
+                {/* Purchase order — disabled while any included line
+                    lacks a cost. Reason rendered below, not just via
+                    title="", so touch users see it too. */}
+                <Button
+                    type="submit"
+                    name="intent"
+                    value="po"
+                    variant="hero"
+                    disabled={poDisabled}
+                    title={poReason || undefined}
+                >
+                    {props.labelPo}
                 </Button>
             </div>
-
-            {/* Approx-total: suppressed on RFQ because the number is
-                either 0.00 (all zero, meaningless) or a partial sum
-                that misrepresents cost (mixed — priced lines only,
-                doesn't count the unpriced ones the supplier will
-                quote). Both cases fail toward showing nothing. On PO,
-                the total is computed from the LIVE inputs so it
-                matches what the server action will record. */}
-            {state.isRfq ? null : (
-                <p className="pt-1 text-xs text-muted-foreground">
+            {poBlockedByUnpriced ? (
+                <p className="text-xs text-warning-600 dark:text-warning-500">
+                    ⚠ {poReason}
+                </p>
+            ) : null}
+            {/* Approx-total only when PO is submittable AND non-zero.
+                Suppressed on the RFQ path because the sum is either
+                zero (nothing to show) or a partial sum that
+                misrepresents the true cost (priced-only, doesn't count
+                unpriced lines the supplier will quote). */}
+            {!poDisabled && state.total > 0 ? (
+                <p className="text-xs text-muted-foreground">
                     {props.approxTotalLabel}: {formatMoney.format(state.total)}
                 </p>
-            )}
-        </>
+            ) : null}
+        </div>
     );
 }

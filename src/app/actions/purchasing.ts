@@ -839,6 +839,16 @@ export async function createPoFromEstimateAction(formData: FormData) {
   const jobCardId = String(formData.get("jobCardId") ?? "").trim();
   const estimateId = String(formData.get("estimateId") ?? "").trim();
   const supplierId = String(formData.get("supplierId") ?? "").trim();
+  // Intent (AR 2026-08-14) — carried by the clicked submit button's
+  // name/value. "po" = owner clicked Create purchase order (asserts
+  // every included line is priced). "rfq" = owner clicked Create
+  // quotation (blanks OK). Default to "rfq" on an unknown/missing
+  // value — the safer shape (never rejects a submit that could have
+  // gone through as a quote). The client already disables the PO
+  // button while any line is unpriced; this is belt-and-braces
+  // against a client bypass (JS off, DOM edit, curl).
+  const intentRaw = String(formData.get("intent") ?? "").trim();
+  const intent: "po" | "rfq" = intentRaw === "po" ? "po" : "rfq";
 
   // For the error redirect, we need a URL the owner can retry from.
   // The from-estimate page keys on ?jobNumber= — try to send them back
@@ -1009,6 +1019,27 @@ export async function createPoFromEstimateAction(formData: FormData) {
         qty,
         unitCost: costResult.value,
       });
+    }
+  }
+
+  // Intent guard (AR 2026-08-14). If the owner clicked Create purchase
+  // order but any included line has null unitCost (blank / unpriced),
+  // reject rather than silently downgrading to an RFQ. Two reasons:
+  //   1. Matches what the button label promised. Clicking PO and
+  //      landing on an RFQ page is a bug from the owner's POV.
+  //   2. Client-side disable protects the button, but a JS-off /
+  //      curl / DOM-edited bypass would still POST intent=po with
+  //      blank costs. Fail fast here.
+  // intent=rfq keeps every path open (blanks are the intent).
+  if (intent === "po") {
+    const unpricedCount = linesToCreate.filter(
+      (l) => l.unitCost === null,
+    ).length;
+    if (unpricedCount > 0) {
+      fail(
+        `Purchase order needs every included line priced — ${unpricedCount} still without a cost.`,
+        await retryPath(),
+      );
     }
   }
 

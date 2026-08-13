@@ -346,6 +346,12 @@ export default async function ConvertFromEstimatePage({
                             </p>
                         ) : (
                             <form
+                                // Client component FromEstimateSubmit
+                                // targets this id to subscribe to input
+                                // events (cost typing + include-checkbox
+                                // ticks); renaming/removing it silently
+                                // freezes the button state at SSR values.
+                                id="from-estimate-form"
                                 action={createPoFromEstimateAction}
                                 className="space-y-4 rounded-xl border border-border p-4"
                             >
@@ -492,30 +498,59 @@ export default async function ConvertFromEstimatePage({
                                     )}
                                 </label>
 
-                                {/* Button label + approx-total live in a
-                                    client component that watches the actual
-                                    cost inputs — the doc kind switches to
-                                    "Create request for quotation" the moment
-                                    any cost is 0 (or blank / negative), and
-                                    approx-total disappears in that case. See
-                                    from-estimate-submit.tsx. */}
-                                {filtered.convertible.length > 0 ? (
-                                    <FromEstimateSubmit
-                                        disabled={suppliers.length === 0}
-                                        labelPo={t("createDraftPoFromEstimate")}
-                                        labelRfq={t("createRfqFromEstimate")}
-                                        approxTotalLabel={t("approxTotal")}
-                                        // Client component re-runs the total
-                                        // over the LIVE inputs (not the server
-                                        // prefill, which is 0 for
-                                        // uncosted-in-inventory parts). Locale
-                                        // + currency matches the internal
-                                        // `money()` above so the two hints in
-                                        // this file agree on formatting.
-                                        locale="en-AE"
-                                        currency="AED"
-                                    />
-                                ) : (
+                                {/* Two-button submit (AR 2026-08-14).
+                                    "Create quotation" and "Create purchase
+                                    order" mirror /owner/purchasing's index
+                                    buttons; the PO button is disabled with
+                                    a visible reason while any included line
+                                    has no cost. Server also validates
+                                    intent=po against blank costs — see
+                                    createPoFromEstimateAction.
+
+                                    SSR-time initials for the client
+                                    component avoid a flicker (PO button
+                                    would otherwise render enabled → snap
+                                    to disabled once the effect hydrates).
+                                    Compute over convertible lines that
+                                    default to checked; matches the
+                                    client's live-view rule (only included
+                                    lines gate the PO button). */}
+                                {filtered.convertible.length > 0 ? (() => {
+                                    let unpricedInitial = 0;
+                                    let totalInitial = 0;
+                                    for (const l of filtered.convertible) {
+                                        const partCost = l.part
+                                            ? Number(l.part.cost)
+                                            : 0;
+                                        const qtyPrefill = Math.max(
+                                            1,
+                                            Math.ceil(Number(l.qty)),
+                                        );
+                                        if (partCost > 0) {
+                                            totalInitial +=
+                                                partCost * qtyPrefill;
+                                        } else {
+                                            unpricedInitial++;
+                                        }
+                                    }
+                                    return (
+                                        <FromEstimateSubmit
+                                            disabled={suppliers.length === 0}
+                                            labelPo={t("createPurchaseOrder")}
+                                            labelRfq={t("createQuotation")}
+                                            approxTotalLabel={t("approxTotal")}
+                                            poDisabledReasonTemplate={t(
+                                                "poRequiresAllPricedReason",
+                                            )}
+                                            unpricedIncludedInitial={
+                                                unpricedInitial
+                                            }
+                                            approxTotalInitial={totalInitial}
+                                            locale="en-AE"
+                                            currency="AED"
+                                        />
+                                    );
+                                })() : (
                                     <div className="pt-1">
                                         <Button
                                             type="submit"

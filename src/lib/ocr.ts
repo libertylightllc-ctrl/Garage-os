@@ -34,19 +34,98 @@ export interface MoulkiaBack {
 /** The full set carried into the confirm form (after merging front + back). */
 export interface MoulkiaFields extends MoulkiaFront, MoulkiaBack {}
 
+/**
+ * Failure category for OCR attempts (Tier 1 error taxonomy, AR
+ * 2026-08-14). Groups Anthropic API failures into three actionable
+ * buckets so the advisor UI can show a *useful* message instead of
+ * "couldn't read this photo" for a credit shortfall, and so ops can
+ * grep AiEvent.sourceType for a specific class of failure.
+ *
+ *   billing   — account needs attention: auth failure (401), permission
+ *               denied (403), or the specific 400 with "credit balance
+ *               is too low". Advisor message: "contact owner".
+ *   temporary — likely-transient: rate limit (429), 5xx, or a network
+ *               error before we got a response. Advisor message: "try
+ *               again in a moment".
+ *   generic   — everything else: 400 for bad input, unreadable image
+ *               (both attempts came back empty), etc. Falls through to
+ *               today's "couldn't read this photo — enter manually".
+ *
+ * Ordering matters: worst-case aggregation across the primary+fallback
+ * attempts uses billing > temporary > generic. See
+ * `worstOcrErrorCategory` below.
+ */
+export type OcrErrorCategory = "billing" | "temporary" | "generic";
+
+/**
+ * Classify an Anthropic-side failure into one of the three tiers.
+ * `status = 0` is the sentinel for "network error, no HTTP response".
+ */
+export function classifyOcrError(status: number, apiMessage: string): OcrErrorCategory {
+  // Auth / permission / credit-shortfall all end up as "billing" from
+  // the advisor's POV — the message is the same ("contact owner"), and
+  // AR can distinguish in AiEvent via the full error suffix. Grouping
+  // them keeps the advisor UI simple.
+  if (status === 401 || status === 403) return "billing";
+  if (status === 400 && /credit balance|insufficient credit|payment required/i.test(apiMessage)) {
+    return "billing";
+  }
+  // 402 is unusual from Anthropic but if it ever surfaces, it's billing.
+  if (status === 402) return "billing";
+  // Rate limits and server errors are worth a retry; network errors too.
+  if (status === 429 || status >= 500 || status === 0) return "temporary";
+  // 400 (not credit-shortfall), 404, unknown → generic.
+  return "generic";
+}
+
+/**
+ * Typed error thrown by `callClaudeVision` when the Anthropic API
+ * returns a non-2xx response or the fetch itself fails. Carries the
+ * classified category so `tryAttempt` can preserve it on the
+ * `OcrAttempt.errorCategory` field without re-classifying.
+ */
+export class OcrApiError extends Error {
+  status: number;
+  apiMessage: string;
+  category: OcrErrorCategory;
+  constructor(status: number, apiMessage: string, message?: string) {
+    super(message ?? `Anthropic vision error ${status}: ${apiMessage}`);
+    this.name = "OcrApiError";
+    this.status = status;
+    this.apiMessage = apiMessage;
+    this.category = classifyOcrError(status, apiMessage);
+  }
+}
+
 /** One OCR attempt's metering record — the caller writes one AiEvent per row. */
 export interface OcrAttempt {
   model: string;
   tokensIn: number;
   tokensOut: number;
   latencyMs: number;
-  error?: string; // present when this attempt failed
+  error?: string; // full failure message; present when this attempt failed
+  errorCategory?: OcrErrorCategory; // classification; present iff `error` is
 }
 
 export interface OcrResult<T> {
   fields: T;
   attempts: OcrAttempt[];
   failed?: boolean;
+  /**
+   * Worst-case category across all failed attempts, set iff `failed`.
+   * Priority: billing > temporary > generic — so a request whose primary
+   * hit a 429 and whose fallback got a credit-shortfall 400 surfaces as
+   * `billing`, because that's the more-actionable message for the
+   * advisor and the one AR needs to see.
+   */
+  errorCategory?: OcrErrorCategory;
+}
+
+/** Aggregate the worst category across a set of failed attempts. */
+export function worstOcrErrorCategory(attempts: OcrAttempt[]): OcrErrorCategory {
+  if (attempts.some((a) => a.errorCategory === "billing")) return "billing";
+  if (attempts.some((a) => a.errorCategory === "temporary")) return "temporary";
+  return "generic";
 }
 
 export function ocrEnabled(): boolean {
@@ -235,36 +314,49 @@ async function callClaudeVision(
   mediaType: string,
   maxTokens = 400,
 ): Promise<ClaudeRaw> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": process.env.ANTHROPIC_API_KEY as string,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      // Moulkia (~6 fields) fits in 400; a multi-line invoice needs more.
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: userText },
-          ],
-        },
-      ],
-    }),
-  });
+  // Network failures (DNS, TLS, connect timeout) throw from fetch itself
+  // before we have a Response to inspect. Wrap as OcrApiError with
+  // status=0 so `tryAttempt` sees the same OcrApiError shape either way
+  // and gets category="temporary" for a retry-worthy failure. Details
+  // ride on `apiMessage` for the AiEvent log.
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY as string,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        // Moulkia (~6 fields) fits in 400; a multi-line invoice needs more.
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+              { type: "text", text: userText },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new OcrApiError(0, msg, `network error: ${msg}`);
+  }
   const j = (await res.json()) as {
     content?: { text?: string }[];
     usage?: { input_tokens?: number; output_tokens?: number };
     error?: { message?: string };
   };
   if (!res.ok) {
-    throw new Error(`Anthropic vision error ${res.status}: ${j.error?.message ?? "(no message)"}`);
+    // Typed throw so the classifier runs once here and the category
+    // rides through `tryAttempt` → `OcrAttempt.errorCategory` unchanged.
+    throw new OcrApiError(res.status, j.error?.message ?? "(no message)");
   }
   return {
     text: j.content?.[0]?.text ?? "{}",
@@ -289,6 +381,9 @@ async function tryAttempt<T>(
     const latencyMs = Date.now() - start;
     const fields = parser(r.text);
     if (isEmpty(fields)) {
+      // API succeeded but the image was unreadable — this is the
+      // "photo too blurry / wrong side" case. Not billing, not
+      // temporary; the operator/advisor needs to retake the photo.
       return {
         attempt: {
           model,
@@ -296,6 +391,7 @@ async function tryAttempt<T>(
           tokensOut: r.tokensOut,
           latencyMs,
           error: "empty-extraction",
+          errorCategory: "generic",
         },
         fields: null,
       };
@@ -305,6 +401,11 @@ async function tryAttempt<T>(
       fields,
     };
   } catch (e) {
+    // OcrApiError already carries the classified category from
+    // callClaudeVision — preserve it. Anything else is an unexpected
+    // caller / parser bug; treat as generic.
+    const category: OcrErrorCategory =
+      e instanceof OcrApiError ? e.category : "generic";
     return {
       attempt: {
         model,
@@ -312,6 +413,7 @@ async function tryAttempt<T>(
         tokensOut: 0,
         latencyMs: Date.now() - start,
         error: e instanceof Error ? e.message : String(e),
+        errorCategory: category,
       },
       fields: null,
     };
@@ -347,7 +449,15 @@ async function extractWithFallback<T>(
   attempts.push(fallback.attempt);
   if (fallback.fields) return { fields: fallback.fields, attempts };
 
-  return { fields: emptyValue, attempts, failed: true };
+  // Both attempts failed — surface the worst-case category so the
+  // caller can pick the right advisor message (billing beats
+  // temporary beats generic). Callers that don't care can ignore it.
+  return {
+    fields: emptyValue,
+    attempts,
+    failed: true,
+    errorCategory: worstOcrErrorCategory(attempts),
+  };
 }
 
 /** OCR the FRONT side (owner name + plate). */

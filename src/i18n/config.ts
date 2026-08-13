@@ -809,6 +809,12 @@ const en = {
   errNoFile: "Select a Moulkia photo.",
   errFields: "Fill owner, mobile, plate, make and model.",
   errOcrFailed: "Couldn't read the Moulkia — please enter the details manually.",
+  // Tier 1 OCR taxonomy (AR 2026-08-14) — surfaces when the failure is
+  // one of the two actionable categories rather than a plain unreadable
+  // photo. The generic errOcrFailed / errOcrBackFailed remain the
+  // fallback for anything not classified.
+  errOcrBilling: "The Moulkia scanner is temporarily unavailable — please contact the shop owner. Enter the details manually for this customer.",
+  errOcrTemporary: "The Moulkia scanner hit a temporary problem. Please try again in a moment, or enter the details manually.",
   errPlateBelongsToAnotherCustomer: "That plate is already registered to a different customer. Double-check the plate you entered.",
   tryAgain: "Try again",
   // PhotoCapture (one-tap camera/mic) — UX labels
@@ -2237,6 +2243,8 @@ const ar: typeof en = {
   errNoFile: "اختر صورة الملكية.",
   errFields: "املأ المالك والجوال واللوحة والصنع والطراز.",
   errOcrFailed: "تعذّر قراءة الملكية — يرجى إدخال البيانات يدويًا.",
+  errOcrBilling: "خدمة قراءة الملكية غير متاحة مؤقتًا — يرجى التواصل مع صاحب الورشة. أدخل بيانات هذا العميل يدويًا.",
+  errOcrTemporary: "تعذّرت قراءة الملكية بسبب مشكلة مؤقتة. حاول مرة أخرى بعد لحظات، أو أدخل البيانات يدويًا.",
   errPlateBelongsToAnotherCustomer: "رقم اللوحة مسجّل بالفعل لعميل مختلف. تحقّق من الرقم الذي أدخلته.",
   tryAgain: "حاول مجددًا",
   // PhotoCapture

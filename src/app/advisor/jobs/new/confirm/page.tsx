@@ -35,6 +35,15 @@ interface SP {
   //"moulkia"= OCR path (consent required);"manual"= no photo;"repeat"= pick-existing
   via?:"moulkia"|"manual"|"repeat";
   error?: string;
+  /**
+   * Tier 1 OCR failure category (AR 2026-08-14). "billing" | "temporary"
+   * | "generic" (or absent → generic). Populated by moulkiaFrontAction /
+   * moulkiaBackAction when the Anthropic call failed, and drives the
+   * banner text below so the advisor sees "contact owner" for a credit
+   * shortfall or "try again" for a transient hiccup, not the generic
+   * "couldn't read the photo" for every class of failure.
+   */
+  errorCode?: string;
   //"1"= advisor skipped the back-photo step
   skippedBack?: string;
   // Slice 3 disambiguation panel outputs. editOwner=1 means the confirm
@@ -111,6 +120,14 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
   const ocrFailed = sp.error ==="ocr";
   const ocrBackFailed = sp.error ==="ocrBack";
   const backSkipped = sp.skippedBack ==="1";
+  // Tier 1 taxonomy — pick the banner message for the failure class.
+  // Falls back to the generic "couldn't read" message for unknown /
+  // absent codes so bookmarks + older redirect URLs keep working.
+  const ocrBannerKey = ((): MessageKey => {
+    if (sp.errorCode === "billing") return "errOcrBilling";
+    if (sp.errorCode === "temporary") return "errOcrTemporary";
+    return ocrBackFailed ? "errOcrBackFailed" : "errOcrFailed";
+  })();
 
   // Repeat-vehicle DB lookup. When the caller passed vehicleId (all
   // slice-3 panel choices, the intake-landing existing-vehicle picker,
@@ -184,19 +201,24 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
 
       {ocrFailed ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-          <span>⚠️ {t("errOcrFailed")}</span>
-          <Link
-            href="/advisor/jobs/new"
-            className="rounded-md border border-warning-500/40 bg-surface px-3 py-1 text-xs font-medium hover:bg-surface-2"
-          >
-            📷 {t("tryAgain")}
-          </Link>
+          <span>⚠️ {t(ocrBannerKey)}</span>
+          {/* Only the front-side "try again" makes sense for the retake
+              button — a back-side failure never lands on the front and
+              a billing failure won't be fixed by another attempt. */}
+          {sp.errorCode !== "billing" ? (
+            <Link
+              href="/advisor/jobs/new"
+              className="rounded-md border border-warning-500/40 bg-surface px-3 py-1 text-xs font-medium hover:bg-surface-2"
+            >
+              📷 {t("tryAgain")}
+            </Link>
+          ) : null}
         </div>
       ) : null}
 
       {ocrBackFailed ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm text-warning-600 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-          <span>⚠️ {t("errOcrBackFailed")}</span>
+          <span>⚠️ {t(ocrBannerKey)}</span>
         </div>
       ) : null}
 

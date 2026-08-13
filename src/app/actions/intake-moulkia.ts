@@ -52,12 +52,22 @@ async function logAttempts(
     // safeLogAiEvent — never throws. A stale JWT / rotated user id used
     // to FK-violate here and take down the whole intake POST; see
     // docs/telemetry-must-not-crash-operation-spec.md.
+    //
+    // Tier 1 taxonomy (AR 2026-08-14): failing attempts land as
+    // `MOULKIA_<side>:<category>:<message>` where <category> is one of
+    // billing|temporary|generic. Ops can grep the sourceType directly:
+    //   SELECT ... WHERE "sourceType" LIKE 'MOULKIA_%:billing:%'
+    // Successful attempts stay bare `MOULKIA_<side>` — no colon suffix,
+    // grep is unambiguous.
+    const category = a.errorCategory ?? "generic";
     await safeLogAiEvent({
       garageId,
       userId,
       kind: "OCR",
       model: a.model,
-      sourceType: a.error ? `MOULKIA_${sourceSide}:${a.error}` : `MOULKIA_${sourceSide}`,
+      sourceType: a.error
+        ? `MOULKIA_${sourceSide}:${category}:${a.error}`
+        : `MOULKIA_${sourceSide}`,
       tokensIn: a.tokensIn,
       tokensOut: a.tokensOut,
       costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
@@ -112,7 +122,14 @@ export async function moulkiaFrontAction(formData: FormData) {
   if (r.failed) {
     // Can't read the front — no point asking for the back. Go straight
     // to manual entry. No draft to persist; nothing PII in URL.
-    redirect(confirmUrl({ via: "manual", error: "ocr", assignedToId }));
+    //
+    // Tier 1 taxonomy: pass the worst-case failure category as
+    // `errorCode` so the confirm page's banner explains the class of
+    // problem (billing → "contact owner", temporary → "try again",
+    // generic → today's "couldn't read"). Absent errorCode falls back
+    // to generic on the confirm page.
+    const errorCode = r.errorCategory ?? "generic";
+    redirect(confirmUrl({ via: "manual", error: "ocr", errorCode, assignedToId }));
   }
 
   // Front succeeded → persist the extraction in a fresh draft and
@@ -180,9 +197,12 @@ export async function moulkiaBackAction(formData: FormData) {
 
   if (r.failed) {
     // Back unreadable — front fields stay in the draft as-is. Flag on
-    // confirm so the advisor knows the back gap.
+    // confirm so the advisor knows the back gap. Carry the same
+    // Tier 1 errorCode as the front path so a billing failure on the
+    // back side shows "contact owner" instead of "photo unreadable".
+    const errorCode = r.errorCategory ?? "generic";
     redirect(
-      `/advisor/jobs/new/confirm?draftId=${encodeURIComponent(draft.id)}&via=moulkia&error=ocrBack`,
+      `/advisor/jobs/new/confirm?draftId=${encodeURIComponent(draft.id)}&via=moulkia&error=ocrBack&errorCode=${errorCode}`,
     );
   }
 

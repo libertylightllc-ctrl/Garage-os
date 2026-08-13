@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
 import {
     bookManualIntake,
+    customerEstimateUrl,
     sendEstimateToCustomer,
     sendJobForEstimate,
 } from "../support/flows";
@@ -60,14 +61,13 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     // from the edit view). Helper navigates there + submits.
     await sendEstimateToCustomer(page, estimateId);
 
-    // Step 5 — grab the customer /c/estimate/<token> link. It's on the
-    // preview page (where sendEstimateToCustomer left us) — no need
-    // to go back to the estimate editor for it.
-    const customerHref = await page
-        .locator('a[href*="/c/estimate/"]')
-        .first()
-        .getAttribute("href");
-    expect(customerHref, "expected a customer approval link on the estimate page").toMatch(
+    // Step 5 — build the customer /c/estimate/<token> URL directly
+    // from the DB. The URL is NOT rendered on the internal preview
+    // or estimate pages — it only reaches the customer via the
+    // WhatsApp send (sendWhatsApp in billing.ts). The publicToken is
+    // populated on the Estimate row at send time; helper reads it.
+    const customerHref = await customerEstimateUrl(estimateId);
+    expect(customerHref, "customerEstimateUrl should return a /c/estimate/ URL").toMatch(
         /\/c\/estimate\/[A-Za-z0-9_-]+/,
     );
 

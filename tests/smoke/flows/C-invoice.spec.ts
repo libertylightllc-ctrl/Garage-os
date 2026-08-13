@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
-import { bookManualIntake } from "../support/flows";
+import {
+    bookManualIntake,
+    customerEstimateUrl,
+    markJobTechComplete,
+    sendEstimateToCustomer,
+    sendJobForEstimate,
+} from "../support/flows";
 
 /**
  * Flow C — Cashier generates + records payment on an invoice.
@@ -20,9 +26,21 @@ import { bookManualIntake } from "../support/flows";
 
 test.use({ storageState: storageStatePath("advisor") });
 
+// Flow C has the most context switches of any flow (advisor + tech +
+// customer + cashier). Local dev browsers spin up in ~2-3s each on
+// Windows, so total wall-clock can push past the default 90s cap even
+// on a clean run. 3-minute cap gives headroom without hiding real
+// regressions.
+test.setTimeout(180_000);
+
 test("Flow C — cashier generates invoice + records payment", async ({ page, browser }) => {
+
     // Step 1 — intake as advisor.
     const { jobCardId } = await bookManualIntake(page, "C");
+
+    // Step 1b — tech workflow flips status ARRIVED → ESTIMATE so
+    // the advisor's Create Estimate button appears. See helper.
+    await sendJobForEstimate(browser, jobCardId);
 
     // Step 2 — create estimate.
     await page.goto(`/advisor/jobs/${jobCardId}`);
@@ -37,12 +55,12 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
     await page.waitForLoadState("networkidle");
 
-    // Step 4 — SEND.
-    await page.locator('form:has(input[name="status"][value="SENT"]) button').first().click();
-    await page.waitForLoadState("networkidle");
+    // Step 4 — SEND (only from the preview page post-workflow-flip).
+    await sendEstimateToCustomer(page, estimateId);
 
-    // Step 5 — grab customer link.
-    const customerHref = await page.locator('a[href*="/c/estimate/"]').first().getAttribute("href");
+    // Step 5 — build customer link from DB (URL isn't on any advisor
+    // page; it only ships via WhatsApp to the customer's phone).
+    const customerHref = await customerEstimateUrl(estimateId);
     expect(customerHref).toMatch(/\/c\/estimate\/[A-Za-z0-9_-]+/);
 
     // Step 6 — customer approves.
@@ -56,6 +74,14 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
         await customerContext.close();
     }
 
+    // Step 6b — the cashier's "Generate Invoice" button gates on
+    // jobCard.status === "TECH_COMPLETE" (per estimates/[id]/page.tsx
+    // line ~638). Estimate APPROVED alone isn't enough; the tech has
+    // to Mark Complete. Bypass the UI (proof-of-work photo requirement
+    // impractical to fake in smoke) via direct DB update — see the
+    // helper for why this shortcut is safe.
+    await markJobTechComplete(jobCardId);
+
     // Step 7 — switch to cashier. Fresh context with cashier's
     // storageState — mid-test role switch is standard Playwright.
     const cashierContext = await browser.newContext({
@@ -64,21 +90,29 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     try {
         const cashierPage = await cashierContext.newPage();
 
-        // Cashier lands on /cashier and finds the approved estimate;
-        // clicking Generate Invoice fires generateInvoiceAction and
-        // redirects to /invoices/<id>.
+        // Cashier lands on /estimates/<id> and finds the approved
+        // estimate; clicking Generate Invoice fires generateInvoiceAction
+        // and redirects to /invoices/<id>. Text-based selector (i18n
+        // key `generateInvoice` = "Generate invoice") is more robust
+        // than form:has(estimateId) because MANY forms on the page
+        // carry the same hidden estimateId input.
         await cashierPage.goto(`/estimates/${estimateId}`);
-        await cashierPage.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]) button:has-text("Generate invoice"), form:has(input[name="estimateId"][value="' + estimateId + '"]) button:has-text("Generate Invoice")').first().click();
+        await cashierPage
+            .getByRole("button", { name: /Generate invoice/i })
+            .click({ timeout: 15_000 });
         await cashierPage.waitForURL(/\/invoices\/[a-z0-9]+/, { timeout: 15_000 });
         const invoiceUrl = cashierPage.url();
         const invoiceId = invoiceUrl.match(/\/invoices\/([a-z0-9]+)/)?.[1] ?? "";
         expect(invoiceId).toMatch(/^[a-z0-9]+$/);
 
         // Step 8 — payment recording lives on the /cashier Receivables
-        // row, not the invoice detail. Go back there, find this
-        // invoice, submit the record-payment form with method=CASH
-        // and amount=invoice total (200 labour + 5% VAT = 210.00).
-        await cashierPage.goto("/cashier");
+        // row, INSIDE the Invoices tab (not the default Estimates
+        // tab). Navigate with ?tab=invoices explicitly or the row's
+        // form never renders in the DOM and the fill() call below
+        // hangs waiting for an element that will never appear.
+        // Scope by invoiceId to distinguish from every other unpaid
+        // invoice on the page (a real prod dashboard has many).
+        await cashierPage.goto("/cashier?tab=invoices");
         // The row exposes an amount input and a method select for
         // this invoice specifically. Scoping to the invoiceId keeps
         // multi-row pages unambiguous.

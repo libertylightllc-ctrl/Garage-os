@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
-import { bookManualIntake } from "../support/flows";
+import {
+    bookManualIntake,
+    customerEstimateUrl,
+    getJobNumber,
+    sendEstimateToCustomer,
+    sendJobForEstimate,
+} from "../support/flows";
 
 /**
  * Flow D — Estimate with a hand-typed part converts to a Request for
@@ -26,11 +32,21 @@ import { bookManualIntake } from "../support/flows";
 
 test.use({ storageState: storageStatePath("advisor") });
 
+// Flow D switches contexts three times (advisor + tech + customer +
+// owner). Matches Flow C's 3-minute cap for the same reason: local
+// Windows browser context startup pushes total wall-clock beyond the
+// default 90s even on a clean run.
+test.setTimeout(180_000);
+
 const HANDTYPED_DESCRIPTION = "Bespoke suspension bushing SMK-D";
 
 test("Flow D — hand-typed part converts to Request for Quotation with no price", async ({ page, browser }) => {
     // Step 1 — advisor books a job.
     const { jobCardId } = await bookManualIntake(page, "D");
+
+    // Step 1b — tech workflow flips status ARRIVED → ESTIMATE so
+    // the advisor's Create Estimate button appears. See helper.
+    await sendJobForEstimate(browser, jobCardId);
 
     // Step 2 — create estimate on the job.
     await page.goto(`/advisor/jobs/${jobCardId}`);
@@ -56,12 +72,13 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         .click();
     await page.waitForLoadState("networkidle");
 
-    // Step 4 — advisor sends the estimate (status → SENT).
-    await page.locator('form:has(input[name="status"][value="SENT"]) button').first().click();
-    await page.waitForLoadState("networkidle");
+    // Step 4 — advisor sends the estimate (status → SENT). Send only
+    // fires from the preview page post-workflow-flip.
+    await sendEstimateToCustomer(page, estimateId);
 
-    // Step 5 — grab the customer approval link.
-    const customerHref = await page.locator('a[href*="/c/estimate/"]').first().getAttribute("href");
+    // Step 5 — build the customer approval link from DB (URL isn't
+    // rendered on any advisor page; only ships via WhatsApp).
+    const customerHref = await customerEstimateUrl(estimateId);
     expect(customerHref).toMatch(/\/c\/estimate\/[A-Za-z0-9_-]+/);
 
     // Step 6 — customer approves in a fresh context.
@@ -85,10 +102,14 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
     try {
         const ownerPage = await ownerContext.newPage();
 
-        // Step 8 — go to the from-estimate conversion page. The
-        // approved estimate for jobCardId should appear as a
-        // convertible group.
-        await ownerPage.goto("/owner/purchasing/from-estimate");
+        // Step 8 — go to the from-estimate conversion page for THIS
+        // job. The page requires a `jobNumber` query param to load
+        // the job (`?estimateId=` alone doesn't populate the form);
+        // look it up from the DB.
+        const jobNumber = await getJobNumber(jobCardId);
+        await ownerPage.goto(
+            `/owner/purchasing/from-estimate?jobNumber=${jobNumber}&estimateId=${estimateId}`,
+        );
 
         // Step 9 — locate the form for THIS job (scoped by hidden
         // jobCardId + estimateId inputs so we don't accidentally

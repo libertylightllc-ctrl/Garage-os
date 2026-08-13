@@ -1,6 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import { smokeCustomerName, smokePhone, smokePlate } from "./unique-id";
 import { storageStatePath } from "./roles";
+import pg from "pg";
 
 /**
  * Shared helpers for the four flow specs. Each helper does ONE step
@@ -193,4 +194,116 @@ export async function sendEstimateToCustomer(
         .first()
         .click({ timeout: 10_000 });
     await page.waitForLoadState("networkidle");
+}
+
+/**
+ * Build the customer-facing /c/estimate/<token> URL directly from
+ * the DB — the URL is NOT rendered anywhere on the internal estimate
+ * or preview pages (only sent to the customer's WhatsApp via
+ * sendWhatsApp in billing.ts:475). The publicToken is on the
+ * Estimate row, populated either at row create time or by
+ * ensurePublicToken during the send action; a just-sent estimate is
+ * guaranteed to have one. See src/lib/document-tokens.ts for the
+ * token resolution scheme (raw publicToken in Phase 2; HMAC in
+ * Phase 1 fallback — we always get the Phase-2 shape from fresh
+ * estimates).
+ *
+ * baseUrl mirrors playwright.config.ts's `baseURL` fallback so
+ * local dev runs work out of the box.
+ */
+/**
+ * Advance a job from ESTIMATE (with an APPROVED estimate on it) to
+ * TECH_COMPLETE via a direct DB update, bypassing the
+ * markCompleteAction UI. Necessary because that action's UI gate
+ * requires `hasWorkProof` — a photo upload or a mid-repair findings
+ * edit — which is impractical to fake in a smoke test.
+ *
+ * The gate exists to prevent techs from claiming completion without
+ * evidence; it's a UX / audit invariant, not a data invariant. Every
+ * downstream cashier / invoice check reads `jobCard.status` and the
+ * estimate.status pair — both of which we set correctly here.
+ *
+ * `workCompletedAt` is set so the cashier's "Awaiting final invoice"
+ * timing display doesn't render "—" and every downstream assertion
+ * against the invoice UI sees a real production-shaped row.
+ */
+export async function markJobTechComplete(
+    jobCardId: string,
+): Promise<void> {
+    const url =
+        process.env.DATABASE_URL ||
+        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+        const res = await client.query(
+            `UPDATE "JobCard" SET status = 'TECH_COMPLETE', "workCompletedAt" = NOW() WHERE id = $1 RETURNING id`,
+            [jobCardId],
+        );
+        if (res.rowCount !== 1) {
+            throw new Error(
+                `markJobTechComplete: expected to update 1 job, updated ${res.rowCount} (jobId=${jobCardId})`,
+            );
+        }
+    } finally {
+        await client.end();
+    }
+}
+
+/**
+ * Look up a job's per-garage sequential number. Needed because
+ * /owner/purchasing/from-estimate requires `?jobNumber=<N>` in the
+ * URL to find the job — passing jobCardId alone isn't enough. Same
+ * raw-pg pattern as customerEstimateUrl for the same reason.
+ */
+export async function getJobNumber(jobCardId: string): Promise<number> {
+    const url =
+        process.env.DATABASE_URL ||
+        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+        const res = await client.query<{ number: number | null }>(
+            `SELECT number FROM "JobCard" WHERE id = $1`,
+            [jobCardId],
+        );
+        const n = res.rows[0]?.number ?? null;
+        if (n == null) {
+            throw new Error(`getJobNumber: no JobCard row for id ${jobCardId}`);
+        }
+        return n;
+    } finally {
+        await client.end();
+    }
+}
+
+export async function customerEstimateUrl(
+    estimateId: string,
+): Promise<string> {
+    // Using raw pg instead of @/lib/prisma: the Prisma 7 driverless
+    // client generator uses `import.meta` internally, which trips
+    // Playwright's CommonJS transpiler at import time. pg is already
+    // transitively installed via @prisma/adapter-pg. One-shot
+    // connection — cheap, self-cleaning.
+    const url =
+        process.env.DATABASE_URL ||
+        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
+    const client = new pg.Client({ connectionString: url });
+    await client.connect();
+    try {
+        const res = await client.query<{ publicToken: string | null }>(
+            `SELECT "publicToken" FROM "Estimate" WHERE id = $1`,
+            [estimateId],
+        );
+        const token = res.rows[0]?.publicToken ?? null;
+        if (!token) {
+            throw new Error(
+                `customerEstimateUrl: estimate ${estimateId} has no publicToken — was sendEstimateToCustomer called first?`,
+            );
+        }
+        const baseUrl = process.env.STAGING_URL || "http://localhost:3000";
+        return `${baseUrl}/c/estimate/${token}`;
+    } finally {
+        await client.end();
+    }
 }

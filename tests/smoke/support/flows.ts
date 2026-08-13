@@ -4,6 +4,53 @@ import { storageStatePath } from "./roles";
 import pg from "pg";
 
 /**
+ * Prod-DB guard (AR 2026-08-14, sibling to the STAGING_URL guard in
+ * global-setup.ts).
+ *
+ * The raw-pg helpers below (customerEstimateUrl, getJobNumber,
+ * markJobTechComplete) mutate whatever DB the connection string points
+ * at. Belt-and-braces against INV-2026-0039 class of failure — someone
+ * exports PROD_DATABASE_URL's value into DATABASE_URL by accident, then
+ * runs smoke locally. STAGING_URL still points at localhost so its
+ * guard doesn't fire, and the app never runs — but our raw pg queries
+ * would still land on prod.
+ *
+ * Preference order (mirrors the CI workflow's cleanup job):
+ *   STAGING_DATABASE_URL > DATABASE_URL > local-dev default.
+ * Then, refuse if the resolved URL byte-matches PROD_DATABASE_URL
+ * (which sits in .env on operator machines per AGENTS.md's Prod-DB
+ * isolation section). Byte-match instead of hostname-match because
+ * staging is likely on the same hosted-Postgres provider as prod —
+ * a hostname check would either be too broad (blocks staging) or
+ * useless (matches nothing). The URL-value match is exact.
+ */
+const LOCAL_DEV_DEFAULT =
+    "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
+
+function resolveSmokeDbUrl(): string {
+    const url =
+        process.env.STAGING_DATABASE_URL ||
+        process.env.DATABASE_URL ||
+        LOCAL_DEV_DEFAULT;
+    if (process.env.FORCE_SMOKE_AGAINST_PROD === "1") {
+        console.warn(
+            `[smoke] FORCE_SMOKE_AGAINST_PROD=1 — bypassing prod-DB guard. Break-glass only.`,
+        );
+        return url;
+    }
+    const prod = process.env.PROD_DATABASE_URL;
+    if (prod && url === prod) {
+        throw new Error(
+            `[smoke] REFUSING to open a DB connection: resolved URL byte-matches PROD_DATABASE_URL.\n` +
+                `See AGENTS.md § Prod-DB isolation. Set STAGING_DATABASE_URL (CI) or ` +
+                `unset DATABASE_URL (local, defaults to prisma-dev on localhost:51214), or ` +
+                `set FORCE_SMOKE_AGAINST_PROD=1 as a break-glass.`,
+        );
+    }
+    return url;
+}
+
+/**
  * Shared helpers for the four flow specs. Each helper does ONE step
  * of the customer journey — flows compose them.
  *
@@ -230,10 +277,7 @@ export async function sendEstimateToCustomer(
 export async function markJobTechComplete(
     jobCardId: string,
 ): Promise<void> {
-    const url =
-        process.env.DATABASE_URL ||
-        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
-    const client = new pg.Client({ connectionString: url });
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
     await client.connect();
     try {
         const res = await client.query(
@@ -257,10 +301,7 @@ export async function markJobTechComplete(
  * raw-pg pattern as customerEstimateUrl for the same reason.
  */
 export async function getJobNumber(jobCardId: string): Promise<number> {
-    const url =
-        process.env.DATABASE_URL ||
-        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
-    const client = new pg.Client({ connectionString: url });
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
     await client.connect();
     try {
         const res = await client.query<{ number: number | null }>(
@@ -285,10 +326,7 @@ export async function customerEstimateUrl(
     // Playwright's CommonJS transpiler at import time. pg is already
     // transitively installed via @prisma/adapter-pg. One-shot
     // connection — cheap, self-cleaning.
-    const url =
-        process.env.DATABASE_URL ||
-        "postgres://postgres:postgres@localhost:51214/template1?sslmode=disable";
-    const client = new pg.Client({ connectionString: url });
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
     await client.connect();
     try {
         const res = await client.query<{ publicToken: string | null }>(

@@ -61,7 +61,28 @@ Now as **Owner** (or **Master**), go to `/owner/purchasing`, convert the approve
 
 ---
 
-## 3. Sign-off
+## 3. Known coverage gaps
+
+The Playwright suite mirrors this checklist for the four flows, but takes one deliberate shortcut worth surfacing so a future incident doesn't blame "the smoke tests are green" for it.
+
+### `markJobTechComplete` — bypasses the Mark Complete work-proof gate (Flow C)
+
+**What we skip.** Flow C's tech step advances `jobCard.status` from `APPROVED` → `TECH_COMPLETE` via a direct DB `UPDATE`, not by clicking the Mark Complete button on `/technician/jobs/[id]`. Helper lives in `tests/smoke/support/flows.ts` → `markJobTechComplete`.
+
+**Why.** The real UI's Mark Complete button only renders when `hasWorkProof` is true — either the tech uploaded a photo after estimate approval, or edited findings text after approval. Faking a real photo upload in a headless browser is a heavier fixture than the C flow's cashier assertion warrants.
+
+**What this means for the gate.** If the Mark Complete button itself breaks in a future change — the form disappears, the action rejects, the redirect target moves — Flow C stays green because it never touches that path. The tech-complete → cashier hand-off is *state-tested*, not *UI-tested*.
+
+**What it would take to cover properly.** Two parts:
+
+1. Playwright fixture that uploads a real image blob to the `/technician/jobs/[id]` findings photo capture (or, cheaper, seeds a `JobFinding` row with a non-empty `findings` string dated *after* `estimate.approvedAt` — that satisfies the `findingTouchedAfterApproval` branch of `hasWorkProof` without a photo).
+2. Add a step between customer approval and cashier context that navigates as tech, clicks Mark Complete, and asserts the redirect to `/technician/jobs/[id]/marked-complete`. Then remove the `markJobTechComplete` helper call.
+
+Estimated effort: half a day. Reasonable follow-up when the Mark Complete surface next has a real bug, or during any planned tech-workflow refactor.
+
+---
+
+## 4. Sign-off
 
 - [ ] All five roles' pages loaded green.
 - [ ] Flows A, B, C, D all completed as written.

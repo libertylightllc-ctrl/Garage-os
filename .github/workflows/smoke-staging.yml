@@ -66,6 +66,13 @@ jobs:
       # Namespace every DB row this run creates + is expected to
       # clean up. Used by flow specs' unique-per-run identifiers.
       STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
+      # Raw-pg helpers in tests/smoke/support/flows.ts (customerEstimateUrl,
+      # getJobNumber, markJobTechComplete) need direct DB access to
+      # read publicToken / job number and to bypass Mark Complete's
+      # work-proof UI gate. Same secret the cleanup job uses.
+      # The prod-DB guard in resolveSmokeDbUrl() refuses if this
+      # byte-matches PROD_DATABASE_URL.
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:

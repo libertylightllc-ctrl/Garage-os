@@ -67,7 +67,7 @@ function resolveSmokeDbUrl(): string {
  */
 export async function bookManualIntake(
     page: Page,
-    letter: "A" | "B" | "C" | "D",
+    letter: "A" | "B" | "C" | "D" | "E",
 ): Promise<{ jobCardId: string; plate: string }> {
     const plate = smokePlate(letter);
     const customer = smokeCustomerName();
@@ -289,6 +289,36 @@ export async function markJobTechComplete(
                 `markJobTechComplete: expected to update 1 job, updated ${res.rowCount} (jobId=${jobCardId})`,
             );
         }
+    } finally {
+        await client.end();
+    }
+}
+
+/**
+ * Force a known unitCost onto every PART line of an estimate via
+ * direct DB write. The screen add-line form (addEstimateLineAction)
+ * only accepts qty + unitPrice — cost is prefilled from a catalog
+ * Part.cost, or left null for free-text lines. The edit-mode
+ * CostPricedInputs form does accept a typed cost, but driving that
+ * UX in Playwright adds an inner mode-switch step for zero test
+ * value. The print-leak test just needs a KNOWN cost value on the
+ * eventually-generated InvoiceLine so the profit-card render has
+ * something concrete to leak — bypassing the UI is fine.
+ *
+ * Data-invariant preserving: the same column the UI writes.
+ */
+export async function setEstimateLineCosts(
+    estimateId: string,
+    unitCost: string,
+): Promise<number> {
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
+    await client.connect();
+    try {
+        const res = await client.query(
+            `UPDATE "EstimateLine" SET "unitCost" = $2, "markupPct" = 0 WHERE "estimateId" = $1 AND kind = 'PART'`,
+            [estimateId, unitCost],
+        );
+        return res.rowCount ?? 0;
     } finally {
         await client.end();
     }

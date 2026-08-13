@@ -15,7 +15,7 @@
 const RUN_ID = process.env.STAGING_SMOKE_RUN_ID ?? "local";
 
 /** Distinctive plate — e.g. "SMK-12345-A". Letter distinguishes flows. */
-export function smokePlate(letter: "A" | "B" | "C" | "D"): string {
+export function smokePlate(letter: "A" | "B" | "C" | "D" | "E"): string {
     return `SMK-${RUN_ID}-${letter}`;
 }
 
@@ -25,14 +25,14 @@ export function smokeCustomerName(): string {
 }
 
 /** UAE-shape phone. Deterministic per (run, letter) so retries reuse it. */
-export function smokePhone(letter: "A" | "B" | "C" | "D"): string {
+export function smokePhone(letter: "A" | "B" | "C" | "D" | "E"): string {
     // +971 55 7 XXXXX — 55 is a valid Etisalat prefix, 7 in position 4
     // keeps this out of any real-looking number range. Last 5 digits
     // derived from the run id + letter for stability across retries.
     const idHash = String(RUN_ID)
         .split("")
         .reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
-    const letterOffset = { A: 0, B: 1, C: 2, D: 3 }[letter];
+    const letterOffset = { A: 0, B: 1, C: 2, D: 3, E: 4 }[letter];
     const suffix = String((idHash + letterOffset) % 100000).padStart(5, "0");
     return `+9715570${suffix}`;
 }

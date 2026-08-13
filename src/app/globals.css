@@ -222,6 +222,36 @@ body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }
      to work anywhere — it emits `display: none` at higher specificity
      than these rules.
 */
+/* ─────────────────────────────────────────────────────────────
+   AR 2026-08-14 (second pass) — the print:hidden classes on the
+   stepper, timeline, and profit panel were still rendering on
+   staging despite being present in source. Two defense-in-depth
+   rules with !important to win any cascade fight, plus an
+   attribute-selector variant so a lost/stripped className still
+   hides the block.
+
+   [data-print-omit-cost]:
+     Any element carrying this attribute is REMOVED from print.
+     Applied to the profit panel today; extend to any future
+     panel that carries cost/margin numbers. Both display:none
+     and visibility:hidden so even if a display fight loses, the
+     content is still visually gone.
+
+   .print\:hidden !important:
+     Overrides Tailwind v4's utility-layer rule with an anonymous-
+     (unlayered) rule that beats any cascade layer. Same selector,
+     stronger cascade slot.
+   ───────────────────────────────────────────────────────────── */
+@media print {
+  [data-print-omit-cost] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
 @media print {
   /* AR 2026-08-14 — normal invoice / estimate / PO print was
      overflowing to a second A4 page. Three tightening levers,

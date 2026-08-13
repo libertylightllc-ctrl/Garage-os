@@ -80,6 +80,17 @@ export function JobProfitCard(props: JobProfitCardProps) {
                 (className ?? "")
             }
             data-testid="job-profit-card"
+            // Belt-and-braces (AR 2026-08-14). `print:hidden` already
+            // sits on the className above, but AR saw the panel print
+            // on staging despite the class being present in source.
+            // This attribute-selector rule (see globals.css @media
+            // print) fires the same display:none with !important —
+            // if any future edit strips the class OR a CSS-cascade
+            // fight overrides the class rule, the attribute rule
+            // still catches it. Cost and margin on a page a customer
+            // might be handed is exactly the leak class we spent an
+            // entire arc fighting on /estimates/[id] (commit 30367ab).
+            data-print-omit-cost
             aria-label={t("profitCardTitle")}
         >
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-mute">

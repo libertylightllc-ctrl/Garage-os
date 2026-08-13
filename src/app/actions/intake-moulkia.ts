@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { safeLogAiEvent } from "@/lib/ai-event-log";
+import { sendBillingAlertIfNeeded } from "@/lib/ai-credit-alert";
 import {
   extractMoulkiaFront,
   extractMoulkiaBack,
@@ -72,6 +73,20 @@ async function logAttempts(
       tokensOut: a.tokensOut,
       costEstimate: ocrCostUsd(a.model, a.tokensIn, a.tokensOut),
       latencyMs: a.latencyMs,
+    });
+  }
+  // Option A — reactive credit alert. Fire on the FIRST billing-class
+  // attempt in this batch (there are only 1-2 attempts per side, both
+  // usually the same category), dedup-gated inside the helper so
+  // repeated intake attempts during an outage don't spam the webhook.
+  // Never throws; the helper swallows notification failures.
+  const billing = attempts.find((a) => a.errorCategory === "billing");
+  if (billing) {
+    await sendBillingAlertIfNeeded({
+      garageId,
+      model: billing.model,
+      apiMessage: billing.error ?? "(no message)",
+      side: sourceSide,
     });
   }
 }

@@ -223,6 +223,52 @@ body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }
      than these rules.
 */
 @media print {
+  /* AR 2026-08-14 — normal invoice / estimate / PO print was
+     overflowing to a second A4 page. Three tightening levers,
+     applied only inside a `[data-print-document]` container so
+     unscoped surfaces (owner dashboards, /c/*, receipts) are
+     unaffected:
+       1. @page margin — browsers default to ~15-20mm; 10mm gives
+          each page ~15% more usable width and vertical space
+          without hitting the printer's non-imageable edge.
+       2. Line-height + font-size compaction — screen reads at
+          1.5 leading + 14px base, print doesn't need the same
+          finger-tap breathing room. 1.25 leading + 12.5px cuts
+          document height by roughly one line per ~5 lines.
+       3. Section gaps + card padding collapse — the on-screen
+          "gap-6" spacing between header, table, and totals is
+          UX for scanning, not paper density. On print, halve
+          gaps and drop the outer card's p-8 to p-3. */
+  @page {
+    margin: 10mm;
+  }
+  [data-print-document] {
+    font-size: 12.5px !important;
+    line-height: 1.25 !important;
+  }
+  /* Compact vertical rhythm — the `gap-6` (1.5rem) between
+     header/body/totals collapses to `gap-3` (0.75rem). Uses the
+     Tailwind class name via attribute selector so we don't have
+     to touch every page's markup. */
+  [data-print-document] .gap-6 {
+    gap: 0.75rem !important;
+  }
+  [data-print-document] .mt-6 {
+    margin-top: 0.75rem !important;
+  }
+  [data-print-document] .p-8 {
+    padding: 0.75rem !important;
+  }
+  [data-print-document] .p-6 {
+    padding: 0.5rem !important;
+  }
+  /* Table cells — `py-1` on the screen becomes `py-0.5` on
+     paper. Halves the height added per line. */
+  [data-print-document] td.py-1,
+  [data-print-document] th.py-1 {
+    padding-top: 0.125rem !important;
+    padding-bottom: 0.125rem !important;
+  }
   [data-print-document] input,
   [data-print-document] textarea,
   [data-print-document] select {

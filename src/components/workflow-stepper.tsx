@@ -64,7 +64,14 @@ export function WorkflowStepper({ state, labels }: Props) {
         heldReason ? labels.holdReasons[heldReason] ?? heldReason : null;
 
     return (
-        <section className="flex flex-col gap-2">
+        // print:hidden — the workflow stepper is an INTERNAL
+        // progress indicator (Check-in → Diagnosis → Estimate → …).
+        // Customers don't need it on printed invoices/estimates, and
+        // it eats ~66px per doc which was pushing normal print onto
+        // a second A4 page. Component-level hide covers every
+        // embedding (invoice edit, estimate edit — plus any future
+        // ones automatically). AR 2026-08-14.
+        <section className="flex flex-col gap-2 print:hidden">
             {/* Bar — scrolls horizontally on mobile; each item is
                 shrink-0 so the row width is the natural sum of all 9
                 steps, NOT the parent width. The outer container handles

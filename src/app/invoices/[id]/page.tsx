@@ -749,8 +749,17 @@ export default async function InvoiceView({
       <aside className="mt-6 flex min-w-0 flex-col gap-6 lg:mt-0 print:contents">
 
       <div className="flex items-end justify-between">
-        {/* QR placeholder — KSA Phase 2 replaces with a signed ZATCA QR */}
-        <div className="flex flex-col items-center">
+        {/* QR placeholder — KSA Phase 2 replaces the dashed box with
+            a real <img> rendered from qrPayload. Every UAE Phase 1
+            invoice today has a mock qrPayload string populated (see
+            generateInvoiceAction) so the shape is wired for the KSA
+            cutover, but nothing rendered here is visually a QR — just
+            the word "QR" in a dashed box.
+            print:hidden — that dead ink is what was pushing normal
+            invoices onto a second A4 page (AR 2026-08-14). Kept on
+            screen so devs still see the placeholder during KSA rollout
+            planning; hidden from print until a real QR image renders. */}
+        <div className="flex flex-col items-center print:hidden">
           <div className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-border text-[10px] text-text-mute">
             QR
           </div>

@@ -217,7 +217,11 @@ export default async function InvoicePreview({
             VAT is invoice.vatAmount (already 5% of post-discount
             subtotal via recomputeInvoice). */}
         <div className="mt-6 flex items-end justify-between">
-          <div className="flex flex-col items-center">
+          {/* QR placeholder hidden from print — the dashed "QR" box
+              is dead ink until KSA Phase 2 renders a real image from
+              qrPayload. See src/app/invoices/[id]/page.tsx for the
+              full note. (AR 2026-08-14.) */}
+          <div className="flex flex-col items-center print:hidden">
             <div className="grid h-24 w-24 place-items-center rounded-md border-2 border-dashed border-black/20 text-[10px] text-zinc-400">
               QR
             </div>

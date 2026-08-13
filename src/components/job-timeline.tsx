@@ -60,7 +60,15 @@ export function JobTimeline({ events, labels, now }: Props) {
 
     let lastDay = "";
     return (
-        <section className="flex flex-col gap-2">
+        // print:hidden — the timeline is an INTERNAL audit view (who
+        // did what when). Every doc surface that embeds it (invoice
+        // edit, estimate edit, tech job page, advisor job print) does
+        // NOT want it on paper — customers don't need it, and it
+        // pushes A4 documents onto a second page. Applying it at the
+        // component root so all call sites inherit; per-page overrides
+        // can wrap in a container that undoes it if ever needed.
+        // (AR 2026-08-14 — invoice print running to two pages.)
+        <section className="flex flex-col gap-2 print:hidden">
             <h2 className="text-sm font-semibold">{labels.title}</h2>
             <ol className="flex flex-col gap-0 rounded-xl border border-border">
                 {events.map((e, idx) => {

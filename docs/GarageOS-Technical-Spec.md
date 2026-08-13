@@ -118,3 +118,26 @@ Ship only this. Everything else is Phase 2+.
 9. UsageMeter + `AiEvent` + remaining Arabic **translations** + instrumentation.
 
 Each step ends with: it runs, it's committed, it's tested.
+
+---
+
+## 6. Known follow-ups (must-revert-when items)
+
+Small list of things that were pragmatic today but WILL break correctness the moment an upstream condition changes. Each one names the trigger that requires the revert so it's grep-able.
+
+### QR placeholder hidden from print (added 2026-08-14; commit `a808052`)
+
+**Where:** `src/app/invoices/[id]/page.tsx`, `src/app/invoices/[id]/preview/page.tsx` — QR block wrapped in `print:hidden`. Also `src/app/globals.css` prints without any QR content.
+
+**Why today:** `Invoice.qrPayload` is populated on every UAE Phase-1 invoice as a mock ZATCA-shape string (see `generateInvoiceAction`), but nothing rendered on the page is visually a QR — just the literal text "QR" inside a dashed box. In UAE Phase 1 there is no tax-side QR requirement, so the placeholder was dead ink pushing normal invoices onto a second A4 page.
+
+**Trigger to revert:** the moment a real QR image renders from `qrPayload` (KSA Fatoora Phase 2, or any UAE FTA rule change that requires a printed QR on tax invoices). **A UAE tax invoice with a QR requirement would fail an audit if the QR is hidden from the printed copy.**
+
+**What the revert looks like:**
+1. Remove the `print:hidden` wrapper on the QR block in both `src/app/invoices/[id]/page.tsx` and `src/app/invoices/[id]/preview/page.tsx`.
+2. Replace the placeholder `<div>QR</div>` with an actual `<img>` (or inline SVG) rendered from `qrPayload` — a `qrcode` npm dependency does this in one line server-side.
+3. Re-measure print height (`docs/staging-smoke-checklist.md` has the CSSOM print-emulation snippet). Confirm one-page fit still holds; if not, tighten the totals block or shrink the QR from 96×96 → 72×72.
+4. Delete this follow-up entry.
+
+**Owner:** whoever wires KSA Fatoora (`KSAFatooraStrategy` in §3), OR whoever handles the next UAE FTA e-invoicing update, whichever comes first.
+

@@ -6,6 +6,7 @@ import {
     withCollisionSuffix,
     normalizePartName,
     findNormalizedMatch,
+    resolveFromEstimatePrefill,
     type EstimateForPick,
     type EstimateLineForFilter,
 } from "@/lib/estimate-to-po";
@@ -468,3 +469,58 @@ describe("findNormalizedMatch", () => {
 
 // `computeSkuChoice` tests removed 2026-08-13 with the helper. See
 // src/lib/estimate-to-po.ts for the deletion note.
+
+describe("resolveFromEstimatePrefill", () => {
+    // Catalogue wins when it has a usable number — it's the freshest
+    // signal (rolling weighted-avg from recent receipts).
+    it("catalogue > 0 → uses catalogue, source=catalogue", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: 42.5, unitCost: 30 }),
+        ).toEqual({ value: 42.5, source: "catalogue" });
+    });
+
+    // The bug AR reported on JC-2026-0098: free-text lines had no
+    // catalogue Part → partCost null; advisor had typed a real supplier
+    // cost on the estimate → unitCost 300. Old code rendered blank; the
+    // fix falls back to the estimate value.
+    it("catalogue absent, estimate > 0 → uses estimate, source=estimate", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: null, unitCost: 300 }),
+        ).toEqual({ value: 300, source: "estimate" });
+    });
+
+    // Catalogue Part exists but the shop has never received any yet →
+    // Part.cost is 0. Prefer the advisor's typed value over writing
+    // literal 0 onto the PO ("supplier price = free" would be a lie).
+    // This is the specific point where from-estimate diverges from the
+    // invoice generator: the invoice treats 0 as authoritative (frozen
+    // at that moment), the PO prefers a real number.
+    it("catalogue 0, estimate > 0 → uses estimate, source=estimate", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: 0, unitCost: 250 }),
+        ).toEqual({ value: 250, source: "estimate" });
+    });
+
+    // Everything blank / zero → no prefill, blank input. Owner still has
+    // to type a cost (or click Create quotation to skip pricing).
+    it("both absent → null value, source=none", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: null, unitCost: null }),
+        ).toEqual({ value: null, source: "none" });
+    });
+
+    it("both zero → null value, source=none", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: 0, unitCost: 0 }),
+        ).toEqual({ value: null, source: "none" });
+    });
+
+    // Negative would be corrupt data (the schema constrains ≥ 0); pin
+    // the treatment as "not usable" so a bad row can't silently seed
+    // a PO with a negative number.
+    it("negative catalogue → treated as unusable, falls back", () => {
+        expect(
+            resolveFromEstimatePrefill({ partCost: -5, unitCost: 100 }),
+        ).toEqual({ value: 100, source: "estimate" });
+    });
+});

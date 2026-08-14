@@ -351,7 +351,7 @@ const en = {
   estimateChosenSent: "Sent {date}",
   estimateChosenDraft: "Draft, last edited {date}",
   partsToConvertHeader: "Parts to include",
-  partsToConvertHint: "Cost is prefilled from your inventory — edit if the supplier's price differs. Estimate prices (customer charge) are ignored.",
+  partsToConvertHint: "Cost prefills from your inventory when known, otherwise from the estimate — the label under each cost shows which. Customer-facing prices are never used. Edit if the supplier's number differs.",
   noConvertibleParts: "This estimate has no parts that can be converted.",
   skippedNoInventoryHeader: "{count} part(s) skipped — no inventory link",
   skippedNoInventoryHint: "add to inventory first",
@@ -378,6 +378,14 @@ const en = {
     "Purchase order needs every included line priced — {n} still without a cost. Type a cost, or click Create quotation to send a request instead.",
   lineUnpricedTag: "quote please",
   approxTotal: "Approx. total",
+  // Cost-source provenance on /owner/purchasing/from-estimate.
+  // Rendered as a small caption under each cost input so the owner
+  // sees where the prefill came from — the catalogue (what the shop
+  // has actually paid, rolling weighted-avg) or the estimate (what
+  // the advisor typed as the expected supplier cost). Different
+  // levels of confidence; the label makes that visible.
+  costSourceCatalogue: "from catalogue",
+  costSourceEstimate: "from estimate",
   addPoLine: "Add line",
   addPoLinePlaceholder: "Part name, or type free text",
   addPoLineHint:
@@ -1832,7 +1840,7 @@ const ar: typeof en = {
   estimateChosenSent: "مُرسَل بتاريخ {date}",
   estimateChosenDraft: "مسودة، آخر تعديل {date}",
   partsToConvertHeader: "القطع المطلوب تضمينها",
-  partsToConvertHint: "التكلفة مأخوذة من مخزونك مسبقاً — عدّلها إذا كان سعر المورد مختلفاً. أسعار عرض السعر (رسوم العميل) مُتجاهَلة.",
+  partsToConvertHint: "التكلفة تُعبّأ من مخزونك عند توفرها، وإلا فمن التقدير — الوسم أسفل كل تكلفة يبيّن المصدر. الأسعار الظاهرة للعميل لا تُستخدم. عدّل الرقم إن اختلف عن سعر المورد.",
   noConvertibleParts: "لا يحتوي هذا العرض على قطع قابلة للتحويل.",
   skippedNoInventoryHeader: "{count} قطعة متجاهَلة — لا يوجد ربط بالمخزون",
   skippedNoInventoryHint: "أضفها إلى المخزون أولاً",
@@ -1854,6 +1862,8 @@ const ar: typeof en = {
     "أمر الشراء يتطلب سعرًا لكل بند مضمّن — {n} بدون سعر حتى الآن. أدخل السعر، أو انقر إنشاء طلب عرض سعر لإرسال طلب بدلاً من ذلك.",
   lineUnpricedTag: "برجاء إفادتنا بالسعر",
   approxTotal: "إجمالي تقريبي",
+  costSourceCatalogue: "من الكتالوج",
+  costSourceEstimate: "من التقدير",
   addPoLine: "إضافة بند",
   addPoLinePlaceholder: "اسم القطعة، أو اكتب وصفًا حرًا",
   addPoLineHint:

@@ -10,6 +10,7 @@ import { createPoFromEstimateAction } from "@/app/actions/purchasing";
 import {
     pickEstimateForConversion,
     filterConvertibleLines,
+    resolveFromEstimatePrefill,
 } from "@/lib/estimate-to-po";
 import { formatJobNo } from "@/lib/jobcard-fields";
 
@@ -97,11 +98,21 @@ export default async function ConvertFromEstimatePage({
                                       declined: true,
                                       description: true,
                                       qty: true,
-                                      // unitPrice — needed to default
-                                      // Part.price in the review form.
-                                      // Customer already approved this
-                                      // number so it's a safe default.
+                                      // unitPrice — customer-facing charge;
+                                      // never used to prefill a PO cost
+                                      // (customer price includes advisor
+                                      // markup). Selected for parity with
+                                      // the multi-picker total column.
                                       unitPrice: true,
+                                      // unitCost — the advisor's typed
+                                      // supplier cost from the tri-input
+                                      // line editor. Fallback prefill
+                                      // when the catalogue Part has no
+                                      // usable cost yet, and the ONLY
+                                      // signal for free-text lines
+                                      // (partId null). See
+                                      // resolveFromEstimatePrefill.
+                                      unitCost: true,
                                       part: {
                                           select: {
                                               name: true,
@@ -369,8 +380,21 @@ export default async function ConvertFromEstimatePage({
 
                                 {/* Convertible lines — checkbox on the left,
                                     qty + cost inputs on the right. Cost is
-                                    prefilled from Part.cost, NEVER from the
-                                    estimate's unitPrice (customer charge). */}
+                                    prefilled from the catalogue Part.cost
+                                    when it's a usable (>0) number, falling
+                                    back to the estimate line's own unitCost
+                                    (the advisor's typed supplier cost) —
+                                    NEVER from unitPrice (customer charge,
+                                    which includes markup). Same fallback
+                                    order the invoice generator uses; see
+                                    resolveFromEstimatePrefill for the rule
+                                    and the AR 2026-08-14 gap it closes. A
+                                    small caption under the cost input names
+                                    the source so the owner sees whether
+                                    they're looking at what the shop has
+                                    actually paid vs. what the advisor
+                                    expected — different levels of
+                                    confidence. */}
                                 <div className="space-y-2">
                                     {filtered.convertible.map((l) => {
                                         // qty prefill: EstimateLine.qty is Decimal but
@@ -381,32 +405,38 @@ export default async function ConvertFromEstimatePage({
                                             1,
                                             Math.ceil(Number(l.qty)),
                                         );
-                                        // Prefill ONLY when the catalogue Part has a
-                                        // genuine non-zero cost. A Part with cost=0
-                                        // means "the shop doesn't know it yet" — the
-                                        // old "0.00" default silently told the
-                                        // supplier the price was zero, which is a
-                                        // lie. Blank leaves it as awaiting-quote
-                                        // (Layer 0: parseMoney reads blank as
-                                        // { ok:true, value:null }, the line writes
-                                        // unitCost NULL, and every downstream
-                                        // surface renders "quote please").
-                                        const partCost = l.part ? Number(l.part.cost) : 0;
+                                        const prefill = resolveFromEstimatePrefill({
+                                            partCost: l.part
+                                                ? Number(l.part.cost)
+                                                : null,
+                                            unitCost:
+                                                l.unitCost != null
+                                                    ? Number(l.unitCost)
+                                                    : null,
+                                        });
                                         const costPrefill =
-                                            partCost > 0 ? partCost.toFixed(2) : "";
+                                            prefill.value !== null
+                                                ? prefill.value.toFixed(2)
+                                                : "";
+                                        const sourceLabel =
+                                            prefill.source === "catalogue"
+                                                ? t("costSourceCatalogue")
+                                                : prefill.source === "estimate"
+                                                ? t("costSourceEstimate")
+                                                : null;
                                         return (
                                             <label
                                                 key={l.id}
-                                                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 border-b border-border/60 pb-2 last:border-0"
+                                                className="grid grid-cols-[auto_1fr_auto_auto] items-start gap-3 border-b border-border/60 pb-2 last:border-0"
                                             >
                                                 <input
                                                     type="checkbox"
                                                     name="include"
                                                     value={l.id}
                                                     defaultChecked
-                                                    className="h-4 w-4"
+                                                    className="mt-2 h-4 w-4"
                                                 />
-                                                <span className="min-w-0 truncate text-sm">
+                                                <span className="min-w-0 truncate self-center text-sm">
                                                     <span className="font-medium">
                                                         {l.part?.name ?? l.description}
                                                     </span>
@@ -424,7 +454,7 @@ export default async function ConvertFromEstimatePage({
                                                     required
                                                     defaultValue={qtyPrefill}
                                                     aria-label={t("colQty")}
-                                                    className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
+                                                    className="mt-1 w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                                                 />
                                                 {/* No `required` — a blank input
                                                     is now a real intent (awaiting
@@ -433,16 +463,26 @@ export default async function ConvertFromEstimatePage({
                                                     canMarkOrdered blocks committing
                                                     the PO until every line is
                                                     priced. */}
-                                                <input
-                                                    type="number"
-                                                    name={`cost_${l.id}`}
-                                                    min="0"
-                                                    step="0.01"
-                                                    defaultValue={costPrefill}
-                                                    aria-label={t("poUnitCost")}
-                                                    placeholder="—"
-                                                    className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
-                                                />
+                                                <div className="flex flex-col items-end">
+                                                    <input
+                                                        type="number"
+                                                        name={`cost_${l.id}`}
+                                                        min="0"
+                                                        step="0.01"
+                                                        defaultValue={costPrefill}
+                                                        aria-label={t("poUnitCost")}
+                                                        placeholder="—"
+                                                        className="w-24 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
+                                                    />
+                                                    {sourceLabel ? (
+                                                        <span
+                                                            className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground"
+                                                            data-testid={`cost-source-${l.id}`}
+                                                        >
+                                                            {sourceLabel}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
                                             </label>
                                         );
                                     })}
@@ -519,16 +559,26 @@ export default async function ConvertFromEstimatePage({
                                     let unpricedInitial = 0;
                                     let totalInitial = 0;
                                     for (const l of filtered.convertible) {
-                                        const partCost = l.part
-                                            ? Number(l.part.cost)
-                                            : 0;
+                                        // Same resolver the row inputs use, so
+                                        // the SSR-computed initials match what
+                                        // the client sees the moment it
+                                        // hydrates (no button-flicker).
+                                        const prefill = resolveFromEstimatePrefill({
+                                            partCost: l.part
+                                                ? Number(l.part.cost)
+                                                : null,
+                                            unitCost:
+                                                l.unitCost != null
+                                                    ? Number(l.unitCost)
+                                                    : null,
+                                        });
                                         const qtyPrefill = Math.max(
                                             1,
                                             Math.ceil(Number(l.qty)),
                                         );
-                                        if (partCost > 0) {
+                                        if (prefill.value !== null) {
                                             totalInitial +=
-                                                partCost * qtyPrefill;
+                                                prefill.value * qtyPrefill;
                                         } else {
                                             unpricedInitial++;
                                         }

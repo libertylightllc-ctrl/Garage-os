@@ -275,3 +275,60 @@ export function findNormalizedMatch<P extends { id: string; name: string; sku: s
 // created before 2026-08-02, confirming nothing new mints them.
 // See docs/auto-create-sku-bump-indicator-spec.md for the design
 // they served — kept for history, no code to trip over.
+
+// ── From-estimate cost prefill resolver ───────────────────────────
+//
+// The /owner/purchasing/from-estimate page prefills the cost input
+// on each convertible line. Two data sources hold a cost per line:
+//
+//   1. Catalogue Part.cost — rolling weighted-average from goods
+//      receipts. The freshest number the shop actually paid.
+//   2. EstimateLine.unitCost — the advisor's typed supplier cost at
+//      pricing time. The ONLY source for free-text lines (no partId).
+//
+// unitPrice is the customer-facing charge and never prefills a PO
+// cost — customer-price minus advisor markup is what we pay the
+// supplier, not what we charge the customer.
+//
+// Priority: catalogue > estimate > blank. Zero on either source
+// triggers the fallback, because writing 0 onto a PO would literally
+// tell the supplier the price is zero. Same order as the invoice
+// generator (see resolveInvoiceLineCost) with one difference: the
+// invoice generator treats a zero Part.cost as authoritative because
+// at invoice time an un-receipted Part IS zero-cost on the shop's
+// books; on a PO we prefer to fall through to the advisor's typed
+// value rather than seed the supplier with 0.
+//
+// Gap history (AR 2026-08-14): the resolver used to be inline in the
+// page and never consulted unitCost — for JC-2026-0098's four free-
+// text lines the advisor had typed real supplier costs (BEAKE PADS
+// 300, BALL JOINTS RH/LH 250, LABOR CHARGES excluded as non-PART)
+// and the picker rendered blanks, silently losing the number.
+
+export type FromEstimatePrefillSource = "catalogue" | "estimate" | "none";
+
+export interface FromEstimatePrefillLine {
+    /** Number(part.cost) when the estimate line is linked to a catalogue Part; null for free-text lines. */
+    partCost: number | null;
+    /** Number(estimateLine.unitCost) — the advisor's typed supplier cost; null when the advisor left it blank. */
+    unitCost: number | null;
+}
+
+export interface FromEstimatePrefill {
+    /** The number to write into the cost input, or null for a blank input. */
+    value: number | null;
+    /** Provenance — surfaced as a per-line label so the owner sees which source fed the prefill. */
+    source: FromEstimatePrefillSource;
+}
+
+export function resolveFromEstimatePrefill(
+    l: FromEstimatePrefillLine,
+): FromEstimatePrefill {
+    if (l.partCost !== null && l.partCost > 0) {
+        return { value: l.partCost, source: "catalogue" };
+    }
+    if (l.unitCost !== null && l.unitCost > 0) {
+        return { value: l.unitCost, source: "estimate" };
+    }
+    return { value: null, source: "none" };
+}

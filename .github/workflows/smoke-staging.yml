@@ -69,6 +69,17 @@ jobs:
       # The prod-DB guard in resolveSmokeDbUrl() refuses if this
       # byte-matches PROD_DATABASE_URL.
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      # Placeholder DATABASE_URL — required at job level so the
+      # `npm ci` postinstall step can run `prisma generate`.
+      # prisma.config.ts throws unconditionally if DATABASE_URL is
+      # unset AND .env.local is missing (2026-08-10 dev/prod
+      # isolation rewrite), and CI has neither. Value is inert:
+      # `prisma generate` only reads the schema file, never connects.
+      # Smoke code paths that actually talk to the DB use
+      # STAGING_DATABASE_URL directly via resolveSmokeDbUrl().
+      # AR 2026-08-14 — surfaced when we collapsed wait-for-vercel
+      # into smoke and npm ci finally ran on real CI.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
     steps:
       # ── Resolve the Vercel preview URL from GitHub Deployments ──
       #
@@ -185,6 +196,9 @@ jobs:
     env:
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
+      # Same reason as the smoke job — prisma.config.ts throws
+      # without DATABASE_URL, breaking `npm ci`'s postinstall.
+      DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

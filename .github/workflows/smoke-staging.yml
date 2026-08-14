@@ -138,7 +138,15 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version-file: package.json
+          # Pinned to 20 to match .github/workflows/test.yml. The
+          # previous `node-version-file: package.json` read from an
+          # engines field that doesn't exist, so setup-node picked a
+          # different default per runner-image refresh — silently OK
+          # until npm ci was actually reached (smoke had always
+          # skipped npm ci because it depended on a wait-for-vercel
+          # job that never succeeded; AR 2026-08-14 workflow rewrite
+          # exposed the latent breakage).
+          node-version: "20"
           cache: npm
       - run: npm ci
       # Quarantine lint runs BEFORE the smoke suite. A fixme without a
@@ -181,7 +189,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: package.json
+          # Pinned to 20 to match .github/workflows/test.yml. The
+          # previous `node-version-file: package.json` read from an
+          # engines field that doesn't exist, so setup-node picked a
+          # different default per runner-image refresh — silently OK
+          # until npm ci was actually reached (smoke had always
+          # skipped npm ci because it depended on a wait-for-vercel
+          # job that never succeeded; AR 2026-08-14 workflow rewrite
+          # exposed the latent breakage).
+          node-version: "20"
           cache: npm
       - run: npm ci
       - name: Delete rows tagged with this run id

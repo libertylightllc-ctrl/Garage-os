@@ -46,6 +46,27 @@ export default defineConfig({
     ],
     use: {
         baseURL: process.env.STAGING_URL || "http://localhost:3000",
+        // Vercel Deployment Protection sits in front of preview URLs.
+        // Unauthenticated requests hit the Vercel SSO interstitial
+        // instead of the app; Playwright would fill the SSO email
+        // field and time out on a password field that doesn't exist.
+        // Sending the `x-vercel-protection-bypass` header on every
+        // request skips the interstitial for the run.
+        //
+        // NB: this reaches the test-fixture-created context/page (the
+        // one every spec's `test('…', ({ page }) => …)` receives).
+        // It does NOT reach a context you build yourself via
+        // `browser.newContext()` — global-setup.ts wires the header
+        // explicitly there. See its comment.
+        //
+        // Empty object when the env var is unset (local dev against
+        // localhost) so we don't send a bogus header no one asked for.
+        extraHTTPHeaders: process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+            ? {
+                  "x-vercel-protection-bypass":
+                      process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+              }
+            : {},
         // Real device pixel ratio + a phone-shaped viewport catches the
         // mobile bottom bar behaviour by default. Individual specs can
         // override via test.use({ viewport: ... }) for the desktop

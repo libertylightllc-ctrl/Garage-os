@@ -1,5 +1,6 @@
 import { chromium, FullConfig } from "@playwright/test";
 import { SMOKE_USERS, storageStatePath } from "./roles";
+import { bypassHeaders } from "./vercel-bypass";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -76,9 +77,26 @@ export default async function globalSetup(config: FullConfig) {
     const authDir = path.resolve(".auth");
     if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
+    // Vercel Deployment Protection bypass header (AR 2026-08-14).
+    //
+    // playwright.config.ts sets `use.extraHTTPHeaders` with this
+    // header, but that only reaches the fixture-created page in
+    // `test('…', ({ page }) => …)`. This global setup builds its OWN
+    // context via `browser.newContext()`, which does NOT inherit
+    // `use.extraHTTPHeaders` — it's a config-driven fixture, not a
+    // browser-level default. Without the explicit wire-in here, the
+    // sign-in flow hits Vercel's SSO interstitial and times out
+    // waiting for a password field on Vercel's login page. Same
+    // pattern in every spec that opens a second/third context via
+    // `browser.newContext()` — see the helper module for the shared
+    // list of call sites.
+    const bypass = bypassHeaders();
+
     try {
         for (const user of SMOKE_USERS) {
-            const context = await browser.newContext();
+            const context = await browser.newContext({
+                extraHTTPHeaders: bypass,
+            });
             const page = await context.newPage();
 
             await page.goto(`${baseURL}/login`);

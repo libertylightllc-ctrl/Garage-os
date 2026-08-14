@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
+import { bypassHeaders } from "../support/vercel-bypass";
 import {
     bookManualIntake,
     customerEstimateUrl,
@@ -64,7 +65,9 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     expect(customerHref).toMatch(/\/c\/estimate\/[A-Za-z0-9_-]+/);
 
     // Step 6 — customer approves.
-    const customerContext = await browser.newContext();
+    const customerContext = await browser.newContext({
+        extraHTTPHeaders: bypassHeaders(),
+    });
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref!);
@@ -86,6 +89,7 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     // storageState — mid-test role switch is standard Playwright.
     const cashierContext = await browser.newContext({
         storageState: storageStatePath("cashier"),
+        extraHTTPHeaders: bypassHeaders(),
     });
     try {
         const cashierPage = await cashierContext.newPage();

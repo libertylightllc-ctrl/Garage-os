@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
+import { bypassHeaders } from "../support/vercel-bypass";
 import {
     bookManualIntake,
     customerEstimateUrl,
@@ -74,7 +75,9 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     // Step 6 — customer context: fresh browser, no auth cookies.
     // The customer link is unauthenticated (signed token), so any
     // browser can hit it.
-    const customerContext = await browser.newContext();
+    const customerContext = await browser.newContext({
+        extraHTTPHeaders: bypassHeaders(),
+    });
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref!);

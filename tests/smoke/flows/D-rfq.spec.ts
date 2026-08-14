@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
+import { bypassHeaders } from "../support/vercel-bypass";
 import {
     bookManualIntake,
     customerEstimateUrl,
@@ -82,7 +83,9 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
     expect(customerHref).toMatch(/\/c\/estimate\/[A-Za-z0-9_-]+/);
 
     // Step 6 — customer approves in a fresh context.
-    const customerContext = await browser.newContext();
+    const customerContext = await browser.newContext({
+        extraHTTPHeaders: bypassHeaders(),
+    });
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref!);
@@ -98,6 +101,7 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
     // OWNER-guarded. Fresh context uses owner's storageState.
     const ownerContext = await browser.newContext({
         storageState: storageStatePath("owner"),
+        extraHTTPHeaders: bypassHeaders(),
     });
     try {
         const ownerPage = await ownerContext.newPage();

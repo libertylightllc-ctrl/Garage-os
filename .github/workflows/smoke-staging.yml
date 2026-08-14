@@ -69,6 +69,20 @@ jobs:
       # The prod-DB guard in resolveSmokeDbUrl() refuses if this
       # byte-matches PROD_DATABASE_URL.
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      # Vercel Deployment Protection is enabled on preview URLs — an
+      # unauthenticated request hits Vercel's SSO interstitial instead
+      # of the app. The smoke suite's Playwright specs would fill the
+      # email field on the SSO page, then time out waiting for a
+      # password field that doesn't exist (AR 2026-08-14, first-flow
+      # symptom).
+      #
+      # This token skips the interstitial. Playwright sends it as the
+      # `x-vercel-protection-bypass` request header (see
+      # playwright.config.ts use.extraHTTPHeaders + the explicit
+      # newContext() header in tests/smoke/support/global-setup.ts —
+      # the setup context does NOT inherit config-level extraHTTPHeaders
+      # and would still hit the SSO wall without the second wire-in).
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       # Placeholder DATABASE_URL — required at job level so the
       # `npm ci` postinstall step can run `prisma generate`.
       # prisma.config.ts throws unconditionally if DATABASE_URL is

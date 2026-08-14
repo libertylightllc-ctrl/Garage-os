@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { storageStatePath } from "../support/roles";
+import { bypassHeaders } from "../support/vercel-bypass";
 import {
     bookManualIntake,
     customerEstimateUrl,
@@ -130,7 +131,9 @@ test("Flow E — invoice edit page prints nothing internal", async ({
     // generate invoice. Same shape as Flow C.
     await sendEstimateToCustomer(page, estimateId);
     const customerHref = await customerEstimateUrl(estimateId);
-    const customerContext = await browser.newContext();
+    const customerContext = await browser.newContext({
+        extraHTTPHeaders: bypassHeaders(),
+    });
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref);

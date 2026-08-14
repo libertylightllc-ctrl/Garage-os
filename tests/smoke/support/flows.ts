@@ -1,6 +1,7 @@
 import type { Browser, Page } from "@playwright/test";
 import { smokeCustomerName, smokePhone, smokePlate } from "./unique-id";
 import { storageStatePath } from "./roles";
+import { bypassHeaders } from "./vercel-bypass";
 import pg from "pg";
 
 /**
@@ -141,6 +142,7 @@ export async function sendJobForEstimate(
 ): Promise<void> {
     const ctx = await browser.newContext({
         storageState: storageStatePath("tech"),
+        extraHTTPHeaders: bypassHeaders(),
     });
     try {
         const page = await ctx.newPage();

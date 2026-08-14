@@ -22,36 +22,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  wait-for-vercel:
-    name: Wait for Vercel commit deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      url: ${{ steps.resolve.outputs.url }}
-    steps:
-      - id: resolve
-        env:
-          SHA: ${{ github.event.inputs.sha || github.sha }}
-        run: |
-          set -euo pipefail
-          # Vercel commit-alias slug: garage-os-<first-12-of-sha>-libertylightllc-ctrls-projects.vercel.app
-          SHORT=${SHA:0:12}
-          URL="https://garage-os-${SHORT}-libertylightllc-ctrls-projects.vercel.app"
-          echo "Polling $URL/api/health…"
-          # Retry every 5s for up to 3 min. /api/health is now a bare
-          # 200 OK (dc5b36c) — the exact response body doesn't matter,
-          # only the status code.
-          for i in $(seq 1 36); do
-            if curl -fsS --max-time 8 -o /dev/null "$URL/api/health"; then
-              echo "url=$URL" >> "$GITHUB_OUTPUT"
-              echo "::notice title=vercel ready::$URL"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::Vercel deploy for $SHA never reached Ready in 3 min."
-          exit 1
-
   smoke:
     # ↑↑↑ REQUIRED-STATUS-CHECK CONTRACT.
     #
@@ -71,12 +41,24 @@ jobs:
     # `production` is silently blocked forever (the required context
     # never appears green). Renaming this job — or its `name:` field —
     # is what would actually break the gate.
+    #
+    # AR 2026-08-14 — URL resolution used to live in a separate
+    # `wait-for-vercel` job with `needs:` here, but that made this job
+    # SKIP (not FAIL) when Vercel URL resolution failed, and GitHub
+    # branch protection treats a `skipped` required check as PASSING.
+    # That silently defeats the gate. Move the resolution INLINE so a
+    # resolution failure = `smoke` = failed, not skipped.
     name: smoke
-    needs: wait-for-vercel
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 5 min for URL resolve + 10 min for the suite itself.
+    timeout-minutes: 15
+    # `deployments: read` lets us read Vercel's deployment_status
+    # posts from the same-repo GITHUB_TOKEN — no third-party token
+    # to rotate. `contents: read` is the default write-nothing baseline.
+    permissions:
+      contents: read
+      deployments: read
     env:
-      STAGING_URL: ${{ needs.wait-for-vercel.outputs.url }}
       # Namespace every DB row this run creates + is expected to
       # clean up. Used by flow specs' unique-per-run identifiers.
       STAGING_SMOKE_RUN_ID: ${{ github.run_id }}
@@ -88,6 +70,66 @@ jobs:
       # byte-matches PROD_DATABASE_URL.
       STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
     steps:
+      # ── Resolve the Vercel preview URL from GitHub Deployments ──
+      #
+      # Vercel's GitHub integration posts a `deployment` + one or more
+      # `deployment_status` events per push. We read them via the
+      # same-repo API. The final status carries `environment_url` (the
+      # exact preview URL — Vercel's hash-based slugs like
+      # `garage-<9chars>-libertylightllc-ctrls-projects.vercel.app`
+      # are generated per deployment and can't be built from the SHA).
+      #
+      # Retry every 5s for up to 5 min. A failed/error deployment
+      # fails the step immediately so we don't wait out the timeout
+      # for a build that's already dead.
+      - name: Resolve Vercel preview URL
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.inputs.sha || github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for Vercel deployment on SHA=$SHA…"
+          for i in $(seq 1 60); do
+            # Latest deployment for this SHA in any environment. The
+            # Vercel integration typically creates one per push.
+            DEPLOYMENT_ID=$(gh api "repos/$REPO/deployments?sha=$SHA&per_page=1" --jq '.[0].id // ""')
+            if [ -n "$DEPLOYMENT_ID" ]; then
+              STATUS=$(gh api "repos/$REPO/deployments/$DEPLOYMENT_ID/statuses?per_page=1" --jq '.[0] // {}')
+              STATE=$(echo "$STATUS" | jq -r '.state // ""')
+              # environment_url is the canonical field; target_url is a
+              # legacy alias some integrations still use — read both.
+              URL=$(echo "$STATUS" | jq -r '.environment_url // .target_url // ""')
+              echo "attempt $i: deployment_id=$DEPLOYMENT_ID state=$STATE url=$URL"
+              case "$STATE" in
+                success)
+                  if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                    # Sanity-check the URL responds. A "success" status
+                    # with a URL that returns 404 would fail late in the
+                    # Playwright suite; fail here so the error is clear.
+                    if curl -fsS --max-time 8 -o /dev/null "$URL/api/health"; then
+                      echo "url=$URL" >> "$GITHUB_OUTPUT"
+                      echo "::notice title=vercel ready::$URL"
+                      exit 0
+                    else
+                      echo "::warning::Vercel says success but $URL/api/health did not respond — retrying"
+                    fi
+                  fi
+                  ;;
+                failure|error)
+                  echo "::error::Vercel deployment $DEPLOYMENT_ID failed for $SHA (state=$STATE)"
+                  exit 1
+                  ;;
+              esac
+            else
+              echo "attempt $i: no deployment posted yet for $SHA"
+            fi
+            sleep 5
+          done
+          echo "::error::Vercel deploy for $SHA never reached success in 5 min. If Vercel's GitHub integration is broken, check https://vercel.com/dashboard for the project's Git connection."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           # Need full history so smoke-quarantine-lint's git blame
@@ -107,6 +149,8 @@ jobs:
         run: node scripts/smoke-quarantine-lint.mjs
       - run: npx playwright install --with-deps chromium
       - name: Run smoke suite
+        env:
+          STAGING_URL: ${{ steps.resolve.outputs.url }}
         run: npx playwright test
       - name: Upload Playwright report
         if: failure()

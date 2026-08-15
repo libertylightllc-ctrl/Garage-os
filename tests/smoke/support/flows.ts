@@ -172,16 +172,35 @@ export async function sendJobForEstimate(
         // ourselves. `?taken=1` means the claim didn't land; surface
         // that explicitly rather than hanging on the next locator.
         //
-        // Was `page.waitForLoadState("networkidle")` — unbounded and
-        // unreliable against Next.js (streaming RSC + Vercel preview
-        // toolbar keep the connection busy). Replaced with a bounded
-        // URL settle: the server action redirects back to /technician
-        // (with or without ?taken=1) and that's the deterministic
-        // signal the action completed. AR 2026-08-15.
-        await page.waitForURL(
-            (url) => url.pathname === "/technician",
-            { timeout: 15_000 },
-        );
+        // First attempt (AR 2026-08-15) tried waitForURL matching
+        // /technician — but the URL is ALREADY /technician when the
+        // click fires, so Playwright's waitForURL returned instantly
+        // and the ?taken=1 check ran against pre-action state, giving
+        // false negatives for the entire suite (same 4-spec failure
+        // pattern as before). waitForURL only fires on a new
+        // navigation; a Next.js server action's redirect back to the
+        // same URL is a soft revalidation, not a hard navigation.
+        //
+        // Second attempt: race two post-action signals with
+        // Promise.any — success = the claim form for this jobId is
+        // detached (job moved out of the unclaimed list); fail = the
+        // URL gained ?taken=1. Whichever fires first ends the wait;
+        // if BOTH time out, Promise.any rejects with AggregateError
+        // and the test fails loud rather than hanging. Predicates
+        // that only match POST-action DOM/URL state, so no race with
+        // pre-action state.
+        await Promise.any([
+            page
+                .locator(
+                    `form:has(input[name="jobId"][value="${jobCardId}"])`,
+                )
+                .first()
+                .waitFor({ state: "detached", timeout: 15_000 }),
+            page.waitForURL(
+                (url) => url.searchParams.get("taken") === "1",
+                { timeout: 15_000 },
+            ),
+        ]);
         if (page.url().includes("?taken=1")) {
             throw new Error(
                 `sendJobForEstimate: claim didn't land — /technician?taken=1 (job ${jobCardId} already taken or ineligible)`,

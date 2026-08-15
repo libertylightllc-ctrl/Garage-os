@@ -229,10 +229,14 @@ export async function sendJobForEstimate(
         // rendered TEXT (not the input value we typed — getByText
         // matches text nodes, not <input value>). Deterministic signal
         // that the server action re-rendered with the new part in the
-        // list. Was `page.waitForLoadState("networkidle")` — hung
-        // indefinitely on Vercel preview (AR 2026-08-15).
+        // list. `.first()` because the tech page renders each part
+        // twice (card view + table view) and strict-mode locators
+        // reject 2-element matches. Was `page.waitForLoadState
+        // ("networkidle")` — hung indefinitely on Vercel preview
+        // (AR 2026-08-15).
         await page
             .getByText("Smoke test — brake pads")
+            .first()
             .waitFor({ state: "visible", timeout: 10_000 });
 
         // 3. "Send to Cashier for Estimate" (button label i18n key

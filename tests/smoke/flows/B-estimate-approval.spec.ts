@@ -57,9 +57,12 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
     // Wait for the added line's description to appear as rendered
     // text (getByText matches text nodes only — not the value of the
-    // input we typed into, which stays present). Was networkidle
-    // (unbounded, unreliable on Vercel preview) — AR 2026-08-15.
-    await page.getByText("Smoke B — labour line").waitFor({ state: "visible", timeout: 10_000 });
+    // input we typed into, which stays present). `.first()` because
+    // the estimate edit page renders each line twice (card view <p>
+    // + table view <td>) and strict-mode locators reject 2-element
+    // matches. Was networkidle (unbounded, unreliable on Vercel
+    // preview) — AR 2026-08-15.
+    await page.getByText("Smoke B — labour line").first().waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — advisor clicks Send. Send only fires from the preview
     // page now (post-workflow-flip: prevents accidental one-tap sends

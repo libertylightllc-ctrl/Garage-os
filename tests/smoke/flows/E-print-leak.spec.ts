@@ -118,10 +118,12 @@ test("Flow E — invoice edit page prints nothing internal", async ({
         .click();
     // Deterministic wait for the added line's rendered text before
     // the setEstimateLineCosts raw-pg UPDATE runs — the row must
-    // exist in the DB before we can UPDATE it. Was networkidle.
-    // AR 2026-08-15.
+    // exist in the DB before we can UPDATE it. `.first()` because
+    // estimate lines render twice (card + table view). Was
+    // networkidle. AR 2026-08-15.
     await page
         .getByText("Print-leak test — brake pad")
+        .first()
         .waitFor({ state: "visible", timeout: 10_000 });
 
     // Force a known cost onto the line — this is what will snapshot

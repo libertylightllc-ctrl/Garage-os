@@ -85,113 +85,113 @@ async function del(sql, params) {
 }
 
 // Deletion order (children first). Audited against
-// prisma/schema.prisma's FK graph for every table smoke flows create:
+// prisma/schema.prisma's FK graph. Every table with a FK column
+// pointing at Customer / Vehicle / JobCard / Estimate / Invoice
+// has to be swept before its parent, or DELETE FROM the parent
+// fires an FK violation.
 //
-//   Flow A (all):   Customer + Vehicle + JobCard  (bookManualIntake)
-//   Flow B/C/D/E:   + JobPart / JobStep           (sendJobForEstimate:
-//                                                   addRequiredPartAction
-//                                                   creates JobPart; the
-//                                                   claim + send transitions
-//                                                   create JobStep rows)
-//                   + Estimate / EstimateLine     (create estimate + line)
-//   Flow C/E:       + Invoice / InvoiceLine       (generate invoice)
-//   Flow C:         + Payment                     (record payment)
-//   Flow D:         + PurchaseOrder / POLine      (from-estimate) — but
-//                                                   these have no FK back
-//                                                   to Vehicle/Customer/
-//                                                   JobCard so they don't
-//                                                   block the chain below;
-//                                                   left to the weekly
-//                                                   reseed to clear.
+// Full parent-child map (only relations without ON DELETE CASCADE /
+// SET NULL — Cascade rows disappear automatically with their parent,
+// SET NULL rows unhook themselves):
 //
-// Missing any child would surface as an FK error on the parent DELETE:
-//   - Payment before Invoice     → Payment.invoiceId
-//   - InvoiceLine before Invoice → InvoiceLine.invoiceId
-//   - Invoice before JobCard     → Invoice.jobCardId
-//   - EstimateLine before Estimate → EstimateLine.estimateId
-//   - Estimate before JobCard    → Estimate.jobCardId
-//   - JobPart before JobCard     → JobPart.jobCardId
-//   - JobStep before JobCard     → JobStep.jobCardId
-//   - JobCard before Vehicle     → JobCard.vehicleId
-//   - Vehicle before Customer    → Vehicle.customerId  (the FK that fired
-//                                                       on run #30's FAIL)
+//   Invoice     ← Payment, InvoiceLine
+//                 (InvoiceSend has onDelete: Cascade, no explicit
+//                  delete needed but harmless)
+//   Estimate    ← EstimateLine
+//   JobCard     ← WorkSession, JobHelper, JobPart, JobStep,
+//                 JobFinding, PartRequest, AdvancePayment,
+//                 PartMovement (nullable jobCardId, RESTRICT),
+//                 Reminder (nullable jobCardId, RESTRICT),
+//                 Estimate, Invoice
+//   Vehicle     ← Reminder (vehicleId not nullable), JobCard, Booking
+//                 (nullable vehicleId, RESTRICT)
+//                 (VehiclePlateHistory + VehicleOwnershipTransfer
+//                  have onDelete: Cascade, gone with Vehicle)
+//                 (PurchaseOrderLine.vehicleId has onDelete: SetNull —
+//                  the row survives, its vehicle pointer nulls out;
+//                  the smoke run does not care about POs)
+//   Customer    ← Vehicle, Booking, WhatsAppThread
+//
+// Prior misses caught the hard way:
+//   #30 — Vehicle_customerId_fkey (plate LIKE pattern didn't match
+//         the normalized stored value → 0 vehicles deleted → Customer
+//         delete blocked)
+//   #32 — WorkSession_jobCardId_fkey (tech workflow creates WorkSession
+//         via the claim action)
+//
+// Order below sweeps every listed child before its parent. Empty
+// DELETE rows are cheap (single query with 0 rowCount), so it is fine
+// to include tables smoke does not touch today — they cost nothing
+// and stop the next added flow from breaking cleanup.
+// Shared subqueries — every child DELETE selects rows attached to a
+// JobCard whose vehicle's plate matches the run's prefix. Written as
+// SQL literals rather than JS templates so the intent stays in each
+// statement.
+const JC_BY_PLATE = `
+    SELECT jc.id FROM "JobCard" jc
+    JOIN "Vehicle" v ON v.id = jc."vehicleId"
+    WHERE v.plate LIKE $1
+`;
+const INV_BY_PLATE = `
+    SELECT i.id FROM "Invoice" i
+    JOIN "JobCard" jc ON jc.id = i."jobCardId"
+    JOIN "Vehicle" v ON v.id = jc."vehicleId"
+    WHERE v.plate LIKE $1
+`;
+const EST_BY_PLATE = `
+    SELECT e.id FROM "Estimate" e
+    JOIN "JobCard" jc ON jc.id = e."jobCardId"
+    JOIN "Vehicle" v ON v.id = jc."vehicleId"
+    WHERE v.plate LIKE $1
+`;
+const V_BY_PLATE = `SELECT id FROM "Vehicle" WHERE plate LIKE $1`;
+
 try {
-    const payments = await del(
-        `DELETE FROM "Payment" WHERE "invoiceId" IN (
-             SELECT i.id FROM "Invoice" i
-             JOIN "JobCard" jc ON jc.id = i."jobCardId"
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const invLines = await del(
-        `DELETE FROM "InvoiceLine" WHERE "invoiceId" IN (
-             SELECT i.id FROM "Invoice" i
-             JOIN "JobCard" jc ON jc.id = i."jobCardId"
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const invoices = await del(
-        `DELETE FROM "Invoice" WHERE "jobCardId" IN (
-             SELECT jc.id FROM "JobCard" jc
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const estLines = await del(
-        `DELETE FROM "EstimateLine" WHERE "estimateId" IN (
-             SELECT e.id FROM "Estimate" e
-             JOIN "JobCard" jc ON jc.id = e."jobCardId"
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const estimates = await del(
-        `DELETE FROM "Estimate" WHERE "jobCardId" IN (
-             SELECT jc.id FROM "JobCard" jc
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const jobParts = await del(
-        `DELETE FROM "JobPart" WHERE "jobCardId" IN (
-             SELECT jc.id FROM "JobCard" jc
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const jobSteps = await del(
-        `DELETE FROM "JobStep" WHERE "jobCardId" IN (
-             SELECT jc.id FROM "JobCard" jc
-             JOIN "Vehicle" v ON v.id = jc."vehicleId"
-             WHERE v.plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const jobs = await del(
-        `DELETE FROM "JobCard" WHERE "vehicleId" IN (
-             SELECT id FROM "Vehicle" WHERE plate LIKE $1
-         )`,
-        [platePattern],
-    );
-    const vehicles = await del(
-        `DELETE FROM "Vehicle" WHERE plate LIKE $1`,
-        [platePattern],
-    );
-    const customers = await del(
-        `DELETE FROM "Customer" WHERE name = $1`,
-        [smokeName],
-    );
+    // Invoice children
+    const payments = await del(`DELETE FROM "Payment" WHERE "invoiceId" IN (${INV_BY_PLATE})`, [platePattern]);
+    const invLines = await del(`DELETE FROM "InvoiceLine" WHERE "invoiceId" IN (${INV_BY_PLATE})`, [platePattern]);
+    const invoices = await del(`DELETE FROM "Invoice" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+
+    // Estimate children
+    const estLines = await del(`DELETE FROM "EstimateLine" WHERE "estimateId" IN (${EST_BY_PLATE})`, [platePattern]);
+    const estimates = await del(`DELETE FROM "Estimate" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+
+    // JobCard children (order within this group doesn't matter — none
+    // reference each other, all reference JobCard).
+    const workSessions = await del(`DELETE FROM "WorkSession" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const jobHelpers = await del(`DELETE FROM "JobHelper" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const jobParts = await del(`DELETE FROM "JobPart" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const jobSteps = await del(`DELETE FROM "JobStep" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const jobFindings = await del(`DELETE FROM "JobFinding" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const partRequests = await del(`DELETE FROM "PartRequest" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const advPayments = await del(`DELETE FROM "AdvancePayment" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    const partMovements = await del(`DELETE FROM "PartMovement" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
+    // Reminder points at BOTH JobCard (nullable) and Vehicle (not nullable) —
+    // need to delete the plate-matched ones before JobCard OR Vehicle.
+    const reminders = await del(`DELETE FROM "Reminder" WHERE "vehicleId" IN (${V_BY_PLATE})`, [platePattern]);
+
+    // JobCard
+    const jobs = await del(`DELETE FROM "JobCard" WHERE "vehicleId" IN (${V_BY_PLATE})`, [platePattern]);
+
+    // Vehicle children (Booking has nullable vehicleId + nullable jobCardId
+    // reverse-relation; the customerId is on Booking, so we filter by that
+    // via the smoke customer join).
+    const bookingsByVehicle = await del(`DELETE FROM "Booking" WHERE "vehicleId" IN (${V_BY_PLATE})`, [platePattern]);
+
+    // Vehicle
+    const vehicles = await del(`DELETE FROM "Vehicle" WHERE plate LIKE $1`, [platePattern]);
+
+    // Customer children (any remaining Bookings + WhatsAppThreads that
+    // reference the smoke customer directly, e.g. from a prior flow that
+    // did not attach a vehicleId).
+    const bookingsByCustomer = await del(`DELETE FROM "Booking" WHERE "customerId" IN (SELECT id FROM "Customer" WHERE name = $1)`, [smokeName]);
+    const waThreads = await del(`DELETE FROM "WhatsAppThread" WHERE "customerId" IN (SELECT id FROM "Customer" WHERE name = $1)`, [smokeName]);
+
+    // Customer
+    const customers = await del(`DELETE FROM "Customer" WHERE name = $1`, [smokeName]);
 
     console.log(
-        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} jobPart=${jobParts} jobStep=${jobSteps} jobCard=${jobs} vehicle=${vehicles} customer=${customers}`,
+        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} workSession=${workSessions} jobHelper=${jobHelpers} jobPart=${jobParts} jobStep=${jobSteps} jobFinding=${jobFindings} partRequest=${partRequests} advPayment=${advPayments} partMovement=${partMovements} reminder=${reminders} jobCard=${jobs} bookingByVehicle=${bookingsByVehicle} vehicle=${vehicles} bookingByCustomer=${bookingsByCustomer} waThread=${waThreads} customer=${customers}`,
     );
 } catch (err) {
     console.error(

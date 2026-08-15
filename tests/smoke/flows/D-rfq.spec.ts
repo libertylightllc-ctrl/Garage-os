@@ -71,9 +71,10 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         )
         .first()
         .click();
-    // Deterministic wait for the added line's rendered text. Was
+    // Deterministic wait for the added line's rendered text. `.first()`
+    // because estimate lines render twice (card + table view). Was
     // networkidle. AR 2026-08-15.
-    await page.getByText(HANDTYPED_DESCRIPTION).waitFor({ state: "visible", timeout: 10_000 });
+    await page.getByText(HANDTYPED_DESCRIPTION).first().waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — advisor sends the estimate (status → SENT). Send only
     // fires from the preview page post-workflow-flip.

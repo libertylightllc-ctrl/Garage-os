@@ -54,9 +54,10 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     await page.fill('input[name="description"], textarea[name="description"]', "Smoke C — labour line");
     await page.fill('input[name="unitPrice"]', "200");
     await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
-    // Deterministic wait for the added line's rendered text — was
+    // Deterministic wait for the added line's rendered text — `.first()`
+    // because estimate lines render twice (card + table view). Was
     // networkidle (unreliable on Vercel preview). AR 2026-08-15.
-    await page.getByText("Smoke C — labour line").waitFor({ state: "visible", timeout: 10_000 });
+    await page.getByText("Smoke C — labour line").first().waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — SEND (only from the preview page post-workflow-flip).
     await sendEstimateToCustomer(page, estimateId);

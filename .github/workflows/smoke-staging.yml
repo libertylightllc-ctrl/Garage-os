@@ -50,8 +50,13 @@ jobs:
     # resolution failure = `smoke` = failed, not skipped.
     name: smoke
     runs-on: ubuntu-latest
-    # 5 min for URL resolve + 10 min for the suite itself.
-    timeout-minutes: 15
+    # 25 min total: ~3 min setup (resolve URL + checkout + npm ci +
+    # playwright install) + ~20 min for the suite. First real run on
+    # 29fcc09 exhausted a 15-min cap after 12m 38s in the Playwright
+    # step alone — 5 flows × up to 3 retries against real Vercel
+    # staging (cold-start latency + network round-trips) needs the
+    # headroom. Matches test.yml's 15-min cap for its lighter workload.
+    timeout-minutes: 25
     # `deployments: read` lets us read Vercel's deployment_status
     # posts from the same-repo GITHUB_TOKEN — no third-party token
     # to rotate. `contents: read` is the default write-nothing baseline.

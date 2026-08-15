@@ -52,7 +52,19 @@ if (/@garageos\.|prod|production/i.test(url)) {
     process.exit(1);
 }
 
-const platePrefix = `SMK-${runId}-%`; // SQL LIKE pattern
+// smokePlate(letter) types "SMK-<runId>-<letter>", but the intake
+// action's normalizePlate() strips dashes + uppercases before writing:
+//   normalizePlate("SMK-31887657706-A") === "SMK31887657706A"
+// So the value stored in Vehicle.plate has NO dashes. The old pattern
+// `SMK-<runId>-%` never matched, vehicles stayed in the DB, and the
+// subsequent DELETE FROM Customer FK-failed on Vehicle_customerId_fkey.
+// AR 2026-08-15 caught this on run #30.
+//
+// Match the normalized form. `_` is SQL LIKE's single-char wildcard —
+// tighter than `%` and safe because smokePlate's letter is always
+// exactly one character (A/B/C/D/E). Using `%` would risk matching a
+// longer run id starting with this one (e.g. SMK1234 vs SMK12345).
+const platePattern = `SMK${runId}_`;
 const smokeName = `Smoke Test ${runId}`;
 
 const client = new pg.Client({ connectionString: url });
@@ -72,7 +84,47 @@ async function del(sql, params) {
     return r.rowCount ?? 0;
 }
 
+// Deletion order (children first). Audited against
+// prisma/schema.prisma's FK graph for every table smoke flows create:
+//
+//   Flow A (all):   Customer + Vehicle + JobCard  (bookManualIntake)
+//   Flow B/C/D/E:   + JobPart / JobStep           (sendJobForEstimate:
+//                                                   addRequiredPartAction
+//                                                   creates JobPart; the
+//                                                   claim + send transitions
+//                                                   create JobStep rows)
+//                   + Estimate / EstimateLine     (create estimate + line)
+//   Flow C/E:       + Invoice / InvoiceLine       (generate invoice)
+//   Flow C:         + Payment                     (record payment)
+//   Flow D:         + PurchaseOrder / POLine      (from-estimate) — but
+//                                                   these have no FK back
+//                                                   to Vehicle/Customer/
+//                                                   JobCard so they don't
+//                                                   block the chain below;
+//                                                   left to the weekly
+//                                                   reseed to clear.
+//
+// Missing any child would surface as an FK error on the parent DELETE:
+//   - Payment before Invoice     → Payment.invoiceId
+//   - InvoiceLine before Invoice → InvoiceLine.invoiceId
+//   - Invoice before JobCard     → Invoice.jobCardId
+//   - EstimateLine before Estimate → EstimateLine.estimateId
+//   - Estimate before JobCard    → Estimate.jobCardId
+//   - JobPart before JobCard     → JobPart.jobCardId
+//   - JobStep before JobCard     → JobStep.jobCardId
+//   - JobCard before Vehicle     → JobCard.vehicleId
+//   - Vehicle before Customer    → Vehicle.customerId  (the FK that fired
+//                                                       on run #30's FAIL)
 try {
+    const payments = await del(
+        `DELETE FROM "Payment" WHERE "invoiceId" IN (
+             SELECT i.id FROM "Invoice" i
+             JOIN "JobCard" jc ON jc.id = i."jobCardId"
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePattern],
+    );
     const invLines = await del(
         `DELETE FROM "InvoiceLine" WHERE "invoiceId" IN (
              SELECT i.id FROM "Invoice" i
@@ -80,7 +132,7 @@ try {
              JOIN "Vehicle" v ON v.id = jc."vehicleId"
              WHERE v.plate LIKE $1
          )`,
-        [platePrefix],
+        [platePattern],
     );
     const invoices = await del(
         `DELETE FROM "Invoice" WHERE "jobCardId" IN (
@@ -88,7 +140,7 @@ try {
              JOIN "Vehicle" v ON v.id = jc."vehicleId"
              WHERE v.plate LIKE $1
          )`,
-        [platePrefix],
+        [platePattern],
     );
     const estLines = await del(
         `DELETE FROM "EstimateLine" WHERE "estimateId" IN (
@@ -97,7 +149,7 @@ try {
              JOIN "Vehicle" v ON v.id = jc."vehicleId"
              WHERE v.plate LIKE $1
          )`,
-        [platePrefix],
+        [platePattern],
     );
     const estimates = await del(
         `DELETE FROM "Estimate" WHERE "jobCardId" IN (
@@ -105,17 +157,33 @@ try {
              JOIN "Vehicle" v ON v.id = jc."vehicleId"
              WHERE v.plate LIKE $1
          )`,
-        [platePrefix],
+        [platePattern],
+    );
+    const jobParts = await del(
+        `DELETE FROM "JobPart" WHERE "jobCardId" IN (
+             SELECT jc.id FROM "JobCard" jc
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePattern],
+    );
+    const jobSteps = await del(
+        `DELETE FROM "JobStep" WHERE "jobCardId" IN (
+             SELECT jc.id FROM "JobCard" jc
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePattern],
     );
     const jobs = await del(
         `DELETE FROM "JobCard" WHERE "vehicleId" IN (
              SELECT id FROM "Vehicle" WHERE plate LIKE $1
          )`,
-        [platePrefix],
+        [platePattern],
     );
     const vehicles = await del(
         `DELETE FROM "Vehicle" WHERE plate LIKE $1`,
-        [platePrefix],
+        [platePattern],
     );
     const customers = await del(
         `DELETE FROM "Customer" WHERE name = $1`,
@@ -123,7 +191,7 @@ try {
     );
 
     console.log(
-        `::notice title=smoke cleanup::runId=${runId} deleted invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} jobCard=${jobs} vehicle=${vehicles} customer=${customers}`,
+        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} jobPart=${jobParts} jobStep=${jobSteps} jobCard=${jobs} vehicle=${vehicles} customer=${customers}`,
     );
 } catch (err) {
     console.error(

@@ -55,7 +55,11 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     // Submit the add-line form (the button doesn't have a stable text
     // key, so scope by form action).
     await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
-    await page.waitForLoadState("networkidle");
+    // Wait for the added line's description to appear as rendered
+    // text (getByText matches text nodes only — not the value of the
+    // input we typed into, which stays present). Was networkidle
+    // (unbounded, unreliable on Vercel preview) — AR 2026-08-15.
+    await page.getByText("Smoke B — labour line").waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — advisor clicks Send. Send only fires from the preview
     // page now (post-workflow-flip: prevents accidental one-tap sends
@@ -87,16 +91,20 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
         await customerPage.click('form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")');
         // Server action redirects back to the same customer page with
         // status=APPROVED — the "approved" banner should render.
-        await customerPage.waitForLoadState("networkidle");
-        const customerBody = await customerPage.locator("body").innerText();
-        expect(customerBody).toMatch(/approved|تمت الموافقة/i);
+        // Was networkidle + body-innerText scan — now a bounded
+        // deterministic wait on the banner text itself. AR 2026-08-15.
+        await expect(
+            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+        ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();
     }
 
-    // Step 8 — advisor sees APPROVED on the estimate row.
+    // Step 8 — advisor sees APPROVED on the estimate row. Bounded
+    // wait on the specific text; page.goto already waits for load,
+    // so no separate networkidle needed. AR 2026-08-15.
     await page.goto(`/advisor/jobs/${jobCardId}`);
-    await page.waitForLoadState("networkidle");
-    const advisorBody = await page.locator("body").innerText();
-    expect(advisorBody).toMatch(/APPROVED/);
+    await expect(page.getByText(/APPROVED/).first()).toBeVisible({
+        timeout: 15_000,
+    });
 });

@@ -13,7 +13,19 @@
  * explicitly does NOT want silent skips — a weekly stretch of "the
  * cleanup step is skipping because the secret got removed and nobody
  * noticed" is exactly the failure mode we're avoiding here.
+ *
+ * Raw pg (AR 2026-08-15). The previous version imported PrismaClient
+ * from `../src/generated/prisma/client/index.js` — a path that has
+ * never existed. Prisma 7's generator emits pure TypeScript at
+ * `../src/generated/prisma/*.ts`, and Node `.mjs` can't import `.ts`
+ * without a runner. Only surfaced now because cleanup had never
+ * reached this import — earlier failures (missing secret, stale
+ * password) exited before line 43. Raw pg with parameterised SQL
+ * matches the pattern in tests/smoke/support/flows.ts and removes
+ * the Prisma-runtime dependency the cleanup step never needed.
  */
+
+import pg from "pg";
 
 const url = process.env.STAGING_DATABASE_URL;
 const runId = process.env.STAGING_SMOKE_RUN_ID;
@@ -40,41 +52,78 @@ if (/@garageos\.|prod|production/i.test(url)) {
     process.exit(1);
 }
 
-const { PrismaClient } = await import("../src/generated/prisma/client/index.js");
-const prisma = new PrismaClient({ datasources: { db: { url } } });
-
-const prefix = `SMK-${runId}-`;
+const platePrefix = `SMK-${runId}-%`; // SQL LIKE pattern
 const smokeName = `Smoke Test ${runId}`;
 
+const client = new pg.Client({ connectionString: url });
+await client.connect();
+
+// Order matters — child rows first, then parents. Any join column
+// this script doesn't cover is safe to skip; the next run's fresh
+// prefix keeps them from interfering, and the weekly reseed
+// eventually clears everything.
+//
+// SQL mirrors the previous Prisma deleteMany chains: each level's
+// filter is a subquery on the plate prefix reached through the join
+// tree. Parameterised to keep the LIKE-pattern out of any SQL-injection
+// concern even though the run-id is our own env var.
+async function del(sql, params) {
+    const r = await client.query(sql, params);
+    return r.rowCount ?? 0;
+}
+
 try {
-    // Order matters — child rows first, then parents. Any join column
-    // this script doesn't cover is safe to skip; the next run's fresh
-    // prefix keeps them from interfering, and the weekly reseed
-    // eventually clears everything.
-    const invLines = await prisma.invoiceLine.deleteMany({
-        where: { invoice: { jobCard: { vehicle: { plate: { startsWith: prefix } } } } },
-    });
-    const invoices = await prisma.invoice.deleteMany({
-        where: { jobCard: { vehicle: { plate: { startsWith: prefix } } } },
-    });
-    const estLines = await prisma.estimateLine.deleteMany({
-        where: { estimate: { jobCard: { vehicle: { plate: { startsWith: prefix } } } } },
-    });
-    const estimates = await prisma.estimate.deleteMany({
-        where: { jobCard: { vehicle: { plate: { startsWith: prefix } } } },
-    });
-    const jobs = await prisma.jobCard.deleteMany({
-        where: { vehicle: { plate: { startsWith: prefix } } },
-    });
-    const vehicles = await prisma.vehicle.deleteMany({
-        where: { plate: { startsWith: prefix } },
-    });
-    const customers = await prisma.customer.deleteMany({
-        where: { name: smokeName },
-    });
+    const invLines = await del(
+        `DELETE FROM "InvoiceLine" WHERE "invoiceId" IN (
+             SELECT i.id FROM "Invoice" i
+             JOIN "JobCard" jc ON jc.id = i."jobCardId"
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePrefix],
+    );
+    const invoices = await del(
+        `DELETE FROM "Invoice" WHERE "jobCardId" IN (
+             SELECT jc.id FROM "JobCard" jc
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePrefix],
+    );
+    const estLines = await del(
+        `DELETE FROM "EstimateLine" WHERE "estimateId" IN (
+             SELECT e.id FROM "Estimate" e
+             JOIN "JobCard" jc ON jc.id = e."jobCardId"
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePrefix],
+    );
+    const estimates = await del(
+        `DELETE FROM "Estimate" WHERE "jobCardId" IN (
+             SELECT jc.id FROM "JobCard" jc
+             JOIN "Vehicle" v ON v.id = jc."vehicleId"
+             WHERE v.plate LIKE $1
+         )`,
+        [platePrefix],
+    );
+    const jobs = await del(
+        `DELETE FROM "JobCard" WHERE "vehicleId" IN (
+             SELECT id FROM "Vehicle" WHERE plate LIKE $1
+         )`,
+        [platePrefix],
+    );
+    const vehicles = await del(
+        `DELETE FROM "Vehicle" WHERE plate LIKE $1`,
+        [platePrefix],
+    );
+    const customers = await del(
+        `DELETE FROM "Customer" WHERE name = $1`,
+        [smokeName],
+    );
 
     console.log(
-        `::notice title=smoke cleanup::runId=${runId} deleted invoiceLine=${invLines.count} invoice=${invoices.count} estimateLine=${estLines.count} estimate=${estimates.count} jobCard=${jobs.count} vehicle=${vehicles.count} customer=${customers.count}`,
+        `::notice title=smoke cleanup::runId=${runId} deleted invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} jobCard=${jobs} vehicle=${vehicles} customer=${customers}`,
     );
 } catch (err) {
     console.error(
@@ -83,5 +132,5 @@ try {
     );
     process.exit(1);
 } finally {
-    await prisma.$disconnect();
+    await client.end();
 }

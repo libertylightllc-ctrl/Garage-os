@@ -171,7 +171,17 @@ export async function sendJobForEstimate(
         // page to settle after the server action, then navigate
         // ourselves. `?taken=1` means the claim didn't land; surface
         // that explicitly rather than hanging on the next locator.
-        await page.waitForLoadState("networkidle");
+        //
+        // Was `page.waitForLoadState("networkidle")` — unbounded and
+        // unreliable against Next.js (streaming RSC + Vercel preview
+        // toolbar keep the connection busy). Replaced with a bounded
+        // URL settle: the server action redirects back to /technician
+        // (with or without ?taken=1) and that's the deterministic
+        // signal the action completed. AR 2026-08-15.
+        await page.waitForURL(
+            (url) => url.pathname === "/technician",
+            { timeout: 15_000 },
+        );
         if (page.url().includes("?taken=1")) {
             throw new Error(
                 `sendJobForEstimate: claim didn't land — /technician?taken=1 (job ${jobCardId} already taken or ineligible)`,
@@ -196,7 +206,15 @@ export async function sendJobForEstimate(
             )
             .first()
             .click({ timeout: 10_000 });
-        await page.waitForLoadState("networkidle");
+        // Wait for the added-part description to appear in the DOM as
+        // rendered TEXT (not the input value we typed — getByText
+        // matches text nodes, not <input value>). Deterministic signal
+        // that the server action re-rendered with the new part in the
+        // list. Was `page.waitForLoadState("networkidle")` — hung
+        // indefinitely on Vercel preview (AR 2026-08-15).
+        await page
+            .getByText("Smoke test — brake pads")
+            .waitFor({ state: "visible", timeout: 10_000 });
 
         // 3. "Send to Cashier for Estimate" (button label i18n key
         //    submitToCashier — "Send to Cashier for Estimate →"). Use
@@ -242,7 +260,18 @@ export async function sendEstimateToCustomer(
         )
         .first()
         .click({ timeout: 10_000 });
-    await page.waitForLoadState("networkidle");
+    // Wait for the SEND form to detach from the DOM. The preview page
+    // only renders the SEND form while the estimate is DRAFT; after
+    // setEstimateStatusAction commits status=SENT and revalidatePath
+    // re-renders, the SEND form is gone (replaced with a sent-state
+    // view). Deterministic signal that the action completed.
+    // Was `page.waitForLoadState("networkidle")` — hung on Vercel
+    // preview (AR 2026-08-15).
+    await page
+        .locator(
+            `form:has(input[name="estimateId"][value="${estimateId}"]):has(input[name="status"][value="SENT"])`,
+        )
+        .waitFor({ state: "detached", timeout: 15_000 });
 }
 
 /**

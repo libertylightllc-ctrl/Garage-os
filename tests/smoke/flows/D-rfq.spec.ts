@@ -71,7 +71,9 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         )
         .first()
         .click();
-    await page.waitForLoadState("networkidle");
+    // Deterministic wait for the added line's rendered text. Was
+    // networkidle. AR 2026-08-15.
+    await page.getByText(HANDTYPED_DESCRIPTION).waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — advisor sends the estimate (status → SENT). Send only
     // fires from the preview page post-workflow-flip.
@@ -92,7 +94,11 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         await customerPage.click(
             'form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")',
         );
-        await customerPage.waitForLoadState("networkidle");
+        // Wait for the approved banner — matches Flow B/C's pattern.
+        // AR 2026-08-15.
+        await expect(
+            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+        ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();
     }

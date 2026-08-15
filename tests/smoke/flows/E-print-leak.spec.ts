@@ -116,7 +116,13 @@ test("Flow E — invoice edit page prints nothing internal", async ({
         )
         .first()
         .click();
-    await page.waitForLoadState("networkidle");
+    // Deterministic wait for the added line's rendered text before
+    // the setEstimateLineCosts raw-pg UPDATE runs — the row must
+    // exist in the DB before we can UPDATE it. Was networkidle.
+    // AR 2026-08-15.
+    await page
+        .getByText("Print-leak test — brake pad")
+        .waitFor({ state: "visible", timeout: 10_000 });
 
     // Force a known cost onto the line — this is what will snapshot
     // as InvoiceLine.unitCost at invoice generation and feed the
@@ -140,7 +146,11 @@ test("Flow E — invoice edit page prints nothing internal", async ({
         await customerPage.click(
             'form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")',
         );
-        await customerPage.waitForLoadState("networkidle");
+        // Wait for the approved banner — matches Flow B/C/D's pattern.
+        // AR 2026-08-15.
+        await expect(
+            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+        ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();
     }

@@ -54,7 +54,9 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     await page.fill('input[name="description"], textarea[name="description"]', "Smoke C — labour line");
     await page.fill('input[name="unitPrice"]', "200");
     await page.locator('form:has(input[name="estimateId"][value="' + estimateId + '"]):has(input[name="unitPrice"]) button:not([type="button"])').first().click();
-    await page.waitForLoadState("networkidle");
+    // Deterministic wait for the added line's rendered text — was
+    // networkidle (unreliable on Vercel preview). AR 2026-08-15.
+    await page.getByText("Smoke C — labour line").waitFor({ state: "visible", timeout: 10_000 });
 
     // Step 4 — SEND (only from the preview page post-workflow-flip).
     await sendEstimateToCustomer(page, estimateId);
@@ -72,7 +74,11 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref!);
         await customerPage.click('form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")');
-        await customerPage.waitForLoadState("networkidle");
+        // Wait for the approved banner — matches Flow B's pattern.
+        // AR 2026-08-15.
+        await expect(
+            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+        ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();
     }
@@ -126,7 +132,11 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
         await paymentForm.locator('input[name="amount"]').fill("210.00");
         await paymentForm.locator('select[name="method"]').selectOption("CASH");
         await paymentForm.locator('button:not([type="button"])').click();
-        await cashierPage.waitForLoadState("networkidle");
+        // After payment records, the row's payment form detaches (the
+        // invoice moves out of receivables). Bounded wait on that
+        // detach as the deterministic signal. Was networkidle. AR
+        // 2026-08-15.
+        await paymentForm.waitFor({ state: "detached", timeout: 15_000 });
 
         // Step 9 — assert PAID on the invoice detail page.
         await cashierPage.goto(`/invoices/${invoiceId}`);

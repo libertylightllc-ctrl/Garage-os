@@ -185,13 +185,16 @@ try {
     // reference the smoke customer directly, e.g. from a prior flow that
     // did not attach a vehicleId).
     const bookingsByCustomer = await del(`DELETE FROM "Booking" WHERE "customerId" IN (SELECT id FROM "Customer" WHERE name = $1)`, [smokeName]);
+    // WhatsAppMessage.threadId → WhatsAppThread (RESTRICT). Sweep
+    // messages before threads; run #33 caught this class of leak.
+    const waMessages = await del(`DELETE FROM "WhatsAppMessage" WHERE "threadId" IN (SELECT wt.id FROM "WhatsAppThread" wt JOIN "Customer" ct ON ct.id = wt."customerId" WHERE ct.name = $1)`, [smokeName]);
     const waThreads = await del(`DELETE FROM "WhatsAppThread" WHERE "customerId" IN (SELECT id FROM "Customer" WHERE name = $1)`, [smokeName]);
 
     // Customer
     const customers = await del(`DELETE FROM "Customer" WHERE name = $1`, [smokeName]);
 
     console.log(
-        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} workSession=${workSessions} jobHelper=${jobHelpers} jobPart=${jobParts} jobStep=${jobSteps} jobFinding=${jobFindings} partRequest=${partRequests} advPayment=${advPayments} partMovement=${partMovements} reminder=${reminders} jobCard=${jobs} bookingByVehicle=${bookingsByVehicle} vehicle=${vehicles} bookingByCustomer=${bookingsByCustomer} waThread=${waThreads} customer=${customers}`,
+        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} workSession=${workSessions} jobHelper=${jobHelpers} jobPart=${jobParts} jobStep=${jobSteps} jobFinding=${jobFindings} partRequest=${partRequests} advPayment=${advPayments} partMovement=${partMovements} reminder=${reminders} jobCard=${jobs} bookingByVehicle=${bookingsByVehicle} vehicle=${vehicles} bookingByCustomer=${bookingsByCustomer} waMessage=${waMessages} waThread=${waThreads} customer=${customers}`,
     );
 } catch (err) {
     console.error(

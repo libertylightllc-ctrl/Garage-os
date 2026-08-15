@@ -141,7 +141,23 @@ test("Flow D — hand-typed part converts to Request for Quotation with no price
         if (!(await firstInclude.isChecked())) {
             await firstInclude.check();
         }
-        await conversionForm.locator('select[name="supplierId"]').selectOption({ label: "Demo Parts Supplier" });
+        // Pick the first real supplier on the dropdown. Previously
+        // pinned to `{ label: "Demo Parts Supplier" }` which does not
+        // exist on staging — Playwright's selectOption retries forever
+        // when the label isn't found, exhausting the whole 180s test
+        // timeout (run #33 caught this). Any supplier works for this
+        // flow's assertion (RFQ title, description survives, no price
+        // leaks) — supplier name/id doesn't matter. AR 2026-08-15.
+        const firstSupplierValue = await conversionForm
+            .locator('select[name="supplierId"] option:not([value=""])')
+            .first()
+            .getAttribute("value");
+        if (!firstSupplierValue) {
+            throw new Error(
+                "D: no supplier available in the from-estimate dropdown on staging — flow cannot pick one",
+            );
+        }
+        await conversionForm.locator('select[name="supplierId"]').selectOption(firstSupplierValue);
 
         // Step 11 — submit. Two buttons now (AR 2026-08-14): "Create
         // quotation" (always enabled) and "Create purchase order"

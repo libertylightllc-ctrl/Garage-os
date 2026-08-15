@@ -451,6 +451,26 @@ const en = {
   poReceiveHint: "Enter how many of each part arrived now. Less than ordered is fine — receive the rest later.",
   poReceiveNow: "Receive now",
   poReceiveButton: "Receive into stock",
+  // Direct-fit receive (AR 2026-08-16, see docs/direct-fit-receive-spec.md).
+  // Rendered only when a PO line has no catalogue part linked. The
+  // owner picks per-line: Direct-fit (default) writes a receipt
+  // against the job's ledger and never touches the catalogue;
+  // Stock item defers to the existing "link a catalogue part on the
+  // line-edit form first" flow.
+  poReceiveDirectOption: "Direct-fit (fitted to the job, no shelf)",
+  poReceiveDirectHelp:
+    "Ball joint for a specific car, timing belt for one repair — arrives and is fitted, never stocked. Records the supplier's cost against this job.",
+  poReceiveStockOption: "Stock item (add to inventory)",
+  poReceiveStockHelp:
+    "Consumables kept on the shelf across many jobs. Link this line to a catalogue part on the line-edit form first, then come back.",
+  poReceiveDirectCostLabel: "Actual per-unit cost paid",
+  poReceiveDirectPartNoLabel: "Supplier part number (optional)",
+  // Catalogue-name hint on an unlinked line. Rendered only when the
+  // line's description normalizes to an existing Part in the shop's
+  // catalogue. Non-authoritative — the default stays Direct-fit; the
+  // owner flips to Stock if this really is a shelf item.
+  poReceiveCatalogueHint:
+    "You stock a part called \"{name}\" ({sku}) — is this the same? If yes, pick Stock item.",
   poReceivedBanner: "Fully received on",
   // 2c purchase returns
   poReturned: "Returned",
@@ -1942,6 +1962,17 @@ const ar: typeof en = {
   poReceiveHint: "أدخل الكمية التي وصلت الآن من كل قطعة. أقل من المطلوب مقبول — استلم الباقي لاحقًا.",
   poReceiveNow: "استلام الآن",
   poReceiveButton: "استلام في المخزون",
+  // Direct-fit receive keys (AR 2026-08-16).
+  poReceiveDirectOption: "تركيب مباشر (يُركّب على السيارة، ليس للمخزون)",
+  poReceiveDirectHelp:
+    "قطعة مشتراة لسيارة محددة وتُركّب فورًا، لا تدخل المخزون. تُسجَّل تكلفة المورّد على هذه المهمة.",
+  poReceiveStockOption: "قطعة مخزنية (إضافة للمخزون)",
+  poReceiveStockHelp:
+    "المستهلكات التي تحتفظ بها في المخزن لعدة مهام. اربط هذا البند بقطعة من الكتالوج من صفحة تعديل البند أولاً، ثم عد إلى هنا.",
+  poReceiveDirectCostLabel: "التكلفة الفعلية للوحدة",
+  poReceiveDirectPartNoLabel: "رقم قطعة المورّد (اختياري)",
+  poReceiveCatalogueHint:
+    "لديك قطعة في الكتالوج باسم «{name}» ({sku}) — هل هي نفسها؟ إن كانت كذلك، اختر «قطعة مخزنية».",
   poReceivedBanner: "تم الاستلام بالكامل في",
   // 2c مرتجعات الشراء
   poReturned: "المُرتجَع",

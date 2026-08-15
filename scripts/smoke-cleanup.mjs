@@ -158,6 +158,12 @@ try {
 
     // JobCard children (order within this group doesn't matter — none
     // reference each other, all reference JobCard).
+    // JobPartReceipt added AR 2026-08-16 with the direct-fit receive
+    // path — records "this part was fitted to this job, no stock
+    // touched". Sweep before JobCard; also cascades from
+    // PurchaseOrderLine deletion via onDelete: Cascade (belt-and-
+    // braces here).
+    const jobPartReceipts = await del(`DELETE FROM "JobPartReceipt" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
     const workSessions = await del(`DELETE FROM "WorkSession" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
     const jobHelpers = await del(`DELETE FROM "JobHelper" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
     const jobParts = await del(`DELETE FROM "JobPart" WHERE "jobCardId" IN (${JC_BY_PLATE})`, [platePattern]);
@@ -194,7 +200,7 @@ try {
     const customers = await del(`DELETE FROM "Customer" WHERE name = $1`, [smokeName]);
 
     console.log(
-        `::notice title=smoke cleanup::runId=${runId} deleted payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} workSession=${workSessions} jobHelper=${jobHelpers} jobPart=${jobParts} jobStep=${jobSteps} jobFinding=${jobFindings} partRequest=${partRequests} advPayment=${advPayments} partMovement=${partMovements} reminder=${reminders} jobCard=${jobs} bookingByVehicle=${bookingsByVehicle} vehicle=${vehicles} bookingByCustomer=${bookingsByCustomer} waMessage=${waMessages} waThread=${waThreads} customer=${customers}`,
+        `::notice title=smoke cleanup::runId=${runId} deleted jobPartReceipt=${jobPartReceipts} payment=${payments} invoiceLine=${invLines} invoice=${invoices} estimateLine=${estLines} estimate=${estimates} workSession=${workSessions} jobHelper=${jobHelpers} jobPart=${jobParts} jobStep=${jobSteps} jobFinding=${jobFindings} partRequest=${partRequests} advPayment=${advPayments} partMovement=${partMovements} reminder=${reminders} jobCard=${jobs} bookingByVehicle=${bookingsByVehicle} vehicle=${vehicles} bookingByCustomer=${bookingsByCustomer} waMessage=${waMessages} waThread=${waThreads} customer=${customers}`,
     );
 } catch (err) {
     console.error(

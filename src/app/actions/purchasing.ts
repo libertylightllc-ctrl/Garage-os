@@ -7,6 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { requireOperational } from "@/lib/action-guards";
 import { blendPartCost } from "@/lib/part-cost-blend";
 import {
+  parseReceiveMode,
+  shouldUpdateEstimateCost,
+} from "@/lib/direct-fit-receipt";
+import {
   pickEstimateForConversion,
   filterConvertibleLines,
 } from "@/lib/estimate-to-po";
@@ -560,6 +564,7 @@ export async function receivePurchaseOrderAction(formData: FormData) {
         select: {
           id: true,
           partId: true,
+          description: true,
           qty: true,
           receivedQty: true,
           // AR 2026-08-12 (profit reporting Step 3): pull unitCost so
@@ -568,6 +573,25 @@ export async function receivePurchaseOrderAction(formData: FormData) {
           // have null cost; the blend helper defensively no-ops in
           // that case rather than clobbering the catalogue.
           unitCost: true,
+          // Direct-fit receive (AR 2026-08-16). The source estimate
+          // line's presence gates the direct-fit path (needed to
+          // resolve the JobCard and to decide whether to reconcile
+          // the estimate cost). The estimate → jobCard → invoice
+          // chain also tells us if the invoice snapshot has already
+          // frozen this line's cost. See docs/direct-fit-receive-spec.md.
+          sourceEstimateLineId: true,
+          sourceEstimateLine: {
+            select: {
+              id: true,
+              unitCost: true,
+              estimate: {
+                select: {
+                  jobCardId: true,
+                  invoice: { select: { id: true } },
+                },
+              },
+            },
+          },
         },
       },
       supplier: { select: { name: true } },
@@ -577,44 +601,116 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   if (po.status !== "ORDERED" && po.status !== "PARTIALLY_RECEIVED")
     fail("Only an ordered order can be received.", back);
 
-  // Parse the per-line "receive now" quantities. Each must be a whole
-  // number between 0 and that line's outstanding (ordered − alreadyReceived).
-  const receipts: {
+  // Two receipt lists — stock and direct-fit. They share the qty +
+  // outstanding-cap logic but write different tables inside the
+  // transaction. AR 2026-08-16 direct-fit split.
+  interface StockReceipt {
     lineId: string;
     partId: string;
     qty: number;
     receiveNow: number;
-    // Cost blend input (Step 3). Pulled straight from POLine.unitCost
-    // — the supplier's per-unit price captured at PO time. Null →
-    // don't touch Part.cost (blend helper no-ops in that case).
     unitCost: typeof po.lines[number]["unitCost"];
-  }[] = [];
+  }
+  interface DirectReceipt {
+    lineId: string;
+    jobCardId: string;
+    sourceEstimateLineId: string;
+    // Truth from the receive form. Cannot be null — the whole point
+    // of the direct-fit receive is to capture the ACTUAL paid cost
+    // for this specific job, so blank costs are rejected upstream.
+    receivedUnitCost: number;
+    receivedPartNo: string | null;
+    qty: number;
+    receiveNow: number;
+    description: string;
+    // Extra bits the tx needs to decide whether to reconcile the
+    // estimate line's cost. Post-invoice = don't touch (frozen).
+    invoiceExists: boolean;
+    currentSourceUnitCost: number | null;
+  }
+  const stockReceipts: StockReceipt[] = [];
+  const directReceipts: DirectReceipt[] = [];
   for (const l of po.lines) {
     const raw = String(formData.get(`recv_${l.id}`) ?? "").trim();
     const n = raw === "" ? 0 : Number(raw);
     if (!Number.isInteger(n) || n < 0) fail("Received quantity must be a whole number of 0 or more.", back);
     const outstanding = l.qty - l.receivedQty;
     if (n > outstanding) fail(`You can't receive more than the ${outstanding} still outstanding on a line.`, back);
-    // Layer 0 (2026-08-01): partId is nullable — a free-text RFQ line
-    // can go all the way to ORDERED without ever being linked to a
-    // catalogue Part. Those lines aren't stock-tracked, so we can't
-    // move stock on them; the shop needs to link a Part first (Layer
-    // 5 auto-links on the DRAFT → ORDERED transition; until then it
-    // stays a manual step on the line edit form).
-    if (n > 0 && l.partId === null) {
-      fail("Link a catalogue part to this line before receiving stock.", back);
-    }
-    if (n > 0 && l.partId !== null) {
-      receipts.push({
+    if (n === 0) continue;
+
+    // Linked line → stock path (unchanged).
+    if (l.partId !== null) {
+      stockReceipts.push({
         lineId: l.id,
         partId: l.partId,
         qty: l.qty,
         receiveNow: n,
         unitCost: l.unitCost,
       });
+      continue;
     }
+
+    // Unlinked line → per-line mode radio decides.
+    // parseReceiveMode defaults to DIRECT for missing / unknown values
+    // (AR 2026-08-16 — the safe default; won't spawn a catalogue row
+    // by accident).
+    const mode = parseReceiveMode(formData.get(`mode_${l.id}`));
+    if (mode === "STOCK") {
+      // Stock item still requires the line to be linked to a Part
+      // first via the line-edit form. The receive UI shows a "Link
+      // to a catalogue part" affordance in this branch.
+      fail(
+        "Link a catalogue part to this line before receiving stock.",
+        back,
+      );
+    }
+
+    // DIRECT: this part was bought for the specific job the source
+    // estimate belongs to, is being fitted, and never enters stock.
+    // We need the estimate → jobCard chain to associate the receipt.
+    if (!l.sourceEstimateLine) {
+      fail(
+        "Direct-fit receive needs a source estimate line. This PO line was added manually — link a catalogue part instead.",
+        back,
+      );
+    }
+    const costRaw = String(formData.get(`cost_${l.id}`) ?? "").trim();
+    const costResult = parseMoney(costRaw);
+    if (!costResult.ok) fail("Invalid unit cost on the direct-fit line.", back);
+    if (costResult.value === null) {
+      fail(
+        "Enter the actual per-unit cost paid to the supplier for this direct-fit line.",
+        back,
+      );
+    }
+    const receivedUnitCost = Number(costResult.value);
+    const receivedPartNo = (() => {
+      const s = String(formData.get(`partNo_${l.id}`) ?? "").trim();
+      return s === "" ? null : s;
+    })();
+    directReceipts.push({
+      lineId: l.id,
+      jobCardId: l.sourceEstimateLine.estimate.jobCardId,
+      sourceEstimateLineId: l.sourceEstimateLine.id,
+      receivedUnitCost,
+      receivedPartNo,
+      qty: l.qty,
+      receiveNow: n,
+      description: (l.description ?? "").trim(),
+      invoiceExists: Boolean(l.sourceEstimateLine.estimate.invoice),
+      currentSourceUnitCost:
+        l.sourceEstimateLine.unitCost === null
+          ? null
+          : Number(l.sourceEstimateLine.unitCost),
+    });
   }
-  if (receipts.length === 0) fail("Enter a quantity to receive on at least one line.", back);
+  if (stockReceipts.length === 0 && directReceipts.length === 0) {
+    fail("Enter a quantity to receive on at least one line.", back);
+  }
+  // Prisma's InputJsonValue-style shape for the stock path below
+  // wants a single `receipts` alias while it walks the loop; keep
+  // one for backwards compatibility with the transaction body.
+  const receipts = stockReceipts;
 
   const reason = `Received PO${po.reference ? ` ${po.reference}` : ""} — ${po.supplier.name}`;
 
@@ -676,6 +772,49 @@ export async function receivePurchaseOrderAction(formData: FormData) {
             kind: "PO_RECEIPT",
           },
         });
+      }
+
+      // Direct-fit receipts (AR 2026-08-16). No Part touch, no
+      // PartMovement — the part never entered stock. We write:
+      //   • an atomic increment on POLine.receivedQty (same cap
+      //     guard as the stock branch);
+      //   • one JobPartReceipt row per receive event, carrying the
+      //     ACTUAL supplier per-unit cost + optional part number;
+      //   • an EstimateLine.unitCost update IFF the estimate hasn't
+      //     been invoiced yet and the received cost differs from
+      //     what the advisor typed (post-invoice snapshots are
+      //     frozen — see docs/direct-fit-receive-spec.md).
+      for (const r of directReceipts) {
+        const cap = r.qty - r.receiveNow;
+        const claim = await tx.purchaseOrderLine.updateMany({
+          where: { id: r.lineId, purchaseOrderId: po.id, receivedQty: { lte: cap } },
+          data: { receivedQty: { increment: r.receiveNow } },
+        });
+        if (claim.count === 0) throw new OverReceiveError();
+
+        await tx.jobPartReceipt.create({
+          data: {
+            jobCardId: r.jobCardId,
+            purchaseOrderLineId: r.lineId,
+            description: r.description,
+            qty: r.receiveNow,
+            receivedUnitCost: r.receivedUnitCost,
+            receivedPartNo: r.receivedPartNo,
+          },
+        });
+
+        if (
+          shouldUpdateEstimateCost({
+            invoiceExists: r.invoiceExists,
+            currentUnitCost: r.currentSourceUnitCost,
+            receivedUnitCost: r.receivedUnitCost,
+          })
+        ) {
+          await tx.estimateLine.update({
+            where: { id: r.sourceEstimateLineId },
+            data: { unitCost: r.receivedUnitCost },
+          });
+        }
       }
 
       // Recompute status from the fresh line state (inside the tx).
@@ -974,6 +1113,12 @@ export async function createPoFromEstimateAction(formData: FormData) {
     // line reads as unpriced on every surface and blocks Mark Ordered
     // until a real price is entered. See parseMoney + canMarkOrdered.
     unitCost: string | null;
+    // Direct-fit receive (AR 2026-08-16). Every PO line born from
+    // this from-estimate flow keeps a back-link to its source
+    // EstimateLine so the direct-fit receive path can resolve the
+    // JobCard and reconcile costs. See
+    // docs/direct-fit-receive-spec.md.
+    sourceEstimateLineId: string;
   }
   const linesToCreate: LineToCreate[] = [];
   for (const lineId of validIncludedIds) {
@@ -1009,6 +1154,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
         description,
         qty,
         unitCost: costResult.value,
+        sourceEstimateLineId: line.id,
       });
     } else {
       // Free-text line (Layer 1). partId stays null; the description
@@ -1018,6 +1164,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
         description,
         qty,
         unitCost: costResult.value,
+        sourceEstimateLineId: line.id,
       });
     }
   }
@@ -1060,6 +1207,7 @@ export async function createPoFromEstimateAction(formData: FormData) {
           description: l.description,
           qty: l.qty,
           unitCost: l.unitCost,
+          sourceEstimateLineId: l.sourceEstimateLineId,
           ...vehicleSnapshot,
         })),
       },

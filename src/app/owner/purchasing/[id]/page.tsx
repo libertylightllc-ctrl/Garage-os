@@ -16,6 +16,8 @@ import { normalizeToE164 } from "@/lib/wa";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
 import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
 import { VehicleMatchFill } from "@/components/vehicle-match-fill";
+import { findNormalizedMatch } from "@/lib/direct-fit-receipt";
+import { ReceiveModeToggle } from "@/components/receive-mode-toggle";
 import {
   addPoLineAction,
   editPoLineAction,
@@ -118,8 +120,13 @@ export default async function PurchaseOrderDetailPage({
   const showReturned = po.status === "PARTIALLY_RECEIVED" || po.status === "RECEIVED";
   const canReturn = showReturned && po.lines.some((l) => l.receivedQty - l.returnedQty > 0);
 
-  // Parts available to add (active, garage-scoped) for the line dropdown.
-  const parts = isDraft
+  // Parts available to add (active, garage-scoped) for the line
+  // dropdown AND for the receive form's "you stock a part called X"
+  // hint on unlinked lines (AR 2026-08-16 direct-fit pass). Fetching
+  // when isDraft OR when the receive form is visible; skipped once
+  // the PO is fully RECEIVED (no more receive UI to serve).
+  const partsListNeeded = isDraft || canReceive;
+  const parts = partsListNeeded
     ? await prisma.part.findMany({
         where: { garageId: session.user.garageId, active: true },
         orderBy: { name: "asc" },
@@ -675,28 +682,72 @@ export default async function PurchaseOrderDetailPage({
               <input type="hidden" name="poId" value={po.id} />
               {po.lines.map((l) => {
                 const outstanding = l.qty - l.receivedQty;
+                // Unlinked lines (partId null) split into two branches
+                // at receive time: Direct-fit (default) writes a
+                // JobPartReceipt against the source job and never
+                // touches the catalogue; Stock item defers to the
+                // existing "link a catalogue part on the line-edit
+                // form first" flow. AR 2026-08-16 — see
+                // docs/direct-fit-receive-spec.md.
+                const isUnlinked = l.partId === null;
+                // Hint: does the shop already stock a part with a
+                // similar name? Non-authoritative — the owner still
+                // decides the mode. Uses the same normalized-name
+                // matcher the from-estimate flow uses.
+                const catalogueHint = isUnlinked
+                    ? findNormalizedMatch(l.description ?? "", parts)
+                    : null;
                 return (
-                  <div key={l.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0">
-                    <span className="min-w-0 truncate text-sm">
-                      {l.part?.name ?? l.description}
-                      <span className="ms-2 text-xs text-muted-foreground">
-                        {l.receivedQty}/{l.qty} {t("poReceivedLower")}
-                        {outstanding > 0 ? <> · {outstanding} {t("poOutstandingLower")}</> : null}
+                  <div key={l.id} className="border-b border-border/60 pb-2 last:border-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm">
+                        {l.part?.name ?? l.description}
+                        <span className="ms-2 text-xs text-muted-foreground">
+                          {l.receivedQty}/{l.qty} {t("poReceivedLower")}
+                          {outstanding > 0 ? <> · {outstanding} {t("poOutstandingLower")}</> : null}
+                        </span>
                       </span>
-                    </span>
-                    {outstanding > 0 ? (
-                      <input
-                        name={`recv_${l.id}`}
-                        type="number"
-                        min="0"
-                        max={outstanding}
-                        defaultValue={outstanding}
-                        aria-label={t("poReceiveNow")}
-                        className="w-20 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-right text-sm tabular-nums"
+                      {outstanding > 0 ? (
+                        <input
+                          name={`recv_${l.id}`}
+                          type="number"
+                          min="0"
+                          max={outstanding}
+                          defaultValue={outstanding}
+                          aria-label={t("poReceiveNow")}
+                          className="w-20 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-right text-sm tabular-nums"
+                        />
+                      ) : (
+                        <span className="shrink-0 text-xs font-medium text-success-700 dark:text-success-500">✓</span>
+                      )}
+                    </div>
+                    {outstanding > 0 && isUnlinked ? (
+                      <ReceiveModeToggle
+                        lineId={l.id}
+                        catalogueHint={
+                          catalogueHint
+                            ? {
+                                partName: catalogueHint.name,
+                                partSku: catalogueHint.sku,
+                                label: t("poReceiveCatalogueHint")
+                                  .replace("{name}", catalogueHint.name)
+                                  .replace("{sku}", catalogueHint.sku),
+                              }
+                            : null
+                        }
+                        labels={{
+                          directOption: t("poReceiveDirectOption"),
+                          directHelp: t("poReceiveDirectHelp"),
+                          stockOption: t("poReceiveStockOption"),
+                          stockHelp: t("poReceiveStockHelp"),
+                          costLabel: t("poReceiveDirectCostLabel"),
+                          partNoLabel: t("poReceiveDirectPartNoLabel"),
+                        }}
+                        defaultCost={
+                          l.unitCost !== null ? String(l.unitCost) : ""
+                        }
                       />
-                    ) : (
-                      <span className="shrink-0 text-xs font-medium text-success-700 dark:text-success-500">✓</span>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}

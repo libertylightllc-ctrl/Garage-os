@@ -588,6 +588,10 @@ model JobCard {
   jobParts      JobPart[]
   advancePayments AdvancePayment[]
   workSessions  WorkSession[]
+  // Direct-fit receive ledger (AR 2026-08-16). One row per direct-fit
+  // arrival on a PO line whose source estimate belongs to this job.
+  // See JobPartReceipt + docs/direct-fit-receive-spec.md.
+  jobPartReceipts JobPartReceipt[]
 
   // Per-document customer link token (Phase 1) — used for the delivery
   // confirmation link /c/delivery/<publicToken>. Named publicToken to
@@ -656,6 +660,58 @@ model JobPart {
   createdAt DateTime @default(now())
 
   @@index([jobCardId, kind])
+}
+
+/// Direct-fit receipt ledger (AR 2026-08-16). Records the physical
+/// arrival of a part that was bought for a specific job and never
+/// enters stock — the "ball joint for a specific Ford F150" case
+/// (see docs/direct-fit-receive-spec.md for the two-category model).
+///
+/// Written by receivePurchaseOrderAction when the operator picks the
+/// "Direct-fit" branch on an unlinked PO line. Never by any other
+/// path. Discovering this row against a job means: this part arrived,
+/// the invoiced cost is authoritative (receivedUnitCost), and no
+/// catalogue Part row exists for it.
+///
+/// The stock path (PartMovement + Part.qtyOnHand blend) does NOT
+/// write here; the two paths are mutually exclusive per PO-line
+/// receive event.
+model JobPartReceipt {
+    id                  String            @id @default(cuid())
+    // The job this part physically landed on. Resolved from the PO
+    // line's sourceEstimateLine.jobCardId at write time; if that
+    // chain isn't present the receive action refuses the direct-fit
+    // path (there's no stock alternative for a partId=null line
+    // without a job link).
+    jobCardId           String
+    jobCard             JobCard           @relation(fields: [jobCardId], references: [id])
+    // The PO line this receipt closes. Cascades on PO delete
+    // because the PO document IS the source of truth for what was
+    // ordered — losing the PO means losing every downstream
+    // receipt-against-PO record along with it.
+    purchaseOrderLineId String
+    purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+    // Description snapshot at receive time — the PO line's own
+    // description (or Part.name if it was somehow linked). Frozen
+    // here so a later PO-line edit doesn't rewrite receipt history.
+    description         String
+    qty                 Int
+    // The supplier's ACTUAL per-unit price at delivery — the number
+    // the shop should use when reporting profit on this job. May
+    // differ from the estimate line's unitCost (which is what the
+    // advisor expected); the receive action reconciles by updating
+    // the estimate line's unitCost when the estimate hasn't yet
+    // been invoiced (post-invoice snapshots stay frozen — see the
+    // ordering rule in the spec).
+    receivedUnitCost    Decimal           @db.Decimal(12, 2)
+    // Supplier / manufacturer part number captured at receive time.
+    // Optional — many shops don't type the SKU on a walk-in-and-fit
+    // part. Used only for record-keeping / warranty lookups.
+    receivedPartNo      String?
+    createdAt           DateTime          @default(now())
+
+    @@index([jobCardId])
+    @@index([purchaseOrderLineId])
 }
 
 // ---------- Estimate / Invoice / Payment ----------
@@ -729,6 +785,15 @@ model EstimateLine {
   // the Part row when this line spawned it via the from-estimate flow.
   // See Part.autoCreatedFromLineId for the design.
   autoCreatedPart Part? @relation("PartAutoCreatedFromLine")
+
+  // Direct-fit receive (AR 2026-08-16). Every PO line born from the
+  // from-estimate flow carries a back-link to its source estimate line
+  // so the direct-fit receive path can (a) know which JobCard the
+  // part arrived for (via estimate → jobCard), and (b) update this
+  // line's unitCost if the actual supplier price differs, provided
+  // no invoice has been generated yet (post-invoice snapshots are
+  // frozen — see docs/direct-fit-receive-spec.md).
+  poLinesSourced PurchaseOrderLine[] @relation("PoLineSourceEstimate")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1105,11 +1170,27 @@ model PurchaseOrderLine {
   vehiclePlate      String?
   vehicleJobNumber  Int?
 
+  // Direct-fit receive (AR 2026-08-16). Populated on the from-estimate
+  // path so the receive action can (a) associate a direct-fit receipt
+  // with the right JobCard via estimate → jobCard, and (b) update
+  // this estimate line's cost with the actual supplier price when it
+  // differs (only if the estimate hasn't yet been invoiced).
+  // Nullable so manually-added POLines (no estimate origin) still
+  // work — those can only take the stock path today. See
+  // docs/direct-fit-receive-spec.md.
+  sourceEstimateLineId String?
+  sourceEstimateLine   EstimateLine? @relation("PoLineSourceEstimate", fields: [sourceEstimateLineId], references: [id])
+
+  // Direct-fit receipt ledger — one row per direct-fit receive event
+  // on this line. Empty for stock-path lines. See JobPartReceipt.
+  jobPartReceipts JobPartReceipt[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([purchaseOrderId])
   @@index([vehicleId])
+  @@index([sourceEstimateLineId])
 }
 
 // PO send audit log — one row per send attempt (WhatsApp intent or Email).

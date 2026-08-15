@@ -667,7 +667,18 @@ model Estimate {
   vatAmount Decimal        @db.Decimal(12, 2)
   total     Decimal        @db.Decimal(12, 2)
   status    EstimateStatus @default(DRAFT)
-  sentAt         DateTime? // when the cashier flipped status to SENT (pricing-duration end)
+  // set when the operator taps 'Send via WhatsApp' — HANDED OFF to the
+  // operator's WhatsApp, NOT confirmed delivery. Mirrors
+  // JobCard.invoiceSentAt (AR 2026-08-15 estimate-honesty pass). Also
+  // marks the end of the pricing-duration window.
+  sentAt         DateTime?
+  // Set only when we KNOW the estimate reached the customer. In the
+  // wa.me era this stays null forever — the operator's local WhatsApp
+  // doesn't report delivery back to us. When the Meta Cloud API
+  // webhook lands, its `delivered` event writes this. Column added
+  // now (AR 2026-08-15) so estimates + invoices stay symmetrical.
+  // Mirror of JobCard.invoiceDeliveredAt.
+  deliveredAt    DateTime?
   approvedAt     DateTime? // audit: when the customer approved (dispute shield)
   approvedAmount Decimal?  @db.Decimal(12, 2)
 

@@ -69,6 +69,7 @@ export interface BuildTimelineInput {
     estimates: {
         createdAt: Date;
         sentAt: Date | null;
+        deliveredAt: Date | null;
         approvedAt: Date | null;
         status: string;
     }[];
@@ -168,6 +169,11 @@ export function buildJobTimeline(input: BuildTimelineInput): TimelineEvent[] {
     for (const e of estimates) {
         ev.push({ at: e.createdAt, kindKey: "tlEstimateCreated", actor: null });
         if (e.sentAt) ev.push({ at: e.sentAt, kindKey: "tlEstimateSent", actor: null });
+        // tlEstimateDelivered fires ONLY when Estimate.deliveredAt is
+        // populated — dormant in the wa.me era (webhook not wired
+        // yet). Mirrors the invoice-side tlInvoiceDelivered pattern
+        // below; see the schema comment on Estimate.deliveredAt.
+        if (e.deliveredAt) ev.push({ at: e.deliveredAt, kindKey: "tlEstimateDelivered", actor: null });
         if (e.approvedAt) ev.push({ at: e.approvedAt, kindKey: "tlEstimateApproved", actor: null });
     }
 

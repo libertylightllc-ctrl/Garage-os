@@ -93,12 +93,49 @@ describe("buildJobTimeline", () => {
         expect(keys).not.toContain("tlWorkCompleted"); // workCompletedAt not provided
     });
 
+    it("estimate deliveredAt fires tlEstimateDelivered when populated, dormant otherwise", () => {
+        // wa.me era: Estimate.deliveredAt stays null → no event.
+        const i1 = emptyInput();
+        i1.estimates = [
+            {
+                createdAt: t("2026-06-17T09:50:00Z"),
+                sentAt: t("2026-06-17T10:00:00Z"),
+                deliveredAt: null,
+                approvedAt: null,
+                status: "SENT",
+            },
+        ];
+        const tl1 = buildJobTimeline(i1);
+        expect(
+            tl1.find((e) => e.kindKey === "tlEstimateDelivered"),
+            "no tlEstimateDelivered when Estimate.deliveredAt is null",
+        ).toBeUndefined();
+
+        // Cloud API era: webhook writes deliveredAt → event fires with
+        // the delivered timestamp, null actor (webhook has no user).
+        const i2 = emptyInput();
+        i2.estimates = [
+            {
+                createdAt: t("2026-06-17T09:50:00Z"),
+                sentAt: t("2026-06-17T10:00:00Z"),
+                deliveredAt: t("2026-06-17T10:02:00Z"),
+                approvedAt: null,
+                status: "SENT",
+            },
+        ];
+        const tl2 = buildJobTimeline(i2);
+        const delivered = tl2.find((e) => e.kindKey === "tlEstimateDelivered");
+        expect(delivered?.at).toEqual(t("2026-06-17T10:02:00Z"));
+        expect(delivered?.actor).toBeNull();
+    });
+
     it("estimate sent + approved render with null actor (no actor recorded today)", () => {
         const i = emptyInput();
         i.estimates = [
             {
                 createdAt: t("2026-06-17T09:50:00Z"),
                 sentAt: t("2026-06-17T10:00:00Z"),
+                deliveredAt: null,
                 approvedAt: t("2026-06-17T10:30:00Z"),
                 status: "APPROVED",
             },

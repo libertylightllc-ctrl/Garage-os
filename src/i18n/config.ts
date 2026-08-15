@@ -583,7 +583,18 @@ const en = {
   optMaster: "Master Admin",
   estimatePrint: "🖨 Print estimate",
   estimateViewPrint: "View / print estimate",
-  estimatePreviewSentBadge: "Sent to the customer",
+  // AR 2026-08-15 estimate-honesty pass. Old copy "Sent to the customer"
+  // read as delivered; wa.me hands off to the operator's WhatsApp and
+  // Meta returns no delivery signal (see src/lib/wa.ts and the
+  // JobCard.invoiceSentAt schema comment for the full lifecycle).
+  // Renamed key + wording mirrors invoiceSentAt / invoiceHandedOffBanner
+  // exactly so estimate and invoice read identically.
+  estimateSentAt: "Handed to your WhatsApp at",
+  estimateDeliveredAt: "Delivered to customer at",
+  estimateHandedOffBanner:
+    "Handed to your WhatsApp — press Send inside WhatsApp on your phone. The customer hasn't received it yet, and you can still edit the estimate.",
+  estimateDeliveredBanner:
+    "Delivered to the customer. You can still update the estimate — a new version will need to be sent.",
   imOnThisCar: "I'm on this car",
   onThisCarNow: "On this car",
   floorNow: "Floor right now",
@@ -815,7 +826,9 @@ const en = {
   jobTimelineTitle: "Workflow timeline",
   jobTimelineClaimedAt: "Tech claimed",
   jobTimelineSentForEstimateAt: "Sent for estimate",
-  jobTimelineEstimateSentAt: "Estimate sent to customer",
+  // jobTimelineEstimateSentAt removed (AR 2026-08-15) — key had no
+  // consumers; the live label is tlEstimateSent via
+  // src/lib/job-timeline-labels.ts.
   jobTimelineNotYet: "—",
   prefilledFromRecord: "Auto-filled from the existing record.",
   errConsent: "Please confirm customer consent first.",
@@ -1161,7 +1174,11 @@ const en = {
   tlSentForEstimate: "Sent to advisor for estimate",
   tlSentForReestimate: "Sent to advisor for re-estimate (extras)",
   tlEstimateCreated: "Estimate created",
-  tlEstimateSent: "Estimate sent to customer",
+  // Estimate-honesty pass (AR 2026-08-15). Was "Estimate sent to
+  // customer" — same wa.me hand-off / no delivery signal as invoices.
+  // Mirrors tlInvoiceSent / tlInvoiceDelivered exactly.
+  tlEstimateSent: "Estimate handed off to WhatsApp",
+  tlEstimateDelivered: "Estimate delivered to customer",
   tlEstimateApproved: "Estimate approved by customer",
   tlWorkCompleted: "Work completed",
   tlQcPassed: "QC passed",
@@ -2052,7 +2069,13 @@ const ar: typeof en = {
   optMaster: "المشرف العام",
   estimatePrint: "🖨 طباعة عرض السعر",
   estimateViewPrint: "عرض / طباعة عرض السعر",
-  estimatePreviewSentBadge: "أُرسل إلى العميل",
+  // Estimate-honesty pass — mirror invoice keys (AR 2026-08-15).
+  estimateSentAt: "تم التسليم إلى واتساب في",
+  estimateDeliveredAt: "استلمه العميل في",
+  estimateHandedOffBanner:
+    "تم التسليم إلى واتساب — اضغط إرسال داخل واتساب على هاتفك. لم يستلمه العميل بعد، وما زال بإمكانك تعديل التقدير.",
+  estimateDeliveredBanner:
+    "تم استلامه من قبل العميل. ما زال بإمكانك تعديل التقدير — سيلزم إرسال نسخة جديدة.",
   imOnThisCar: "أعمل على هذه السيارة",
   onThisCarNow: "على هذه السيارة",
   floorNow: "الورشة الآن",
@@ -2253,7 +2276,6 @@ const ar: typeof en = {
   jobTimelineTitle: "مسار العمل",
   jobTimelineClaimedAt: "استلم الفني",
   jobTimelineSentForEstimateAt: "أُرسلت للتقدير",
-  jobTimelineEstimateSentAt: "أُرسل التقدير للعميل",
   jobTimelineNotYet: "—",
   prefilledFromRecord: "مملوء تلقائيًا من السجل الحالي.",
   errConsent: "يرجى تأكيد موافقة العميل أولًا.",
@@ -2583,7 +2605,8 @@ const ar: typeof en = {
   tlSentForEstimate: "تم إرسال إلى مستشار الخدمة للتسعير",
   tlSentForReestimate: "تم إرسال إلى مستشار الخدمة لإعادة التسعير",
   tlEstimateCreated: "تم إنشاء التقدير",
-  tlEstimateSent: "تم إرسال التقدير إلى العميل",
+  tlEstimateSent: "تم تسليم التقدير إلى واتساب",
+  tlEstimateDelivered: "استلم العميل التقدير",
   tlEstimateApproved: "وافق العميل على التقدير",
   tlWorkCompleted: "اكتمل العمل",
   tlQcPassed: "تم اجتياز فحص الجودة",

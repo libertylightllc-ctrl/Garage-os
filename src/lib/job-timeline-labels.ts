@@ -17,6 +17,12 @@ const EVENT_KEYS = [
     "tlSentForReestimate",
     "tlEstimateCreated",
     "tlEstimateSent",
+    // tlEstimateDelivered added AR 2026-08-15 as the estimate-side
+    // mirror of tlInvoiceDelivered. Dormant until a Cloud API webhook
+    // writes Estimate.deliveredAt; the job-timeline builder in
+    // src/lib/job-timeline.ts will start emitting the event as soon
+    // as the column is populated.
+    "tlEstimateDelivered",
     "tlEstimateApproved",
     "tlWorkCompleted",
     "tlQcPassed",

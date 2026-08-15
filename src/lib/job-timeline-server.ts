@@ -47,7 +47,7 @@ export async function loadJobTimeline(
             }),
             prisma.estimate.findMany({
                 where: { jobCardId: jobId },
-                select: { createdAt: true, sentAt: true, approvedAt: true, status: true },
+                select: { createdAt: true, sentAt: true, deliveredAt: true, approvedAt: true, status: true },
                 orderBy: { createdAt: "asc" },
             }),
             prisma.invoice.findMany({
@@ -88,6 +88,7 @@ export async function loadJobTimeline(
         estimates: estimates.map((e) => ({
             createdAt: e.createdAt,
             sentAt: e.sentAt,
+            deliveredAt: e.deliveredAt,
             approvedAt: e.approvedAt,
             status: e.status,
         })),

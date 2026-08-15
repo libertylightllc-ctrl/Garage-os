@@ -199,20 +199,39 @@ export default async function EstimatePreview({
             </button>
           </form>
         ) : (
-          <span className="inline-flex h-12 items-center justify-center rounded-lg bg-success-50 px-5 text-base font-semibold text-success-700 dark:bg-success-500/10 dark:text-success-500">
-            ✓{" "}
-            {est.status === "SENT" && est.sentAt
-              ? `${t("estimatePreviewSentBadge")} · ${fmtDate(est.sentAt, locale, tz)}`
-              : est.status === "SENT"
-                ? t("estimatePreviewSentBadge")
-                : est.status}
+          // AR 2026-08-15 estimate-honesty pass. Was a green ✓ pill
+          // reading "Sent to the customer · <date>" — both the colour
+          // and the wording implied delivery had happened. wa.me
+          // returns no delivery signal (see src/lib/wa.ts + the
+          // JobCard.invoiceSentAt schema comment). Now warning-yellow
+          // with an honest label + a full banner below that mirrors
+          // the invoice preview at src/app/invoices/[id]/preview/page.tsx
+          // exactly, so estimate + invoice read the same. The
+          // sentAt timestamp is what we know: when the hand-off fired.
+          <span className="inline-flex h-12 items-center justify-center rounded-lg bg-warning-50 px-5 text-base font-semibold text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
+            📱{" "}
+            {est.sentAt
+              ? `${t("estimateSentAt")} ${fmtDate(est.sentAt, locale, tz)}`
+              : t("estimateSentAt")}
           </span>
         )}
       </div>
 
       {isDraft ? (
         <p className="text-xs text-zinc-400 print:hidden">{t("estimatePreviewMockNote")}</p>
-      ) : null}
+      ) : (
+        // Footer banner mirrors the invoice preview (see src/app/
+        // invoices/[id]/preview/page.tsx line ~316). Renders the
+        // full honest text and the hand-off timestamp so the
+        // operator can't miss that the customer hasn't received the
+        // estimate yet.
+        <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500 print:hidden">
+          📱 {t("estimateHandedOffBanner")}
+          {est.sentAt
+            ? ` · ${t("estimateSentAt")} ${fmtDate(est.sentAt, locale, tz)}`
+            : ""}
+        </p>
+      )}
     </main>
   );
 }

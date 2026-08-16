@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { stockOptionSuffix } from "@/lib/stock-label";
 import { normalizeToE164 } from "@/lib/wa";
 import { resolvePoVehicles, formatVehicleShort } from "@/lib/po-vehicle";
-import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
+import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered, poStatusDisplayKey } from "@/lib/po-doc-kind";
 import { VehicleMatchFill } from "@/components/vehicle-match-fill";
 import { findNormalizedMatch } from "@/lib/direct-fit-receipt";
 import { ReceiveModeToggle } from "@/components/receive-mode-toggle";
@@ -103,6 +103,13 @@ export default async function PurchaseOrderDetailPage({
           },
         },
       },
+      // Send count for the display-status label (AR 2026-08-16). A
+      // DRAFT that's already been sent to the supplier reads as
+      // "Sent — awaiting quote/order" instead of "Draft"; the
+      // underlying status stays DRAFT (Mark Ordered is still the
+      // commitment). Just the count — the row-level audit is loaded
+      // separately by PoSentHistory below. See poStatusDisplayKey.
+      _count: { select: { sends: true } },
     },
   });
   if (!po) notFound();
@@ -414,7 +421,15 @@ export default async function PurchaseOrderDetailPage({
               consistent with the other document surfaces. */}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-              {t(`poStatus_${po.status}`)}
+              {/* AR 2026-08-16 — was `t(`poStatus_${po.status}`)` which
+                  read as "Draft" for a document that had already been
+                  sent to a supplier (technically right, but reads as
+                  "not sent" and confuses operators). Now considers
+                  the send count too: DRAFT + at least one send fires
+                  "Sent — awaiting quote/order" per doc kind;
+                  everything else unchanged. Mark Ordered is still the
+                  commitment click. */}
+              {t(poStatusDisplayKey(po, po._count.sends))}
             </span>
             <span>
               {po.lines.length} {t("poLines").toLowerCase()}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
+import { poDocKind, isLinePriced, isLineUnpriced, canMarkOrdered, poStatusDisplayKey } from "@/lib/po-doc-kind";
 
 describe("isLinePriced", () => {
     it("positive number → priced", () => {
@@ -167,5 +167,79 @@ describe("poDocKind", () => {
         // the shop cancels — the audit trail should read as
         // "cancelled purchase order", not "cancelled quotation".
         expect(poDocKind({ status: "CANCELLED", orderedAt: asOf })).toBe("PO");
+    });
+});
+
+describe("poStatusDisplayKey — DRAFT + sends changes label, others unchanged", () => {
+    // AR 2026-08-16 rule: a DRAFT that has already been sent to a
+    // supplier reads as "Draft" which operators mistake for "not
+    // sent". Display flips to "Sent — awaiting quote/order" once
+    // any send exists. Underlying status stays DRAFT (Mark Ordered
+    // is still the commitment).
+
+    it("DRAFT with zero sends → poStatus_DRAFT (unchanged, 'Draft')", () => {
+        expect(
+            poStatusDisplayKey(
+                { status: "DRAFT", orderedAt: null, intent: "QUOTE" },
+                0,
+            ),
+        ).toBe("poStatus_DRAFT");
+    });
+
+    it("DRAFT + intent=QUOTE + at least one send → 'Sent — awaiting quote'", () => {
+        expect(
+            poStatusDisplayKey(
+                { status: "DRAFT", orderedAt: null, intent: "QUOTE" },
+                1,
+            ),
+        ).toBe("poStatusDraftSent_RFQ");
+    });
+
+    it("DRAFT + intent=ORDER + at least one send → 'Sent — awaiting order'", () => {
+        // A PO_DRAFT (author knew the prices at doc creation) that
+        // went to the supplier before Mark Ordered fires the PO
+        // version of the awaiting label — the shop is waiting for
+        // the supplier to confirm the order, not to quote it.
+        expect(
+            poStatusDisplayKey(
+                { status: "DRAFT", orderedAt: null, intent: "ORDER" },
+                1,
+            ),
+        ).toBe("poStatusDraftSent_PO");
+    });
+
+    it("ORDERED with sends → poStatus_ORDERED (post-DRAFT statuses unchanged)", () => {
+        expect(
+            poStatusDisplayKey(
+                { status: "ORDERED", orderedAt: new Date(), intent: "ORDER" },
+                3,
+            ),
+        ).toBe("poStatus_ORDERED");
+    });
+
+    it("PARTIALLY_RECEIVED unchanged regardless of send count", () => {
+        expect(
+            poStatusDisplayKey(
+                { status: "PARTIALLY_RECEIVED", orderedAt: new Date(), intent: "ORDER" },
+                5,
+            ),
+        ).toBe("poStatus_PARTIALLY_RECEIVED");
+    });
+
+    it("CANCELLED unchanged even with sends (nothing left awaiting)", () => {
+        // Explicit — after cancel, the display shouldn't imply the
+        // supplier owes anything. "Cancelled" is the whole story.
+        expect(
+            poStatusDisplayKey(
+                { status: "CANCELLED", orderedAt: null, intent: "QUOTE" },
+                2,
+            ),
+        ).toBe("poStatus_CANCELLED");
+        expect(
+            poStatusDisplayKey(
+                { status: "CANCELLED", orderedAt: new Date(), intent: "ORDER" },
+                2,
+            ),
+        ).toBe("poStatus_CANCELLED");
     });
 });

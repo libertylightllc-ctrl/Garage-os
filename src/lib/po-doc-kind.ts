@@ -155,3 +155,48 @@ export function canMarkOrdered(lines: readonly LineForOrderGuard[]): boolean {
     if (lines.length === 0) return false;
     return lines.every(isLinePriced);
 }
+
+// ── Status display (AR 2026-08-16) ─────────────────────────────────
+//
+// A DRAFT PurchaseOrder that has ALREADY been sent to a supplier
+// reads as "Draft" — technically right (nothing was ordered), but
+// operators see "Draft" and think the doc hasn't gone out yet. The
+// send audit says otherwise; the label lies by omission.
+//
+// Split the display into two facts:
+//   • Underlying status stays the schema value (Mark Ordered still
+//     drives the DRAFT → ORDERED transition — no schema change).
+//   • The DISPLAY LABEL considers status + docKind + whether at
+//     least one send exists.
+//
+// Rule:
+//   status !== DRAFT               → poStatus_<status> (unchanged)
+//   status === DRAFT, sendCount>0
+//     kind === RFQ                 → poStatusDraftSent_RFQ
+//                                    ("Sent — awaiting quote")
+//     kind === PO_DRAFT            → poStatusDraftSent_PO
+//                                    ("Sent — awaiting order")
+//   status === DRAFT, sendCount=0  → poStatus_DRAFT (unchanged)
+//
+// The i18n key resolution is left to the caller so this stays a
+// pure function. See src/i18n/config.ts for the strings.
+
+export type PoStatusDisplayKey =
+    | `poStatus_${PoStatusForDocKind}`
+    | "poStatusDraftSent_RFQ"
+    | "poStatusDraftSent_PO";
+
+export function poStatusDisplayKey(
+    po: PoForDocKind,
+    sendCount: number,
+): PoStatusDisplayKey {
+    if (po.status === "DRAFT" && sendCount > 0) {
+        const kind = poDocKind(po);
+        // A CANCELLED-with-orderedAt-null still classifies as RFQ but
+        // its status isn't DRAFT — the outer guard skips it.
+        return kind === "PO_DRAFT"
+            ? "poStatusDraftSent_PO"
+            : "poStatusDraftSent_RFQ";
+    }
+    return `poStatus_${po.status}`;
+}

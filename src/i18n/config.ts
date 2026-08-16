@@ -356,6 +356,12 @@ const en = {
   poStatus_PARTIALLY_RECEIVED: "Partly received",
   poStatus_RECEIVED: "Received",
   poStatus_CANCELLED: "Cancelled",
+  // Display-only labels for a DRAFT that has already been sent to
+  // the supplier (AR 2026-08-16). Underlying status stays DRAFT —
+  // Mark Ordered is still the commitment click. See
+  // poStatusDisplayKey in src/lib/po-doc-kind.ts.
+  poStatusDraftSent_RFQ: "Sent — awaiting quote",
+  poStatusDraftSent_PO: "Sent — awaiting order",
   backToPurchasing: "← Purchasing",
   noSuppliersForPo: "Add a supplier first, in",
   choosePlaceholder: "Choose…",
@@ -1895,6 +1901,8 @@ const ar: typeof en = {
   poStatus_PARTIALLY_RECEIVED: "مُستلَم جزئيًا",
   poStatus_RECEIVED: "تم الاستلام",
   poStatus_CANCELLED: "ملغى",
+  poStatusDraftSent_RFQ: "أُرسل — بانتظار عرض السعر",
+  poStatusDraftSent_PO: "أُرسل — بانتظار تأكيد الطلب",
   backToPurchasing: "← المشتريات",
   noSuppliersForPo: "أضف موردًا أولًا في",
   choosePlaceholder: "اختر…",

@@ -240,6 +240,18 @@ export default async function PurchaseOrderDetailPage({
     defaultVehicleFuelType: po.defaultVehicleFuelType,
     defaultVehicleJobNumber: po.defaultVehicleJobNumber,
   });
+  // Single-vehicle document detection (AR 2026-08-17). When every
+  // line resolves to the SAME vehicle, we render it once as a
+  // caption below the header and drop the per-row Vehicle column
+  // from the table entirely. This is what was blowing up the PO
+  // print — six vehicle-detail lines stacked on every row, repeated
+  // identically, forced the table wider than A4 and cut off Unit
+  // cost + Line total. Multi-vehicle docs keep the per-row column
+  // (rarer path; the vehicle really does vary per line there).
+  const singleVehicle =
+    vehicles.allResolved && vehicles.distinct.length === 1
+      ? vehicles.distinct[0]
+      : null;
 
   // The shared message body used to be built here for the wa.me href.
   // It now lives inside sendPurchaseOrderWhatsAppAction (and C's email
@@ -437,6 +449,51 @@ export default async function PurchaseOrderDetailPage({
             </span>
           </div>
           {po.note ? <p className="mt-1 text-sm text-muted-foreground">{po.note}</p> : null}
+          {/* Single-vehicle caption — shown when every line resolves
+              to the same vehicle. Renders once here so the supplier
+              (screen + print) reads the vehicle context up top
+              instead of having make/model/year/engine/plate/VIN/JC
+              stacked on every table row. AR 2026-08-17: repeating
+              those seven lines per row was overflowing the printed
+              page and cutting off Unit cost + Line total. See
+              src/app/owner/purchasing/[id]/page.tsx table below
+              for the matching column-drop. */}
+          {singleVehicle ? (
+            <section className="mt-2 rounded-lg border border-border/60 bg-surface-2/40 px-3 py-2 text-xs print:border-transparent print:bg-transparent print:px-0 print:py-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("colVehicle")}
+              </div>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                {singleVehicle.make || singleVehicle.model ? (
+                  <span className="font-medium">
+                    {[singleVehicle.make, singleVehicle.model, singleVehicle.year != null ? String(singleVehicle.year) : null]
+                      .filter(Boolean)
+                      .join(" ")}
+                  </span>
+                ) : null}
+                {singleVehicle.engineSize || singleVehicle.fuelType ? (
+                  <span className="text-muted-foreground">
+                    {[singleVehicle.engineSize, singleVehicle.fuelType]
+                      .filter(Boolean)
+                      .join(" ")}
+                  </span>
+                ) : null}
+                {singleVehicle.plate ? (
+                  <span className="font-medium">{singleVehicle.plate}</span>
+                ) : null}
+                {singleVehicle.vin ? (
+                  <span className="font-mono text-muted-foreground">
+                    VIN {singleVehicle.vin}
+                  </span>
+                ) : null}
+                {singleVehicle.jobNumber != null ? (
+                  <span className="text-muted-foreground">
+                    JC-{singleVehicle.jobNumber}
+                  </span>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         {error ? (
@@ -460,13 +517,22 @@ export default async function PurchaseOrderDetailPage({
           </p>
         ) : null}
 
-        {/* Lines */}
-        <div className="overflow-x-auto rounded-xl border border-border">
+        {/* Lines. Wrapper uses `print:overflow-visible` (matches the
+            invoice preview at src/app/invoices/[id]/preview/page.tsx
+            line ~158). Without it, the print layer inherits the
+            overflow-x-auto scrollbar and clips wide content at the
+            paper edge instead of letting the table fit. Vehicle
+            column is dropped entirely on single-vehicle docs (the
+            caption above carries the info once) so the remaining
+            columns fit A4 portrait comfortably. AR 2026-08-17. */}
+        <div className="overflow-x-auto rounded-xl border border-border print:overflow-visible print:rounded-none print:border-0">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">{t("partName")}</th>
-                <th className="px-4 py-3">{t("colVehicle")}</th>
+                {singleVehicle ? null : (
+                  <th className="px-4 py-3">{t("colVehicle")}</th>
+                )}
                 <th className="px-4 py-3 text-right">{t("poOrdered")}</th>
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poReceived")}</th> : null}
                 {showReceiving ? <th className="px-4 py-3 text-right">{t("poOutstanding")}</th> : null}
@@ -495,66 +561,64 @@ export default async function PurchaseOrderDetailPage({
                           Fall back to the row's own description/sku. */}
                       {l.part?.name ?? l.description} <span className="font-mono text-xs text-muted-foreground">{l.part?.sku ?? l.sku ?? ""}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs">
-                      {lineVehicle ? (
-                        // 2026-08-02 (fix #3 followup): each detail on
-                        // its own row so a supplier can identify the
-                        // right part. "Toyota Land Cruiser 2021" alone
-                        // isn't enough to pick a filter for a specific
-                        // trim; the engine + plate + VIN are what
-                        // matter. Rows that are null just don't render.
-                        <div className="space-y-0.5">
-                          {lineVehicle.make || lineVehicle.model ? (
-                            <div className="font-medium">
-                              {[lineVehicle.make, lineVehicle.model]
-                                .filter(Boolean)
-                                .join(" ")}
-                            </div>
-                          ) : null}
-                          {lineVehicle.year != null ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              {lineVehicle.year}
-                            </div>
-                          ) : null}
-                          {lineVehicle.engineSize || lineVehicle.fuelType ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              {[lineVehicle.engineSize, lineVehicle.fuelType]
-                                .filter(Boolean)
-                                .join(" ")}
-                            </div>
-                          ) : null}
-                          {lineVehicle.plate ? (
-                            <div className="text-[11px] font-medium">
-                              {lineVehicle.plate}
-                            </div>
-                          ) : null}
-                          {lineVehicle.vin ? (
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              VIN {lineVehicle.vin}
-                            </div>
-                          ) : null}
-                          {lineVehicle.jobNumber != null ? (
-                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              JC-{lineVehicle.jobNumber}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        // Empty on print (supplier surface) + a subdued
-                        // dash on screen for staff so the column doesn't
-                        // read as broken. The internal "(no vehicle
-                        // linked)" wording is gone as of 2026-08-02 —
-                        // AR's rule: print + supplier surfaces show
-                        // nothing, and the screen inherits the cleaner
-                        // shape.
-                        <span
-                          className="text-muted-foreground print:hidden"
-                          aria-hidden="true"
-                        >
-                          —
-                        </span>
-                      )}
-                    </td>
+                    {singleVehicle ? null : (
+                      <td className="px-4 py-3 text-xs">
+                        {lineVehicle ? (
+                          // 2026-08-02 (fix #3 followup): each detail on
+                          // its own row so a supplier can identify the
+                          // right part. "Toyota Land Cruiser 2021" alone
+                          // isn't enough to pick a filter for a specific
+                          // trim; the engine + plate + VIN are what
+                          // matter. Rows that are null just don't render.
+                          // AR 2026-08-17 — only rendered on multi-
+                          // vehicle docs; single-vehicle docs show the
+                          // vehicle once in the caption above.
+                          <div className="space-y-0.5">
+                            {lineVehicle.make || lineVehicle.model ? (
+                              <div className="font-medium">
+                                {[lineVehicle.make, lineVehicle.model]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              </div>
+                            ) : null}
+                            {lineVehicle.year != null ? (
+                              <div className="text-[11px] text-muted-foreground">
+                                {lineVehicle.year}
+                              </div>
+                            ) : null}
+                            {lineVehicle.engineSize || lineVehicle.fuelType ? (
+                              <div className="text-[11px] text-muted-foreground">
+                                {[lineVehicle.engineSize, lineVehicle.fuelType]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              </div>
+                            ) : null}
+                            {lineVehicle.plate ? (
+                              <div className="text-[11px] font-medium">
+                                {lineVehicle.plate}
+                              </div>
+                            ) : null}
+                            {lineVehicle.vin ? (
+                              <div className="font-mono text-[10px] text-muted-foreground">
+                                VIN {lineVehicle.vin}
+                              </div>
+                            ) : null}
+                            {lineVehicle.jobNumber != null ? (
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                JC-{lineVehicle.jobNumber}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span
+                            className="text-muted-foreground print:hidden"
+                            aria-hidden="true"
+                          >
+                            —
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right tabular-nums">
                       {isDraft ? (
                         <input
@@ -671,7 +735,7 @@ export default async function PurchaseOrderDetailPage({
               })}
               {po.lines.length === 0 ? (
                 <tr>
-                  <td colSpan={isDraft ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={(isDraft ? 6 : 5) - (singleVehicle ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">
                     {t("noPoLines")}
                   </td>
                 </tr>

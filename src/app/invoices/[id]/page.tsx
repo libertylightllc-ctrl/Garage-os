@@ -37,6 +37,7 @@ import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { canEditInvoice, canSeeMargin } from "@/lib/permissions";
 import { computeJobProfit } from "@/lib/job-profit";
+import { isReceiptReconciledOnInvoice } from "@/lib/direct-fit-receipt";
 import { JobProfitCard } from "@/components/job-profit-card";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
@@ -158,14 +159,47 @@ export default async function InvoiceView({
   // invoice generation, work-session snapshots frozen at close), so
   // a later PO receipt or rate change never rewrites this number.
   const canShowProfit = canSeeMargin(session.user.role);
-  const [workSessionsForProfit] = canShowProfit
+  const [workSessionsForProfit, receiptsForProfit] = canShowProfit
     ? await Promise.all([
         prisma.workSession.findMany({
           where: { jobCardId: inv.jobCardId, endedAt: { not: null } },
           select: { laborCostSnapshot: true },
         }),
+        // Direct-fit receipts on this job (AR 2026-08-16). Any
+        // receipt whose cost isn't provably reflected on the
+        // invoice snapshot makes parts profit unreliable — the
+        // coverage rule treats it the same way as a missing part
+        // cost. See docs/direct-fit-receive-spec.md and
+        // isReceiptReconciledOnInvoice.
+        prisma.jobPartReceipt.findMany({
+          where: { jobCardId: inv.jobCardId },
+          select: {
+            receivedUnitCost: true,
+            purchaseOrderLine: {
+              select: {
+                sourceEstimateLine: {
+                  select: {
+                    unitCost: true,
+                    estimate: { select: { invoice: { select: { id: true } } } },
+                  },
+                },
+              },
+            },
+          },
+        }),
       ])
-    : [[] as { laborCostSnapshot: import("@/generated/prisma/client").Prisma.Decimal | null }[]];
+    : [
+        [] as { laborCostSnapshot: import("@/generated/prisma/client").Prisma.Decimal | null }[],
+        [] as Array<{
+          receivedUnitCost: import("@/generated/prisma/client").Prisma.Decimal;
+          purchaseOrderLine: {
+            sourceEstimateLine: {
+              unitCost: import("@/generated/prisma/client").Prisma.Decimal | null;
+              estimate: { invoice: { id: string } | null };
+            } | null;
+          };
+        }>,
+      ];
   const profit = canShowProfit
     ? computeJobProfit(
         inv.lines.map((l) => ({
@@ -175,6 +209,22 @@ export default async function InvoiceView({
           unitCost: l.unitCost,
         })),
         workSessionsForProfit,
+        receiptsForProfit.map((r) => ({
+          reconciled: isReceiptReconciledOnInvoice({
+            receivedUnitCost: Number(r.receivedUnitCost),
+            sourceEstimateLine: r.purchaseOrderLine.sourceEstimateLine
+              ? {
+                  unitCost:
+                    r.purchaseOrderLine.sourceEstimateLine.unitCost === null
+                      ? null
+                      : Number(r.purchaseOrderLine.sourceEstimateLine.unitCost),
+                  estimateHasInvoice: Boolean(
+                    r.purchaseOrderLine.sourceEstimateLine.estimate.invoice,
+                  ),
+                }
+              : null,
+          }),
+        })),
       )
     : null;
   const hasLabourRate =

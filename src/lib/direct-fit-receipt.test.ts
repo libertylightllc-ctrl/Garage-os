@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
     parseReceiveMode,
     shouldUpdateEstimateCost,
+    isReceiptReconciledOnInvoice,
     DEFAULT_MODE_FOR_UNLINKED,
 } from "./direct-fit-receipt";
 
@@ -108,5 +109,101 @@ describe("shouldUpdateEstimateCost", () => {
                 receivedUnitCost: -1,
             }),
         ).toBe(false);
+    });
+});
+
+describe("isReceiptReconciledOnInvoice", () => {
+    // AR 2026-08-16 rule: a receipt is reconciled iff (1) it has a
+    // source estimate line, (2) that line's current unitCost equals
+    // the receipt's receivedUnitCost, AND (3) the source estimate has
+    // an invoice. Any other case is unreconciled — parts profit will
+    // render as em-dash with a coverage note.
+
+    it("reconciled when all three conditions hold (from-estimate happy path)", () => {
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toBe(true);
+    });
+
+    it("unreconciled when the PO line has no source estimate line (manual PO path)", () => {
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250,
+                sourceEstimateLine: null,
+            }),
+        ).toBe(false);
+    });
+
+    it("unreconciled when the source estimate has no invoice yet (writeback not snapshotted)", () => {
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: false,
+                },
+            }),
+        ).toBe(false);
+    });
+
+    it("unreconciled when advisor edited estimate cost away from received value", () => {
+        // Writeback wrote 250 at receive time, advisor later edited
+        // the estimate to 260, invoice generated with 260. Receipt
+        // cost no longer matches invoice snapshot — unreconciled.
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250,
+                sourceEstimateLine: {
+                    unitCost: 260,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toBe(false);
+    });
+
+    it("unreconciled when writeback was skipped (post-invoice receipt) — receivedUnitCost never landed on the line", () => {
+        // Invoice existed at receive time, writeback skipped. Source
+        // line still holds the advisor's original estimated cost.
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 260,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toBe(false);
+    });
+
+    it("unreconciled when source estimate line has null unitCost", () => {
+        // Legacy row before the tri-input line editor, or a line the
+        // advisor never priced. Can't compare against a null.
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250,
+                sourceEstimateLine: {
+                    unitCost: null,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toBe(false);
+    });
+
+    it("cent-level equality — 250 vs 250.001 is treated as equal", () => {
+        expect(
+            isReceiptReconciledOnInvoice({
+                receivedUnitCost: 250.001,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toBe(true);
     });
 });

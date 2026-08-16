@@ -72,6 +72,13 @@ const en = {
     "Cost and profit can't be calculated — some lines have no cost data. See the coverage lines below.",
   profitCardCoverageParts: "{covered} of {total} parts have cost data",
   profitCardCoverageLabour: "{covered} of {total} work sessions have cost data",
+  // Direct-fit receipt coverage (AR 2026-08-16). Rendered under the
+  // parts card when at least one JobPartReceipt on this job has a
+  // supplier cost that can't be proved to sit on the frozen invoice
+  // snapshot — parts profit shows em-dash in that case, same rule
+  // as missing part cost. See docs/direct-fit-receive-spec.md.
+  profitCardCoverageReceipts:
+    "{count} received part cost(s) aren't captured on the invoice — add them to the estimate + reissue the invoice, or record them as separate lines.",
   profitCardNoLabourSessions: "No work sessions recorded on this job.",
   profitCardLabourRateMissing: "Labour cost is unknown — labour rate not set.",
   profitCardLabourRateMissingCta: "Set labour rate",
@@ -1624,6 +1631,8 @@ const ar: typeof en = {
   profitCardHeadlineIncomplete:
     "لا يمكن احتساب التكلفة والربح — بعض البنود بدون بيانات تكلفة. راجع سطور التغطية أدناه.",
   profitCardCoverageParts: "{covered} من {total} قطع بها بيانات تكلفة",
+  profitCardCoverageReceipts:
+    "{count} تكلفة قطعة مستلمة غير مسجّلة على الفاتورة — أضِفها إلى التقدير وأعِد إصدار الفاتورة، أو سجّلها كبنود منفصلة.",
   profitCardCoverageLabour: "{covered} من {total} جلسات عمل بها بيانات تكلفة",
   profitCardNoLabourSessions: "لا توجد جلسات عمل مسجلة على هذه المهمة.",
   profitCardLabourRateMissing: "تكلفة العمالة غير معروفة — لم يتم ضبط سعر الساعة.",

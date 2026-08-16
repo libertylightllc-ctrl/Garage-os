@@ -68,3 +68,52 @@ function round2(n: number): number {
  * to the from-estimate flow).
  */
 export { normalizePartName, findNormalizedMatch } from "./estimate-to-po";
+
+/**
+ * Decide whether a JobPartReceipt's cost is provably reflected on the
+ * invoice snapshot (AR 2026-08-16). Called by the job-profit loader
+ * to decide `receiptsUnreconciled` on the coverage record.
+ *
+ * Rule — all three must hold:
+ *   1. Receipt has a sourceEstimateLine (the from-estimate path).
+ *      Manual PO path receipts have no source line to reconcile
+ *      against, so they never count as reconciled — the operator is
+ *      responsible for capturing the cost separately if they want
+ *      it on the invoice.
+ *   2. The source EstimateLine.unitCost equals the receipt's
+ *      receivedUnitCost to 2dp. This is the writeback signature —
+ *      shouldUpdateEstimateCost updated the estimate line to the
+ *      received value at receive time. If the advisor later re-edited
+ *      the estimate to a different cost, the invoice snapshot no
+ *      longer matches the receipt, so we can't claim reconciliation.
+ *   3. The source estimate has an invoice — the writeback made it
+ *      into a frozen snapshot.
+ *
+ * Any receipt failing all three is unreconciled. Rule is deliberately
+ * strict: over-claiming a receipt as reconciled would understate
+ * parts cost by an unknown amount, exactly the failure mode AR
+ * pointed at.
+ */
+export interface ReconcilableReceipt {
+    receivedUnitCost: number;
+    /**
+     * The source estimate line's snapshot at read time. null when the
+     * PO line was added manually (no sourceEstimateLineId).
+     */
+    sourceEstimateLine: {
+        unitCost: number | null;
+        estimateHasInvoice: boolean;
+    } | null;
+}
+
+export function isReceiptReconciledOnInvoice(
+    r: ReconcilableReceipt,
+): boolean {
+    if (!r.sourceEstimateLine) return false;
+    if (!r.sourceEstimateLine.estimateHasInvoice) return false;
+    if (r.sourceEstimateLine.unitCost === null) return false;
+    return (
+        round2(r.sourceEstimateLine.unitCost) ===
+        round2(r.receivedUnitCost)
+    );
+}

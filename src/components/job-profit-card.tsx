@@ -72,6 +72,15 @@ export function JobProfitCard(props: JobProfitCardProps) {
     // render as em-dashes. Coverage line explains why.
     const partsIncomplete = c.partsTotal > 0 && c.partsCovered < c.partsTotal;
     const laborIncomplete = c.laborTotal > 0 && c.laborCovered < c.laborTotal;
+    // Direct-fit receipt coverage (AR 2026-08-16). Any JobPartReceipt
+    // whose cost we can't prove landed on the frozen invoice snapshot
+    // means parts cost would be understated by an unknown amount —
+    // same treatment as a missing part cost.
+    const receiptsUnreconciled = c.receiptsUnreconciled > 0;
+    const receiptsCoverageText = t("profitCardCoverageReceipts").replace(
+        "{count}",
+        String(c.receiptsUnreconciled),
+    );
 
     return (
         <section
@@ -127,7 +136,7 @@ export function JobProfitCard(props: JobProfitCardProps) {
                 wrap doesn't visually crowd the Parts / Labour boxes
                 (AR cosmetic report 2026-08-13 — the plain-paragraph
                 version got clipped by the boxes underneath). */}
-            {(partsIncomplete || laborIncomplete) && (
+            {(partsIncomplete || laborIncomplete || receiptsUnreconciled) && (
                 <div
                     role="status"
                     className="mt-3 rounded-lg border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
@@ -170,6 +179,18 @@ export function JobProfitCard(props: JobProfitCardProps) {
                                 }
                             >
                                 {partsCoverageText}
+                            </p>
+                        )}
+                        {receiptsUnreconciled && (
+                            // Direct-fit receipt coverage note. Matches
+                            // the parts-coverage line's warning tone so
+                            // both incomplete signals read the same. See
+                            // docs/direct-fit-receive-spec.md.
+                            <p
+                                className="mt-1 text-xs text-warning-700 dark:text-warning-500"
+                                data-testid="job-profit-card-receipts-coverage"
+                            >
+                                {receiptsCoverageText}
                             </p>
                         )}
                     </div>

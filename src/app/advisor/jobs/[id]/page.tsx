@@ -34,6 +34,7 @@ import { jobTimeSummary } from "@/lib/work-session-reports";
 import { JobTimePanel } from "@/components/job-time-panel";
 import { canSeeMargin } from "@/lib/permissions";
 import { computeJobProfit } from "@/lib/job-profit";
+import { isReceiptReconciledOnInvoice } from "@/lib/direct-fit-receipt";
 import { JobProfitCard } from "@/components/job-profit-card";
 
 export const dynamic ="force-dynamic";
@@ -142,8 +143,48 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         select: { laborCostSnapshot: true },
       })
     : [];
+  // Direct-fit receipts on this job (AR 2026-08-16). Any receipt whose
+  // cost we CAN'T prove landed on the frozen invoice snapshot makes
+  // parts profit unreliable — the coverage rule treats it the same
+  // way as a missing part cost. Detection is deterministic; see
+  // isReceiptReconciledOnInvoice + docs/direct-fit-receive-spec.md.
+  const profitReceipts = profitInvoice
+    ? (
+        await prisma.jobPartReceipt.findMany({
+          where: { jobCardId: id },
+          select: {
+            receivedUnitCost: true,
+            purchaseOrderLine: {
+              select: {
+                sourceEstimateLine: {
+                  select: {
+                    unitCost: true,
+                    estimate: { select: { invoice: { select: { id: true } } } },
+                  },
+                },
+              },
+            },
+          },
+        })
+      ).map((r) => ({
+        reconciled: isReceiptReconciledOnInvoice({
+          receivedUnitCost: Number(r.receivedUnitCost),
+          sourceEstimateLine: r.purchaseOrderLine.sourceEstimateLine
+            ? {
+                unitCost:
+                  r.purchaseOrderLine.sourceEstimateLine.unitCost === null
+                    ? null
+                    : Number(r.purchaseOrderLine.sourceEstimateLine.unitCost),
+                estimateHasInvoice: Boolean(
+                  r.purchaseOrderLine.sourceEstimateLine.estimate.invoice,
+                ),
+              }
+            : null,
+        }),
+      }))
+    : [];
   const profit = profitInvoice
-    ? computeJobProfit(profitInvoice.lines, profitSessions)
+    ? computeJobProfit(profitInvoice.lines, profitSessions, profitReceipts)
     : null;
   const hasLabourRate =
     profitInvoice?.garage.defaultLaborHourlyCost !== null &&

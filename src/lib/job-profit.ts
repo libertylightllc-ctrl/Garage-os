@@ -69,12 +69,37 @@ export interface JobProfit {
         partsTotal: number;   // # PART lines total
         laborCovered: number; // # sessions with laborCostSnapshot not null
         laborTotal: number;   // # sessions total
+        // Direct-fit receipts coverage (AR 2026-08-16). A
+        // JobPartReceipt whose cost cannot be proved to have made it
+        // into the frozen InvoiceLine snapshot means parts profit
+        // would be understated by an unknown amount — treat it the
+        // same way as a missing part cost (null out partsCost /
+        // partsProfit / partsMargin). Detection is deterministic:
+        // see src/lib/direct-fit-receipt.ts →
+        // isReceiptReconciledOnInvoice. The card reads
+        // `receiptsUnreconciled` to render a coverage line that
+        // matches the parts-coverage messaging.
+        receiptsUnreconciled: number;
+        receiptsTotal: number;
     };
+}
+
+/**
+ * Direct-fit receipt input to computeJobProfit. Kept a thin
+ * interface — the compute layer only needs to know how many
+ * receipts total and how many aren't reflected on the invoice yet.
+ * The reconciliation decision is made by the caller
+ * (isReceiptReconciledOnInvoice) so this module stays pure.
+ */
+export interface ProfitReceipt {
+    /** True when the receipt's cost is provably reflected on the invoice. */
+    reconciled: boolean;
 }
 
 export function computeJobProfit(
     lines: ProfitLine[],
     sessions: ProfitSession[],
+    receipts: ProfitReceipt[] = [],
 ): JobProfit {
     const ZERO = new Prisma.Decimal(0);
 
@@ -112,11 +137,26 @@ export function computeJobProfit(
     }
     const laborTotal = sessions.length;
 
+    // Direct-fit receipt coverage (AR 2026-08-16). A receipt whose
+    // cost can't be proved to sit on the frozen invoice snapshot
+    // would understate parts cost by an unknown amount — treat the
+    // whole parts side as unknown, same as a missing part cost.
+    // Caller passes `receipts` with `.reconciled` already decided
+    // (isReceiptReconciledOnInvoice in direct-fit-receipt.ts).
+    const receiptsTotal = receipts.length;
+    const receiptsUnreconciled = receipts.filter(
+        (r) => !r.reconciled,
+    ).length;
+    const receiptsCovered = receiptsUnreconciled === 0;
+
     // Coverage-gated numbers. "Known" means every countable input has a
     // value. A side with zero countable inputs is trivially known
     // (nothing to be missing) — its cost is a genuine 0, not a
     // stand-in for an unknown.
-    const partsKnown = partsTotal === 0 || partsCovered === partsTotal;
+    // Parts side is ALSO gated by receipts coverage: any receipt not
+    // yet reflected on the invoice makes parts cost unreliable.
+    const partsKnown =
+        (partsTotal === 0 || partsCovered === partsTotal) && receiptsCovered;
     const laborKnown = laborTotal === 0 || laborCovered === laborTotal;
 
     const partsCost = partsKnown ? round2(partsCostAccum) : null;
@@ -151,7 +191,14 @@ export function computeJobProfit(
         totalCost,
         grossProfit,
         grossMarginPct,
-        coverage: { partsCovered, partsTotal, laborCovered, laborTotal },
+        coverage: {
+            partsCovered,
+            partsTotal,
+            laborCovered,
+            laborTotal,
+            receiptsUnreconciled,
+            receiptsTotal,
+        },
     };
 }
 

@@ -41,7 +41,38 @@ describe("computeJobProfit — full coverage", () => {
             partsTotal: 2,
             laborCovered: 2,
             laborTotal: 2,
+            receiptsUnreconciled: 0,
+            receiptsTotal: 0,
         });
+    });
+
+    // AR 2026-08-16 receipt-coverage rule: any unreconciled receipt
+    // nulls out parts cost / profit / margin, same as missing part
+    // cost. The invoice snapshot alone can't be trusted when a
+    // direct-fit receipt's cost isn't provably reflected there.
+    it("unreconciled receipt nulls parts cost, keeps revenue, sets coverage counts", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
+            [],
+            [{ reconciled: false }],
+        );
+        expect(out.partsRevenue.toString()).toBe("100");
+        expect(out.partsCost).toBeNull();
+        expect(out.partsProfit).toBeNull();
+        expect(out.partsMarginPct).toBeNull();
+        expect(out.coverage.receiptsTotal).toBe(1);
+        expect(out.coverage.receiptsUnreconciled).toBe(1);
+    });
+
+    it("reconciled receipts don't disturb the confident number", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
+            [],
+            [{ reconciled: true }, { reconciled: true }],
+        );
+        expect(out.partsCost?.toString()).toBe("40");
+        expect(out.coverage.receiptsTotal).toBe(2);
+        expect(out.coverage.receiptsUnreconciled).toBe(0);
     });
 });
 

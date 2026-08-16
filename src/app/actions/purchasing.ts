@@ -592,6 +592,16 @@ export async function receivePurchaseOrderAction(formData: FormData) {
               },
             },
           },
+          // Manually-added PO lines don't have a source estimate line
+          // but do carry a Job Card number snapshot (per-garage
+          // sequential — same key JobCard.number uses). This is the
+          // fallback the direct-fit receive uses to resolve the
+          // target JobCard when sourceEstimateLine is null (AR
+          // 2026-08-16 fallback order). Nullable — a manually-added
+          // line without any vehicle context can't take the direct-
+          // fit path either; the receive action rejects with a
+          // clear message.
+          vehicleJobNumber: true,
         },
       },
       supplier: { select: { name: true } },
@@ -614,7 +624,12 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   interface DirectReceipt {
     lineId: string;
     jobCardId: string;
-    sourceEstimateLineId: string;
+    // Null when the JobCard was resolved via the manual-PO fallback
+    // (vehicleJobNumber → JobCard). In that case the receive path
+    // writes JobPartReceipt only and skips the estimate-line
+    // writeback — there's no source line to write back to. See
+    // docs/direct-fit-receive-spec.md.
+    sourceEstimateLineId: string | null;
     // Truth from the receive form. Cannot be null — the whole point
     // of the direct-fit receive is to capture the ACTUAL paid cost
     // for this specific job, so blank costs are rejected upstream.
@@ -625,6 +640,7 @@ export async function receivePurchaseOrderAction(formData: FormData) {
     description: string;
     // Extra bits the tx needs to decide whether to reconcile the
     // estimate line's cost. Post-invoice = don't touch (frozen).
+    // Both null when there's no source estimate line to reconcile.
     invoiceExists: boolean;
     currentSourceUnitCost: number | null;
   }
@@ -666,14 +682,19 @@ export async function receivePurchaseOrderAction(formData: FormData) {
     }
 
     // DIRECT: this part was bought for the specific job the source
-    // estimate belongs to, is being fitted, and never enters stock.
-    // We need the estimate → jobCard chain to associate the receipt.
-    if (!l.sourceEstimateLine) {
-      fail(
-        "Direct-fit receive needs a source estimate line. This PO line was added manually — link a catalogue part instead.",
-        back,
-      );
-    }
+    // estimate belongs to (or the JobCard the operator identified on
+    // the PO line), is being fitted, and never enters stock. Two-step
+    // JobCard resolution (AR 2026-08-16 fallback order):
+    //
+    //   1. sourceEstimateLine present → resolve via
+    //      estimate → jobCardId. Estimate writeback candidate.
+    //   2. Else vehicleJobNumber present → resolve via
+    //      (garageId, JobCard.number). No estimate writeback
+    //      (nothing to write back to); JobPartReceipt captures
+    //      the cost on its own.
+    //   3. Neither → refuse. No job to attribute.
+    //
+    // Cost + part-no parsing is shared between both branches.
     const costRaw = String(formData.get(`cost_${l.id}`) ?? "").trim();
     const costResult = parseMoney(costRaw);
     if (!costResult.ok) fail("Invalid unit cost on the direct-fit line.", back);
@@ -688,20 +709,59 @@ export async function receivePurchaseOrderAction(formData: FormData) {
       const s = String(formData.get(`partNo_${l.id}`) ?? "").trim();
       return s === "" ? null : s;
     })();
+
+    let resolvedJobCardId: string;
+    let resolvedSourceEstimateLineId: string | null;
+    let resolvedInvoiceExists: boolean;
+    let resolvedCurrentSourceUnitCost: number | null;
+
+    if (l.sourceEstimateLine) {
+      // Step 1: from-estimate path — the happy path.
+      resolvedJobCardId = l.sourceEstimateLine.estimate.jobCardId;
+      resolvedSourceEstimateLineId = l.sourceEstimateLine.id;
+      resolvedInvoiceExists = Boolean(l.sourceEstimateLine.estimate.invoice);
+      resolvedCurrentSourceUnitCost =
+        l.sourceEstimateLine.unitCost === null
+          ? null
+          : Number(l.sourceEstimateLine.unitCost);
+    } else if (l.vehicleJobNumber !== null) {
+      // Step 2: manual-PO fallback — resolve JobCard by garage-
+      // scoped job number. The number was captured at line-write
+      // time (or inherited from the PO's defaultVehicleJobNumber);
+      // (garageId, number) is unique on JobCard.
+      const job = await prisma.jobCard.findFirst({
+        where: { garageId: user.garageId, number: l.vehicleJobNumber },
+        select: { id: true },
+      });
+      if (!job) {
+        fail(
+          `Direct-fit receive: job card JC-${l.vehicleJobNumber} on this line doesn't exist in this garage.`,
+          back,
+        );
+      }
+      resolvedJobCardId = job.id;
+      resolvedSourceEstimateLineId = null;
+      resolvedInvoiceExists = false; // no source line → nothing to writeback
+      resolvedCurrentSourceUnitCost = null;
+    } else {
+      // Step 3: no path to a JobCard. Genuine refusal.
+      fail(
+        "This PO line has no job attached. Add a job card number on the line and try again, or link a catalogue part if it's a stock item.",
+        back,
+      );
+    }
+
     directReceipts.push({
       lineId: l.id,
-      jobCardId: l.sourceEstimateLine.estimate.jobCardId,
-      sourceEstimateLineId: l.sourceEstimateLine.id,
+      jobCardId: resolvedJobCardId,
+      sourceEstimateLineId: resolvedSourceEstimateLineId,
       receivedUnitCost,
       receivedPartNo,
       qty: l.qty,
       receiveNow: n,
       description: (l.description ?? "").trim(),
-      invoiceExists: Boolean(l.sourceEstimateLine.estimate.invoice),
-      currentSourceUnitCost:
-        l.sourceEstimateLine.unitCost === null
-          ? null
-          : Number(l.sourceEstimateLine.unitCost),
+      invoiceExists: resolvedInvoiceExists,
+      currentSourceUnitCost: resolvedCurrentSourceUnitCost,
     });
   }
   if (stockReceipts.length === 0 && directReceipts.length === 0) {
@@ -803,7 +863,14 @@ export async function receivePurchaseOrderAction(formData: FormData) {
           },
         });
 
+        // Estimate-line writeback — only when a source line exists
+        // (from-estimate path). Manual-PO fallback receipts skip
+        // this; JobPartReceipt is the sole record of the received
+        // cost, and profit reporting's receipts-coverage rule
+        // treats them as unreconciled (see job-profit.ts +
+        // isReceiptReconciledOnInvoice).
         if (
+          r.sourceEstimateLineId !== null &&
           shouldUpdateEstimateCost({
             invoiceExists: r.invoiceExists,
             currentUnitCost: r.currentSourceUnitCost,

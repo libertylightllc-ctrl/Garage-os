@@ -122,15 +122,64 @@ keeps the invoice-snapshot invariant simple; a "correct receipt cost"
 affordance on a closed invoice can be added later if it ever hurts,
 as a scoped void-and-reissue variant.
 
+## JobCard resolution — two-step fallback (AR 2026-08-16)
+
+The direct-fit path needs to know *which JobCard* the receipt
+attributes to. Two paths, tried in order:
+
+1. **`sourceEstimateLine` present** (from-estimate happy path) →
+   resolve via `sourceEstimateLine.estimate.jobCardId`. Estimate
+   writeback is a candidate per the reconciliation rule above.
+2. **`vehicleJobNumber` present on the PO line** (manually-added
+   line where the operator captured the Job Card number) →
+   resolve via `JobCard.findFirst({ garageId, number: vehicleJobNumber })`.
+   No estimate writeback (nothing to write back to); `JobPartReceipt`
+   is the sole record of the received cost. Profit reporting will
+   flag this as an unreconciled receipt (see the coverage rule below).
+3. **Neither** → refuse with a clear message: *"This PO line has no
+   job attached. Add a job card number on the line and try again,
+   or link a catalogue part if it's a stock item."*
+
+## Profit reporting — receipt coverage (AR 2026-08-16)
+
+`computeJobProfit` gained a third input: an array of `JobPartReceipt`
+descriptors with a `reconciled` boolean per receipt. Any receipt with
+`reconciled=false` nulls out `partsCost / partsProfit / partsMargin`
+— same treatment as a missing part cost. AR's principle: *"a number
+that's wrong by an unknown amount is worse than no number."*
+
+**Reconciliation rule** (`isReceiptReconciledOnInvoice` in
+`src/lib/direct-fit-receipt.ts`) — a receipt is reconciled iff:
+
+1. It has a `sourceEstimateLine` (rules out the manual-PO path).
+2. That line's current `unitCost` equals the receipt's
+   `receivedUnitCost` to 2dp (proof the writeback ran and hasn't
+   been re-edited).
+3. The source estimate has an `invoice` row (proof the writeback
+   made it into a frozen snapshot).
+
+Any of the three failing → unreconciled. Rule is deliberately strict:
+over-claiming a receipt as reconciled would silently understate parts
+cost, exactly the failure mode this coverage rule exists to catch.
+
+The profit card renders a coverage line under the parts sub-card
+when `receiptsUnreconciled > 0`:
+
+> *"N received part cost(s) aren't captured on the invoice — add
+> them to the estimate + reissue the invoice, or record them as
+> separate lines."*
+
 ## What direct-fit does NOT support today
 
-* Manually-added PO lines with no estimate origin (`sourceEstimateLineId`
-  null) cannot use the direct-fit path — the receive action rejects
-  with a clear error and points at the stock path.
-* No partial-receipt cost averaging — each direct-fit receive event
-  writes its own `JobPartReceipt` row with the received cost. Cross-
-  receipt averaging isn't needed because direct-fit is one-off by
-  definition (order-of-1 for a specific vehicle).
+* **No partial-receipt cost averaging** — each direct-fit receive
+  event writes its own `JobPartReceipt` row with the received cost.
+  Cross-receipt averaging isn't needed because direct-fit is one-off
+  by definition (order-of-1 for a specific vehicle).
+* **No automatic invoice-line creation** on a manual-PO receipt —
+  the receipt records the supplier-side event; putting the cost on
+  the customer's invoice is a separate step (add an estimate line
+  and invoice as usual). The profit-card coverage line surfaces
+  this gap so the operator can act on it.
 
 Both can be revisited if a real shop hits them. Neither blocks the
 common case.

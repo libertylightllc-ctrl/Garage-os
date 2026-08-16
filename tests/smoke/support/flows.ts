@@ -259,42 +259,54 @@ export async function sendJobForEstimate(
  * Post-workflow-flip (see the /estimates/[id]/page.tsx comment: "The
  * send action itself now only fires from /estimates/[id]/preview, so
  * a typo noticed mid-edit can't slip into a one-tap send"), sending
- * requires going through the customer-facing preview page. Direct
- * navigate + click the Send form there.
+ * requires going through the customer-facing preview page.
  *
- * The preview page's Send form has:
- *   <form action={setEstimateStatusAction}>
- *     <input name="estimateId" value=... />
- *     <input name="status" value="SENT" />
- *     <button>...</button>
- *   </form>
+ * AR 2026-08-16 estimate-send fix: the preview form now submits to
+ * sendEstimateToCustomerAction, which mirrors the invoice send —
+ * builds a wa.me URL and redirects the browser to it. The old form
+ * carried a `status=SENT` hidden input; the new one only carries
+ * `estimateId`. Match by form action attribute (Next.js server-
+ * action forms render an opaque `/estimates/[id]/preview`-ish action;
+ * safest is to match on the button label since that's the only
+ * Send button on the preview page).
  *
- * Scope by status=SENT + estimateId to distinguish from the reject
- * form (also on preview).
+ * On successful redirect the browser navigates to wa.me/... — we
+ * intercept that so smoke tests don't leave the app. When the URL
+ * changes to a wa.me destination, we know the action ran; we then
+ * navigate back to the preview page so the caller can continue.
  */
 export async function sendEstimateToCustomer(
     page: Page,
     estimateId: string,
 ): Promise<void> {
     await page.goto(`/estimates/${estimateId}/preview`);
+    // Intercept the wa.me navigation so smoke stays inside the app.
+    // The server-side action still runs to completion (status flip
+    // + sentAt stamp happen BEFORE redirect() is thrown); aborting
+    // stops the browser from actually opening WhatsApp.
+    await page.route(/^https:\/\/(?:api\.whatsapp\.com|wa\.me)/, (route) => {
+        void route.abort();
+    });
+    // Kick off the server-action-response wait BEFORE the click —
+    // Playwright's canonical pattern. The Next.js server-action POST
+    // returns before the client processes the redirect, so this
+    // resolves as soon as the DB writes are committed regardless of
+    // whether the wa.me nav completes.
+    const actionResponsePromise = page.waitForResponse(
+        (r) => r.request().method() === "POST" && r.url().includes("/estimates/"),
+        { timeout: 15_000 },
+    );
     await page
-        .locator(
-            `form:has(input[name="estimateId"][value="${estimateId}"]):has(input[name="status"][value="SENT"]) button:not([type="button"])`,
-        )
+        .getByRole("button", { name: /Send Estimate to Customer/i })
         .first()
         .click({ timeout: 10_000 });
-    // Wait for the SEND form to detach from the DOM. The preview page
-    // only renders the SEND form while the estimate is DRAFT; after
-    // setEstimateStatusAction commits status=SENT and revalidatePath
-    // re-renders, the SEND form is gone (replaced with a sent-state
-    // view). Deterministic signal that the action completed.
-    // Was `page.waitForLoadState("networkidle")` — hung on Vercel
-    // preview (AR 2026-08-15).
-    await page
-        .locator(
-            `form:has(input[name="estimateId"][value="${estimateId}"]):has(input[name="status"][value="SENT"])`,
-        )
-        .waitFor({ state: "detached", timeout: 15_000 });
+    await actionResponsePromise;
+    // Reload the preview page so the caller (which typically pulls
+    // the customer URL next) sees fresh state — sentAt set, status
+    // flipped. The RSC re-render on the previous request was
+    // aborted by the wa.me nav intercept.
+    await page.unroute(/^https:\/\/(?:api\.whatsapp\.com|wa\.me)/);
+    await page.goto(`/estimates/${estimateId}/preview`);
 }
 
 /**

@@ -25,7 +25,7 @@ import {
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { buildWaMeUrl, normalizeToE164 } from "@/lib/wa";
-import { invoiceMessage } from "@/lib/po-message";
+import { invoiceMessage, estimateMessage } from "@/lib/po-message";
 import { logInvoiceSend } from "@/lib/invoice-send-log";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
 import { requireAnyRole } from "@/lib/action-guards";
@@ -499,6 +499,167 @@ export async function setEstimateStatusAction(formData: FormData) {
   }
   revalidatePath(`/estimates/${estimateId}`);
   revalidatePath(`/advisor/jobs/${est.jobCardId}`);
+}
+
+/**
+ * Send an estimate to the customer via WhatsApp hand-off (AR 2026-08-16,
+ * INV-2026-0048 sibling report — estimate send was silently mocking
+ * away in prod because it still used the pre-wa.me `sendWhatsApp`
+ * helper which no-ops without Meta Cloud API creds).
+ *
+ * Mirror of sendInvoiceToCustomerAction (billing.ts:1055):
+ *
+ *   1. Resolve customer + vehicle + garage
+ *   2. Build the customer-facing message via estimateMessage()
+ *   3. Build the wa.me URL via buildWaMeUrl (picker fallback on bad
+ *      phone matches invoice behaviour)
+ *   4. Stamp Estimate.sentAt = now() (idempotent — resend updates
+ *      the timestamp, matches invoice-side JobCard.invoiceSentAt)
+ *   5. On the FIRST send (est.status !== SENT): flip status to SENT
+ *      and re-run the quote-approval-gate check that used to live
+ *      inside setEstimateStatusAction's SENT branch. Later resends
+ *      skip both — the status is already SENT and re-checking
+ *      isQuoteIncrease against the same value is a no-op.
+ *   6. Revalidate + redirect to wa.me — the load-bearing step. The
+ *      old path revalidated + returned; the browser stayed on the
+ *      preview page and WhatsApp never opened.
+ *
+ * Called from /estimates/[id]/preview — both the initial Send and
+ * a Resend on an already-SENT estimate. setEstimateStatusAction's
+ * SENT branch is now defensive-only (nothing in the UI submits to
+ * it with status=SENT).
+ */
+export async function sendEstimateToCustomerAction(formData: FormData) {
+  const user = await requireAnyRole(SEND_ROLES);
+  const estimateId = String(formData.get("estimateId") ?? "");
+  // Garage-scope via the jobCard relation (Estimate has no garageId
+   // column — same pattern ownedEstimate uses).
+  const est = await prisma.estimate.findFirst({
+    where: { id: estimateId, jobCard: { garageId: user.garageId } },
+    select: {
+      id: true,
+      jobCardId: true,
+      status: true,
+      subtotal: true,
+      vatAmount: true,
+      total: true,
+      publicToken: true,
+      lines: {
+        select: { qty: true, description: true, declined: true },
+        orderBy: { createdAt: "asc" },
+      },
+      jobCard: {
+        select: {
+          number: true,
+          garage: { select: { name: true } },
+          vehicle: {
+            select: {
+              make: true,
+              model: true,
+              year: true,
+              plate: true,
+              vin: true,
+              engineSize: true,
+              fuelType: true,
+              customer: {
+                select: { id: true, name: true, phone: true, waId: true, lang: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!est) throw new Error("Estimate not found in this garage");
+
+  const customer = est.jobCard.vehicle.customer;
+  const rawPhone = customer.waId ?? customer.phone;
+  const phoneE164 = normalizeToE164(rawPhone);
+
+  const publicToken = await ensurePublicToken("estimate", est);
+  const body = estimateMessage({
+    customer: { name: customer.name, lang: customer.lang },
+    garage: { name: est.jobCard.garage.name },
+    vehicle: {
+      make: est.jobCard.vehicle.make,
+      model: est.jobCard.vehicle.model,
+      year: est.jobCard.vehicle.year ?? null,
+      plate: est.jobCard.vehicle.plate ?? null,
+      vin: est.jobCard.vehicle.vin ?? null,
+      engineSize: est.jobCard.vehicle.engineSize ?? null,
+      fuelType: est.jobCard.vehicle.fuelType ?? null,
+      jobNumber: est.jobCard.number ?? null,
+    },
+    estimate: {
+      // No per-garage Estimate.number today (invoice has one, estimate
+      // doesn't) — render the cuid tail so the customer has a stable
+      // ref they can quote back. Same convention invoiceMessage takes:
+      // caller decides the string.
+      number: `#${est.id.slice(-6).toUpperCase()}`,
+      subtotal: Number(est.subtotal),
+      vatAmount: Number(est.vatAmount),
+      total: Number(est.total),
+      lines: est.lines
+        // Declined lines never reach the customer — same rule as the
+        // customer /c/estimate page.
+        .filter((l) => !l.declined)
+        .map((l) => ({ qty: Number(l.qty), description: l.description })),
+    },
+    appUrl: appUrl(),
+    estimateToken: publicToken,
+  });
+  const waHref = buildWaMeUrl(phoneE164, body);
+
+  const isFirstSend = est.status !== "SENT";
+
+  // Stamp sentAt + (first-send only) flip status. Same pattern as
+  // sendInvoiceToCustomerAction: sentAt is a per-hand-off timestamp,
+  // updated on every send/resend.
+  await prisma.estimate.update({
+    where: { id: est.id },
+    data: {
+      sentAt: new Date(),
+      ...(isFirstSend ? { status: "SENT" as const } : {}),
+    },
+  });
+
+  if (isFirstSend) {
+    // Quote-approval-gate — carried over verbatim from the old
+    // setEstimateStatusAction SENT branch. Only runs on first send;
+    // a resend of an already-SENT estimate can't change the
+    // approval landscape.
+    const prior = await prisma.estimate.aggregate({
+      where: { jobCardId: est.jobCardId, status: "APPROVED", NOT: { id: est.id } },
+      _max: { total: true },
+    });
+    const lastApproved = Number(prior._max.total ?? 0);
+    if (isQuoteIncrease(Number(est.total), lastApproved)) {
+      const job = await prisma.jobCard.findFirst({
+        where: { id: est.jobCardId, garageId: user.garageId },
+        select: { status: true },
+      });
+      if (job && job.status !== "ON_HOLD") {
+        await prisma.jobCard.update({
+          where: { id: est.jobCardId },
+          data: {
+            status: "ON_HOLD",
+            heldFrom: job.status,
+            holdReason: "AWAITING_APPROVAL",
+          },
+        });
+      }
+    }
+  }
+
+  revalidatePath(`/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}/preview`);
+  revalidatePath(`/advisor/jobs/${est.jobCardId}`);
+  revalidatePath("/advisor");
+  // The load-bearing step. Anywhere else in this action can fail
+  // (customer missing, phone bad) and we STILL want to hand off —
+  // buildWaMeUrl falls back to the contact-picker URL on a missing
+  // phone, so the operator can still send.
+  redirect(waHref);
 }
 
 export async function generateInvoiceAction(formData: FormData) {

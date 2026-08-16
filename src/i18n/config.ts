@@ -1258,6 +1258,10 @@ const en = {
   disputeShieldNote:
     "This receipt confirms the vehicle condition and valuables at drop-off. Any additional damage claims must be raised before you take the vehicle away.",
   estimateSendToCustomer: "Send Estimate to Customer →",
+  // Resend affordance on the SENT-state preview (AR 2026-08-16
+  // estimate-send fix). Mirrors invoiceResendViaWhatsApp so
+  // estimate + invoice read the same on hand-off retries.
+  estimateResendViaWhatsApp: "Resend via WhatsApp →",
   estimatePreviewMockNote: "WhatsApp delivery is mocked in this build — Send Estimate logs the message that would have gone out.",
   markApproved: "Mark approved",
   markRejected: "Mark rejected",
@@ -2706,6 +2710,7 @@ const ar: typeof en = {
   disputeShieldNote:
     "يؤكد هذا الإيصال حالة المركبة والأغراض الثمينة عند التسليم. يجب الإبلاغ عن أي مطالبات تلف إضافية قبل استلام المركبة.",
   estimateSendToCustomer: "إرسال التقدير للعميل ←",
+  estimateResendViaWhatsApp: "إعادة الإرسال عبر واتساب ←",
   estimatePreviewMockNote: "إرسال واتساب وضعٌ تجريبي — زر «إرسال التقدير» يسجِّل الرسالة التي كانت ستُرسل.",
   markApproved: "تعيين: موافَق",
   markRejected: "تعيين: مرفوض",

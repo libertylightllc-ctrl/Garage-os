@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
-import { setEstimateStatusAction } from "@/app/actions/billing";
+import { sendEstimateToCustomerAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
 import { DocumentHeader } from "@/components/document-header";
 import { getT, getLocale } from "@/i18n/server";
@@ -187,34 +187,53 @@ export default async function EstimatePreview({
             {t("estimatePrint")}
           </PrintButton>
         </div>
-        {isDraft ? (
-          <form action={setEstimateStatusAction}>
-            <input type="hidden" name="estimateId" value={est.id} />
-            <input type="hidden" name="status" value="SENT"/>
+        {/* AR 2026-08-16 estimate-send fix. Previously the Send form
+            called setEstimateStatusAction(SENT), which built no wa.me
+            URL and mocked the WhatsApp call away in prod (no Meta
+            Cloud API creds) — the button stamped sentAt but WhatsApp
+            never opened. sendEstimateToCustomerAction mirrors
+            sendInvoiceToCustomerAction: builds the wa.me URL and
+            redirects the browser to it, so WhatsApp opens with the
+            message drafted. The action is idempotent — same form
+            renders on the SENT-state pill below with a Resend label. */}
+        <form action={sendEstimateToCustomerAction}>
+          <input type="hidden" name="estimateId" value={est.id} />
+          {isDraft ? (
             <button
               type="submit"
               className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
             >
               {t("estimateSendToCustomer")}
             </button>
-          </form>
-        ) : (
-          // AR 2026-08-15 estimate-honesty pass. Was a green ✓ pill
-          // reading "Sent to the customer · <date>" — both the colour
-          // and the wording implied delivery had happened. wa.me
-          // returns no delivery signal (see src/lib/wa.ts + the
-          // JobCard.invoiceSentAt schema comment). Now warning-yellow
-          // with an honest label + a full banner below that mirrors
-          // the invoice preview at src/app/invoices/[id]/preview/page.tsx
-          // exactly, so estimate + invoice read the same. The
-          // sentAt timestamp is what we know: when the hand-off fired.
-          <span className="inline-flex h-12 items-center justify-center rounded-lg bg-warning-50 px-5 text-base font-semibold text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
-            📱{" "}
-            {est.sentAt
-              ? `${t("estimateSentAt")} ${fmtDate(est.sentAt, locale, tz)}`
-              : t("estimateSentAt")}
-          </span>
-        )}
+          ) : (
+            // AR 2026-08-15 estimate-honesty pass. Was a green ✓ pill
+            // reading "Sent to the customer · <date>" — both the colour
+            // and the wording implied delivery had happened. wa.me
+            // returns no delivery signal (see src/lib/wa.ts + the
+            // JobCard.invoiceSentAt schema comment). Now warning-yellow
+            // with an honest label + a full banner below that mirrors
+            // the invoice preview at src/app/invoices/[id]/preview/page.tsx
+            // exactly, so estimate + invoice read the same. The
+            // sentAt timestamp is what we know: when the hand-off fired.
+            // AR 2026-08-16 — pill now sits next to a Resend submit
+            // button, mirroring the invoice preview's post-send state
+            // (invoiceResendViaWhatsApp).
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-12 items-center justify-center rounded-lg bg-warning-50 px-5 text-base font-semibold text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
+                📱{" "}
+                {est.sentAt
+                  ? `${t("estimateSentAt")} ${fmtDate(est.sentAt, locale, tz)}`
+                  : t("estimateSentAt")}
+              </span>
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+              >
+                {t("estimateResendViaWhatsApp")}
+              </button>
+            </div>
+          )}
+        </form>
       </div>
 
       {isDraft ? (

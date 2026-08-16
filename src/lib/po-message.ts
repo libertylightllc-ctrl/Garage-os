@@ -167,6 +167,122 @@ export function invoiceMessage(input: InvoiceMessageInput): string {
         .join("\n\n");
 }
 
+// ── Customer-facing estimate message ──────────────────────────────
+//
+// Same shape as invoiceMessage — one function per document type so
+// bodies can't drift when either template changes. The estimate
+// version's closing prompt asks the customer to REVIEW AND APPROVE
+// (there's a decision to make), where the invoice's closes with
+// "please pay at the garage" (no decision — already priced +
+// approved). AR 2026-08-16 — fixing the estimate send path so it
+// opens WhatsApp the same way invoice already does.
+
+export interface EstimateMessageInput {
+    customer: { name: string; lang?: string | null };
+    garage: { name: string };
+    vehicle: {
+        make: string;
+        model: string;
+        year: number | null;
+        plate: string | null;
+        vin: string | null;
+        engineSize: string | null;
+        fuelType: string | null;
+        jobNumber: number | null;
+    };
+    estimate: {
+        /**
+         * Already-formatted estimate number when we have one, else the
+         * cuid tail (the schema doesn't have per-garage Estimate.number
+         * today — invoiceMessage's `invoice.number` is a formatted
+         * string too, matching that convention). Caller decides.
+         */
+        number: string;
+        subtotal: number;
+        vatAmount: number;
+        total: number;
+        lines: Array<{ qty: number; description: string }>;
+    };
+    /** Origin without trailing slash. */
+    appUrl: string;
+    /** URL segment for the customer view — publicToken (Phase 2). */
+    estimateToken: string;
+}
+
+/**
+ * Structured customer-facing estimate message. Mirrors the invoice
+ * layout section-for-section so a shop reading the two in a chat
+ * sees the same shape. Only the label + closing action differ:
+ *
+ *   Hi {name},
+ *
+ *   Estimate {number} — from {garage}
+ *
+ *   For: {vehicle · plate · VIN · engine · JC-N}
+ *
+ *   {qty} × {description}   (one per line)
+ *
+ *   Subtotal: {subtotal}
+ *   VAT (5%): {vat}
+ *   Total: {total}
+ *
+ *   Please review and approve.
+ *
+ *   Review & approve: {url}
+ */
+export function estimateMessage(input: EstimateMessageInput): string {
+    const { customer, garage, vehicle, estimate, appUrl, estimateToken } = input;
+    const ar = isArabic(customer.lang);
+    const link = `${appUrl}/c/estimate/${estimateToken}`;
+
+    const greeting = ar ? `مرحباً ${customer.name}،` : `Hi ${customer.name},`;
+
+    const estimateLabel = ar ? "عرض سعر" : "Estimate";
+    const heading = ar
+        ? `${estimateLabel} ${estimate.number} — ${garage.name}`
+        : `${estimateLabel} ${estimate.number} — from ${garage.name}`;
+
+    // Vehicle line — identical rules to invoiceMessage.
+    const forLabel = ar ? "لأجل" : "For";
+    const jcLabel = (n: number) => (ar ? `بطاقة عمل رقم ${n}` : `JC-${n}`);
+    const mmy = [vehicle.make, vehicle.model, vehicle.year != null ? String(vehicle.year) : ""]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
+    const vehicleBits: string[] = [];
+    if (mmy) vehicleBits.push(mmy);
+    if (vehicle.plate) vehicleBits.push(vehicle.plate);
+    if (vehicle.vin) vehicleBits.push(`VIN ${vehicle.vin}`);
+    const engine = [vehicle.engineSize, vehicle.fuelType]
+        .filter((s): s is string => Boolean(s))
+        .join(" ");
+    if (engine) vehicleBits.push(engine);
+    if (vehicle.jobNumber != null) vehicleBits.push(jcLabel(vehicle.jobNumber));
+    const vehicleLine = vehicleBits.length ? `${forLabel}: ${vehicleBits.join(" · ")}` : "";
+
+    const items = estimate.lines
+        .map((l) => `${l.qty} × ${l.description}`)
+        .join("\n");
+
+    const subtotalLabel = ar ? "المجموع الفرعي" : "Subtotal";
+    const vatLabel = ar ? "ضريبة القيمة المضافة (٥٪)" : "VAT (5%)";
+    const totalLabel = ar ? "الإجمالي" : "Total";
+    const totals = [
+        `${subtotalLabel}: ${formatMoney(estimate.subtotal, customer.lang)}`,
+        `${vatLabel}: ${formatMoney(estimate.vatAmount, customer.lang)}`,
+        `${totalLabel}: ${formatMoney(estimate.total, customer.lang)}`,
+    ].join("\n");
+
+    const closing = ar
+        ? "يرجى المراجعة والموافقة."
+        : "Please review and approve.";
+
+    const linkLine = ar ? `للمراجعة والموافقة: ${link}` : `Review & approve: ${link}`;
+
+    return [greeting, heading, vehicleLine, items, totals, closing, linkLine]
+        .filter((s) => s.length > 0)
+        .join("\n\n");
+}
+
 // ── Supplier-facing PO / RFQ message ──────────────────────────────
 //
 // Outbound from the shop owner TO a supplier. Two shapes hidden

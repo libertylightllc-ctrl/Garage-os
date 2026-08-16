@@ -103,6 +103,39 @@ describe("computeJobProfit — full coverage", () => {
         expect(out.coverage.receiptsMismatchTotalDelta?.toString()).toBe("15");
     });
 
+    // AR 2026-08-16 markup label — profit as % of COST, alongside
+    // the existing margin (profit as % of REVENUE). Matches the
+    // "default parts markup %" setting so the owner can compare
+    // like-for-like without arithmetic.
+    it("computes partsMarkupPct as profit / cost × 100 (matches settings' markup convention)", () => {
+        // Cost 508, Revenue 584.20, Profit 76.20:
+        //   margin = 76.20 / 584.20 = 13.04%
+        //   markup = 76.20 / 508    = 15.00%
+        // Same profit, different denominator.
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "584.20", unitCost: "508" }],
+            [],
+        );
+        expect(out.partsMarginPct?.toString()).toBe("13");
+        expect(out.partsMarkupPct?.toString()).toBe("15");
+    });
+
+    it("partsMarkupPct is null when partsCost is unknown", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: null }],
+            [],
+        );
+        expect(out.partsMarkupPct).toBeNull();
+    });
+
+    it("partsMarkupPct is null when partsCost is zero (would divide by zero)", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "0" }],
+            [],
+        );
+        expect(out.partsMarkupPct).toBeNull();
+    });
+
     it("reconciled receipts contribute nothing to delta or counts", () => {
         const out = computeJobProfit(
             [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],

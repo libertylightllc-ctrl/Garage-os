@@ -48,8 +48,21 @@ export interface JobProfit {
     partsCost: Prisma.Decimal | null;
     /** null when partsCost is null (can't subtract unknown from known). */
     partsProfit: Prisma.Decimal | null;
-    /** null when partsProfit is null OR partsRevenue is 0. */
+    /**
+     * Profit as % of REVENUE. Null when partsProfit is null OR
+     * partsRevenue is 0. Standard accounting margin.
+     */
     partsMarginPct: Prisma.Decimal | null;
+    /**
+     * Profit as % of COST — i.e., the markup the shop applied on top
+     * of what it paid for the parts. Same profit as partsMarginPct
+     * but a different denominator (cost, not revenue). Rendered next
+     * to margin on the profit card so the owner can compare against
+     * the "default parts markup %" setting without arithmetic. Null
+     * when partsCost is null or 0. See docs/profit-reporting-spec.md.
+     * AR 2026-08-16.
+     */
+    partsMarkupPct: Prisma.Decimal | null;
 
     /** Always known — sum of LABOR line totals. */
     laborRevenue: Prisma.Decimal;
@@ -193,6 +206,13 @@ export function computeJobProfit(
     const partsCost = partsKnown ? round2(partsCostAccum) : null;
     const partsProfit = partsCost !== null ? round2(partsRevenue.minus(partsCost)) : null;
     const partsMarginPct = partsProfit !== null ? pct(partsProfit, partsRevenue) : null;
+    // Markup — profit as a % of COST (not revenue). Matches the
+    // "default parts markup %" setting on /settings so the owner
+    // can compare like-for-like without arithmetic. Renders next
+    // to margin on the parts block. Null on the same conditions
+    // as margin, plus when partsCost is zero (would divide by 0).
+    const partsMarkupPct =
+        partsProfit !== null && partsCost !== null ? pct(partsProfit, partsCost) : null;
 
     const laborCost = laborKnown ? round2(laborCostAccum) : null;
     const laborProfit = laborCost !== null ? round2(laborRevenue.minus(laborCost)) : null;
@@ -215,6 +235,7 @@ export function computeJobProfit(
         partsCost,
         partsProfit,
         partsMarginPct,
+        partsMarkupPct,
         laborRevenue: round2(laborRevenue),
         laborCost,
         laborProfit,

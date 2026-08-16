@@ -66,6 +66,11 @@ const en = {
   profitCardCost: "Cost",
   profitCardGross: "Gross profit",
   profitCardMargin: "Margin",
+  // Markup label on the parts block (AR 2026-08-16). Shown next to
+  // margin so the owner can compare directly against the "default
+  // parts markup %" setting on /settings. Same profit, different
+  // denominator (cost, not revenue).
+  profitCardMarkup: "Markup",
   profitCardParts: "Parts",
   profitCardLabour: "Labour",
   profitCardHeadlineIncomplete:
@@ -100,6 +105,12 @@ const en = {
     "Margins use weighted-average part cost, not per-unit cost.",
   profitCardNoteLabourCost:
     "Labour cost is the configured hourly rate applied to recorded work time — not cash out the door.",
+  // AR 2026-08-16 — explain the two figures on the parts block.
+  // A 15% markup on cost renders as a ~13% margin on revenue; both
+  // are correct, they measure the same profit against different
+  // denominators.
+  profitCardNoteMarginVsMarkup:
+    "Margin is profit as a % of selling price; markup is profit as a % of cost. A 15% markup shows as a ~13% margin.",
   profitCardUnknown: "unknown",
   settingsErrLogoBadMagic: "That file doesn't look like a real image.",
   settingsErrLogoMimeMismatch: "The file's content doesn't match its declared type.",
@@ -1640,6 +1651,7 @@ const ar: typeof en = {
   profitCardCost: "التكلفة",
   profitCardGross: "إجمالي الربح",
   profitCardMargin: "الهامش",
+  profitCardMarkup: "هامش الربح على التكلفة",
   profitCardParts: "قطع الغيار",
   profitCardLabour: "العمالة",
   profitCardHeadlineIncomplete:
@@ -1659,6 +1671,8 @@ const ar: typeof en = {
     "تُحتسب الهوامش على أساس متوسط تكلفة القطعة المرجّح، وليس التكلفة الفعلية للوحدة.",
   profitCardNoteLabourCost:
     "تكلفة العمالة هي سعر الساعة المُعدّ مضروبًا في وقت العمل المسجل — وليست نقدًا مدفوعًا للحظتها.",
+  profitCardNoteMarginVsMarkup:
+    "الهامش هو الربح كنسبة من سعر البيع، وهامش الربح على التكلفة هو الربح كنسبة من التكلفة. زيادة 15% على التكلفة تظهر كهامش نحو 13% على سعر البيع.",
   profitCardUnknown: "غير معروفة",
   settingsErrLogoBadMagic: "هذا الملف لا يبدو كصورة حقيقية.",
   settingsErrLogoMimeMismatch: "محتوى الملف لا يطابق النوع المعلن.",

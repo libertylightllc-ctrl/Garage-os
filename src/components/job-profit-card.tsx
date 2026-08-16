@@ -188,6 +188,17 @@ export function JobProfitCard(props: JobProfitCardProps) {
                             <dd className="text-end font-medium">
                                 {pct(profit.partsMarginPct)}
                             </dd>
+                            {/* Markup shown alongside margin so the
+                                owner can compare directly against the
+                                "default parts markup %" setting — same
+                                profit, different denominator (cost vs
+                                revenue). AR 2026-08-16: reading a 13%
+                                margin next to a 15% markup setting
+                                looked like a bug at first glance. */}
+                            <dt className="text-text-mute">{t("profitCardMarkup")}</dt>
+                            <dd className="text-end text-text-mute">
+                                {pct(profit.partsMarkupPct)}
+                            </dd>
                         </dl>
                         {c.partsTotal > 0 && (
                             <p
@@ -300,6 +311,7 @@ export function JobProfitCard(props: JobProfitCardProps) {
             <ul className="mt-3 flex flex-col gap-1 text-[11px] leading-snug text-text-mute">
                 <li>· {t("profitCardNotePartsCost")}</li>
                 <li>· {t("profitCardNoteLabourCost")}</li>
+                <li>· {t("profitCardNoteMarginVsMarkup")}</li>
             </ul>
         </section>
     );

@@ -280,24 +280,50 @@ export async function sendEstimateToCustomer(
     estimateId: string,
 ): Promise<void> {
     await page.goto(`/estimates/${estimateId}/preview`);
-    // Kick off the wa.me wait BEFORE the click — canonical Playwright
-    // pattern for "click, then navigation happens". The server-action
-    // redirects the browser to wa.me; we let the navigation start,
-    // then goto back to the preview so subsequent test steps have a
-    // clean starting URL. Route interception + unroute proved
-    // unreliable on Vercel staging (unroute hung past the 90s test
-    // timeout in one run) — this approach uses only two navigations
-    // and no route handlers to clean up.
-    const waNavPromise = page.waitForURL(/wa\.me/, { timeout: 15_000 });
+    // Poll the DB for Estimate.sentAt AFTER click — deterministic
+    // signal that the server action committed. Previous attempts:
+    //   • page.route + page.unroute: unroute hung past test timeout
+    //     on retries.
+    //   • page.waitForURL(/wa.me/): never fired — Next.js server-
+    //     action cross-origin redirects apparently don't surface as
+    //     main-frame nav events to Playwright's URL observer.
+    // Raw pg poll bypasses both — we know the exact DB write we're
+    // waiting on (Estimate.sentAt IS NOT NULL) and can bound the
+    // wait ourselves.
     await page
         .getByRole("button", { name: /Send Estimate to Customer/i })
         .first()
         .click({ timeout: 10_000 });
-    await waNavPromise;
-    // Back to the preview page so callers pulling customerEstimateUrl
-    // next see fresh state (sentAt set, status flipped). goto is a
-    // full nav — no dependency on the aborted wa.me load's DOM.
-    await page.goto(`/estimates/${estimateId}/preview`);
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
+    await client.connect();
+    try {
+        const deadline = Date.now() + 15_000;
+        // Poll every 250ms for the sentAt stamp. Fires in ~1 round-
+        // trip on the happy path; times out with a specific message
+        // if the server action never committed.
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+            const r = await client.query<{ sentAt: Date | null; status: string }>(
+                `SELECT "sentAt", status FROM "Estimate" WHERE id = $1`,
+                [estimateId],
+            );
+            const row = r.rows[0];
+            if (row?.sentAt && row.status === "SENT") return;
+            if (Date.now() > deadline) {
+                throw new Error(
+                    `sendEstimateToCustomer: estimate ${estimateId} did not reach status=SENT + sentAt within 15s. Row: ${JSON.stringify(row ?? null)}`,
+                );
+            }
+            await new Promise((res) => setTimeout(res, 250));
+        }
+    } finally {
+        await client.end();
+        // Reload the preview page so the caller sees fresh RSC state.
+        // The wa.me redirect fired on the browser side but nothing
+        // waited for it; goto cancels any pending nav and pulls a
+        // clean render.
+        await page.goto(`/estimates/${estimateId}/preview`);
+    }
 }
 
 /**

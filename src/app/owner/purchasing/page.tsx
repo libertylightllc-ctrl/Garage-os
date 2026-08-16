@@ -4,13 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT, getLocale } from "@/i18n/server";
 import { ButtonLink } from "@/components/ui/button";
-import type { PurchaseOrderStatus, Prisma } from "@/generated/prisma/client";
+import type { Prisma, PurchaseOrderStatus } from "@/generated/prisma/client";
 import {
   PURCHASE_ORDER_TABS,
   DEFAULT_PURCHASE_ORDER_TAB,
-  purchaseOrderStatusLabelKey,
-  statusToUrlParam,
-  urlParamToStatus,
+  purchaseOrderTabLabelKey,
+  tabHasImplicitSentFilter,
+  tabToUrlParam,
+  tabWherePredicate,
+  urlParamToTab,
+  type PurchaseOrderTab,
 } from "@/lib/purchase-order-section";
 import { Paginator } from "@/components/paginator";
 import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
@@ -164,25 +167,45 @@ export default async function PurchasingPage({
   } = await searchParams;
   const garageId = session.user.garageId;
 
-  const currentStatus = urlParamToStatus(rawStatus) ?? DEFAULT_PURCHASE_ORDER_TAB;
+  const currentTab = urlParamToTab(rawStatus) ?? DEFAULT_PURCHASE_ORDER_TAB;
   const currentKind = parseKindFilter(rawKind);
-  const currentSent = parseSentFilter(rawSent);
+  // The two DRAFT-split tabs encode the sent axis in the tab itself —
+  // the pill would either duplicate or contradict. On those tabs we
+  // ignore the incoming ?sent= param and hide the pill in the render.
+  const currentSent = tabHasImplicitSentFilter(currentTab)
+    ? "all"
+    : parseSentFilter(rawSent);
 
-  // Per-status counts still fuel the tab badges. Kept independent of
-  // the kind/sent filters — the tab count reflects the total for that
-  // status, not the filtered subset. If we counted the filtered subset,
-  // switching tabs would show badges that don't match what you actually
-  // find on that tab.
-  const groups = await prisma.purchaseOrder.groupBy({
-    by: ["status"],
-    where: { garageId },
-    _count: { _all: true },
-  });
-  const countByStatus = new Map<PurchaseOrderStatus, number>();
-  for (const s of PURCHASE_ORDER_TABS) countByStatus.set(s, 0);
-  for (const g of groups) {
-    countByStatus.set(g.status as PurchaseOrderStatus, g._count._all);
-  }
+  // Per-tab counts fuel the tab badges. Kept independent of the kind
+  // filter — the tab count reflects the total for that tab, not the
+  // filtered subset. If we counted the filtered subset, switching
+  // tabs would show badges that don't match what you actually find
+  // on that tab.
+  //
+  // Two queries: (1) groupBy status → post-DRAFT tab counts, plus
+  // total-DRAFT for the split; (2) count of AWAITING_SUPPLIER (DRAFT
+  // + at least one send). UNSENT_DRAFT = total DRAFT − awaiting.
+  // AR 2026-08-17.
+  const [groups, awaitingSupplierCount] = await Promise.all([
+    prisma.purchaseOrder.groupBy({
+      by: ["status"],
+      where: { garageId },
+      _count: { _all: true },
+    }),
+    prisma.purchaseOrder.count({
+      where: { garageId, status: "DRAFT", sends: { some: {} } },
+    }),
+  ]);
+  const rawByStatus = new Map<string, number>();
+  for (const g of groups) rawByStatus.set(g.status, g._count._all);
+  const draftTotal = rawByStatus.get("DRAFT") ?? 0;
+  const countByTab = new Map<PurchaseOrderTab, number>();
+  countByTab.set("UNSENT_DRAFT", Math.max(0, draftTotal - awaitingSupplierCount));
+  countByTab.set("AWAITING_SUPPLIER", awaitingSupplierCount);
+  countByTab.set("ORDERED", rawByStatus.get("ORDERED") ?? 0);
+  countByTab.set("PARTIALLY_RECEIVED", rawByStatus.get("PARTIALLY_RECEIVED") ?? 0);
+  countByTab.set("RECEIVED", rawByStatus.get("RECEIVED") ?? 0);
+  countByTab.set("CANCELLED", rawByStatus.get("CANCELLED") ?? 0);
 
   // Build the where clause. Kind + sent filters push into Prisma so
   // pagination reflects the filtered set, not the pre-filtered set with
@@ -201,9 +224,12 @@ export default async function PurchasingPage({
   // keeps the three-way "Purchase Order (draft)" distinction where it
   // matters. Older rows without intent backfilled to QUOTE by the
   // 2026-08-02 migration.
+  // Build where. Tab predicate handles the status + (implicit) sent
+  // axis for the DRAFT-split tabs; kind + explicit sent pills push
+  // in as extra AND clauses.
   const where: Prisma.PurchaseOrderWhereInput = {
     garageId,
-    status: currentStatus,
+    ...tabWherePredicate(currentTab),
   };
   const andClauses: Prisma.PurchaseOrderWhereInput[] = [];
   const PO_ORDERED_STATUSES: PurchaseOrderStatus[] = [
@@ -296,7 +322,7 @@ export default async function PurchasingPage({
     }>,
   ): string => {
     const p = new URLSearchParams();
-    const s = overrides.status ?? statusToUrlParam(currentStatus);
+    const s = overrides.status ?? tabToUrlParam(currentTab);
     if (s) p.set("status", s);
     const k = overrides.kind ?? currentKind;
     if (k !== "all") p.set("kind", k);
@@ -364,23 +390,29 @@ export default async function PurchasingPage({
           </p>
         ) : null}
 
-        {/* Status tab strip — unchanged shape. See file header. */}
+        {/* Tab strip — action-oriented labels (AR 2026-08-17). The
+            two draft tabs ("To send" / "Awaiting supplier") split
+            what was previously a single "Draft" bucket that lumped
+            never-sent RFQs and sent-but-awaiting-reply RFQs together.
+            Order: what needs the owner's action first, then what's
+            in flight, then closed. See src/lib/purchase-order-section.ts. */}
         <nav>
           <div className="flex flex-wrap items-center gap-1 gap-y-2 border-b border-border pb-2">
-            {PURCHASE_ORDER_TABS.map((s) => {
-              const isActive = s === currentStatus;
-              // Carry kind + sent through the tab switch. "Show me
-              // unsent RFQs across statuses" is a real cross-status
-              // question — resetting on tab click made the owner
-              // re-apply both filters every time.
+            {PURCHASE_ORDER_TABS.map((tab) => {
+              const isActive = tab === currentTab;
+              // Carry kind through the tab switch. Do NOT carry sent
+              // — the two draft tabs encode the sent axis, so any
+              // incoming ?sent= would either duplicate or conflict.
+              // buildQuery already zeroes sent for draft tabs via
+              // currentSent normalization above.
               const href = `/owner/purchasing?${buildQuery({
-                status: statusToUrlParam(s),
+                status: tabToUrlParam(tab),
                 page: "",
               })}`;
-              const count = countByStatus.get(s) ?? 0;
+              const count = countByTab.get(tab) ?? 0;
               return (
                 <Link
-                  key={s}
+                  key={tab}
                   href={href}
                   aria-current={isActive ? "page" : undefined}
                   className={
@@ -390,7 +422,7 @@ export default async function PurchasingPage({
                       : "text-muted-foreground hover:bg-surface-2")
                   }
                 >
-                  {t(purchaseOrderStatusLabelKey(s))}
+                  {t(purchaseOrderTabLabelKey(tab))}
                   <span
                     className={
                       "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums " +
@@ -431,25 +463,31 @@ export default async function PurchasingPage({
               </Link>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-muted-foreground">{t("purchasingFilterSentLabel")}</span>
-            {(["all", "sent", "unsent"] as const).map((s) => (
-              <Link
-                key={s}
-                href={`/owner/purchasing?${buildQuery({ sent: s, page: "" })}`}
-                className={filterPillClass(currentSent === s)}
-                aria-pressed={currentSent === s}
-              >
-                {t(
-                  s === "all"
-                    ? "purchasingFilterSentAll"
-                    : s === "sent"
-                      ? "purchasingFilterSentSent"
-                      : "purchasingFilterSentUnsent",
-                )}
-              </Link>
-            ))}
-          </div>
+          {/* Sent / Not sent pill — hidden on the two DRAFT-split
+              tabs (the tab itself encodes the sent axis). Visible on
+              the other four tabs where "which of my Received POs
+              did I never send?" is a legit question. AR 2026-08-17. */}
+          {tabHasImplicitSentFilter(currentTab) ? null : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">{t("purchasingFilterSentLabel")}</span>
+              {(["all", "sent", "unsent"] as const).map((s) => (
+                <Link
+                  key={s}
+                  href={`/owner/purchasing?${buildQuery({ sent: s, page: "" })}`}
+                  className={filterPillClass(currentSent === s)}
+                  aria-pressed={currentSent === s}
+                >
+                  {t(
+                    s === "all"
+                      ? "purchasingFilterSentAll"
+                      : s === "sent"
+                        ? "purchasingFilterSentSent"
+                        : "purchasingFilterSentUnsent",
+                  )}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-border">
@@ -492,9 +530,14 @@ export default async function PurchasingPage({
                 // (which means the advisor hasn't converted it to a PO
                 // yet — no prices filled in). Threshold is deliberately
                 // loose; it's a hint, not an alarm.
+                // The RFQ waiting badge fires only on the
+                // AWAITING_SUPPLIER tab (which encodes DRAFT + at least
+                // one send); UNSENT_DRAFT can't produce a `daysSinceSend`
+                // and post-DRAFT tabs don't need the "chase" hint.
+                // AR 2026-08-17 tab-split.
                 const showWaitingBadge =
                   kind === "RFQ" &&
-                  currentStatus === "DRAFT" &&
+                  currentTab === "AWAITING_SUPPLIER" &&
                   daysSinceSend !== null &&
                   daysSinceSend >= 2;
                 return (

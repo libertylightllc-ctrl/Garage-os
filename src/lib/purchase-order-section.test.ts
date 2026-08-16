@@ -3,9 +3,14 @@ import { PurchaseOrderStatus } from "@/generated/prisma/client";
 import {
   purchaseOrderSection,
   purchaseOrderStatusLabelKey,
+  purchaseOrderTabLabelKey,
+  tabHasImplicitSentFilter,
+  tabWherePredicate,
   PURCHASE_ORDER_TABS,
-  statusToUrlParam,
-  urlParamToStatus,
+  DEFAULT_PURCHASE_ORDER_TAB,
+  tabToUrlParam,
+  urlParamToTab,
+  type PurchaseOrderTab,
 } from "./purchase-order-section";
 
 describe("purchaseOrderSection — exhaustiveness", () => {
@@ -50,7 +55,10 @@ describe("purchaseOrderSection — exhaustiveness", () => {
 });
 
 describe("purchaseOrderStatusLabelKey — every status has a translation key", () => {
-  it("returns a label key for every enum value", () => {
+  // Still used by surfaces that render the raw schema status (detail
+  // page banner, print doc footer, admin logs). Kept in lock-step with
+  // the enum so a new status can't ship without a key.
+  it("returns a poStatus_* key for every enum value", () => {
     for (const status of Object.values(PurchaseOrderStatus)) {
       const key = purchaseOrderStatusLabelKey(status);
       expect(key).toMatch(/^poStatus_/);
@@ -58,45 +66,135 @@ describe("purchaseOrderStatusLabelKey — every status has a translation key", (
   });
 });
 
-describe("PURCHASE_ORDER_TABS — derived tab list", () => {
-  it("covers every enum value exactly once", () => {
-    const values = Object.values(PurchaseOrderStatus);
-    expect(PURCHASE_ORDER_TABS.length).toBe(values.length);
-    for (const s of values) {
-      expect(PURCHASE_ORDER_TABS).toContain(s);
-    }
-  });
+describe("PURCHASE_ORDER_TABS — the display tab list (AR 2026-08-17)", () => {
+  // Tabs are a DISPLAY split, not a schema mirror. DRAFT is split into
+  // UNSENT_DRAFT + AWAITING_SUPPLIER; everything else 1-for-1.
 
-  it("matches the schema declaration order — DRAFT → CANCELLED", () => {
+  it("declares the tabs in action-oriented order", () => {
+    // What needs the owner's action first, then what's in flight,
+    // then closed.
     expect([...PURCHASE_ORDER_TABS]).toEqual([
-      "DRAFT",
+      "UNSENT_DRAFT",
+      "AWAITING_SUPPLIER",
       "ORDERED",
       "PARTIALLY_RECEIVED",
       "RECEIVED",
       "CANCELLED",
     ]);
   });
+
+  it("has one more tab than the schema has statuses (the DRAFT split)", () => {
+    expect(PURCHASE_ORDER_TABS.length).toBe(
+      Object.values(PurchaseOrderStatus).length + 1,
+    );
+  });
+
+  it("default tab is ORDERED — 'real work in flight'", () => {
+    expect(DEFAULT_PURCHASE_ORDER_TAB).toBe("ORDERED");
+  });
 });
 
-describe("urlParamToStatus / statusToUrlParam — round-trip + safety", () => {
-  it("round-trips every enum value via lowercase URL param", () => {
-    for (const status of Object.values(PurchaseOrderStatus)) {
-      const url = statusToUrlParam(status);
-      expect(url).toBe(status.toLowerCase());
-      expect(urlParamToStatus(url)).toBe(status);
+describe("purchaseOrderTabLabelKey — every tab has a translation key", () => {
+  it("returns a MessageKey for every tab (build breaks if a new tab is added without a case)", () => {
+    for (const tab of PURCHASE_ORDER_TABS) {
+      const key = purchaseOrderTabLabelKey(tab);
+      // The two draft tabs get poTab_* keys; the rest reuse poStatus_*
+      // because their tab and status names are the same.
+      expect(key).toMatch(/^(poTab_|poStatus_)/);
+    }
+  });
+
+  it("draft tabs get the new poTab_* keys, others reuse poStatus_*", () => {
+    expect(purchaseOrderTabLabelKey("UNSENT_DRAFT")).toBe("poTab_UNSENT_DRAFT");
+    expect(purchaseOrderTabLabelKey("AWAITING_SUPPLIER")).toBe(
+      "poTab_AWAITING_SUPPLIER",
+    );
+    expect(purchaseOrderTabLabelKey("ORDERED")).toBe("poStatus_ORDERED");
+    expect(purchaseOrderTabLabelKey("PARTIALLY_RECEIVED")).toBe(
+      "poStatus_PARTIALLY_RECEIVED",
+    );
+    expect(purchaseOrderTabLabelKey("RECEIVED")).toBe("poStatus_RECEIVED");
+    expect(purchaseOrderTabLabelKey("CANCELLED")).toBe("poStatus_CANCELLED");
+  });
+});
+
+describe("tabWherePredicate — DRAFT split maps to sends-any-none clauses", () => {
+  it("UNSENT_DRAFT → status DRAFT + sends is empty", () => {
+    expect(tabWherePredicate("UNSENT_DRAFT")).toEqual({
+      status: "DRAFT",
+      sends: { none: {} },
+    });
+  });
+
+  it("AWAITING_SUPPLIER → status DRAFT + sends is non-empty", () => {
+    expect(tabWherePredicate("AWAITING_SUPPLIER")).toEqual({
+      status: "DRAFT",
+      sends: { some: {} },
+    });
+  });
+
+  it("post-DRAFT tabs pass status straight through with no send predicate", () => {
+    // Anywhere else the sent axis is a legit user-controlled filter
+    // (the Sent / Not sent pill); the tab shouldn't force it either
+    // way.
+    for (const tab of [
+      "ORDERED",
+      "PARTIALLY_RECEIVED",
+      "RECEIVED",
+      "CANCELLED",
+    ] as const) {
+      const pred = tabWherePredicate(tab);
+      expect(pred).toEqual({ status: tab });
+      expect(pred).not.toHaveProperty("sends");
+    }
+  });
+});
+
+describe("tabHasImplicitSentFilter — the pill-visibility rule", () => {
+  it("true for the two DRAFT-split tabs (pill would be redundant/contradictory)", () => {
+    expect(tabHasImplicitSentFilter("UNSENT_DRAFT")).toBe(true);
+    expect(tabHasImplicitSentFilter("AWAITING_SUPPLIER")).toBe(true);
+  });
+
+  it("false everywhere else — the pill stays useful", () => {
+    for (const tab of [
+      "ORDERED",
+      "PARTIALLY_RECEIVED",
+      "RECEIVED",
+      "CANCELLED",
+    ] as const satisfies readonly PurchaseOrderTab[]) {
+      expect(tabHasImplicitSentFilter(tab)).toBe(false);
+    }
+  });
+});
+
+describe("urlParamToTab / tabToUrlParam — round-trip + legacy compat", () => {
+  it("round-trips every tab via kebab-case URL param", () => {
+    for (const tab of PURCHASE_ORDER_TABS) {
+      const url = tabToUrlParam(tab);
+      expect(url).toBe(tab.toLowerCase().replace(/_/g, "-"));
+      expect(urlParamToTab(url)).toBe(tab);
     }
   });
 
   it("mixed-case survives", () => {
-    expect(urlParamToStatus("Draft")).toBe("DRAFT");
-    expect(urlParamToStatus("PARTIALLY_RECEIVED")).toBe("PARTIALLY_RECEIVED");
+    expect(urlParamToTab("Unsent-Draft")).toBe("UNSENT_DRAFT");
+    expect(urlParamToTab("PARTIALLY-RECEIVED")).toBe("PARTIALLY_RECEIVED");
+  });
+
+  it("legacy ?status=draft (pre-split URL) lands on UNSENT_DRAFT", () => {
+    // Bookmarked pre-split URLs used ?status=draft. Route them to
+    // the "what needs my action" bucket rather than 404 to default —
+    // that's what the operator most likely wanted.
+    expect(urlParamToTab("draft")).toBe("UNSENT_DRAFT");
+    expect(urlParamToTab("DRAFT")).toBe("UNSENT_DRAFT");
   });
 
   it("junk / unknown returns null so the caller can fall back to default", () => {
-    expect(urlParamToStatus("")).toBeNull();
-    expect(urlParamToStatus("garbage")).toBeNull();
-    expect(urlParamToStatus(undefined)).toBeNull();
-    expect(urlParamToStatus(42)).toBeNull();
-    expect(urlParamToStatus("cancelled_x")).toBeNull();
+    expect(urlParamToTab("")).toBeNull();
+    expect(urlParamToTab("garbage")).toBeNull();
+    expect(urlParamToTab(undefined)).toBeNull();
+    expect(urlParamToTab(42)).toBeNull();
+    expect(urlParamToTab("cancelled_x")).toBeNull();
   });
 });

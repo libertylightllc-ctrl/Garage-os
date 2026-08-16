@@ -362,6 +362,14 @@ const en = {
   // poStatusDisplayKey in src/lib/po-doc-kind.ts.
   poStatusDraftSent_RFQ: "Sent — awaiting quote",
   poStatusDraftSent_PO: "Sent — awaiting order",
+  // Purchasing-page tab labels for the DRAFT split (AR 2026-08-17).
+  // The previous single "Draft" tab lumped never-sent RFQs with
+  // sent-and-awaiting-supplier RFQs; the split gives the operator
+  // an at-a-glance answer to "what needs my action?". Wording is
+  // action-oriented — parallels the invoice-side "handed off" copy
+  // (both docs read the same when the hand-off boundary matters).
+  poTab_UNSENT_DRAFT: "To send",
+  poTab_AWAITING_SUPPLIER: "Awaiting supplier",
   backToPurchasing: "← Purchasing",
   noSuppliersForPo: "Add a supplier first, in",
   choosePlaceholder: "Choose…",
@@ -1903,6 +1911,13 @@ const ar: typeof en = {
   poStatus_CANCELLED: "ملغى",
   poStatusDraftSent_RFQ: "أُرسل — بانتظار عرض السعر",
   poStatusDraftSent_PO: "أُرسل — بانتظار تأكيد الطلب",
+  // Arabic tab labels — parallel construction to the existing status
+  // pills. "بحاجة للإرسال" preserves the imperative tone of "To send"
+  // (needs sending, YOUR action). "بانتظار المورّد" matches the
+  // detail-page "بانتظار عرض السعر" pattern the operator already
+  // sees on the DRAFT-sent status pill.
+  poTab_UNSENT_DRAFT: "بحاجة للإرسال",
+  poTab_AWAITING_SUPPLIER: "بانتظار المورّد",
   backToPurchasing: "← المشتريات",
   noSuppliersForPo: "أضف موردًا أولًا في",
   choosePlaceholder: "اختر…",

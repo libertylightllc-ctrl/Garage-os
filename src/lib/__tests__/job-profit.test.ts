@@ -41,38 +41,81 @@ describe("computeJobProfit — full coverage", () => {
             partsTotal: 2,
             laborCovered: 2,
             laborTotal: 2,
-            receiptsUnreconciled: 0,
             receiptsTotal: 0,
+            receiptsMismatched: 0,
+            receiptsMismatchTotalDelta: null,
+            receiptsUnlinkable: 0,
         });
     });
 
-    // AR 2026-08-16 receipt-coverage rule: any unreconciled receipt
-    // nulls out parts cost / profit / margin, same as missing part
-    // cost. The invoice snapshot alone can't be trusted when a
-    // direct-fit receipt's cost isn't provably reflected there.
-    it("unreconciled receipt nulls parts cost, keeps revenue, sets coverage counts", () => {
+    // AR 2026-08-16 receipt-coverage rule (rewritten): receipts are
+    // PURE WARNINGS — they never suppress a number the invoice can
+    // support. Invoice with full cost data → parts margin shows.
+    // Mismatched / unlinkable counts + delta feed a warning line
+    // on the card.
+    it("mismatched receipt does NOT suppress parts cost — number stands, delta is reported", () => {
         const out = computeJobProfit(
             [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
             [],
-            [{ reconciled: false }],
-        );
-        expect(out.partsRevenue.toString()).toBe("100");
-        expect(out.partsCost).toBeNull();
-        expect(out.partsProfit).toBeNull();
-        expect(out.partsMarginPct).toBeNull();
-        expect(out.coverage.receiptsTotal).toBe(1);
-        expect(out.coverage.receiptsUnreconciled).toBe(1);
-    });
-
-    it("reconciled receipts don't disturb the confident number", () => {
-        const out = computeJobProfit(
-            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
-            [],
-            [{ reconciled: true }, { reconciled: true }],
+            [{ status: "mismatch", totalDelta: 5 }],
         );
         expect(out.partsCost?.toString()).toBe("40");
+        expect(out.partsProfit?.toString()).toBe("60");
+        expect(out.coverage.receiptsMismatched).toBe(1);
+        expect(out.coverage.receiptsMismatchTotalDelta?.toString()).toBe("5");
+        expect(out.coverage.receiptsUnlinkable).toBe(0);
+    });
+
+    it("unlinkable receipt does NOT suppress parts cost — delta stays null", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
+            [],
+            [{ status: "unlinkable", totalDelta: null }],
+        );
+        expect(out.partsCost?.toString()).toBe("40");
+        expect(out.coverage.receiptsUnlinkable).toBe(1);
+        expect(out.coverage.receiptsMismatchTotalDelta).toBeNull();
+    });
+
+    it("only invoice-side incompleteness suppresses parts cost", () => {
+        // Line without unitCost → parts side unknown regardless of
+        // any receipt status.
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: null }],
+            [],
+            [{ status: "reconciled", totalDelta: null }],
+        );
+        expect(out.partsCost).toBeNull();
+    });
+
+    it("sums mismatch deltas across multiple receipts (signed)", () => {
+        // Two mismatches, one over-cost, one under-cost. Total delta
+        // is the signed sum so the owner sees the net direction.
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
+            [],
+            [
+                { status: "mismatch", totalDelta: 20 },
+                { status: "mismatch", totalDelta: -5 },
+            ],
+        );
+        expect(out.coverage.receiptsMismatched).toBe(2);
+        expect(out.coverage.receiptsMismatchTotalDelta?.toString()).toBe("15");
+    });
+
+    it("reconciled receipts contribute nothing to delta or counts", () => {
+        const out = computeJobProfit(
+            [{ kind: "PART", qty: 1, lineTotal: "100", unitCost: "40" }],
+            [],
+            [
+                { status: "reconciled", totalDelta: null },
+                { status: "reconciled", totalDelta: null },
+            ],
+        );
         expect(out.coverage.receiptsTotal).toBe(2);
-        expect(out.coverage.receiptsUnreconciled).toBe(0);
+        expect(out.coverage.receiptsMismatched).toBe(0);
+        expect(out.coverage.receiptsUnlinkable).toBe(0);
+        expect(out.coverage.receiptsMismatchTotalDelta).toBeNull();
     });
 });
 

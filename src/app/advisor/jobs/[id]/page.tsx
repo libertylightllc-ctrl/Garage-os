@@ -34,7 +34,7 @@ import { jobTimeSummary } from "@/lib/work-session-reports";
 import { JobTimePanel } from "@/components/job-time-panel";
 import { canSeeMargin } from "@/lib/permissions";
 import { computeJobProfit } from "@/lib/job-profit";
-import { isReceiptReconciledOnInvoice } from "@/lib/direct-fit-receipt";
+import { compareReceiptToInvoice } from "@/lib/direct-fit-receipt";
 import { JobProfitCard } from "@/components/job-profit-card";
 
 export const dynamic ="force-dynamic";
@@ -153,6 +153,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         await prisma.jobPartReceipt.findMany({
           where: { jobCardId: id },
           select: {
+            qty: true,
             receivedUnitCost: true,
             purchaseOrderLine: {
               select: {
@@ -166,9 +167,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
             },
           },
         })
-      ).map((r) => ({
-        reconciled: isReceiptReconciledOnInvoice({
+      ).map((r) => {
+        const cmp = compareReceiptToInvoice({
           receivedUnitCost: Number(r.receivedUnitCost),
+          qty: r.qty,
           sourceEstimateLine: r.purchaseOrderLine.sourceEstimateLine
             ? {
                 unitCost:
@@ -180,8 +182,9 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                 ),
               }
             : null,
-        }),
-      }))
+        });
+        return { status: cmp.status, totalDelta: cmp.totalDelta };
+      })
     : [];
   const profit = profitInvoice
     ? computeJobProfit(profitInvoice.lines, profitSessions, profitReceipts)

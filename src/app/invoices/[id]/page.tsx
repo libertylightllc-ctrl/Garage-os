@@ -37,7 +37,7 @@ import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
 import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
 import { canEditInvoice, canSeeMargin } from "@/lib/permissions";
 import { computeJobProfit } from "@/lib/job-profit";
-import { isReceiptReconciledOnInvoice } from "@/lib/direct-fit-receipt";
+import { compareReceiptToInvoice } from "@/lib/direct-fit-receipt";
 import { JobProfitCard } from "@/components/job-profit-card";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
@@ -174,6 +174,7 @@ export default async function InvoiceView({
         prisma.jobPartReceipt.findMany({
           where: { jobCardId: inv.jobCardId },
           select: {
+            qty: true,
             receivedUnitCost: true,
             purchaseOrderLine: {
               select: {
@@ -191,6 +192,7 @@ export default async function InvoiceView({
     : [
         [] as { laborCostSnapshot: import("@/generated/prisma/client").Prisma.Decimal | null }[],
         [] as Array<{
+          qty: number;
           receivedUnitCost: import("@/generated/prisma/client").Prisma.Decimal;
           purchaseOrderLine: {
             sourceEstimateLine: {
@@ -209,9 +211,10 @@ export default async function InvoiceView({
           unitCost: l.unitCost,
         })),
         workSessionsForProfit,
-        receiptsForProfit.map((r) => ({
-          reconciled: isReceiptReconciledOnInvoice({
+        receiptsForProfit.map((r) => {
+          const cmp = compareReceiptToInvoice({
             receivedUnitCost: Number(r.receivedUnitCost),
+            qty: r.qty,
             sourceEstimateLine: r.purchaseOrderLine.sourceEstimateLine
               ? {
                   unitCost:
@@ -223,8 +226,9 @@ export default async function InvoiceView({
                   ),
                 }
               : null,
-          }),
-        })),
+          });
+          return { status: cmp.status, totalDelta: cmp.totalDelta };
+        }),
       )
     : null;
   const hasLabourRate =

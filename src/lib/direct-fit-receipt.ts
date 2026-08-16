@@ -70,32 +70,49 @@ function round2(n: number): number {
 export { normalizePartName, findNormalizedMatch } from "./estimate-to-po";
 
 /**
- * Decide whether a JobPartReceipt's cost is provably reflected on the
- * invoice snapshot (AR 2026-08-16). Called by the job-profit loader
- * to decide `receiptsUnreconciled` on the coverage record.
+ * Compare a JobPartReceipt against the invoice snapshot (AR 2026-08-16;
+ * rewritten AR 2026-08-16 after INV-2026-0048 review).
  *
- * Rule — all three must hold:
- *   1. Receipt has a sourceEstimateLine (the from-estimate path).
- *      Manual PO path receipts have no source line to reconcile
- *      against, so they never count as reconciled — the operator is
- *      responsible for capturing the cost separately if they want
- *      it on the invoice.
- *   2. The source EstimateLine.unitCost equals the receipt's
- *      receivedUnitCost to 2dp. This is the writeback signature —
- *      shouldUpdateEstimateCost updated the estimate line to the
- *      received value at receive time. If the advisor later re-edited
- *      the estimate to a different cost, the invoice snapshot no
- *      longer matches the receipt, so we can't claim reconciliation.
- *   3. The source estimate has an invoice — the writeback made it
- *      into a frozen snapshot.
+ * Earlier version returned a single boolean and the profit card used it
+ * to SUPPRESS parts margin whenever any receipt failed to reconcile —
+ * too aggressive. If the invoice has cost data on every line, margin
+ * IS calculable from what's on the invoice; a mismatched receipt just
+ * means the invoiced cost may be stale, which is a warning, not a
+ * suppressor. AR's rule: "we don't know" justifies a dash; "we know,
+ * but a later receipt says something different" is a number plus a
+ * caveat.
  *
- * Any receipt failing all three is unreconciled. Rule is deliberately
- * strict: over-claiming a receipt as reconciled would understate
- * parts cost by an unknown amount, exactly the failure mode AR
- * pointed at.
+ * Three outcomes per receipt:
+ *
+ *   • "reconciled" — receipt has a source estimate line, that line's
+ *     current unitCost matches the receipt's receivedUnitCost to 2dp,
+ *     and the estimate has an invoice. The invoiced cost IS the paid
+ *     cost. Nothing to warn about.
+ *   • "mismatch"   — receipt has a source estimate line with a
+ *     comparable unitCost + an invoice, but the numbers disagree.
+ *     We can compute a per-unit delta and a total (delta × qty).
+ *     The invoice cost is what fed the margin; the delta tells the
+ *     owner by how much the invoice may be understating (positive
+ *     delta = shop paid more) or overstating (negative) parts cost.
+ *   • "unlinkable" — receipt is a direct-fit against a manually-
+ *     added PO line (no source), OR the source line has no unitCost
+ *     to compare against, OR the source estimate has no invoice yet.
+ *     We know the receipt exists but can't check it against the
+ *     invoice. The profit card renders a lighter "not linked to an
+ *     invoice line — verify the invoiced cost matches" note.
+ *
+ * The caller passes each receipt's status + delta to
+ * computeJobProfit; the compute layer sums the deltas across
+ * mismatched receipts and reports counts + total. Parts margin is
+ * NEVER suppressed based on receipt status — only on missing
+ * InvoiceLine.unitCost. See src/lib/job-profit.ts.
  */
+export type ReceiptStatus = "reconciled" | "mismatch" | "unlinkable";
+
 export interface ReconcilableReceipt {
     receivedUnitCost: number;
+    /** Line quantity. Used to expand per-unit delta to a total. */
+    qty: number;
     /**
      * The source estimate line's snapshot at read time. null when the
      * PO line was added manually (no sourceEstimateLineId).
@@ -106,14 +123,34 @@ export interface ReconcilableReceipt {
     } | null;
 }
 
-export function isReceiptReconciledOnInvoice(
+export interface ReceiptComparison {
+    status: ReceiptStatus;
+    /**
+     * Signed total delta = (receivedUnitCost - invoicedUnitCost) × qty.
+     * Positive when the shop paid more than the invoice reflects;
+     * negative when it paid less. null for "reconciled" (zero) and
+     * "unlinkable" (can't compute).
+     */
+    totalDelta: number | null;
+}
+
+export function compareReceiptToInvoice(
     r: ReconcilableReceipt,
-): boolean {
-    if (!r.sourceEstimateLine) return false;
-    if (!r.sourceEstimateLine.estimateHasInvoice) return false;
-    if (r.sourceEstimateLine.unitCost === null) return false;
-    return (
-        round2(r.sourceEstimateLine.unitCost) ===
-        round2(r.receivedUnitCost)
-    );
+): ReceiptComparison {
+    if (
+        !r.sourceEstimateLine ||
+        !r.sourceEstimateLine.estimateHasInvoice ||
+        r.sourceEstimateLine.unitCost === null
+    ) {
+        return { status: "unlinkable", totalDelta: null };
+    }
+    const invoiced = round2(r.sourceEstimateLine.unitCost);
+    const received = round2(r.receivedUnitCost);
+    if (invoiced === received) {
+        return { status: "reconciled", totalDelta: null };
+    }
+    return {
+        status: "mismatch",
+        totalDelta: round2((received - invoiced) * r.qty),
+    };
 }

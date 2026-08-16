@@ -69,31 +69,49 @@ export interface JobProfit {
         partsTotal: number;   // # PART lines total
         laborCovered: number; // # sessions with laborCostSnapshot not null
         laborTotal: number;   // # sessions total
-        // Direct-fit receipts coverage (AR 2026-08-16). A
-        // JobPartReceipt whose cost cannot be proved to have made it
-        // into the frozen InvoiceLine snapshot means parts profit
-        // would be understated by an unknown amount — treat it the
-        // same way as a missing part cost (null out partsCost /
-        // partsProfit / partsMargin). Detection is deterministic:
-        // see src/lib/direct-fit-receipt.ts →
-        // isReceiptReconciledOnInvoice. The card reads
-        // `receiptsUnreconciled` to render a coverage line that
-        // matches the parts-coverage messaging.
-        receiptsUnreconciled: number;
+        // Direct-fit receipt coverage (AR 2026-08-16; rewritten same
+        // day after INV-2026-0048 review). Purely informational —
+        // parts margin is NOT suppressed based on receipts, only on
+        // missing InvoiceLine.unitCost. See compareReceiptToInvoice
+        // in src/lib/direct-fit-receipt.ts for the per-receipt
+        // status decision. AR's rule: "we don't know" justifies a
+        // dash; "we know, but a later receipt says something
+        // different" is a number plus a caveat.
         receiptsTotal: number;
+        // Receipts whose paid cost differs from the invoiced cost
+        // (source estimate line + invoice both present, values
+        // disagree). Card renders a warning line with the total
+        // delta so the owner sees BY HOW MUCH the invoiced cost
+        // may be understating / overstating parts cost.
+        receiptsMismatched: number;
+        // Signed AED total of (received - invoiced) × qty across
+        // every mismatched receipt. Positive → shop paid more than
+        // invoiced (true cost worse than card shows). Negative →
+        // shop paid less. null when there are zero mismatched
+        // receipts (nothing to sum).
+        receiptsMismatchTotalDelta: Prisma.Decimal | null;
+        // Receipts that CAN'T be checked against the invoice — no
+        // source estimate line (manually-added PO), or source has
+        // no unitCost, or estimate not invoiced. Card renders a
+        // lighter note prompting the owner to verify manually.
+        receiptsUnlinkable: number;
     };
 }
 
 /**
- * Direct-fit receipt input to computeJobProfit. Kept a thin
- * interface — the compute layer only needs to know how many
- * receipts total and how many aren't reflected on the invoice yet.
- * The reconciliation decision is made by the caller
- * (isReceiptReconciledOnInvoice) so this module stays pure.
+ * Direct-fit receipt input to computeJobProfit. Caller passes the
+ * per-receipt comparison already computed via compareReceiptToInvoice
+ * so this module stays pure (no Prisma joins).
  */
 export interface ProfitReceipt {
-    /** True when the receipt's cost is provably reflected on the invoice. */
-    reconciled: boolean;
+    /** "reconciled" | "mismatch" | "unlinkable" */
+    status: "reconciled" | "mismatch" | "unlinkable";
+    /**
+     * (received - invoiced) × qty. Present only when status is
+     * "mismatch"; null otherwise (reconciled contributes zero;
+     * unlinkable is uncomputable).
+     */
+    totalDelta: Prisma.Decimal | string | number | null;
 }
 
 export function computeJobProfit(
@@ -137,26 +155,39 @@ export function computeJobProfit(
     }
     const laborTotal = sessions.length;
 
-    // Direct-fit receipt coverage (AR 2026-08-16). A receipt whose
-    // cost can't be proved to sit on the frozen invoice snapshot
-    // would understate parts cost by an unknown amount — treat the
-    // whole parts side as unknown, same as a missing part cost.
-    // Caller passes `receipts` with `.reconciled` already decided
-    // (isReceiptReconciledOnInvoice in direct-fit-receipt.ts).
+    // Direct-fit receipt aggregates (AR 2026-08-16, rewritten same
+    // day). Pure information — parts margin is NOT gated on receipt
+    // status. When the invoice has cost on every line the margin
+    // stands; mismatched receipts become a warning with a delta,
+    // and unlinkable ones become a lighter "verify manually" note.
     const receiptsTotal = receipts.length;
-    const receiptsUnreconciled = receipts.filter(
-        (r) => !r.reconciled,
-    ).length;
-    const receiptsCovered = receiptsUnreconciled === 0;
+    let receiptsMismatched = 0;
+    let receiptsUnlinkable = 0;
+    let mismatchDeltaAccum = ZERO;
+    let anyMismatch = false;
+    for (const r of receipts) {
+        if (r.status === "mismatch") {
+            receiptsMismatched += 1;
+            if (r.totalDelta !== null && r.totalDelta !== undefined) {
+                mismatchDeltaAccum = mismatchDeltaAccum.plus(
+                    new Prisma.Decimal(r.totalDelta),
+                );
+                anyMismatch = true;
+            }
+        } else if (r.status === "unlinkable") {
+            receiptsUnlinkable += 1;
+        }
+    }
+    const receiptsMismatchTotalDelta = anyMismatch
+        ? round2(mismatchDeltaAccum)
+        : null;
 
-    // Coverage-gated numbers. "Known" means every countable input has a
-    // value. A side with zero countable inputs is trivially known
+    // Coverage-gated numbers. "Known" means every countable input has
+    // a value. A side with zero countable inputs is trivially known
     // (nothing to be missing) — its cost is a genuine 0, not a
-    // stand-in for an unknown.
-    // Parts side is ALSO gated by receipts coverage: any receipt not
-    // yet reflected on the invoice makes parts cost unreliable.
-    const partsKnown =
-        (partsTotal === 0 || partsCovered === partsTotal) && receiptsCovered;
+    // stand-in for an unknown. Receipt status does NOT participate
+    // in this gate (see rule change above).
+    const partsKnown = partsTotal === 0 || partsCovered === partsTotal;
     const laborKnown = laborTotal === 0 || laborCovered === laborTotal;
 
     const partsCost = partsKnown ? round2(partsCostAccum) : null;
@@ -196,8 +227,10 @@ export function computeJobProfit(
             partsTotal,
             laborCovered,
             laborTotal,
-            receiptsUnreconciled,
             receiptsTotal,
+            receiptsMismatched,
+            receiptsMismatchTotalDelta,
+            receiptsUnlinkable,
         },
     };
 }

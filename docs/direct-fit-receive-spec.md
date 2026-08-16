@@ -140,34 +140,36 @@ attributes to. Two paths, tried in order:
    job attached. Add a job card number on the line and try again,
    or link a catalogue part if it's a stock item."*
 
-## Profit reporting — receipt coverage (AR 2026-08-16)
+## Profit reporting — receipt signals (AR 2026-08-16; rewritten same day after INV-2026-0048 review)
 
-`computeJobProfit` gained a third input: an array of `JobPartReceipt`
-descriptors with a `reconciled` boolean per receipt. Any receipt with
-`reconciled=false` nulls out `partsCost / partsProfit / partsMargin`
-— same treatment as a missing part cost. AR's principle: *"a number
-that's wrong by an unknown amount is worse than no number."*
+**Receipts are informational — they never suppress a number the
+invoice can support.** AR's rule: *"we don't know" justifies a dash;
+"we know, but a later receipt says something different" is a number
+plus a caveat.*
 
-**Reconciliation rule** (`isReceiptReconciledOnInvoice` in
-`src/lib/direct-fit-receipt.ts`) — a receipt is reconciled iff:
+Parts margin is gated only on `InvoiceLine.unitCost` completeness
+(existing behaviour). Receipts are compared to the invoice snapshot
+and each falls into one of three buckets via
+`compareReceiptToInvoice` in `src/lib/direct-fit-receipt.ts`:
 
-1. It has a `sourceEstimateLine` (rules out the manual-PO path).
-2. That line's current `unitCost` equals the receipt's
-   `receivedUnitCost` to 2dp (proof the writeback ran and hasn't
-   been re-edited).
-3. The source estimate has an `invoice` row (proof the writeback
-   made it into a frozen snapshot).
+| Bucket | Meaning | Profit card |
+|---|---|---|
+| `reconciled` | Source line + `unitCost` matches receipt + invoice exists. No signal to raise. | (silent) |
+| `mismatch` | Source line + invoice both present, values disagree by a known amount. `totalDelta = (received - invoiced) × qty` (signed). | Warning: *"N receipt(s) show actual paid costs differ from what was invoiced — invoiced cost may be understating parts cost by AED X."* Direction flips ("overstating") when delta is negative. |
+| `unlinkable` | No source line (manual-PO path), or source `unitCost` is null, or no invoice yet. Can't compute a delta. | Lighter note: *"N direct-fit receipt(s) not linked to an invoice line — verify the invoiced cost matches what you paid."* |
 
-Any of the three failing → unreconciled. Rule is deliberately strict:
-over-claiming a receipt as reconciled would silently understate parts
-cost, exactly the failure mode this coverage rule exists to catch.
+`computeJobProfit`'s coverage record carries:
+- `receiptsTotal`
+- `receiptsMismatched` + `receiptsMismatchTotalDelta` (signed, `null` when zero mismatches)
+- `receiptsUnlinkable`
 
-The profit card renders a coverage line under the parts sub-card
-when `receiptsUnreconciled > 0`:
+`partsKnown` gate stays exactly the original rule: `partsTotal === 0
+|| partsCovered === partsTotal`. Receipts do NOT participate.
 
-> *"N received part cost(s) aren't captured on the invoice — add
-> them to the estimate + reissue the invoice, or record them as
-> separate lines."*
+Consequence: if the invoice has cost on every parts line, the margin
+IS shown — even when direct-fit receipts show a different actual
+paid cost. The delta warning tells the owner by how much the number
+may be off.
 
 ## What direct-fit does NOT support today
 

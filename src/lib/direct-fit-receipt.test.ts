@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
     parseReceiveMode,
     shouldUpdateEstimateCost,
-    isReceiptReconciledOnInvoice,
+    compareReceiptToInvoice,
     DEFAULT_MODE_FOR_UNLINKED,
 } from "./direct-fit-receipt";
 
@@ -112,98 +112,97 @@ describe("shouldUpdateEstimateCost", () => {
     });
 });
 
-describe("isReceiptReconciledOnInvoice", () => {
-    // AR 2026-08-16 rule: a receipt is reconciled iff (1) it has a
-    // source estimate line, (2) that line's current unitCost equals
-    // the receipt's receivedUnitCost, AND (3) the source estimate has
-    // an invoice. Any other case is unreconciled — parts profit will
-    // render as em-dash with a coverage note.
+describe("compareReceiptToInvoice", () => {
+    // AR 2026-08-16 rewrite: three-way outcome (reconciled / mismatch
+    // / unlinkable). NEVER used to suppress margin — only to render a
+    // warning line on the profit card. See docs/direct-fit-receive-spec.md.
 
-    it("reconciled when all three conditions hold (from-estimate happy path)", () => {
+    it("reconciled when source line's unitCost matches receipt cost + invoice exists", () => {
         expect(
-            isReceiptReconciledOnInvoice({
+            compareReceiptToInvoice({
                 receivedUnitCost: 250,
+                qty: 1,
                 sourceEstimateLine: {
                     unitCost: 250,
                     estimateHasInvoice: true,
                 },
             }),
-        ).toBe(true);
+        ).toEqual({ status: "reconciled", totalDelta: null });
     });
 
-    it("unreconciled when the PO line has no source estimate line (manual PO path)", () => {
+    it("mismatch with positive delta when shop paid MORE than invoiced (invoice understates cost)", () => {
         expect(
-            isReceiptReconciledOnInvoice({
+            compareReceiptToInvoice({
+                receivedUnitCost: 260,
+                qty: 2,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toEqual({ status: "mismatch", totalDelta: 20 }); // (260 - 250) × 2
+    });
+
+    it("mismatch with negative delta when shop paid LESS than invoiced (invoice overstates cost)", () => {
+        expect(
+            compareReceiptToInvoice({
+                receivedUnitCost: 240,
+                qty: 3,
+                sourceEstimateLine: {
+                    unitCost: 250,
+                    estimateHasInvoice: true,
+                },
+            }),
+        ).toEqual({ status: "mismatch", totalDelta: -30 }); // (240 - 250) × 3
+    });
+
+    it("unlinkable when the PO line has no source estimate line (manual-PO path)", () => {
+        expect(
+            compareReceiptToInvoice({
                 receivedUnitCost: 250,
+                qty: 1,
                 sourceEstimateLine: null,
             }),
-        ).toBe(false);
+        ).toEqual({ status: "unlinkable", totalDelta: null });
     });
 
-    it("unreconciled when the source estimate has no invoice yet (writeback not snapshotted)", () => {
+    it("unlinkable when the source estimate has no invoice yet", () => {
+        // Nothing frozen to compare against.
         expect(
-            isReceiptReconciledOnInvoice({
+            compareReceiptToInvoice({
                 receivedUnitCost: 250,
+                qty: 1,
                 sourceEstimateLine: {
                     unitCost: 250,
                     estimateHasInvoice: false,
                 },
             }),
-        ).toBe(false);
+        ).toEqual({ status: "unlinkable", totalDelta: null });
     });
 
-    it("unreconciled when advisor edited estimate cost away from received value", () => {
-        // Writeback wrote 250 at receive time, advisor later edited
-        // the estimate to 260, invoice generated with 260. Receipt
-        // cost no longer matches invoice snapshot — unreconciled.
+    it("unlinkable when source estimate line has null unitCost (can't compute delta)", () => {
         expect(
-            isReceiptReconciledOnInvoice({
+            compareReceiptToInvoice({
                 receivedUnitCost: 250,
-                sourceEstimateLine: {
-                    unitCost: 260,
-                    estimateHasInvoice: true,
-                },
-            }),
-        ).toBe(false);
-    });
-
-    it("unreconciled when writeback was skipped (post-invoice receipt) — receivedUnitCost never landed on the line", () => {
-        // Invoice existed at receive time, writeback skipped. Source
-        // line still holds the advisor's original estimated cost.
-        expect(
-            isReceiptReconciledOnInvoice({
-                receivedUnitCost: 260,
-                sourceEstimateLine: {
-                    unitCost: 250,
-                    estimateHasInvoice: true,
-                },
-            }),
-        ).toBe(false);
-    });
-
-    it("unreconciled when source estimate line has null unitCost", () => {
-        // Legacy row before the tri-input line editor, or a line the
-        // advisor never priced. Can't compare against a null.
-        expect(
-            isReceiptReconciledOnInvoice({
-                receivedUnitCost: 250,
+                qty: 1,
                 sourceEstimateLine: {
                     unitCost: null,
                     estimateHasInvoice: true,
                 },
             }),
-        ).toBe(false);
+        ).toEqual({ status: "unlinkable", totalDelta: null });
     });
 
-    it("cent-level equality — 250 vs 250.001 is treated as equal", () => {
+    it("cent-level equality — 250 vs 250.001 rounds to equal → reconciled", () => {
         expect(
-            isReceiptReconciledOnInvoice({
+            compareReceiptToInvoice({
                 receivedUnitCost: 250.001,
+                qty: 1,
                 sourceEstimateLine: {
                     unitCost: 250,
                     estimateHasInvoice: true,
                 },
             }),
-        ).toBe(true);
+        ).toEqual({ status: "reconciled", totalDelta: null });
     });
 });

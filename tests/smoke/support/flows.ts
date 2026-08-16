@@ -280,32 +280,23 @@ export async function sendEstimateToCustomer(
     estimateId: string,
 ): Promise<void> {
     await page.goto(`/estimates/${estimateId}/preview`);
-    // Intercept the wa.me navigation so smoke stays inside the app.
-    // The server-side action still runs to completion (status flip
-    // + sentAt stamp happen BEFORE redirect() is thrown); aborting
-    // stops the browser from actually opening WhatsApp.
-    await page.route(/^https:\/\/(?:api\.whatsapp\.com|wa\.me)/, (route) => {
-        void route.abort();
-    });
-    // Kick off the server-action-response wait BEFORE the click —
-    // Playwright's canonical pattern. The Next.js server-action POST
-    // returns before the client processes the redirect, so this
-    // resolves as soon as the DB writes are committed regardless of
-    // whether the wa.me nav completes.
-    const actionResponsePromise = page.waitForResponse(
-        (r) => r.request().method() === "POST" && r.url().includes("/estimates/"),
-        { timeout: 15_000 },
-    );
+    // Kick off the wa.me wait BEFORE the click — canonical Playwright
+    // pattern for "click, then navigation happens". The server-action
+    // redirects the browser to wa.me; we let the navigation start,
+    // then goto back to the preview so subsequent test steps have a
+    // clean starting URL. Route interception + unroute proved
+    // unreliable on Vercel staging (unroute hung past the 90s test
+    // timeout in one run) — this approach uses only two navigations
+    // and no route handlers to clean up.
+    const waNavPromise = page.waitForURL(/wa\.me/, { timeout: 15_000 });
     await page
         .getByRole("button", { name: /Send Estimate to Customer/i })
         .first()
         .click({ timeout: 10_000 });
-    await actionResponsePromise;
-    // Reload the preview page so the caller (which typically pulls
-    // the customer URL next) sees fresh state — sentAt set, status
-    // flipped. The RSC re-render on the previous request was
-    // aborted by the wa.me nav intercept.
-    await page.unroute(/^https:\/\/(?:api\.whatsapp\.com|wa\.me)/);
+    await waNavPromise;
+    // Back to the preview page so callers pulling customerEstimateUrl
+    // next see fresh state (sentAt set, status flipped). goto is a
+    // full nav — no dependency on the aborted wa.me load's DOM.
     await page.goto(`/estimates/${estimateId}/preview`);
 }
 

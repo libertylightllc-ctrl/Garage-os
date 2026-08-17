@@ -20,6 +20,7 @@ import {
   jobPartLineDescription,
   parseLineEditInput,
   parseMoney,
+  resolveOneClickItemisePrice,
   formatInvoiceNo,
   type DraftLine,
   type LineKind,
@@ -276,6 +277,23 @@ export async function addEstimateLineAction(formData: FormData) {
 
 // One-click itemise: turn a technician part (required/used) into a priced PART line,
 // pre-filled with the catalog price when the part is catalog-linked.
+//
+// AR 2026-08-17. Historical shape read `jp.part ? Number(jp.part.price)
+// : 0` — a tech part that wasn't catalogued (or whose catalogue Part
+// had a null/zero price) landed on the estimate at unitPrice: 0 with
+// no visible warning. That's how JC-2026-0098's lines ended up
+// unpriced and flowed silently into the invoice → VAT → ledger,
+// same class as item 2. EstimateLine.unitPrice is NOT NULL in the
+// schema (prisma/schema.prisma:779) so we can't express "unpriced"
+// as a row — refuse the create and surface an error the advisor
+// can act on. See docs/estimate-line-blank-price-spec.md.
+//
+// Two happy paths remain:
+//   1. Catalogued part with a real price (Part.price > 0) — inherit
+//      it. This is the common case; nothing changes.
+//   2. Uncatalogued part or catalogue with no price — refuse; the
+//      advisor uses "Add line" (which now rejects blank prices per
+//      item 2) or prices the catalogue Part first.
 export async function addLineFromPartAction(formData: FormData) {
   const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
@@ -287,12 +305,27 @@ export async function addLineFromPartAction(formData: FormData) {
     where: { id: jobPartId, jobCardId: est.jobCardId },
     // AR 2026-08-12 Step 4 — also pull cost so the created PART line
     // prefills unitCost + implied markupPct from the catalogue.
-    include: { part: { select: { cost: true, price: true } } },
+    include: {
+      part: { select: { id: true, name: true, cost: true, price: true } },
+    },
   });
   if (!jp) throw new Error("Part not found on this job");
 
+  // Refuse when we don't have a real price to work with — see the
+  // resolveOneClickItemisePrice docstring for the full reasoning.
+  // Reason gets mapped to an operator-facing message here rather
+  // than inside the helper, so the helper stays UI-agnostic.
+  const priceCheck = resolveOneClickItemisePrice(jp.part);
+  if (!priceCheck.ok) {
+    const label = jp.part?.name ? `"${jp.part.name}"` : "this part";
+    const msg =
+      priceCheck.reason === "no-catalogue-part"
+        ? `${label} isn't in your catalogue — add it to Inventory with a price, or add the estimate line manually with a price.`
+        : `${label} has no catalogue price yet — set a price on the part in Inventory, or add the line manually with a price.`;
+    throw new Error(msg);
+  }
   const qty = Math.max(1, jp.qty);
-  const unitPrice = jp.part ? Number(jp.part.price) : 0; // catalog price, else cashier sets it
+  const unitPrice = priceCheck.price;
 
   // Cost-based prefill — same logic as addEstimateLineAction above.
   let unitCost: number | null = null;

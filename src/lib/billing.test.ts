@@ -17,6 +17,7 @@ import {
   jobPartLineDescription,
   parseLineEditInput,
   parseMoney,
+  resolveOneClickItemisePrice,
   ACCOUNTS,
   type DraftLine,
   type LedgerLine,
@@ -227,6 +228,75 @@ describe("parseMoney — blank never becomes zero", () => {
     // return; callers re-sign to canonical negative themselves.
     expect(parseMoney("-50", { allowNegative: true })).toEqual({ ok: true, value: -50 });
     expect(parseMoney("50", { allowNegative: true })).toEqual({ ok: true, value: 50 });
+  });
+});
+
+// AR 2026-08-17 — one-click itemise (addLineFromPartAction) used to
+// write unitPrice: 0 whenever a technician-requested part was
+// uncatalogued OR its catalogue Part.price was null/zero. That's how
+// JC-2026-0098's lines ended up unpriced and silently flowed to
+// invoice/VAT/ledger. Same class as parseMoney but on a different
+// input shape (DB read, not form input) so it needs its own guard.
+// EstimateLine.unitPrice is NOT NULL in the schema — we can't store
+// "unpriced", so the action refuses and asks the advisor to price
+// the catalogue Part or add the line manually. This test pins the
+// decision table so the fallback-to-0 shape can't sneak back in.
+describe("resolveOneClickItemisePrice — refuse to itemise at 0", () => {
+  it("accepts a real catalogue price (the happy path)", () => {
+    expect(resolveOneClickItemisePrice({ price: 45.5 })).toEqual({
+      ok: true,
+      price: 45.5,
+    });
+    // Prisma Decimal arrives as a string via the driver adapter —
+    // must convert to Number cleanly.
+    expect(resolveOneClickItemisePrice({ price: "125.00" })).toEqual({
+      ok: true,
+      price: 125,
+    });
+  });
+  it("refuses when the jobPart isn't catalogue-linked", () => {
+    expect(resolveOneClickItemisePrice(null)).toEqual({
+      ok: false,
+      reason: "no-catalogue-part",
+    });
+  });
+  it("refuses when the catalogue price is zero — a comp/warranty is priced on the line, not stored in the catalogue", () => {
+    expect(resolveOneClickItemisePrice({ price: 0 })).toEqual({
+      ok: false,
+      reason: "no-catalogue-price",
+    });
+    expect(resolveOneClickItemisePrice({ price: "0" })).toEqual({
+      ok: false,
+      reason: "no-catalogue-price",
+    });
+  });
+  it("refuses a negative catalogue price (not a legitimate shape)", () => {
+    expect(resolveOneClickItemisePrice({ price: -10 })).toEqual({
+      ok: false,
+      reason: "no-catalogue-price",
+    });
+  });
+  it("refuses NaN / Infinity — the shouldn't-happen catch-all", () => {
+    expect(resolveOneClickItemisePrice({ price: NaN })).toEqual({
+      ok: false,
+      reason: "bad-catalogue-price",
+    });
+    expect(resolveOneClickItemisePrice({ price: Infinity })).toEqual({
+      ok: false,
+      reason: "bad-catalogue-price",
+    });
+    expect(resolveOneClickItemisePrice({ price: "not-a-number" })).toEqual({
+      ok: false,
+      reason: "bad-catalogue-price",
+    });
+  });
+  it("REGRESSION DETECTOR — silent 0 fallback would fail these", () => {
+    // If someone reintroduces `jp.part ? Number(jp.part.price) : 0`,
+    // these three cases would all return { ok: true, price: 0 }
+    // instead of the appropriate refusal, and the test fails loudly.
+    expect(resolveOneClickItemisePrice(null).ok).toBe(false);
+    expect(resolveOneClickItemisePrice({ price: 0 }).ok).toBe(false);
+    expect(resolveOneClickItemisePrice({ price: null as unknown as number }).ok).toBe(false);
   });
 });
 

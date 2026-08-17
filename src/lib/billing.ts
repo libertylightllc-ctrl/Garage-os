@@ -43,6 +43,50 @@ export type MoneyParseResult =
   | { ok: true; value: number }
   | { ok: false; error: "required" | "not-a-number" | "negative" };
 
+/**
+ * Decide whether a technician-requested part can be one-click
+ * itemised into a priced estimate line. AR 2026-08-17.
+ *
+ * Historical shape (`jp.part ? Number(jp.part.price) : 0`) silently
+ * wrote unitPrice: 0 when the part was uncatalogued OR the catalogue
+ * price was null/zero. That's how JC-2026-0098's lines ended up
+ * unpriced. EstimateLine.unitPrice is NOT NULL in the schema so we
+ * can't express "unpriced" — the choice is accept-at-0 (the bug) or
+ * refuse-with-message (this helper). Kept as a pure function so the
+ * decision table is testable without a DB fixture.
+ *
+ * Two accept shapes:
+ *   { ok: true, price }
+ * where price is > 0 and finite. Three refuse shapes:
+ *   { ok: false, reason: "no-catalogue-part" }  — jp.part is null
+ *   { ok: false, reason: "no-catalogue-price" } — Part.price null/0
+ *   { ok: false, reason: "bad-catalogue-price" } — NaN / Infinity
+ * The caller surfaces the appropriate operator-facing error string.
+ */
+export type OneClickItemisePart = { price: number | string | { toString(): string } } | null;
+
+export type OneClickItemiseResolution =
+  | { ok: true; price: number }
+  | { ok: false; reason: "no-catalogue-part" | "no-catalogue-price" | "bad-catalogue-price" };
+
+export function resolveOneClickItemisePrice(
+  part: OneClickItemisePart,
+): OneClickItemiseResolution {
+  if (part == null) return { ok: false, reason: "no-catalogue-part" };
+  // Prisma Decimals arrive as strings via the driver adapter; Number()
+  // handles both Decimal.toString() and the direct-number path used by
+  // tests. NaN / Infinity are the "shouldn't-happen" catch-all — the
+  // schema declares Part.price as non-null Decimal, so this branch
+  // fires only if a driver bug or bad seed slips through.
+  const n = Number(part.price);
+  if (!Number.isFinite(n)) return { ok: false, reason: "bad-catalogue-price" };
+  // 0 (and negative) means "never priced" — a courtesy/warranty line
+  // is created by pricing the estimate line at 0 explicitly, NOT by
+  // storing a 0 catalogue price. Treat the same as null.
+  if (n <= 0) return { ok: false, reason: "no-catalogue-price" };
+  return { ok: true, price: n };
+}
+
 export function parseMoney(
   raw: unknown,
   opts: { allowNegative?: boolean } = {},

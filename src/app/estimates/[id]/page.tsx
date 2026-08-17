@@ -482,6 +482,22 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
               {t("addLine")}
             </button>
           </div>
+          {/* Explanatory hint shown only when a picked catalogue part
+              has no meaningful price. The `required` attribute on the
+              input above is still the enforcement — this line just
+              tells the advisor WHY the field is blank instead of
+              pre-filled, so the browser's generic "please fill out
+              this field" doesn't leave them guessing. Toggled by
+              CatalogPartSelect via `.hidden`, which keeps it out of
+              the paint + accessibility tree when not needed. AR
+              2026-08-17. */}
+          <p
+            data-hint="no-catalogue-price"
+            hidden
+            className="text-xs text-warning-700 dark:text-warning-500"
+          >
+            {t("catalogPartNoPriceHint")}
+          </p>
         </form>
       ) : null}
 

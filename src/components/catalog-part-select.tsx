@@ -50,10 +50,16 @@ export function CatalogPartSelect({
         // type the real number. Explicit "0" is still allowed if they
         // actually type it — the distinction that matters is
         // "advisor typed 0" vs "the picker put 0 there for them".
-        if (price) {
-          const n = Number(picked.price);
-          price.value = Number.isFinite(n) && n > 0 ? picked.price : "";
-        }
+        const n = Number(picked.price);
+        const hasPrice = Number.isFinite(n) && n > 0;
+        if (price) price.value = hasPrice ? picked.price : "";
+        // Show the "no catalogue price" hint alongside the input when
+        // we deliberately blanked it. The hint element lives in the
+        // parent form (page.tsx) as [data-hint="no-catalogue-price"];
+        // toggled via .hidden so it's completely absent from the paint
+        // and screen readers when not needed. AR 2026-08-17.
+        const hint = form.querySelector<HTMLElement>('[data-hint="no-catalogue-price"]');
+        if (hint) hint.hidden = hasPrice;
       }}
     >
       <option value="">{placeholder}</option>

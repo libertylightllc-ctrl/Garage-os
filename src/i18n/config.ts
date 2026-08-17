@@ -1089,6 +1089,12 @@ const en = {
   photographDamaged: "Photograph the damaged parts.",
   noPartsRequired: "No parts listed yet.",
   catalogPartOptional: "Catalog part (optional)",
+  // AR 2026-08-17 — hint shown next to the Unit price input when a picked
+  // catalogue part has no price set on the Part row. The `required` attr +
+  // parseMoney already block the submit; this line explains WHY the field
+  // stayed blank instead of pre-filling, so the advisor knows to type it or
+  // fix the Inventory row.
+  catalogPartNoPriceHint: "This part has no price in inventory — type the price, or set one in Inventory.",
   techFindingsPanel: "Technician findings & parts required",
   enterFindingsFirst: "Enter findings before submitting.",
   // repair stage (parts used + work notes)
@@ -2562,6 +2568,7 @@ const ar: typeof en = {
   photographDamaged: "صوّر القطع التالفة.",
   noPartsRequired: "لا توجد قطع بعد.",
   catalogPartOptional: "قطعة من الكتالوج (اختياري)",
+  catalogPartNoPriceHint: "لا يوجد سعر لهذه القطعة في المخزون — أدخل السعر يدويًا، أو حدّده في المخزون.",
   techFindingsPanel: "نتائج الفني والقطع المطلوبة",
   enterFindingsFirst: "أدخل النتائج قبل الإرسال.",
   // repair stage

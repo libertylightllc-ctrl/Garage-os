@@ -19,6 +19,7 @@ import {
   isQuoteIncrease,
   jobPartLineDescription,
   parseLineEditInput,
+  parseMoney,
   formatInvoiceNo,
   type DraftLine,
   type LineKind,
@@ -205,7 +206,25 @@ export async function addEstimateLineAction(formData: FormData) {
     String(formData.get("description") ?? "").trim() ||
     (linkedPart ? `${linkedPart.name} (${linkedPart.sku})` : isDiscount ? "Discount" : "Item");
   const qty = Math.max(0, Number(formData.get("qty") ?? 1));
-  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
+  // AR 2026-08-17 — parseMoney rejects blanks instead of silently
+  // writing unitPrice: 0 (see estimate-line-blank-price-spec.md). A
+  // blank on a real line was flowing through to invoice + ledger +
+  // filed VAT return under-counted. DISCOUNT parses allowNegative
+  // because sign-flip is legal for that sugar-kind; regular lines
+  // reject negatives.
+  const parsedPrice = parseMoney(formData.get("unitPrice"), {
+    allowNegative: isDiscount,
+  });
+  if (!parsedPrice.ok) {
+    throw new Error(
+      parsedPrice.error === "required"
+        ? "Unit price is required"
+        : parsedPrice.error === "negative"
+        ? "Unit price cannot be negative"
+        : "Unit price must be a number",
+    );
+  }
+  const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
   // Cost-based prefill (AR 2026-08-12) — only meaningful for PART lines.
@@ -325,8 +344,24 @@ export async function updateEstimateLinePriceAction(formData: FormData) {
 
   const line = await prisma.estimateLine.findFirst({ where: { id: lineId, estimateId } });
   if (!line) throw new Error("Line not found");
-  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
-  const unitPrice = Number(line.unitPrice) < 0 ? -priceAbs : priceAbs;
+  // AR 2026-08-17 — see the parseMoney note in addEstimateLineAction.
+  // The sign of the EXISTING line decides whether we allow negative
+  // input (this preserves the DISCOUNT convention on inline edit).
+  const wasDiscount = Number(line.unitPrice) < 0;
+  const parsedPrice = parseMoney(formData.get("unitPrice"), {
+    allowNegative: wasDiscount,
+  });
+  if (!parsedPrice.ok) {
+    throw new Error(
+      parsedPrice.error === "required"
+        ? "Unit price is required"
+        : parsedPrice.error === "negative"
+        ? "Unit price cannot be negative"
+        : "Unit price must be a number",
+    );
+  }
+  const priceAbs = Math.abs(parsedPrice.value);
+  const unitPrice = wasDiscount ? -priceAbs : priceAbs;
   await prisma.estimateLine.update({
     where: { id: lineId },
     data: { unitPrice, lineTotal: lineTotal(Number(line.qty), unitPrice) },
@@ -1041,7 +1076,24 @@ export async function addInvoiceLineAction(formData: FormData) {
   const description =
     String(formData.get("description") ?? "").trim() || (isDiscount ? "Discount" : "Item");
   const qty = Math.max(0, Number(formData.get("qty") ?? 1));
-  const priceAbs = Math.abs(Number(formData.get("unitPrice") ?? 0));
+  // AR 2026-08-17 — same parseMoney treatment as the estimate-side
+  // sites. A live tax invoice has no "unpriced draft" concept; a
+  // blank on Add-line was writing unitPrice: 0 straight onto an
+  // editable invoice, propagating to subtotal/VAT/total on the next
+  // recompute. Reject instead of accepting silently.
+  const parsedPrice = parseMoney(formData.get("unitPrice"), {
+    allowNegative: isDiscount,
+  });
+  if (!parsedPrice.ok) {
+    throw new Error(
+      parsedPrice.error === "required"
+        ? "Unit price is required"
+        : parsedPrice.error === "negative"
+        ? "Unit price cannot be negative"
+        : "Unit price must be a number",
+    );
+  }
+  const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
   await prisma.invoiceLine.create({

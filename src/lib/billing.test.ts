@@ -16,6 +16,7 @@ import {
   isQuoteIncrease,
   jobPartLineDescription,
   parseLineEditInput,
+  parseMoney,
   ACCOUNTS,
   type DraftLine,
   type LedgerLine,
@@ -180,6 +181,55 @@ describe("invoice number formatting", () => {
   });
 });
 
+// AR 2026-08-17 — parseMoney is the guard that stops Number("")→0 from
+// silently landing on estimate lines. The whole point of the helper
+// is that a blank price is an ERROR, not a real zero. These tests pin
+// the boundary so a well-meaning simplification (e.g. `?? 0`) can't
+// reintroduce the bug. See docs/estimate-line-blank-price-spec.md
+// for the incident context.
+describe("parseMoney — blank never becomes zero", () => {
+  it("accepts a plain positive string", () => {
+    expect(parseMoney("150")).toEqual({ ok: true, value: 150 });
+  });
+  it("accepts a numeric literal (not from a form)", () => {
+    expect(parseMoney(150)).toEqual({ ok: true, value: 150 });
+    expect(parseMoney(0)).toEqual({ ok: true, value: 0 });
+  });
+  it("trims whitespace around a numeric string", () => {
+    expect(parseMoney("  150  ")).toEqual({ ok: true, value: 150 });
+  });
+  it("REJECTS an empty string — the bug this exists to close", () => {
+    // The historical `Number(formData.get("unitPrice") ?? 0)` would
+    // return 0 for "". A blank price is "advisor forgot to type", not
+    // a real zero — writing it silently flowed through to invoice
+    // subtotal → VAT → filed FTA return, understating tax owed.
+    expect(parseMoney("")).toEqual({ ok: false, error: "required" });
+  });
+  it("REJECTS a whitespace-only string", () => {
+    expect(parseMoney("   ")).toEqual({ ok: false, error: "required" });
+  });
+  it("REJECTS null / undefined (missing form key)", () => {
+    expect(parseMoney(null)).toEqual({ ok: false, error: "required" });
+    expect(parseMoney(undefined)).toEqual({ ok: false, error: "required" });
+  });
+  it("rejects non-numeric text with a distinct error", () => {
+    expect(parseMoney("abc")).toEqual({ ok: false, error: "not-a-number" });
+    expect(parseMoney("12abc")).toEqual({ ok: false, error: "not-a-number" });
+    expect(parseMoney(NaN)).toEqual({ ok: false, error: "not-a-number" });
+    expect(parseMoney(Infinity)).toEqual({ ok: false, error: "not-a-number" });
+  });
+  it("rejects negatives by default (LABOR / PART / regular FEE)", () => {
+    expect(parseMoney("-50")).toEqual({ ok: false, error: "negative" });
+    expect(parseMoney(-50)).toEqual({ ok: false, error: "negative" });
+  });
+  it("accepts negatives when allowNegative — the DISCOUNT sugar path", () => {
+    // Sign is the signal for DISCOUNT lines. Sign preserved on
+    // return; callers re-sign to canonical negative themselves.
+    expect(parseMoney("-50", { allowNegative: true })).toEqual({ ok: true, value: -50 });
+    expect(parseMoney("50", { allowNegative: true })).toEqual({ ok: true, value: 50 });
+  });
+});
+
 describe("parseLineEditInput — validation + DISCOUNT sign convention", () => {
   const good = { kind: "LABOR", description: "Diagnostics", qty: "1", unitPrice: "150" };
 
@@ -265,9 +315,30 @@ describe("parseLineEditInput — validation + DISCOUNT sign convention", () => {
   });
 
   it("zero price is allowed (free labor, comp'd item)", () => {
+    // Explicit "0" is a legit input — a courtesy line or a warranty
+    // fee stays as an explicit zero. The distinction that matters is
+    // "0" typed vs "" left blank; only the latter is the bug.
     const r = parseLineEditInput({ ...good, unitPrice: "0" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.unitPrice).toBe(0);
+  });
+
+  it("BLANK price is rejected — was silently 0 before AR 2026-08-17", () => {
+    // Historical behaviour: Number("") === 0, so a blank
+    // form field wrote unitPrice: 0 → lineTotal: 0, understating
+    // subtotal / VAT / total / ledger + AR. parseLineEditInput now
+    // routes through parseMoney, which rejects "" as
+    // { ok: false, error: "required" } and the caller surfaces
+    // "bad-price". Same for null / undefined / whitespace.
+    expect(parseLineEditInput({ ...good, unitPrice: "" }).ok).toBe(false);
+    expect(parseLineEditInput({ ...good, unitPrice: "   " }).ok).toBe(false);
+    expect(parseLineEditInput({ ...good, unitPrice: null }).ok).toBe(false);
+    expect(parseLineEditInput({ ...good, unitPrice: undefined }).ok).toBe(false);
+    // Regression detector: if someone reintroduces
+    // `Number(input.unitPrice)` without parseMoney, "" would pass
+    // here and this line would fail on the NEXT assertion below.
+    const r = parseLineEditInput({ ...good, unitPrice: "" });
+    if (!r.ok) expect(r.error).toBe("bad-price");
   });
 
   it("fractional qty is allowed (0.5 hours of labor)", () => {

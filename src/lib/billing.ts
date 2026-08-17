@@ -19,6 +19,58 @@ export function lineTotal(qty: number, unitPrice: number): number {
 }
 
 /**
+ * Discriminated money parse — AR 2026-08-17. Same shape mandated on
+ * the Layer 0 branch for parsing supplier costs, brought over to the
+ * customer-facing side after the estimate-line blank-price incident.
+ *
+ * `Number("")` collapses silently to 0, which is exactly what we want
+ * to STOP happening on money fields: a blank price is not a real
+ * zero, it's the operator forgetting to type. This helper never
+ * returns 0 for a blank — blanks are rejected outright — and rejects
+ * non-numeric text, negatives (unless `allowNegative`), and NaN /
+ * Infinity. The caller pattern is
+ *
+ *     const parsed = parseMoney(formData.get("unitPrice"));
+ *     if (!parsed.ok) throw new Error(parsed.error);
+ *     const price = parsed.value;
+ *
+ * `allowNegative: true` is for the DISCOUNT convention (FEE with
+ * negative unitPrice); default false rejects negatives on LABOR/PART/
+ * regular FEE lines. Once accepted the sign is preserved verbatim —
+ * callers that need |value| take Math.abs themselves.
+ */
+export type MoneyParseResult =
+  | { ok: true; value: number }
+  | { ok: false; error: "required" | "not-a-number" | "negative" };
+
+export function parseMoney(
+  raw: unknown,
+  opts: { allowNegative?: boolean } = {},
+): MoneyParseResult {
+  // Accept the two legitimate shapes callers pass:
+  //   - string (FormData.get on a number input) — the actual hazard;
+  //     the blank-collapses-to-zero bug this helper exists to close.
+  //   - number (a caller that already has the parsed value in hand,
+  //     e.g. parseLineEditInput's unit tests, or a JSON body).
+  // Everything else (null / undefined / File / boolean / object) is
+  // either a missing key or a caller-side type bug — reject as
+  // "required", same as an empty string.
+  let n: number;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed === "") return { ok: false, error: "required" };
+    n = Number(trimmed);
+  } else if (typeof raw === "number") {
+    n = raw;
+  } else {
+    return { ok: false, error: "required" };
+  }
+  if (!Number.isFinite(n)) return { ok: false, error: "not-a-number" };
+  if (!opts.allowNegative && n < 0) return { ok: false, error: "negative" };
+  return { ok: true, value: n };
+}
+
+/**
  * Validate + normalise the raw inputs from an estimate-line edit form.
  * Pulled out as a pure helper so the server action stays thin and the
  * validation rules are unit-testable. DISCOUNT is sugar for a FEE line
@@ -70,12 +122,16 @@ export function parseLineEditInput(input: {
   const qty = Number(input.qty);
   if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "bad-qty" };
 
-  const price = Number(input.unitPrice);
-  if (!Number.isFinite(price)) return { ok: false, error: "bad-price" };
-  // For LABOR/PART/FEE, a negative price is a data error. DISCOUNT is the
-  // sanctioned sign-flip — accept any input and re-sign to negative below.
-  if (!isDiscount && price < 0) return { ok: false, error: "bad-price" };
-  const priceAbs = Math.abs(price);
+  // AR 2026-08-17 — no more silent Number("") → 0. A blank price is
+  // "advisor forgot to type", not a real zero, and letting it write
+  // 0 through to the invoice + ledger silently understated VAT on
+  // filed returns. parseMoney rejects blanks and non-numeric input;
+  // DISCOUNT parses with `allowNegative: true` because the sign
+  // itself is the signal, then we re-sign below to canonical
+  // negative regardless of what the operator typed.
+  const parsedPrice = parseMoney(input.unitPrice, { allowNegative: isDiscount });
+  if (!parsedPrice.ok) return { ok: false, error: "bad-price" };
+  const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
   // Cost + markup (PART lines only; ignored + nulled on other kinds).

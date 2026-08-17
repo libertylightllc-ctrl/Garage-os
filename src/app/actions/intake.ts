@@ -81,6 +81,15 @@ export async function createBookingPublic(formData: FormData) {
     select: { id: true },
   });
 
+  // AR 2026-08-18 — revalidate the two staff surfaces that read
+  // Booking.status='PROPOSED': the advisor bookings inbox and the
+  // dashboard badge counter (see src/app/advisor/page.tsx:93).
+  // Without these the new booking is invisible to staff until Next's
+  // route cache times out — customer submits and the shop doesn't
+  // know about it. Same class as approve/reject on the estimate.
+  revalidatePath("/advisor/bookings");
+  revalidatePath("/advisor");
+
   redirect(`/c/booking/${booking.id}`);
 }
 

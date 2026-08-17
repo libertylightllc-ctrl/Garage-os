@@ -81,4 +81,11 @@ export async function confirmCollectionPublic(formData: FormData) {
   // Revalidate the same URL the customer is on — pass the token they
   // received verbatim, regardless of shape.
   revalidatePath(`/c/delivery/${token}`);
+  // AR 2026-08-18 — same class of gap as approveEstimatePublic.
+  // Advisor's job detail renders the confirmed-at timestamp, and the
+  // end-of-day view lists DELIVERED-and-confirmed jobs; both must
+  // reflect the customer's confirm immediately, not on cache timeout.
+  revalidatePath(`/advisor/jobs/${id}`);
+  revalidatePath("/advisor/eod");
+  revalidatePath("/advisor");
 }

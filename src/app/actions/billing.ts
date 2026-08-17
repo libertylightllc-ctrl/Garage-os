@@ -9,6 +9,7 @@ import {
   totalsFor,
   lineTotal,
   invoiceLedger,
+  voidReversalLedger,
   paymentLedger,
   advanceLedger,
   advanceMigrationLedger,
@@ -1226,6 +1227,9 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
       subtotal: true,
       vatAmount: true,
       total: true,
+      // Reissue detection — non-null when this invoice was created via
+      // reissueInvoiceAction. Drives the ledger post below.
+      previousInvoiceId: true,
       // Phase 2: publicToken is the customer URL segment (see below).
       publicToken: true,
       // Line items — rendered in the WhatsApp body as "qty × description"
@@ -1313,9 +1317,43 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   // Cloud API commit lands this becomes "sent" outright; today it's
   // an operator-hand-off stamp and every read site is reworded to
   // match.
-  await prisma.jobCard.update({
-    where: { id: inv.jobCardId },
-    data: { invoiceSentAt: new Date() },
+  //
+  // Reissue ledger post (AR 2026-08-17). Reissued invoices are
+  // created as DRAFT by reissueInvoiceAction with NO ledger entries —
+  // the deliberate choice was to defer until they're actually sent so
+  // mid-draft edits don't need to re-post. First send is that
+  // trigger: check `previousInvoiceId IS NOT NULL` and no existing
+  // sourceType='INVOICE' rows for this invoice.id, then post the
+  // standard invoiceLedger. Idempotent — a Resend from the send-
+  // history page finds ledger rows already present and skips.
+  // Originals (previousInvoiceId IS NULL) already posted their
+  // ledger at generation time, so they always skip.
+  await prisma.$transaction(async (tx) => {
+    await tx.jobCard.update({
+      where: { id: inv.jobCardId },
+      data: { invoiceSentAt: new Date() },
+    });
+    if (inv.previousInvoiceId) {
+      const alreadyPosted = await tx.ledgerEntry.count({
+        where: { sourceType: "INVOICE", sourceId: inv.id },
+      });
+      if (alreadyPosted === 0) {
+        await tx.ledgerEntry.createMany({
+          data: invoiceLedger(
+            Number(inv.subtotal),
+            Number(inv.vatAmount),
+            Number(inv.total),
+          ).map((e) => ({
+            garageId: user.garageId,
+            account: e.account,
+            debit: e.debit,
+            credit: e.credit,
+            sourceType: "INVOICE",
+            sourceId: inv.id,
+          })),
+        });
+      }
+    }
   });
 
   // Sender name snapshot — the JWT's `name` field, else email. Frozen
@@ -1587,9 +1625,19 @@ export async function recordAdvancePaymentAction(formData: FormData) {
  *     operator so they don't lose the payment history quietly.)
  *
  * On success: status=VOID, voidedAt=now, voidedByUserId=user.
- * Ledger entries are NOT reversed here — the reissued invoice's
- * ledger takes over. If we ever add credit notes (Phase 2), they
- * write the reversal entries; the void alone doesn't move money.
+ *
+ * Ledger reversal (AR 2026-08-17). The original issuance posted
+ *   DR AR (total) / CR Sales (subtotal) / CR VAT Payable (vatAmount)
+ * with sourceType='INVOICE'. Voiding writes the exact mirror
+ *   CR AR (total) / DR Sales (subtotal) / DR VAT Payable (vatAmount)
+ * with sourceType='INVOICE_VOID', sourceId=this invoice, in the SAME
+ * transaction as the status flip. Net across the two events on every
+ * account is zero — the pure-function invariant is pinned by test.
+ * Without this, AR/Sales/VAT Payable stayed overstated on the books
+ * indefinitely (the shop appeared to owe FTA money for a voided
+ * sale). PAID stays blocked — a paid invoice needs a credit note,
+ * inventing a void-with-refund shape would make the accounting
+ * worse. That gap ships separately.
  */
 export async function voidInvoiceAction(formData: FormData) {
   const user = await requireAnyRole(INVOICE_ROLES);
@@ -1601,6 +1649,11 @@ export async function voidInvoiceAction(formData: FormData) {
     select: {
       id: true,
       status: true,
+      // Widened for the reversal: the reversing entries need the
+      // exact numbers the original issuance posted.
+      subtotal: true,
+      vatAmount: true,
+      total: true,
       jobCard: { select: { invoiceDeliveredAt: true } },
     },
   });
@@ -1625,13 +1678,29 @@ export async function voidInvoiceAction(formData: FormData) {
     );
   }
 
-  await prisma.invoice.update({
-    where: { id: inv.id },
-    data: {
-      status: "VOID",
-      voidedAt: new Date(),
-      voidedByUserId: user.id,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.invoice.update({
+      where: { id: inv.id },
+      data: {
+        status: "VOID",
+        voidedAt: new Date(),
+        voidedByUserId: user.id,
+      },
+    });
+    await tx.ledgerEntry.createMany({
+      data: voidReversalLedger(
+        Number(inv.subtotal),
+        Number(inv.vatAmount),
+        Number(inv.total),
+      ).map((e) => ({
+        garageId: user.garageId,
+        account: e.account,
+        debit: e.debit,
+        credit: e.credit,
+        sourceType: "INVOICE_VOID",
+        sourceId: inv.id,
+      })),
+    });
   });
 
   revalidatePath(back);
@@ -1755,14 +1824,14 @@ export async function reissueInvoiceAction(formData: FormData) {
       data: { invoiceSentAt: null, invoiceDeliveredAt: null },
     });
 
-    // NOTE: we deliberately do NOT write ledger rows here. The void
-    // hasn't been reversed and the new invoice is DRAFT — ledger
-    // shape comes from the eventual send/pay events on the new row.
-    // If we double-wrote invoiceLedger here, AR would be counted
-    // twice until the void was ledger-reversed. Correcting that is
-    // a Phase 2 concern (credit note); for now, cashier-issued
-    // corrections in the wa.me era are rare enough that a manual
-    // ledger cleanup at void time is acceptable.
+    // NOTE: no ledger rows written here. The reissue opens as DRAFT
+    // and its totals may change before send — invoiceLedger is posted
+    // by sendInvoiceToCustomerAction on the FIRST send (guarded by
+    // previousInvoiceId IS NOT NULL + zero existing INVOICE rows for
+    // this id, so re-sends don't double-post). The paired reversal
+    // for the void itself is written by voidInvoiceAction with
+    // sourceType='INVOICE_VOID', so the books are already balanced
+    // by the time the operator opens the reissue for editing.
 
     return inv.id;
   });

@@ -3,6 +3,7 @@ import {
   totalsFor,
   lineTotal,
   invoiceLedger,
+  voidReversalLedger,
   paymentLedger,
   advanceLedger,
   advanceMigrationLedger,
@@ -54,6 +55,71 @@ describe("zero-entry ledger", () => {
 
   it("payment entries balance", () => {
     expect(isBalanced(paymentLedger(283.5))).toBe(true);
+  });
+
+  // AR 2026-08-17 — void reversal.
+  // The invariant: issuance + void nets to zero on EVERY account. The
+  // whole reason voidReversalLedger exists is to unwind the sale on
+  // the books when a delivered invoice is cancelled; if any account
+  // has a residual, either the books misreport a sale that didn't
+  // happen or misreport a receivable that isn't there. Pinning the
+  // invariant as a pure-function test means a well-meaning refactor
+  // of either helper can't drift them out of alignment without CI
+  // firing.
+  describe("voidReversalLedger — mirror of invoiceLedger", () => {
+    function netByAccount(rows: LedgerLine[]): Record<string, number> {
+      const net: Record<string, number> = {};
+      for (const r of rows) {
+        net[r.account] = (net[r.account] ?? 0) + r.debit - r.credit;
+      }
+      return net;
+    }
+
+    it("individual reversal entries balance (debits == credits)", () => {
+      const t = totalsFor(lines);
+      expect(isBalanced(voidReversalLedger(t.subtotal, t.vatAmount, t.total))).toBe(true);
+    });
+
+    it("issuance + reversal nets to zero across AR, Sales, VAT Payable", () => {
+      const t = totalsFor(lines);
+      const combined = [
+        ...invoiceLedger(t.subtotal, t.vatAmount, t.total),
+        ...voidReversalLedger(t.subtotal, t.vatAmount, t.total),
+      ];
+      const net = netByAccount(combined);
+      // Every account touched by the invoice lifecycle must return to
+      // zero after void. Using the actual ACCOUNTS constants so a
+      // rename in one place fires the test rather than silently
+      // creating a residual on the old key.
+      expect(net[ACCOUNTS.AR]).toBe(0);
+      expect(net[ACCOUNTS.SALES]).toBe(0);
+      expect(net[ACCOUNTS.VAT_PAYABLE]).toBe(0);
+      // Belt-and-braces: no OTHER account picked up a residual either.
+      for (const account of Object.keys(net)) {
+        expect(net[account]).toBe(0);
+      }
+    });
+
+    it("holds for realistic and fractional totals", () => {
+      // Rounding is a common place for these invariants to break —
+      // exercise a value where subtotal + VAT edges into a half-cent
+      // round.
+      for (const [subtotal, vat, total] of [
+        [270, 13.5, 283.5],
+        [100.03, 5.0015, 105.0315],  // pre-round values
+        [0, 0, 0],                    // degenerate but must still hold
+        [9999.99, 500.0, 10499.99],
+      ] as const) {
+        const combined = [
+          ...invoiceLedger(subtotal, vat, total),
+          ...voidReversalLedger(subtotal, vat, total),
+        ];
+        const net = netByAccount(combined);
+        expect(net[ACCOUNTS.AR]).toBe(0);
+        expect(net[ACCOUNTS.SALES]).toBe(0);
+        expect(net[ACCOUNTS.VAT_PAYABLE]).toBe(0);
+      }
+    });
   });
 });
 

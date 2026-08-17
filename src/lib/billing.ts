@@ -154,6 +154,25 @@ export function invoiceLedger(subtotal: number, vatAmount: number, total: number
   ];
 }
 
+/**
+ * Voiding a delivered invoice: exact mirror of `invoiceLedger`.
+ * CR AR (total) / DR Sales (subtotal) + DR VAT Payable (vat). Summed
+ * with the original issuance entries this nets to zero on every
+ * account — the accounting effect of the sale is undone. Written by
+ * voidInvoiceAction with sourceType='INVOICE_VOID'. AR 2026-08-17.
+ */
+export function voidReversalLedger(
+  subtotal: number,
+  vatAmount: number,
+  total: number,
+): LedgerLine[] {
+  return [
+    { account: ACCOUNTS.AR, debit: 0, credit: round2(total) },
+    { account: ACCOUNTS.SALES, debit: round2(subtotal), credit: 0 },
+    { account: ACCOUNTS.VAT_PAYABLE, debit: round2(vatAmount), credit: 0 },
+  ];
+}
+
 /** Receiving a payment: DR Cash/Bank / CR AR. */
 export function paymentLedger(amount: number): LedgerLine[] {
   return [

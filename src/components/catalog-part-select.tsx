@@ -38,7 +38,22 @@ export function CatalogPartSelect({
         const desc = form.elements.namedItem("description") as HTMLInputElement | null;
         if (desc) desc.value = `${picked.name} (${picked.sku})`;
         const price = form.elements.namedItem("unitPrice") as HTMLInputElement | null;
-        if (price) price.value = picked.price;
+        // AR 2026-08-17 — don't pre-fill zero. The catalogue Part.price
+        // can be 0 (never priced, or seed default), which used to land
+        // in the input as "0.00". The input's `required` attribute
+        // doesn't fire on "0" — it's non-empty — and the server-side
+        // parseMoney accepts explicit 0 as a legitimate courtesy /
+        // warranty price. Together that let an advisor pick a catalogue
+        // part, hit Add, and save an unpriced line silently. Leaving
+        // the field blank when the catalogue has no meaningful price
+        // makes `required` block the submit and forces the advisor to
+        // type the real number. Explicit "0" is still allowed if they
+        // actually type it — the distinction that matters is
+        // "advisor typed 0" vs "the picker put 0 there for them".
+        if (price) {
+          const n = Number(picked.price);
+          price.value = Number.isFinite(n) && n > 0 ? picked.price : "";
+        }
       }}
     >
       <option value="">{placeholder}</option>

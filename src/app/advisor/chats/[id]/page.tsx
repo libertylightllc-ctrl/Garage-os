@@ -10,7 +10,6 @@ import {
   approveDraftAction,
   discardDraftAction,
   sendManualAction,
-  simulateInboundAction,
 } from "@/app/actions/chat";
 
 export const dynamic ="force-dynamic";
@@ -104,6 +103,18 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
             {m.aiGenerated ? (
               <span className="ms-2 text-[10px] opacity-70">AI</span>
             ) : null}
+            {/* AR 2026-08-19 — visible SIMULATED marker on any message
+                that was fabricated by the deleted test tools. Post-
+                deletion no new rows can carry this flag, but 4 historical
+                rows in prod are backfilled by migration
+                20260819140000_mark_simulated_whatsapp_messages. The
+                marker stays permanently so an audit reader can
+                distinguish the row from real customer speech. */}
+            {m.simulated ? (
+              <span className="ms-2 rounded-full border border-warning-500/40 bg-warning-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                {t("chatSimulatedTag")}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -117,14 +128,9 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
         </button>
       </form>
 
-      {/* Dev: simulate a customer message */}
-      <form action={simulateInboundAction} className="flex gap-2 border-t border-dashed border-border pt-3">
-        <input type="hidden" name="threadId" value={thread.id} />
-        <input name="body" placeholder={t("simulateInbound")} className={field} />
-        <button className="rounded-md border border-border px-3 py-1 text-sm">
-          ⤵
-        </button>
-      </form>
+      {/* AR 2026-08-19 — the "Simulate a customer message" form was
+          DELETED here alongside simulateInboundAction. See rule 7 in
+          docs/business-rules.md. */}
     </main>
   );
 }

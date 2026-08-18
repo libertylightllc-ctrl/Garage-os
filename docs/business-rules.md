@@ -194,6 +194,42 @@ three-state pattern (commit `0fcfb01`, INV-2026-0048).
 
 ---
 
+## 7. Production write paths never fabricate
+
+Production paths that write to permanent records must not fabricate.
+A "simulate a customer message" form in the operator UI produces
+rows in the WhatsApp history that no customer sent; a "seed a fake
+invoice" button in production writes to the invoice-number sequence
+that VAT audits depend on. Test/simulate paths belong in scripts —
+kept in `scripts/` or in a staging-only path a real advisor cannot
+reach — not in the surfaces staff use every day.
+
+**Why the discipline is strict**: fabricated rows in a
+permanent record are indistinguishable from real ones after the
+fact. In a dispute (VAT audit, insurance claim, customer complaint,
+receipt lookup) the shop cannot prove which speech / row was fake
+without a marker. Even with a marker, the sequence is polluted —
+gapless-invoice regulations don't accept "row 43 was a test".
+
+**Common violation shape**: "Dev/testing without Meta" or "Simulate
+a customer message" panels that sit alongside real staff actions on
+a prod-reachable page. Comments in code that read `// Dev:` are the
+usual smell. If it's dev, it doesn't ship. If it ships, it isn't
+dev — treat it as a production feature and design it with the same
+audit + permissions discipline.
+
+**Correct shape**: fabrication paths live under `scripts/` and use
+the `target-prod.mjs` / `target-local.mjs` opt-in wrappers — the
+operator opens a terminal, not a browser. If a "test conversation"
+flow becomes a genuine product need, it lives on a staging-only
+surface with a distinct role gate, distinct row markers on write
+(rows carry a `simulated` boolean forever), and distinct visual
+treatment on read (an audit reader sees "(SIMULATED)" on every such
+row for its lifetime). See `WhatsAppMessage.simulated` and the
+2026-08-19 chat-tools deletion.
+
+---
+
 ## How to use this doc
 
 Before shipping a change that touches money, parts, POs, or customer

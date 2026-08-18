@@ -3,7 +3,6 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT } from "@/i18n/server";
-import { startTestConversationAction } from "@/app/actions/chat";
 
 export const dynamic ="force-dynamic";
 
@@ -11,17 +10,16 @@ export default async function ChatsInbox() {
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const garageId = session.user.garageId;
 
-  const [threads, customers] = await Promise.all([
-    prisma.whatsAppThread.findMany({
-      where: { garageId },
-      include: {
-        customer: { select: { name: true, phone: true } },
-        messages: { orderBy: { createdAt:"desc"}, take: 1 },
-      },
-      orderBy: [{ threadStatus:"asc"}, { lastMessageAt:"desc"}],
-    }),
-    prisma.customer.findMany({ where: { garageId }, orderBy: { createdAt:"asc"} }),
-  ]);
+  // The parallel customer.findMany that fed the deleted test-conversation
+  // picker went away with it — AR 2026-08-19.
+  const threads = await prisma.whatsAppThread.findMany({
+    where: { garageId },
+    include: {
+      customer: { select: { name: true, phone: true } },
+      messages: { orderBy: { createdAt:"desc"}, take: 1 },
+    },
+    orderBy: [{ threadStatus:"asc"}, { lastMessageAt:"desc"}],
+  });
   const t = await getT();
   const ordered = threads
     .slice()
@@ -68,37 +66,11 @@ export default async function ChatsInbox() {
         )}
       </ul>
 
-      {/* Dev: start a test conversation without Meta */}
-      {customers.length > 0 ? (
-        <form
-          action={startTestConversationAction}
-          className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 text-sm"
-        >
-          <span className="text-xs font-medium text-text-mute">
-            {t("startTestConvo")}
-          </span>
-          <select
-            name="customerId"
-            className="rounded-md border border-border bg-transparent px-2 py-1"
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} · {c.phone}
-              </option>
-            ))}
-          </select>
-          <div className="flex gap-2">
-            <input
-              name="body"
-              placeholder="is my car ready? / how much? / I want a refund"
-              className="flex-1 rounded-md border border-border bg-transparent px-2 py-1"
-            />
-            <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-              {t("send")}
-            </button>
-          </div>
-        </form>
-      ) : null}
+      {/* AR 2026-08-19 — the "Start a test conversation (no Meta
+          needed)" panel was DELETED here alongside the
+          startTestConversationAction it submitted to. See rule 7 in
+          docs/business-rules.md: production write paths never
+          fabricate. */}
     </main>
   );
 }

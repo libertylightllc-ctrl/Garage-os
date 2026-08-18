@@ -1589,6 +1589,26 @@ model WhatsAppMessage {
   state       WaMsgState     @default(SENT) // RECEIVED | SENT | PENDING_APPROVAL | DRAFT
   payloadJson Json?
 
+  // AR 2026-08-19 — marks a row that was fabricated by a "simulate
+  // customer message" test tool rather than sent by a real customer.
+  // Sits alongside direction + state as an orthogonal audit fact:
+  // "this row exists in the record but no human on the other end
+  // actually spoke". False on every real message.
+  //
+  // Kept even though the write paths that produced sim- rows
+  // (startTestConversationAction, simulateInboundAction) were
+  // deleted in the same commit — the invariant we need is
+  // "simulated messages are visibly distinguishable forever",
+  // which needs a column, not a code check. Read sites that render
+  // thread history to advisors show a "(SIMULATED)" tag on any
+  // simulated=true row (see src/app/advisor/chats/[id]/page.tsx).
+  //
+  // Backfill in migration 20260819140000: every row with
+  // waMessageId LIKE 'sim-%' gets simulated=true. The two probe
+  // hits AR ran on 2026-08-19 confirmed 4 such rows in prod, 0
+  // second-order outbound sent to real phones.
+  simulated Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

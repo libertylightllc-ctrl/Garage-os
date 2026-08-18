@@ -1,11 +1,13 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+// AR 2026-08-19 — randomUUID + handleInbound imports removed with
+// the deletion of startTestConversationAction + simulateInboundAction
+// (see the note at the bottom of this file). No other action in this
+// module needs them.
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsApp } from "@/lib/whatsapp";
-import { handleInbound } from "@/lib/receptionist-engine";
 import { requireAdvisor } from "@/lib/action-guards";
 
 
@@ -80,39 +82,14 @@ export async function sendManualAction(formData: FormData) {
   revalidatePath(`/advisor/chats/${thread.id}`);
 }
 
-// Dev/testing without Meta: pick a customer and inject their first message → routes via AI.
-export async function startTestConversationAction(formData: FormData) {
-  const user = await requireAdvisor();
-  const customerId = String(formData.get("customerId") ?? "");
-  const body = String(formData.get("body") ?? "").trim() || "is my car ready?";
-  const customer = await prisma.customer.findFirst({
-    where: { id: customerId, garageId: user.garageId },
-    select: { id: true, lang: true, phone: true, waId: true },
-  });
-  if (!customer) throw new Error("Customer not found");
-  await handleInbound({
-    garageId: user.garageId,
-    customer: { id: customer.id, lang: customer.lang },
-    waId: customer.waId ?? customer.phone,
-    waMessageId: `sim-${randomUUID()}`,
-    body,
-  });
-  revalidatePath("/advisor/chats");
-}
-
-// Dev/testing without Meta: inject a customer message and run the AI engine.
-export async function simulateInboundAction(formData: FormData) {
-  const user = await requireAdvisor();
-  const thread = await ownedThread(String(formData.get("threadId") ?? ""), user.garageId);
-  const body = String(formData.get("body") ?? "").trim();
-  if (body) {
-    await handleInbound({
-      garageId: thread.garageId,
-      customer: { id: thread.customer.id, lang: thread.customer.lang },
-      waId: thread.waId,
-      waMessageId: `sim-${randomUUID()}`,
-      body,
-    });
-  }
-  revalidatePath(`/advisor/chats/${thread.id}`);
-}
+// AR 2026-08-19 — startTestConversationAction + simulateInboundAction
+// DELETED. Two "Dev/testing without Meta" actions that let any advisor
+// fabricate an inbound customer message directly into the permanent
+// WhatsApp record. Prod-audit: 4 fabricated rows found on
+// 2026-08-19; zero triggered real outbound sends. Historical rows
+// backfilled with `simulated = true` in migration
+// 20260819140000_mark_simulated_whatsapp_messages so an audit reader
+// can distinguish them from real customer speech. The UI buttons in
+// src/app/advisor/chats/{page,[id]/page}.tsx were removed in the
+// same commit. See business-rules.md rule 7 (Production write paths
+// never fabricate).

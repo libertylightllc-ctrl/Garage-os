@@ -552,7 +552,10 @@ const en = {
   needsHuman: "needs human",
   humanMode: "you",
   botMode: "AI",
-  startTestConvo: "Start a test conversation (no Meta needed)",
+  // startTestConvo removed 2026-08-19 — the "Start a test
+  // conversation (no Meta needed)" panel + its
+  // startTestConversationAction were deleted; the string had no
+  // remaining reader. See rule 7 in docs/business-rules.md.
   send: "Send",
   takeOver: "Take over",
   release: "Back to AI",
@@ -560,7 +563,9 @@ const en = {
   approveSend: "Approve & send",
   discard: "Discard",
   message: "Message",
-  simulateInbound: "Simulate a customer message…",
+  // simulateInbound removed 2026-08-19 alongside the deletion of
+  // simulateInboundAction. See rule 7.
+  chatSimulatedTag: "SIMULATED",
   waConnect: "Connect WhatsApp",
   waConnectIntro: "Connect your garage's WhatsApp number so messages send from your own number.",
   waConnected: "Connected",
@@ -2120,7 +2125,6 @@ const ar: typeof en = {
   needsHuman: "يحتاج تدخّلًا",
   humanMode: "أنت",
   botMode: "الذكاء",
-  startTestConvo: "ابدأ محادثة تجريبية (دون واتساب)",
   send: "إرسال",
   takeOver: "تولّي المحادثة",
   release: "إعادة للذكاء",
@@ -2128,7 +2132,7 @@ const ar: typeof en = {
   approveSend: "موافقة وإرسال",
   discard: "تجاهل",
   message: "رسالة",
-  simulateInbound: "محاكاة رسالة عميل…",
+  chatSimulatedTag: "محاكاة",
   waConnect: "ربط واتساب",
   waConnectIntro: "اربط رقم واتساب الخاص بورشتك لإرسال الرسائل من رقمك.",
   waConnected: "متصل",

@@ -18,6 +18,7 @@ import {
   parseLineEditInput,
   parseMoney,
   resolveOneClickItemisePrice,
+  findZeroPricedPartLines,
   ACCOUNTS,
   type DraftLine,
   type LedgerLine,
@@ -297,6 +298,90 @@ describe("resolveOneClickItemisePrice — refuse to itemise at 0", () => {
     expect(resolveOneClickItemisePrice(null).ok).toBe(false);
     expect(resolveOneClickItemisePrice({ price: 0 }).ok).toBe(false);
     expect(resolveOneClickItemisePrice({ price: null as unknown as number }).ok).toBe(false);
+  });
+});
+
+// AR 2026-08-18 — exit gate on sendEstimateToCustomerAction +
+// generateInvoiceAction. Catches the JC-2026-0001 class: four PART
+// lines at 0.00 sailed through both send + invoice generation because
+// nothing checked. Zero LABOR / FEE lines pass through (labour comps
+// are common; DISCOUNT is negative-FEE sugar). Declined lines are
+// excluded (the customer already removed them from the total).
+describe("findZeroPricedPartLines — exit gate", () => {
+  const line = (over: Partial<Parameters<typeof findZeroPricedPartLines>[0][number]>) => ({
+    kind: "PART" as const,
+    description: "Air filter",
+    unitPrice: 60,
+    declined: false,
+    ...over,
+  });
+
+  it("returns nothing when every PART line has a real price", () => {
+    const lines = [line({ unitPrice: 60 }), line({ description: "Oil", unitPrice: 45 })];
+    expect(findZeroPricedPartLines(lines)).toEqual([]);
+  });
+
+  it("flags a PART line priced at 0", () => {
+    const zero = line({ description: "Suspension bushes", unitPrice: 0 });
+    const kept = line({ description: "Oil", unitPrice: 45 });
+    expect(findZeroPricedPartLines([kept, zero])).toEqual([zero]);
+  });
+
+  it("accepts Decimal-shaped price (Prisma driver adapter returns strings)", () => {
+    // The `toString()` shape covers the driver-adapter's Decimal-as-string
+    // return without importing Prisma types here.
+    expect(findZeroPricedPartLines([line({ unitPrice: "0" as unknown as string })])).toHaveLength(1);
+    expect(findZeroPricedPartLines([line({ unitPrice: "0.00" as unknown as string })])).toHaveLength(1);
+    expect(findZeroPricedPartLines([line({ unitPrice: "60.00" as unknown as string })])).toHaveLength(0);
+  });
+
+  it("ignores zero-priced LABOR + FEE lines — comps + discount sugar are legit", () => {
+    // Labour comps ("we tightened the belt for free") are common; a
+    // FEE at 0 is the natural way to record an admin note that
+    // costs nothing. Only PART @ 0 is the class of harm — a physical
+    // part the shop paid for going out at zero.
+    const labour = line({ kind: "LABOR", unitPrice: 0 });
+    const fee = line({ kind: "FEE", unitPrice: 0 });
+    expect(findZeroPricedPartLines([labour, fee])).toEqual([]);
+  });
+
+  it("ignores declined PART lines — customer removed them from the total", () => {
+    const declined = line({ description: "Cabin filter", unitPrice: 0, declined: true });
+    expect(findZeroPricedPartLines([declined])).toEqual([]);
+  });
+
+  it("ignores negative-priced PART lines — a negative price is a data error caught elsewhere", () => {
+    // parseMoney rejects negatives on write; if one slipped through
+    // historically it's a different pathology than the silent-zero
+    // class this gate exists to catch.
+    expect(findZeroPricedPartLines([line({ unitPrice: -5 })])).toEqual([]);
+  });
+
+  it("returns lines in original order (advisor scans top-to-bottom)", () => {
+    const zeros = [
+      line({ description: "First", unitPrice: 0 }),
+      line({ description: "Middle real", unitPrice: 60 }),
+      line({ description: "Third", unitPrice: 0 }),
+      line({ description: "Last", unitPrice: 0 }),
+    ];
+    expect(findZeroPricedPartLines(zeros).map((l) => l.description)).toEqual([
+      "First",
+      "Third",
+      "Last",
+    ]);
+  });
+
+  it("JC-2026-0001 regression — 4 PART lines at 0.00 all flagged", () => {
+    // The exact incident that triggered this gate. Four PART lines
+    // at 0.00 flowed through sendEstimateToCustomerAction and
+    // generateInvoiceAction without a peep before this commit.
+    const lines = [
+      line({ description: "Engine oil", unitPrice: 0 }),
+      line({ description: "Oil filter", unitPrice: 0 }),
+      line({ description: "Suspension bushes", unitPrice: 0 }),
+      line({ description: "Brake pads", unitPrice: 0 }),
+    ];
+    expect(findZeroPricedPartLines(lines)).toHaveLength(4);
   });
 });
 

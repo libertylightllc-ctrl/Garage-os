@@ -23,6 +23,7 @@ import {
   priceErrorCode,
   lineEditErrorCode,
   resolveOneClickItemisePrice,
+  findZeroPricedPartLines,
   formatInvoiceNo,
   type DraftLine,
   type LineKind,
@@ -615,7 +616,11 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
       total: true,
       publicToken: true,
       lines: {
-        select: { qty: true, description: true, declined: true },
+        // AR 2026-08-18 — widened to include kind + unitPrice for the
+        // exit gate below (refuse to send when any non-declined PART
+        // line is 0.00). partId isn't needed today; if we ever add
+        // a courtesy-flag lookup, add it back here.
+        select: { kind: true, qty: true, description: true, declined: true, unitPrice: true },
         orderBy: { createdAt: "asc" },
       },
       jobCard: {
@@ -641,6 +646,26 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
     },
   });
   if (!est) throw new Error("Estimate not found in this garage");
+
+  // Exit gate — AR 2026-08-18. Refuse to hand off an estimate that
+  // contains a non-declined PART line at 0.00. Same class as the
+  // JC-2026-0001 incident: four PART lines at 0.00 sailed straight
+  // through send + invoice generation because nothing checked.
+  //
+  // Confirmable: the advisor can re-submit with confirmZeroParts=1
+  // to acknowledge the zero prices are intentional (warranty /
+  // courtesy). Today there's no schema flag for "intentionally free"
+  // (see the report chain: EstimateLine has no isCourtesy field), so
+  // the confirm dance is the intent-capture mechanism — noisy per
+  // send, but no schema change required. The preview page renders a
+  // banner listing the offending lines + a "Send anyway" form that
+  // resubmits with confirmZeroParts=1.
+  if (formData.get("confirmZeroParts") !== "1") {
+    const zeroPartLines = findZeroPricedPartLines(est.lines);
+    if (zeroPartLines.length > 0) {
+      redirect(`/estimates/${estimateId}/preview?formError=zero-part-lines-estimate`);
+    }
+  }
 
   const customer = est.jobCard.vehicle.customer;
   const rawPhone = customer.waId ?? customer.phone;
@@ -768,6 +793,19 @@ export async function generateInvoiceAction(formData: FormData) {
   const mergedLines = approvedEstimates.flatMap((e) =>
     e.lines.filter((l) => !l.declined),
   );
+
+  // Exit gate — AR 2026-08-18. Matters MOST here: the invoice number
+  // is consumed from a gapless per-garage sequence, so correcting
+  // after issue means void + reissue (a whole document lifecycle
+  // event, not a line edit). Same confirmable shape as the send gate.
+  // The estimate detail page renders the banner + a "Generate anyway"
+  // form that resubmits with confirmZeroParts=1.
+  if (formData.get("confirmZeroParts") !== "1") {
+    const zeroPartLines = findZeroPricedPartLines(mergedLines);
+    if (zeroPartLines.length > 0) {
+      redirect(`/estimates/${estimateId}?formError=zero-part-lines-invoice`);
+    }
+  }
 
   // Cost-at-invoicing snapshot (AR 2026-08-12, corrects Step 6 of
   // cost-based pricing). For any PART line with a catalog partId,

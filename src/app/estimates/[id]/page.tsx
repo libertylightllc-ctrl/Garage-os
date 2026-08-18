@@ -16,7 +16,12 @@ import {
   generateInvoiceAction,
   recordAdvancePaymentAction,
 } from "@/app/actions/billing";
-import { balanceDue, LINE_FORM_ERROR_CODES, type LineFormErrorCode } from "@/lib/billing";
+import {
+  balanceDue,
+  LINE_FORM_ERROR_CODES,
+  type LineFormErrorCode,
+  findZeroPricedPartLines,
+} from "@/lib/billing";
 import {
   canEditEstimate as roleCanEditEstimate,
   canEditInvoice as roleCanEditInvoice,
@@ -272,7 +277,11 @@ export default async function EstimateEditor({
           with ?formError=<code>. See LINE_FORM_ERROR_CODES in
           src/lib/billing.ts. Uses `role="alert"` + off-print so a
           user who happens to print an estimate mid-refusal doesn't
-          see the banner on paper. AR 2026-08-18. */}
+          see the banner on paper. AR 2026-08-18.
+          When the code is `zero-part-lines-invoice`, also enumerate
+          the offending line names (so the advisor sees exactly which
+          rows need fixing) and render a "Generate anyway" form that
+          resubmits generateInvoiceAction with confirmZeroParts=1. */}
       {lineFormErrorMessage ? (
         <div
           role="alert"
@@ -280,6 +289,27 @@ export default async function EstimateEditor({
         >
           <div className="font-semibold">{t("lineFormErrorTitle")}</div>
           <div className="mt-0.5">{lineFormErrorMessage}</div>
+          {formError === "zero-part-lines-invoice" ? (() => {
+            const zeroLines = findZeroPricedPartLines(est.lines);
+            if (zeroLines.length === 0) return null;
+            return (
+              <>
+                <div className="mt-2 font-medium">{t("lineFormErr_zeroPartsHeading")}</div>
+                <ul className="mt-1 list-inside list-disc">
+                  {zeroLines.map((l) => (
+                    <li key={l.id}>{l.description}</li>
+                  ))}
+                </ul>
+                <form action={generateInvoiceAction} className="mt-3">
+                  <input type="hidden" name="estimateId" value={est.id} />
+                  <input type="hidden" name="confirmZeroParts" value="1" />
+                  <button className="inline-flex h-10 items-center justify-center rounded-lg border border-danger-500/60 bg-danger-50 px-4 text-sm font-semibold text-danger-700 hover:bg-danger-100 dark:bg-danger-500/10 dark:text-danger-500 dark:hover:bg-danger-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500/60">
+                    {t("lineFormErr_generateAnyway")}
+                  </button>
+                </form>
+              </>
+            );
+          })() : null}
         </div>
       ) : null}
 

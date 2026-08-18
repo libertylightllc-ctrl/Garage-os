@@ -1110,6 +1110,15 @@ const en = {
   lineFormErr_kind_unknown: "Choose a valid line type (Labor / Part / Fee / Discount).",
   lineFormErr_part_not_in_catalogue: "That part isn't in your catalogue yet. Add it to Inventory with a price, or add the line manually with a price.",
   lineFormErr_part_no_price_in_catalogue: "That catalogue part has no price set. Update the price on the part in Inventory, or add the line manually with a price.",
+  // Exit-gate messages — AR 2026-08-18. The banner lists the offending
+  // line descriptions after the copy (see how the preview + estimate
+  // pages render this). Keep the leading sentence generic; the shop-
+  // facing detail (line names) is appended by the page layer.
+  lineFormErr_zero_part_lines_estimate: "This estimate has PART lines priced at AED 0.00. Set real prices, mark the lines as declined, or use \"Send anyway\" if they're genuinely free (warranty/courtesy).",
+  lineFormErr_zero_part_lines_invoice: "This invoice would carry PART lines priced at AED 0.00. Set real prices, mark the lines as declined, or use \"Generate anyway\" if they're genuinely free. The invoice number is consumed from a gapless sequence — correcting after issue needs void + reissue.",
+  lineFormErr_zeroPartsHeading: "Lines priced at AED 0.00:",
+  lineFormErr_sendAnyway: "Send anyway (these are genuinely free)",
+  lineFormErr_generateAnyway: "Generate anyway (these are genuinely free)",
   techFindingsPanel: "Technician findings & parts required",
   enterFindingsFirst: "Enter findings before submitting.",
   // repair stage (parts used + work notes)
@@ -2594,6 +2603,11 @@ const ar: typeof en = {
   lineFormErr_kind_unknown: "اختر نوع بند صحيحًا (عمالة / قطعة / رسوم / خصم).",
   lineFormErr_part_not_in_catalogue: "هذه القطعة ليست في الكتالوج بعد. أضِفها إلى المخزون مع سعر، أو أضف البند يدويًا بسعر.",
   lineFormErr_part_no_price_in_catalogue: "قطعة الكتالوج هذه بلا سعر محدَّد. حدّث سعر القطعة في المخزون، أو أضف البند يدويًا بسعر.",
+  lineFormErr_zero_part_lines_estimate: "يحتوي هذا التقدير على بنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية، أو ضع البنود على «مرفوض»، أو استخدم «إرسال على أي حال» إذا كانت مجانية فعلًا (ضمان/مجاملة).",
+  lineFormErr_zero_part_lines_invoice: "ستُصدَر الفاتورة ببنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية، أو ضع البنود على «مرفوض»، أو استخدم «إصدار على أي حال» إذا كانت مجانية فعلًا. رقم الفاتورة يُستهلَك من تسلسل بلا فجوات — التصحيح بعد الإصدار يتطلب إبطالًا وإعادة إصدار.",
+  lineFormErr_zeroPartsHeading: "بنود بسعر 0.00 درهم:",
+  lineFormErr_sendAnyway: "إرسال على أي حال (هذه مجانية فعلًا)",
+  lineFormErr_generateAnyway: "إصدار على أي حال (هذه مجانية فعلًا)",
   techFindingsPanel: "نتائج الفني والقطع المطلوبة",
   enterFindingsFirst: "أدخل النتائج قبل الإرسال.",
   // repair stage

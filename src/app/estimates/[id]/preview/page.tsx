@@ -8,6 +8,12 @@ import { DocumentHeader } from "@/components/document-header";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import {
+  LINE_FORM_ERROR_CODES,
+  type LineFormErrorCode,
+  findZeroPricedPartLines,
+} from "@/lib/billing";
+import type { MessageKey } from "@/i18n/config";
 
 export const dynamic ="force-dynamic";
 
@@ -37,16 +43,32 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
   */
 export default async function EstimatePreview({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  // Optional — real Next-App-Router always supplies an empty object
+  // when there is no query; keeping the property optional avoids
+  // rewriting existing unit tests that call the component directly.
+  searchParams?: Promise<{ formError?: string }>;
 }) {
   const { id } = await params;
+  // sendEstimateToCustomerAction redirects back with ?formError=<code>
+  // when the exit gate refuses (today: zero-part-lines-estimate).
+  // Whitelist the code against LINE_FORM_ERROR_CODES before rendering.
+  const { formError } = (await searchParams) ?? {};
   // ADVISOR included per KEY DECISION #5 (advisor prices + SENDS the
   // estimate) — it was missing here, so the editor's "Preview Estimate"
   // button bounced advisors back to their dashboard.
   const session = await requireAnyRole(["ADVISOR","CASHIER","OWNER","MASTER"]);
   const t = await getT();
   const locale = await getLocale();
+  const lineFormErrorMessage: string | null = formError
+    ? LINE_FORM_ERROR_CODES.has(formError as LineFormErrorCode)
+      ? t(
+          `lineFormErr_${(formError as LineFormErrorCode).replace(/-/g, "_")}` as MessageKey,
+        )
+      : t("lineFormErr_generic")
+    : null;
 
   const est = await prisma.estimate.findFirst({
     where: { id, jobCard: { garageId: session.user.garageId } },
@@ -169,6 +191,42 @@ export default async function EstimatePreview({
           </div>
         </div>
       </div>
+
+      {/* Inline validation banner (AR 2026-08-18) — sendEstimate refused
+          because non-declined PART lines are at 0.00. Lists offending
+          lines + a "Send anyway" form that resubmits with
+          confirmZeroParts=1. Off-print so a mid-refusal print of the
+          preview doesn't carry the banner onto paper. */}
+      {lineFormErrorMessage ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 print:hidden dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500"
+        >
+          <div className="font-semibold">{t("lineFormErrorTitle")}</div>
+          <div className="mt-0.5">{lineFormErrorMessage}</div>
+          {formError === "zero-part-lines-estimate" ? (() => {
+            const zeroLines = findZeroPricedPartLines(est.lines);
+            if (zeroLines.length === 0) return null;
+            return (
+              <>
+                <div className="mt-2 font-medium">{t("lineFormErr_zeroPartsHeading")}</div>
+                <ul className="mt-1 list-inside list-disc">
+                  {zeroLines.map((l) => (
+                    <li key={l.id}>{l.description}</li>
+                  ))}
+                </ul>
+                <form action={sendEstimateToCustomerAction} className="mt-3">
+                  <input type="hidden" name="estimateId" value={est.id} />
+                  <input type="hidden" name="confirmZeroParts" value="1" />
+                  <button className="inline-flex h-10 items-center justify-center rounded-lg border border-danger-500/60 bg-danger-50 px-4 text-sm font-semibold text-danger-700 hover:bg-danger-100 dark:bg-danger-500/10 dark:text-danger-500 dark:hover:bg-danger-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger-500/60">
+                    {t("lineFormErr_sendAnyway")}
+                  </button>
+                </form>
+              </>
+            );
+          })() : null}
+        </div>
+      ) : null}
 
       {/* Bottom action bar — Go Back + Print always; Send only while
           DRAFT (still the ONLY surface that fires

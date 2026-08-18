@@ -115,7 +115,14 @@ export type LineFormErrorCode =
   | "qty-invalid"
   | "kind-unknown"
   | "part-not-in-catalogue"
-  | "part-no-price-in-catalogue";
+  | "part-no-price-in-catalogue"
+  // AR 2026-08-18 — exit gates. Fire when a shop tries to send/issue
+  // an estimate or invoice that contains PART lines priced at 0.00.
+  // Confirmable — the advisor can resubmit with confirmZeroParts=1
+  // to override (the courtesy/warranty case). See
+  // findZeroPricedPartLines below.
+  | "zero-part-lines-estimate"
+  | "zero-part-lines-invoice";
 
 export const LINE_FORM_ERROR_CODES: ReadonlySet<LineFormErrorCode> = new Set<LineFormErrorCode>([
   "price-required",
@@ -126,7 +133,40 @@ export const LINE_FORM_ERROR_CODES: ReadonlySet<LineFormErrorCode> = new Set<Lin
   "kind-unknown",
   "part-not-in-catalogue",
   "part-no-price-in-catalogue",
+  "zero-part-lines-estimate",
+  "zero-part-lines-invoice",
 ]);
+
+/**
+ * Non-declined PART lines priced at 0.00. AR 2026-08-18.
+ *
+ * Fires the exit gate on `sendEstimateToCustomerAction` +
+ * `generateInvoiceAction`. Zero-priced LABOR / FEE lines pass through
+ * (labour comps are common; discount is negative-FEE sugar; the class
+ * of harm this catches is a PART that costs the shop real money going
+ * out at zero). Declined lines are excluded — the customer already
+ * removed them from the total.
+ *
+ * Pure. Callers pass the already-loaded line rows verbatim.
+ */
+export function findZeroPricedPartLines<
+  T extends {
+    kind: LineKind;
+    unitPrice: number | string | { toString(): string };
+    declined?: boolean;
+    description: string;
+  },
+>(lines: readonly T[]): T[] {
+  return lines.filter((l) => {
+    if (l.kind !== "PART") return false;
+    if (l.declined === true) return false;
+    // Number(Decimal) via toString handles the driver-adapter's string
+    // shape without importing Prisma types here (keeps this file
+    // dependency-free from the client).
+    const price = Number(l.unitPrice);
+    return Number.isFinite(price) && price === 0;
+  });
+}
 
 /** Map parseMoney's result-error to a LineFormErrorCode. Keeps the
  *  action-layer callers from re-deriving the mapping site-by-site. */

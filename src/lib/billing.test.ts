@@ -17,7 +17,6 @@ import {
   jobPartLineDescription,
   parseLineEditInput,
   parseMoney,
-  resolveOneClickItemisePrice,
   findZeroPricedPartLines,
   ACCOUNTS,
   type DraftLine,
@@ -232,74 +231,16 @@ describe("parseMoney — blank never becomes zero", () => {
   });
 });
 
-// AR 2026-08-17 — one-click itemise (addLineFromPartAction) used to
-// write unitPrice: 0 whenever a technician-requested part was
-// uncatalogued OR its catalogue Part.price was null/zero. That's how
-// JC-2026-0098's lines ended up unpriced and silently flowed to
-// invoice/VAT/ledger. Same class as parseMoney but on a different
-// input shape (DB read, not form input) so it needs its own guard.
-// EstimateLine.unitPrice is NOT NULL in the schema — we can't store
-// "unpriced", so the action refuses and asks the advisor to price
-// the catalogue Part or add the line manually. This test pins the
-// decision table so the fallback-to-0 shape can't sneak back in.
-describe("resolveOneClickItemisePrice — refuse to itemise at 0", () => {
-  it("accepts a real catalogue price (the happy path)", () => {
-    expect(resolveOneClickItemisePrice({ price: 45.5 })).toEqual({
-      ok: true,
-      price: 45.5,
-    });
-    // Prisma Decimal arrives as a string via the driver adapter —
-    // must convert to Number cleanly.
-    expect(resolveOneClickItemisePrice({ price: "125.00" })).toEqual({
-      ok: true,
-      price: 125,
-    });
-  });
-  it("refuses when the jobPart isn't catalogue-linked", () => {
-    expect(resolveOneClickItemisePrice(null)).toEqual({
-      ok: false,
-      reason: "no-catalogue-part",
-    });
-  });
-  it("refuses when the catalogue price is zero — a comp/warranty is priced on the line, not stored in the catalogue", () => {
-    expect(resolveOneClickItemisePrice({ price: 0 })).toEqual({
-      ok: false,
-      reason: "no-catalogue-price",
-    });
-    expect(resolveOneClickItemisePrice({ price: "0" })).toEqual({
-      ok: false,
-      reason: "no-catalogue-price",
-    });
-  });
-  it("refuses a negative catalogue price (not a legitimate shape)", () => {
-    expect(resolveOneClickItemisePrice({ price: -10 })).toEqual({
-      ok: false,
-      reason: "no-catalogue-price",
-    });
-  });
-  it("refuses NaN / Infinity — the shouldn't-happen catch-all", () => {
-    expect(resolveOneClickItemisePrice({ price: NaN })).toEqual({
-      ok: false,
-      reason: "bad-catalogue-price",
-    });
-    expect(resolveOneClickItemisePrice({ price: Infinity })).toEqual({
-      ok: false,
-      reason: "bad-catalogue-price",
-    });
-    expect(resolveOneClickItemisePrice({ price: "not-a-number" })).toEqual({
-      ok: false,
-      reason: "bad-catalogue-price",
-    });
-  });
-  it("REGRESSION DETECTOR — silent 0 fallback would fail these", () => {
-    // If someone reintroduces `jp.part ? Number(jp.part.price) : 0`,
-    // these three cases would all return { ok: true, price: 0 }
-    // instead of the appropriate refusal, and the test fails loudly.
-    expect(resolveOneClickItemisePrice(null).ok).toBe(false);
-    expect(resolveOneClickItemisePrice({ price: 0 }).ok).toBe(false);
-    expect(resolveOneClickItemisePrice({ price: null as unknown as number }).ok).toBe(false);
-  });
-});
+// AR 2026-08-19 — the earlier `resolveOneClickItemisePrice` suite
+// (8 tests) was DELETED here alongside the helper itself. The old
+// helper encoded the wrong rule: "refuse to price a tech-requested
+// part unless it's already in the catalogue". That advice violated
+// business-rules.md rule 1 (direct-fit parts must NEVER create
+// catalogue records) and is exactly how the AUTO-* duplicate SKUs
+// in issue #19 were created. The new addLineFromPartAction takes
+// cost + price from the form inputs via parseMoney (which parses +
+// rejects blanks per rule 5), so the fallback-to-catalogue path
+// doesn't exist anymore. Nothing to unit-test at the helper layer.
 
 // AR 2026-08-18 — exit gate on sendEstimateToCustomerAction +
 // generateInvoiceAction. Catches the JC-2026-0001 class: four PART

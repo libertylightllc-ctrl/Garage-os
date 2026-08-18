@@ -157,6 +157,43 @@ the operator clicks (see the estimate/[id] and preview page).
 
 ---
 
+## 6. Profit is either right, or it says it doesn't know
+
+A per-invoice profit number is either **correct** or it is **absent
+with a reason**. Never show a computed number derived from
+incomplete data — a total that pretends it's the truth when a cost
+input is missing or unreconciled tells the shop the wrong thing at
+the exact moment they'd act on it (pricing a similar job, deciding
+whether to keep a supplier, forecasting).
+
+Missing inputs are common in this domain: a PO landed with no
+receive yet, a receipt sits unreconciled against the invoice line,
+a direct-fit line was never linked to its receipt. Each is a
+legitimate mid-flow state — the profit view must SHOW that state,
+not paper over it with a "best guess" number.
+
+**Common violation shape:** "if we don't have `receivedUnitCost`,
+fall back to the estimate's `unitCost`" or "if the receipt hasn't
+landed, use `Part.cost` as a proxy". Any fallback that turns
+missing data into a number is the bug — the number will look
+correct, be wrong in a way no one can spot, and get used.
+
+Also violating: a receipt that came in at a different price than the
+line's `unitCost` silently overriding profit to zero / null / negative
+without saying why. Nulling out on any-mismatch is the mirror image
+of the fallback shape: it hides information the shop needs.
+
+**Correct shape:** the profit card renders three states, distinctly.
+Number when we have all inputs. Dash + explicit "unlinked receipt"
+/ "no receipt yet" / "PO outstanding" label when a component is
+absent. Number + warning delta when a receipt disagrees with the
+line's cost — the number stands, the disagreement is called out
+so the shop can decide which is right. See
+`compareReceiptToInvoice()` and the profit-card render for the
+three-state pattern (commit `0fcfb01`, INV-2026-0048).
+
+---
+
 ## How to use this doc
 
 Before shipping a change that touches money, parts, POs, or customer

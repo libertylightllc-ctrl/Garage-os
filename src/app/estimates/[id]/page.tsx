@@ -11,11 +11,11 @@ import type { MessageKey } from "@/i18n/config";
 import { DictateInput } from "@/components/dictate";
 import {
   addEstimateLineAction,
-  addLineFromPartAction,
   setEstimateStatusAction,
   generateInvoiceAction,
   recordAdvancePaymentAction,
 } from "@/app/actions/billing";
+import { PriceThisPartRow } from "@/components/price-this-part-row";
 import {
   balanceDue,
   LINE_FORM_ERROR_CODES,
@@ -43,36 +43,12 @@ export const dynamic ="force-dynamic";
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
-// A technician part row with a one-click"Price this part"button (when editable).
-function PartRow({
-  p,
-  estimateId,
-  editable,
-  t,
-}: {
-  p: { id: string; partNo: string | null; description: string; qty: number };
-  estimateId: string;
-  editable: boolean;
-  t: (k: MessageKey) => string;
-}) {
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-2 text-base text-text-mute">
-      <span>
-        • {p.partNo ? `${p.partNo} ` :""}
-        {p.description} ×{p.qty}
-      </span>
-      {editable ? (
-        <form action={addLineFromPartAction}>
-          <input type="hidden" name="estimateId" value={estimateId} />
-          <input type="hidden" name="jobPartId" value={p.id} />
-          <button className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-2">
-            {t("priceThisPart")}
-          </button>
-        </form>
-      ) : null}
-    </li>
-  );
-}
+// AR 2026-08-19 — the old server-side `PartRow` fragment was
+// replaced with the client component `PriceThisPartRow` (see
+// src/components/price-this-part-row.tsx). The rewrite drops the
+// catalogue-lookup shape (which produced the AUTO-* duplicate SKUs
+// per issue #19) in favour of an inline cost + price form per row,
+// and hides the button once JobPart.estimateLineId is set.
 
 // Shared screen: the Cashier sets prices here; the Advisor can view + send it.
 export default async function EstimateEditor({
@@ -207,6 +183,22 @@ export default async function EstimateEditor({
   const timelineEvents = await loadJobTimeline(est.jobCardId, session.user.garageId);
 
   const editable = canEditEstimate && est.status ==="DRAFT";
+
+  // Lookup from estimateLineId → line total, so the PriceThisPartRow
+  // component can render "Priced: AED 123.00" beside a JobPart that's
+  // already been priced. Built once, O(1) per row. AR 2026-08-19.
+  const lineTotalById = new Map<string, number>(
+    est.lines.map((l) => [l.id, Number(l.lineTotal)]),
+  );
+  const priceThisPartLabels = {
+    priceThisPart: t("priceThisPart"),
+    priced: t("priceThisPart_priced"),
+    qty: t("colQty"),
+    unitCost: t("priceThisPart_unitCost"),
+    unitPrice: t("priceThisPart_unitPrice"),
+    save: t("priceThisPart_save"),
+    cancel: t("priceThisPart_cancel"),
+  };
   const canDecline = canEditEstimate && !est.invoice; // skip lines until the invoice is cut
 
   // 3b — read-only stock hint (reuses 3a's rules) + optional catalog picker
@@ -362,7 +354,25 @@ export default async function EstimateEditor({
           {requiredParts.length > 0 ? (
             <ul className="mt-2 flex flex-col gap-1">
               {requiredParts.map((p) => (
-                <PartRow key={p.id} p={p} estimateId={est.id} editable={editable} t={t} />
+                <PriceThisPartRow
+                  key={p.id}
+                  jobPart={{
+                    id: p.id,
+                    partNo: p.partNo,
+                    description: p.description,
+                    qty: p.qty,
+                    estimateLineId: p.estimateLineId,
+                  }}
+                  pricedAmount={
+                    p.estimateLineId
+                      ? lineTotalById.get(p.estimateLineId) ?? null
+                      : null
+                  }
+                  estimateId={est.id}
+                  editable={editable}
+                  currency="AED"
+                  labels={priceThisPartLabels}
+                />
               ))}
             </ul>
           ) : null}
@@ -377,7 +387,25 @@ export default async function EstimateEditor({
           {usedParts.length > 0 ? (
             <ul className="mt-1 flex flex-col gap-1">
               {usedParts.map((p) => (
-                <PartRow key={p.id} p={p} estimateId={est.id} editable={editable} t={t} />
+                <PriceThisPartRow
+                  key={p.id}
+                  jobPart={{
+                    id: p.id,
+                    partNo: p.partNo,
+                    description: p.description,
+                    qty: p.qty,
+                    estimateLineId: p.estimateLineId,
+                  }}
+                  pricedAmount={
+                    p.estimateLineId
+                      ? lineTotalById.get(p.estimateLineId) ?? null
+                      : null
+                  }
+                  estimateId={est.id}
+                  editable={editable}
+                  currency="AED"
+                  labels={priceThisPartLabels}
+                />
               ))}
             </ul>
           ) : null}

@@ -657,7 +657,27 @@ model JobPart {
   createdById String?
   createdBy   User?       @relation("CreatedJobParts", fields: [createdById], references: [id])
 
+  // "Price this part" back-link (AR 2026-08-19). Non-null when the
+  // advisor has priced this tech-required part into an EstimateLine.
+  // The PartRow uses this to hide the "Price this part" button (no
+  // duplicate-line clicks) and instead show the priced amount.
+  //
+  // onDelete: SetNull — when the advisor deletes the EstimateLine
+  // the JobPart becomes priceable again (per AR 2026-08-19: "if the
+  // advisor later deletes that estimate line, the JobPart should
+  // become priceable again"). We DO NOT want the JobPart to vanish
+  // when its line is deleted — it's still a real thing the tech
+  // requested. Nor do we want an orphaned FK — clearing it is the
+  // exact correct semantic.
+  //
+  // @unique because Prisma requires it for a 1:1 optional relation
+  // (and the semantic matches: no EstimateLine should ever be the
+  // priced-from target of more than one JobPart — each priced tech
+  // request has exactly one line). A future "re-link this JobPart to
+  // a different line" flow just moves the FK; the uniqueness holds.
   createdAt DateTime @default(now())
+  estimateLineId String?        @unique
+  estimateLine   EstimateLine?  @relation("EstimateLinePricedFromJobPart", fields: [estimateLineId], references: [id], onDelete: SetNull)
 
   @@index([jobCardId, kind])
 }
@@ -785,6 +805,15 @@ model EstimateLine {
   // the Part row when this line spawned it via the from-estimate flow.
   // See Part.autoCreatedFromLineId for the design.
   autoCreatedPart Part? @relation("PartAutoCreatedFromLine")
+
+  // "Price this part" back-link (AR 2026-08-19). At most one JobPart
+  // maps to this line (JobPart.estimateLineId is @unique). Non-null
+  // when the line was created via addLineFromPartAction on a tech-
+  // required JobPart; null for lines added via the manual Add-line
+  // form. Set on delete: JobPart.estimateLineId clears (onDelete:
+  // SetNull on that side), so this line's deletion makes the tech
+  // request priceable again.
+  pricedFromJobPart JobPart? @relation("EstimateLinePricedFromJobPart")
 
   // Direct-fit receive (AR 2026-08-16). Every PO line born from the
   // from-estimate flow carries a back-link to its source estimate line

@@ -22,7 +22,6 @@ import {
   parseMoney,
   priceErrorCode,
   lineEditErrorCode,
-  resolveOneClickItemisePrice,
   findZeroPricedPartLines,
   formatInvoiceNo,
   type DraftLine,
@@ -277,25 +276,34 @@ export async function addEstimateLineAction(formData: FormData) {
   revalidatePath(`/estimates/${estimateId}`);
 }
 
-// One-click itemise: turn a technician part (required/used) into a priced PART line,
-// pre-filled with the catalog price when the part is catalog-linked.
-//
-// AR 2026-08-17. Historical shape read `jp.part ? Number(jp.part.price)
-// : 0` — a tech part that wasn't catalogued (or whose catalogue Part
-// had a null/zero price) landed on the estimate at unitPrice: 0 with
-// no visible warning. That's how JC-2026-0098's lines ended up
-// unpriced and flowed silently into the invoice → VAT → ledger,
-// same class as item 2. EstimateLine.unitPrice is NOT NULL in the
-// schema (prisma/schema.prisma:779) so we can't express "unpriced"
-// as a row — refuse the create and surface an error the advisor
-// can act on. See docs/estimate-line-blank-price-spec.md.
-//
-// Two happy paths remain:
-//   1. Catalogued part with a real price (Part.price > 0) — inherit
-//      it. This is the common case; nothing changes.
-//   2. Uncatalogued part or catalogue with no price — refuse; the
-//      advisor uses "Add line" (which now rejects blank prices per
-//      item 2) or prices the catalogue Part first.
+/**
+ * "Price this part" — turn a technician-required JobPart into a
+ * priced EstimateLine.
+ *
+ * AR 2026-08-19 rewrite. Historical shape looked up the catalogue
+ * Part.price and refused when there wasn't one; the refusal banner
+ * told the advisor to "add the part to Inventory". That advice
+ * violates business-rules.md rule 1 (parts are two kinds, direct-
+ * fit must NEVER create catalogue records) — the majority of
+ * tech-requested parts are direct-fit for one car and never enter
+ * stock. Following the old advice is exactly how the AUTO-* duplicate
+ * SKUs in issue #19 were created (ENGINE-OIL @ 180 shadowing
+ * OIL-5W30 @ 35).
+ *
+ * The new shape: the advisor types unit cost + unit price on an
+ * inline form on the JobPart row. This action accepts those form
+ * values verbatim, creates an EstimateLine with `partId =
+ * jp.partId` (may be null for direct-fit), and NEVER writes to
+ * Part. Adding a part to Inventory becomes a deliberate separate
+ * action on /owner/inventory — not a side effect of pricing a
+ * line.
+ *
+ * Duplicate-click guard: on success, JobPart.estimateLineId is set
+ * to the new line's id. The PartRow UI hides the "Price this part"
+ * button once set. The FK is @unique + ON DELETE SET NULL — if the
+ * advisor deletes the resulting EstimateLine, the JobPart becomes
+ * priceable again.
+ */
 export async function addLineFromPartAction(formData: FormData) {
   const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
   const estimateId = String(formData.get("estimateId") ?? "");
@@ -305,66 +313,86 @@ export async function addLineFromPartAction(formData: FormData) {
 
   const jp = await prisma.jobPart.findFirst({
     where: { id: jobPartId, jobCardId: est.jobCardId },
-    // AR 2026-08-12 Step 4 — also pull cost so the created PART line
-    // prefills unitCost + implied markupPct from the catalogue.
-    include: {
-      part: { select: { id: true, name: true, cost: true, price: true } },
+    // partId still pulled — when the tech DID pick a catalogue part,
+    // we preserve the link on the EstimateLine (stock-path
+    // provenance). part.cost/price are NOT read anymore — the form
+    // values win at write, per rule 5 (blank ≠ zero).
+    select: {
+      id: true,
+      partId: true,
+      partNo: true,
+      description: true,
+      qty: true,
+      estimateLineId: true,
     },
   });
   if (!jp) throw new Error("Part not found on this job");
-
-  // Refuse when we don't have a real price to work with — see the
-  // resolveOneClickItemisePrice docstring for the full reasoning.
-  // AR 2026-08-18 — redirect with a code instead of throw. Previous
-  // shape threw, which surfaced as Next's generic "Something went
-  // wrong / ref <digest>" page (INC ref 4073247469) — the operator-
-  // facing message never reached the advisor. Source page reads
-  // ?formError=<code> and renders a proper banner.
-  const priceCheck = resolveOneClickItemisePrice(jp.part);
-  if (!priceCheck.ok) {
-    const code = priceCheck.reason === "no-catalogue-part"
-      ? "part-not-in-catalogue"
-      : "part-no-price-in-catalogue";
-    redirect(`/estimates/${estimateId}?formError=${code}`);
+  // Duplicate-click guard, server side. The PartRow UI hides the
+  // button once JobPart.estimateLineId is set, but a stale tab or a
+  // hand-crafted POST could still reach here. Redirect quietly
+  // rather than creating a second line — the advisor asked us to
+  // do a thing that's already done.
+  if (jp.estimateLineId) {
+    redirect(`/estimates/${estimateId}`);
   }
-  const qty = Math.max(1, jp.qty);
-  const unitPrice = priceCheck.price;
 
-  // Cost-based prefill — same logic as addEstimateLineAction above.
-  let unitCost: number | null = null;
-  let markupPct: number | null = null;
-  if (jp.part) {
-    const c = Number(jp.part.cost);
-    const p = Number(jp.part.price);
-    if (Number.isFinite(c) && c > 0) {
-      unitCost = c;
-      if (Number.isFinite(p) && p > 0) {
-        markupPct = Math.round((p / c - 1) * 100 * 100) / 100;
-      }
-    }
+  // Qty comes from the form (advisor may adjust the tech's number).
+  // Fall back to jp.qty if the form field is missing — same shape
+  // as the manual Add-line qty field.
+  const rawQty = Number(formData.get("qty") ?? jp.qty);
+  const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : jp.qty;
+
+  // Price fields — required. parseMoney enforces rule 5 (blank ≠
+  // zero); the operator can still type "0" explicitly for a
+  // warranty/courtesy part, and it will pass. The exit-gate on
+  // send/invoice catches un-declined 0.00 PART lines with a
+  // confirmable banner. AR 2026-08-19.
+  const parsedCost = parseMoney(formData.get("unitCost"));
+  if (!parsedCost.ok) {
+    redirect(`/estimates/${estimateId}?formError=${priceErrorCode(parsedCost.error)}`);
   }
-  if (markupPct == null) {
-    const g = await prisma.garage.findUnique({
-      where: { id: user.garageId },
-      select: { defaultPartsMarkupPct: true },
+  const parsedPrice = parseMoney(formData.get("unitPrice"));
+  if (!parsedPrice.ok) {
+    redirect(`/estimates/${estimateId}?formError=${priceErrorCode(parsedPrice.error)}`);
+  }
+  const unitCost = parsedCost.value;
+  const unitPrice = parsedPrice.value;
+
+  // Implicit markup pct — derived so the row-editor's tri-input keeps
+  // working after this line lands. Cost > 0 required; when cost is
+  // 0 (a comp), markupPct is undefined and stays null. Same math as
+  // addEstimateLineAction's catalogue prefill path.
+  const markupPct =
+    unitCost > 0 && Number.isFinite(unitPrice / unitCost)
+      ? Math.round((unitPrice / unitCost - 1) * 100 * 100) / 100
+      : null;
+
+  // Transactionally: create the EstimateLine, then link it back to
+  // the JobPart so the PartRow UI can hide its button. If either
+  // fails, both roll back — a JobPart with a non-existent
+  // estimateLineId is a foot-gun.
+  await prisma.$transaction(async (tx) => {
+    const line = await tx.estimateLine.create({
+      data: {
+        estimateId,
+        kind: "PART",
+        // partId preserved when the tech picked from catalogue. Null
+        // otherwise (direct-fit path). Rule 1 — we NEVER create a
+        // catalogue row here.
+        partId: jp.partId,
+        description: jobPartLineDescription(jp.partNo, jp.description),
+        qty,
+        unitCost,
+        markupPct,
+        unitPrice,
+        lineTotal: lineTotal(qty, unitPrice),
+      },
+      select: { id: true },
     });
-    if (g?.defaultPartsMarkupPct != null) {
-      markupPct = Number(g.defaultPartsMarkupPct);
-    }
-  }
-
-  await prisma.estimateLine.create({
-    data: {
-      estimateId,
-      kind: "PART",
-      partId: jp.partId,
-      description: jobPartLineDescription(jp.partNo, jp.description),
-      qty,
-      unitCost,
-      markupPct,
-      unitPrice,
-      lineTotal: lineTotal(qty, unitPrice),
-    },
+    await tx.jobPart.update({
+      where: { id: jp.id },
+      data: { estimateLineId: line.id },
+    });
   });
   await recomputeEstimate(estimateId);
   revalidatePath(`/estimates/${estimateId}`);

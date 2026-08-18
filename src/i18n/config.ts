@@ -1095,6 +1095,13 @@ const en = {
   // stayed blank instead of pre-filling, so the advisor knows to type it or
   // fix the Inventory row.
   catalogPartNoPriceHint: "This part has no price in inventory — type the price, or set one in Inventory.",
+  // Price-this-part inline form (AR 2026-08-19). Advisor types cost +
+  // price on each tech-required JobPart row, no catalogue write.
+  priceThisPart_unitCost: "Unit cost",
+  priceThisPart_unitPrice: "Unit price",
+  priceThisPart_save: "Save",
+  priceThisPart_cancel: "Cancel",
+  priceThisPart_priced: "Priced",
   // AR 2026-08-18 — banner shown on /estimates/[id] and /invoices/[id]
   // when a server action redirects with ?formError=<code>. Every
   // code in LINE_FORM_ERROR_CODES (src/lib/billing.ts) needs a matching
@@ -1108,8 +1115,6 @@ const en = {
   lineFormErr_desc_required: "Description is required.",
   lineFormErr_qty_invalid: "Quantity must be a positive number.",
   lineFormErr_kind_unknown: "Choose a valid line type (Labor / Part / Fee / Discount).",
-  lineFormErr_part_not_in_catalogue: "That part isn't in your catalogue yet. Add it to Inventory with a price, or add the line manually with a price.",
-  lineFormErr_part_no_price_in_catalogue: "That catalogue part has no price set. Update the price on the part in Inventory, or add the line manually with a price.",
   // Exit-gate messages — AR 2026-08-18. The banner lists the offending
   // line descriptions after the copy (see how the preview + estimate
   // pages render this). Keep the leading sentence generic; the shop-
@@ -2602,6 +2607,11 @@ const ar: typeof en = {
   noPartsRequired: "لا توجد قطع بعد.",
   catalogPartOptional: "قطعة من الكتالوج (اختياري)",
   catalogPartNoPriceHint: "لا يوجد سعر لهذه القطعة في المخزون — أدخل السعر يدويًا، أو حدّده في المخزون.",
+  priceThisPart_unitCost: "التكلفة",
+  priceThisPart_unitPrice: "سعر البيع",
+  priceThisPart_save: "حفظ",
+  priceThisPart_cancel: "إلغاء",
+  priceThisPart_priced: "مُسعَّر",
   lineFormErrorTitle: "تعذّر حفظ هذا البند",
   lineFormErr_generic: "لم يُحفظ البند. تحقّق من القيم وحاول مجدّدًا.",
   lineFormErr_price_required: "سعر الوحدة مطلوب — الحقل الفارغ ليس صفرًا. أدخل السعر، أو إن كان البند مجانيًا فعلًا (ضمان/مجاملة) فاكتب 0 صراحةً.",
@@ -2610,8 +2620,6 @@ const ar: typeof en = {
   lineFormErr_desc_required: "الوصف مطلوب.",
   lineFormErr_qty_invalid: "يجب أن تكون الكمية رقمًا موجبًا.",
   lineFormErr_kind_unknown: "اختر نوع بند صحيحًا (عمالة / قطعة / رسوم / خصم).",
-  lineFormErr_part_not_in_catalogue: "هذه القطعة ليست في الكتالوج بعد. أضِفها إلى المخزون مع سعر، أو أضف البند يدويًا بسعر.",
-  lineFormErr_part_no_price_in_catalogue: "قطعة الكتالوج هذه بلا سعر محدَّد. حدّث سعر القطعة في المخزون، أو أضف البند يدويًا بسعر.",
   lineFormErr_zero_part_lines_estimate: "يحتوي هذا التقدير على بنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية، أو ضع البنود على «مرفوض»، أو استخدم «إرسال على أي حال» إذا كانت مجانية فعلًا (ضمان/مجاملة).",
   lineFormErr_zero_part_lines_invoice: "ستُصدَر الفاتورة ببنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية، أو ضع البنود على «مرفوض»، أو استخدم «إصدار على أي حال» إذا كانت مجانية فعلًا. رقم الفاتورة يُستهلَك من تسلسل بلا فجوات — التصحيح بعد الإصدار يتطلب إبطالًا وإعادة إصدار.",
   lineFormErr_zeroPartsHeading: "بنود بسعر 0.00 درهم:",

@@ -16,7 +16,7 @@ import {
   generateInvoiceAction,
   recordAdvancePaymentAction,
 } from "@/app/actions/billing";
-import { balanceDue } from "@/lib/billing";
+import { balanceDue, LINE_FORM_ERROR_CODES, type LineFormErrorCode } from "@/lib/billing";
 import {
   canEditEstimate as roleCanEditEstimate,
   canEditInvoice as roleCanEditInvoice,
@@ -70,8 +70,30 @@ function PartRow({
 }
 
 // Shared screen: the Cashier sets prices here; the Advisor can view + send it.
-export default async function EstimateEditor({ params }: { params: Promise<{ id: string }> }) {
+export default async function EstimateEditor({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  // Optional so unit tests can call the page component without wiring
+  // a searchParams promise. In real Next-App-Router usage the runtime
+  // always supplies one (empty object if no query string).
+  searchParams?: Promise<{ formError?: string }>;
+}) {
   const { id } = await params;
+  // Server actions on this page redirect with ?formError=<code> when a
+  // validation refusal fires (add-line, update-line-price, price-this-
+  // part). Read the code, whitelist it, and render a banner. Never
+  // t(`lineFormErr_${code}`) with an untrusted code — same discipline
+  // as the /c/book photoError handling.
+  const { formError } = (await searchParams) ?? {};
+  const lineFormErrorMessage: string | null = formError
+    ? LINE_FORM_ERROR_CODES.has(formError as LineFormErrorCode)
+      ? await getT().then((t) =>
+          t(`lineFormErr_${(formError as LineFormErrorCode).replace(/-/g, "_")}` as MessageKey),
+        )
+      : await getT().then((t) => t("lineFormErr_generic"))
+    : null;
   // Both advisor + cashier can land on this page after KEY DECISION #5
   // (rev. 2026-06-23): the ADVISOR creates + prices + sends the estimate,
   // the CASHIER opens it to generate the invoice / record advance payment.
@@ -245,6 +267,21 @@ export default async function EstimateEditor({ params }: { params: Promise<{ id:
       </div>
 
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
+
+      {/* Inline validation banner — a server action redirected here
+          with ?formError=<code>. See LINE_FORM_ERROR_CODES in
+          src/lib/billing.ts. Uses `role="alert"` + off-print so a
+          user who happens to print an estimate mid-refusal doesn't
+          see the banner on paper. AR 2026-08-18. */}
+      {lineFormErrorMessage ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 print:hidden dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500"
+        >
+          <div className="font-semibold">{t("lineFormErrorTitle")}</div>
+          <div className="mt-0.5">{lineFormErrorMessage}</div>
+        </div>
+      ) : null}
 
       {/* Two-column layout at lg+ — main work content (findings, parts,
           line items, timeline) on the left; summary, action buttons,

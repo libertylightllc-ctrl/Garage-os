@@ -20,6 +20,8 @@ import {
   jobPartLineDescription,
   parseLineEditInput,
   parseMoney,
+  priceErrorCode,
+  lineEditErrorCode,
   resolveOneClickItemisePrice,
   formatInvoiceNo,
   type DraftLine,
@@ -217,13 +219,12 @@ export async function addEstimateLineAction(formData: FormData) {
     allowNegative: isDiscount,
   });
   if (!parsedPrice.ok) {
-    throw new Error(
-      parsedPrice.error === "required"
-        ? "Unit price is required"
-        : parsedPrice.error === "negative"
-        ? "Unit price cannot be negative"
-        : "Unit price must be a number",
-    );
+    // AR 2026-08-18 — redirect back with a code, not throw. Throwing
+    // hits Next's generic error boundary ("Something went wrong / ref
+    // <digest>") and the advisor never sees the operator-facing text.
+    // Source page renders the banner from ?formError=<code>; see
+    // lib/billing.ts LINE_FORM_ERROR_CODES.
+    redirect(`/estimates/${estimateId}?formError=${priceErrorCode(parsedPrice.error)}`);
   }
   const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
@@ -313,16 +314,17 @@ export async function addLineFromPartAction(formData: FormData) {
 
   // Refuse when we don't have a real price to work with — see the
   // resolveOneClickItemisePrice docstring for the full reasoning.
-  // Reason gets mapped to an operator-facing message here rather
-  // than inside the helper, so the helper stays UI-agnostic.
+  // AR 2026-08-18 — redirect with a code instead of throw. Previous
+  // shape threw, which surfaced as Next's generic "Something went
+  // wrong / ref <digest>" page (INC ref 4073247469) — the operator-
+  // facing message never reached the advisor. Source page reads
+  // ?formError=<code> and renders a proper banner.
   const priceCheck = resolveOneClickItemisePrice(jp.part);
   if (!priceCheck.ok) {
-    const label = jp.part?.name ? `"${jp.part.name}"` : "this part";
-    const msg =
-      priceCheck.reason === "no-catalogue-part"
-        ? `${label} isn't in your catalogue — add it to Inventory with a price, or add the estimate line manually with a price.`
-        : `${label} has no catalogue price yet — set a price on the part in Inventory, or add the line manually with a price.`;
-    throw new Error(msg);
+    const code = priceCheck.reason === "no-catalogue-part"
+      ? "part-not-in-catalogue"
+      : "part-no-price-in-catalogue";
+    redirect(`/estimates/${estimateId}?formError=${code}`);
   }
   const qty = Math.max(1, jp.qty);
   const unitPrice = priceCheck.price;
@@ -385,13 +387,7 @@ export async function updateEstimateLinePriceAction(formData: FormData) {
     allowNegative: wasDiscount,
   });
   if (!parsedPrice.ok) {
-    throw new Error(
-      parsedPrice.error === "required"
-        ? "Unit price is required"
-        : parsedPrice.error === "negative"
-        ? "Unit price cannot be negative"
-        : "Unit price must be a number",
-    );
+    redirect(`/estimates/${estimateId}?formError=${priceErrorCode(parsedPrice.error)}`);
   }
   const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = wasDiscount ? -priceAbs : priceAbs;
@@ -461,7 +457,12 @@ export async function updateEstimateLineAction(formData: FormData) {
     unitCost: formData.get("unitCost"),
     markupPct: formData.get("markupPct"),
   });
-  if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
+  if (!parsed.ok) {
+    // AR 2026-08-18 — redirect with a code instead of throw. Same
+    // pattern as add-line: source page reads ?formError=<code> and
+    // renders a banner.
+    redirect(`/estimates/${estimateId}?formError=${lineEditErrorCode(parsed.error)}`);
+  }
   const { kind, description, qty, unitPrice, unitCost, markupPct } = parsed;
 
   await prisma.estimateLine.update({
@@ -1118,13 +1119,7 @@ export async function addInvoiceLineAction(formData: FormData) {
     allowNegative: isDiscount,
   });
   if (!parsedPrice.ok) {
-    throw new Error(
-      parsedPrice.error === "required"
-        ? "Unit price is required"
-        : parsedPrice.error === "negative"
-        ? "Unit price cannot be negative"
-        : "Unit price must be a number",
-    );
+    redirect(`/invoices/${invoiceId}?formError=${priceErrorCode(parsedPrice.error)}`);
   }
   const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
@@ -1159,7 +1154,9 @@ export async function updateInvoiceLineAction(formData: FormData) {
     qty: formData.get("qty"),
     unitPrice: formData.get("unitPrice"),
   });
-  if (!parsed.ok) throw new Error(`Invalid line edit: ${parsed.error}`);
+  if (!parsed.ok) {
+    redirect(`/invoices/${invoiceId}?formError=${lineEditErrorCode(parsed.error)}`);
+  }
   const { kind, description, qty, unitPrice } = parsed;
 
   await prisma.invoiceLine.update({

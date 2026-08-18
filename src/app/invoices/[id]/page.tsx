@@ -34,7 +34,7 @@ import { appUrl } from "@/lib/whatsapp";
 // plain module that both this page and billing.ts can share without
 // triggering the server-action export check.
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
-import { arState, AR_EMOJI, balanceDue, formatInvoiceNo } from "@/lib/billing";
+import { arState, AR_EMOJI, balanceDue, formatInvoiceNo, LINE_FORM_ERROR_CODES, type LineFormErrorCode } from "@/lib/billing";
 import { canEditInvoice, canSeeMargin } from "@/lib/permissions";
 import { computeJobProfit } from "@/lib/job-profit";
 import { compareReceiptToInvoice } from "@/lib/direct-fit-receipt";
@@ -55,10 +55,19 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function InvoiceView({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  // Optional so unit tests can invoke the page without a searchParams
+  // promise; real Next-App-Router usage always supplies an empty
+  // object when no query is present.
+  searchParams?: Promise<{ formError?: string }>;
 }) {
   const { id } = await params;
+  // Server actions on this page (add-line, update-line) redirect back
+  // with ?formError=<code> on validation refusal. Whitelist + t()
+  // per the same discipline as /c/book photoError. AR 2026-08-18.
+  const { formError } = (await searchParams) ?? {};
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -84,6 +93,17 @@ export default async function InvoiceView({
   if (!inv) notFound();
   const tz = countryToTimeZone(inv.garage.country);
   const t = await getT();
+  // Whitelist ?formError=<code> and localize into a banner-ready
+  // message. AR 2026-08-18.
+  const lineFormErrorMessage: string | null = formError
+    ? LINE_FORM_ERROR_CODES.has(formError as LineFormErrorCode)
+      ? t(
+          `lineFormErr_${(formError as LineFormErrorCode).replace(/-/g, "_")}` as Parameters<
+            typeof t
+          >[0],
+        )
+      : t("lineFormErr_generic")
+    : null;
   // locale drives the line-item dictionary swap below. Only the
   // read-only display branch uses translation; the inline-edit form
   // keeps the raw (English/canonical) description so the cashier
@@ -379,6 +399,20 @@ export default async function InvoiceView({
         garage={inv.garage}
         logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
       />
+
+      {/* Inline validation banner — server action refused the last
+          submit and redirected here with ?formError=<code>. Off-print
+          so a mid-refusal print doesn't carry the banner. AR
+          2026-08-18. */}
+      {lineFormErrorMessage ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 print:hidden dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500"
+        >
+          <div className="font-semibold">{t("lineFormErrorTitle")}</div>
+          <div className="mt-0.5">{lineFormErrorMessage}</div>
+        </div>
+      ) : null}
 
       {/* Void / correction cross-references (2026-08-10). Sits
           directly under the doc number so an auditor scanning the

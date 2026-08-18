@@ -1095,6 +1095,21 @@ const en = {
   // stayed blank instead of pre-filling, so the advisor knows to type it or
   // fix the Inventory row.
   catalogPartNoPriceHint: "This part has no price in inventory — type the price, or set one in Inventory.",
+  // AR 2026-08-18 — banner shown on /estimates/[id] and /invoices/[id]
+  // when a server action redirects with ?formError=<code>. Every
+  // code in LINE_FORM_ERROR_CODES (src/lib/billing.ts) needs a matching
+  // key here — the render-side whitelist falls through to
+  // lineFormErr_generic if a code is missing.
+  lineFormErrorTitle: "Couldn't save that line",
+  lineFormErr_generic: "That line couldn't be saved. Check the values and try again.",
+  lineFormErr_price_required: "Unit price is required — a blank isn't a real zero. Type the price, or if the line is genuinely free (courtesy/warranty), type 0 explicitly.",
+  lineFormErr_price_negative: "Unit price can't be negative. For a customer discount, use the Discount line type instead.",
+  lineFormErr_price_not_numeric: "Unit price must be a number.",
+  lineFormErr_desc_required: "Description is required.",
+  lineFormErr_qty_invalid: "Quantity must be a positive number.",
+  lineFormErr_kind_unknown: "Choose a valid line type (Labor / Part / Fee / Discount).",
+  lineFormErr_part_not_in_catalogue: "That part isn't in your catalogue yet. Add it to Inventory with a price, or add the line manually with a price.",
+  lineFormErr_part_no_price_in_catalogue: "That catalogue part has no price set. Update the price on the part in Inventory, or add the line manually with a price.",
   techFindingsPanel: "Technician findings & parts required",
   enterFindingsFirst: "Enter findings before submitting.",
   // repair stage (parts used + work notes)
@@ -2569,6 +2584,16 @@ const ar: typeof en = {
   noPartsRequired: "لا توجد قطع بعد.",
   catalogPartOptional: "قطعة من الكتالوج (اختياري)",
   catalogPartNoPriceHint: "لا يوجد سعر لهذه القطعة في المخزون — أدخل السعر يدويًا، أو حدّده في المخزون.",
+  lineFormErrorTitle: "تعذّر حفظ هذا البند",
+  lineFormErr_generic: "لم يُحفظ البند. تحقّق من القيم وحاول مجدّدًا.",
+  lineFormErr_price_required: "سعر الوحدة مطلوب — الحقل الفارغ ليس صفرًا. أدخل السعر، أو إن كان البند مجانيًا فعلًا (ضمان/مجاملة) فاكتب 0 صراحةً.",
+  lineFormErr_price_negative: "لا يمكن أن يكون سعر الوحدة سالبًا. للحصول على خصم، استخدم نوع البند «خصم».",
+  lineFormErr_price_not_numeric: "يجب أن يكون سعر الوحدة رقمًا.",
+  lineFormErr_desc_required: "الوصف مطلوب.",
+  lineFormErr_qty_invalid: "يجب أن تكون الكمية رقمًا موجبًا.",
+  lineFormErr_kind_unknown: "اختر نوع بند صحيحًا (عمالة / قطعة / رسوم / خصم).",
+  lineFormErr_part_not_in_catalogue: "هذه القطعة ليست في الكتالوج بعد. أضِفها إلى المخزون مع سعر، أو أضف البند يدويًا بسعر.",
+  lineFormErr_part_no_price_in_catalogue: "قطعة الكتالوج هذه بلا سعر محدَّد. حدّث سعر القطعة في المخزون، أو أضف البند يدويًا بسعر.",
   techFindingsPanel: "نتائج الفني والقطع المطلوبة",
   enterFindingsFirst: "أدخل النتائج قبل الإرسال.",
   // repair stage

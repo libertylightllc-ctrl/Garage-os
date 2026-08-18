@@ -87,6 +87,69 @@ export function resolveOneClickItemisePrice(
   return { ok: true, price: n };
 }
 
+// ── Estimate / invoice line-form error codes (AR 2026-08-18) ──────
+//
+// Server actions that validate estimate/invoice add-line + edit-line
+// forms used to `throw new Error(msg)` on refusal — Next then rendered
+// its generic "Something went wrong / ref: <digest>" page, and the
+// operator-facing text never reached the advisor (INC ref 4073247469,
+// the "Price this part" click on a free-typed jobPart). The
+// replacement pattern:
+//
+//   * Actions REDIRECT back to their source page (`/estimates/${id}`
+//     or `/invoices/${id}`) with `?formError=<code>` in the query.
+//   * The source page whitelists the code against LINE_FORM_ERROR_CODES
+//     below, then renders the localized message from
+//     t(`lineFormErr_${code}`). Whitelist prevents URL fuzzing —
+//     never send an untrusted string into i18n lookup.
+//
+// Codes are kebab-cased. Every code has both an en and ar i18n key
+// under the `lineFormErr_` prefix. Adding a new code: extend the
+// union type + the Set + both i18n dictionaries in the same commit,
+// otherwise the whitelist will drop it into the generic fallback.
+export type LineFormErrorCode =
+  | "price-required"
+  | "price-negative"
+  | "price-not-numeric"
+  | "desc-required"
+  | "qty-invalid"
+  | "kind-unknown"
+  | "part-not-in-catalogue"
+  | "part-no-price-in-catalogue";
+
+export const LINE_FORM_ERROR_CODES: ReadonlySet<LineFormErrorCode> = new Set<LineFormErrorCode>([
+  "price-required",
+  "price-negative",
+  "price-not-numeric",
+  "desc-required",
+  "qty-invalid",
+  "kind-unknown",
+  "part-not-in-catalogue",
+  "part-no-price-in-catalogue",
+]);
+
+/** Map parseMoney's result-error to a LineFormErrorCode. Keeps the
+ *  action-layer callers from re-deriving the mapping site-by-site. */
+export function priceErrorCode(
+  err: "required" | "not-a-number" | "negative",
+): LineFormErrorCode {
+  switch (err) {
+    case "required": return "price-required";
+    case "not-a-number": return "price-not-numeric";
+    case "negative": return "price-negative";
+  }
+}
+
+/** Map parseLineEditInput's result-error to a LineFormErrorCode. */
+export function lineEditErrorCode(err: LineEditError): LineFormErrorCode {
+  switch (err) {
+    case "missing-description": return "desc-required";
+    case "bad-qty": return "qty-invalid";
+    case "bad-price": return "price-required";  // parseLineEditInput's bad-price already covers blank via parseMoney
+    case "unknown-kind": return "kind-unknown";
+  }
+}
+
 export function parseMoney(
   raw: unknown,
   opts: { allowNegative?: boolean } = {},

@@ -1119,6 +1119,15 @@ const en = {
   lineFormErr_zeroPartsHeading: "Lines priced at AED 0.00:",
   lineFormErr_sendAnyway: "Send anyway (these are genuinely free)",
   lineFormErr_generateAnyway: "Generate anyway (these are genuinely free)",
+  // Pre-flight warning — AR 2026-08-18. Rendered on the estimate edit
+  // + preview pages BEFORE the advisor clicks Send/Generate Invoice,
+  // whenever any non-declined PART line is 0.00. Warning-yellow (not
+  // danger-red) — this is informational; the post-click gate is what
+  // enforces. Keeps semantic separation between "you might want to
+  // check this before you click" and "we refused, take action".
+  zeroPartsPreflightTitle: "Unpriced PART lines",
+  zeroPartsPreflightBody: "This estimate has PART lines priced at AED 0.00. Set real prices or mark them declined before you send. If they're genuinely free (warranty/courtesy), you'll be asked to confirm on send.",
+  zeroPartsChip: "⚠ No price",
   techFindingsPanel: "Technician findings & parts required",
   enterFindingsFirst: "Enter findings before submitting.",
   // repair stage (parts used + work notes)
@@ -2608,6 +2617,9 @@ const ar: typeof en = {
   lineFormErr_zeroPartsHeading: "بنود بسعر 0.00 درهم:",
   lineFormErr_sendAnyway: "إرسال على أي حال (هذه مجانية فعلًا)",
   lineFormErr_generateAnyway: "إصدار على أي حال (هذه مجانية فعلًا)",
+  zeroPartsPreflightTitle: "بنود «قطعة» بدون سعر",
+  zeroPartsPreflightBody: "يحتوي هذا التقدير على بنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية أو ضعها على «مرفوض» قبل الإرسال. إذا كانت مجانية فعلًا (ضمان/مجاملة) فسيُطلب منك التأكيد عند الإرسال.",
+  zeroPartsChip: "⚠ بدون سعر",
   techFindingsPanel: "نتائج الفني والقطع المطلوبة",
   enterFindingsFirst: "أدخل النتائج قبل الإرسال.",
   // repair stage

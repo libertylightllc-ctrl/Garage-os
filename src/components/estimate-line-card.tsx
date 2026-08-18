@@ -61,6 +61,10 @@ export interface CardProps {
         markup: string;
         unit: string;
         margin: string;
+        // Pre-flight "No price" chip (AR 2026-08-18) — mirror of the
+        // desktop row component.
+        noPriceChip: string;
+        noPriceChipTitle: string;
     };
 }
 
@@ -268,8 +272,18 @@ export function EstimateLineCard({
                 <p className={`text-xs text-text-mute ${valueClass}`}>🚗 {vehicleLabel}</p>
             ) : null}
 
-            {/* Row 3: part / description name */}
-            <p className={`text-base font-semibold ${valueClass}`}>{cleanDescription}</p>
+            {/* Row 3: part / description name (+ pre-flight chip). */}
+            <p className={`text-base font-semibold ${valueClass}`}>
+              {cleanDescription}
+              {line.kind === "PART" && !line.declined && Number(line.unitPrice) === 0 ? (
+                <span
+                  className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+                  title={labels.noPriceChipTitle}
+                >
+                  {labels.noPriceChip}
+                </span>
+              ) : null}
+            </p>
 
             {/* Row 4: qty + unit + total mini-grid. Labels above, numbers
                 right-aligned and tabular so e.g. 234.00 and 1,890.00 line

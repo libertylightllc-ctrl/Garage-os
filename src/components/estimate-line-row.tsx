@@ -71,6 +71,11 @@ export interface LineProps {
         markup: string;
         unit: string;
         margin: string;
+        // Pre-flight "No price" chip on PART @ 0.00 lines (AR 2026-08-18).
+        // Title is the accessible tooltip; the chip label is the short
+        // visible text ("⚠ No price").
+        noPriceChip: string;
+        noPriceChipTitle: string;
     };
 }
 
@@ -247,7 +252,23 @@ export function EstimateLineRow({
                 </span>
             </td>
             <td className={`${td} whitespace-nowrap ${valueClass}`}>{vehicleLabel}</td>
-            <td className={`${td} font-medium ${valueClass}`}>{cleanDescription}</td>
+            <td className={`${td} font-medium ${valueClass}`}>
+              {cleanDescription}
+              {/* Pre-flight chip — AR 2026-08-18. Warning-yellow flag
+                  next to any non-declined PART line priced at 0.00, so
+                  the advisor sees the offending row while still on the
+                  edit surface (findZeroPricedPartLines predicate lives
+                  in lib/billing.ts; kept inline here to avoid a client-
+                  component boundary crossing). */}
+              {line.kind === "PART" && !line.declined && Number(line.unitPrice) === 0 ? (
+                <span
+                  className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+                  title={labels.noPriceChipTitle}
+                >
+                  {labels.noPriceChip}
+                </span>
+              ) : null}
+            </td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>{Number(line.qty)}</td>
             <td className={`${td} text-right tabular-nums ${valueClass}`}>
                 {Number(line.unitPrice).toFixed(2)}

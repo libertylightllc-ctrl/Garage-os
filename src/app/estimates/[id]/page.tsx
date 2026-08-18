@@ -273,6 +273,35 @@ export default async function EstimateEditor({
 
       <WorkflowStepper state={stepperState} labels={buildStepperLabels(t)} />
 
+      {/* Pre-flight warning — AR 2026-08-18. Rendered whenever the
+          estimate has any non-declined PART line at 0.00, regardless
+          of whether the advisor has clicked Send/Generate yet. This
+          is the "catch the mistake while you can still fix it" surface
+          your JC-2026-0001 observation named. Warning-yellow (not
+          danger-red) — informational, not a refusal. Enforcement stays
+          with the post-click gate below + on the preview page. Off-
+          print. Line-level chips on each offending row come from the
+          EstimateLineRow / EstimateLineCard components (see the
+          labels.noPriceChip prop passed above). */}
+      {(() => {
+        const preflightZero = findZeroPricedPartLines(est.lines);
+        if (preflightZero.length === 0) return null;
+        return (
+          <div
+            role="status"
+            className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 print:hidden dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+          >
+            <div className="font-semibold">{t("zeroPartsPreflightTitle")}</div>
+            <div className="mt-0.5">{t("zeroPartsPreflightBody")}</div>
+            <ul className="mt-1 list-inside list-disc">
+              {preflightZero.map((l) => (
+                <li key={l.id}>{l.description}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
       {/* Inline validation banner — a server action redirected here
           with ?formError=<code>. See LINE_FORM_ERROR_CODES in
           src/lib/billing.ts. Uses `role="alert"` + off-print so a
@@ -418,6 +447,8 @@ export default async function EstimateEditor({
                   markup: t("markupLabel"),
                   unit: t("colUnit"),
                   margin: t("marginLabel"),
+                  noPriceChip: t("zeroPartsChip"),
+                  noPriceChipTitle: t("zeroPartsPreflightBody"),
                 }}
               />
             ))}
@@ -496,6 +527,8 @@ export default async function EstimateEditor({
                       markup: t("markupLabel"),
                       unit: t("colUnit"),
                       margin: t("marginLabel"),
+                      noPriceChip: t("zeroPartsChip"),
+                      noPriceChipTitle: t("zeroPartsPreflightBody"),
                     }}
                   />
                 ))}

@@ -318,10 +318,37 @@ export async function sendEstimateToCustomer(
         }
     } finally {
         await client.end();
+        // AR 2026-08-19 helper-race fix. Between click → wa.me 302 →
+        // browser follows, and our finally page.goto(preview), the
+        // browser may still be mid-navigation to api.whatsapp.com.
+        // A goto() firing during that in-flight nav intermittently
+        // aborts with "Navigation to X is interrupted by another
+        // navigation to Y" (INC 2026-08-19, commit 7f80e2b smoke).
+        //
+        // Wait up to ~3s for the URL to actually reach the wa.me
+        // destination (or any other stable non-preview URL that the
+        // action redirected us to). Then goto(preview) always
+        // starts from a settled state. .catch(()=>{}) so a race where
+        // the URL never changes (rare, but happens when the click
+        // races the DB poll's completion) doesn't fail the helper —
+        // the subsequent goto(preview) handles both cases.
+        await page
+            .waitForURL(
+                (url) =>
+                    url.hostname === "api.whatsapp.com" ||
+                    url.hostname === "wa.me" ||
+                    !url.pathname.endsWith("/preview"),
+                { timeout: 3000 },
+            )
+            .catch(() => {
+                // Nothing to do — either the redirect already settled
+                // before we got here, or the click didn't leave the
+                // preview page (server refused, page re-rendered
+                // in place). Both are fine; the goto below reads the
+                // fresh state either way.
+            });
         // Reload the preview page so the caller sees fresh RSC state.
-        // The wa.me redirect fired on the browser side but nothing
-        // waited for it; goto cancels any pending nav and pulls a
-        // clean render.
+        // Now unambiguous: no pending main-frame nav to race against.
         await page.goto(`/estimates/${estimateId}/preview`);
     }
 }

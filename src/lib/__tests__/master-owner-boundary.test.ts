@@ -90,6 +90,12 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // narrow-gate audit; MASTER runs the shop day-to-day and needs to
   // set its own name / TRN / address for tax invoices).
   { file: "src/app/actions/settings.ts", action: "updateGarageDetailsAction" },
+  // Bays capacity — /owner/bays is on the MASTER-permitted list per
+  // AGENTS.md Key Decision #8, but both mutating actions were still
+  // requireOwner (fifth instance of the trap pattern, caught in the
+  // 2026-08-20 audit). Widened alongside the structural check below.
+  { file: "src/app/actions/onboarding.ts", action: "addBayAction" },
+  { file: "src/app/actions/onboarding.ts", action: "removeBayAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER
@@ -191,6 +197,102 @@ describe("MASTER vs OWNER boundary on /owner/*", () => {
         // Guarding an owner-only action with requireOperational would
         // silently widen finance / onboarding to MASTER — pin it out.
         expect(body).not.toMatch(/\brequireOperational\s*\(/);
+      },
+    );
+  });
+
+  // ── Structural: no MASTER-opened page may submit to a requireOwner action ──
+  //
+  // The narrow-gate trap ("page renders for MASTER, action throws Not
+  // authorized on submit") has shipped FIVE times this session — most
+  // recently on /owner/bays after Batch B. The per-page-per-action
+  // whitelists above catch it once the fix is written, but only if
+  // the reviewer remembers to add the new entry. This block catches
+  // the CLASS instead: for every OPEN_TO_MASTER page, walk every
+  // `<form action={fn}>` reference, resolve `fn` back to its import
+  // and file, and fail if that action uses requireOwner() /
+  // requireRole("OWNER"). No whitelist needed — new pages and new
+  // actions get audited automatically.
+  //
+  // Deliberately narrow: only `<form action={...}>` (server-action
+  // form submissions). Nested `formAction=` attributes on submit
+  // buttons are followed too. Client-component handlers and API
+  // routes are out of scope — those have their own guards and aren't
+  // the trap vector.
+  describe("MASTER-opened pages: no reachable action requires OWNER", () => {
+    // Import-name → { file, exportedName } table for a given page.
+    // Handles both `import { foo } from "@/app/actions/x"` and
+    // `import { foo as bar } from "..."`.
+    interface ImportedAction { file: string; exported: string }
+    function pageActionImports(pageSrc: string): Map<string, ImportedAction> {
+      const out = new Map<string, ImportedAction>();
+      const re = /import\s*\{([^}]+)\}\s*from\s*["'](@\/app\/actions\/[^"']+)["']/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(pageSrc)) !== null) {
+        const names = m[1];
+        const spec = m[2];
+        // Resolve "@/app/actions/foo" → src/app/actions/foo.ts
+        const file = spec.replace("@/", "src/") + ".ts";
+        for (const raw of names.split(",")) {
+          const [exportedRaw, aliasRaw] = raw.split(" as ").map((s) => s.trim());
+          const exported = exportedRaw.replace(/^type\s+/, "").trim();
+          const local = (aliasRaw ?? exported).trim();
+          if (exported && local) out.set(local, { file, exported });
+        }
+      }
+      return out;
+    }
+
+    // Every local-name referenced as `action={...}` OR `formAction={...}`
+    // inside the page. Only form/button attribute usages — that's the
+    // trap vector; other references (a link, a helper) are irrelevant.
+    function actionRefs(pageSrc: string): Set<string> {
+      const out = new Set<string>();
+      const re = /\b(?:action|formAction)=\{([A-Za-z_$][A-Za-z0-9_$]*)\}/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(pageSrc)) !== null) out.add(m[1]);
+      return out;
+    }
+
+    function actionUsesRequireOwner(fileSrc: string, exported: string): boolean {
+      const body = extractActionBody(fileSrc, exported);
+      // Positive match on requireOwner OR requireRole("OWNER").
+      // The latter is used by garage-logo.ts and treated as owner-only.
+      return /\brequireOwner\s*\(/.test(body)
+        || /\brequireRole\s*\(\s*["']OWNER["']\s*\)/.test(body);
+    }
+
+    // Emit one test per (page, referenced-action) pair so the failure
+    // message names both. Missing imports (action referenced but not
+    // imported from @/app/actions/*) skip silently — client-side
+    // handlers and other patterns aren't the trap this catches.
+    const cases: Array<{ page: string; local: string; file: string; exported: string }> = [];
+    for (const page of OPEN_TO_MASTER) {
+      const src = read(page);
+      const imports = pageActionImports(src);
+      for (const local of actionRefs(src)) {
+        const imp = imports.get(local);
+        if (!imp) continue;
+        cases.push({ page, local, file: imp.file, exported: imp.exported });
+      }
+    }
+
+    // Guardrail: if this ever returns zero, the regex broke — we'd
+    // silently pass instead of catching new traps. Every MASTER page
+    // in the repo today has at least one server-action form submit.
+    it("scan discovered form actions on MASTER-opened pages", () => {
+      expect(cases.length).toBeGreaterThan(0);
+    });
+
+    it.each(cases)(
+      "$page → $local ($file:$exported) does NOT use requireOwner()",
+      ({ page, local, file, exported }) => {
+        const fileSrc = read(file);
+        const owner = actionUsesRequireOwner(fileSrc, exported);
+        // Failure message names the fix path so a reviewer doesn't
+        // have to dig: swap requireOwner → requireOperational in the
+        // action, and add the action to OPERATIONAL_ACTIONS above.
+        expect(owner, `${page} opens for MASTER but submits to ${local} in ${file} which requires OWNER — either widen the action to requireOperational() and add it to OPERATIONAL_ACTIONS, or narrow the page to OWNER-only.`).toBe(false);
       },
     );
   });

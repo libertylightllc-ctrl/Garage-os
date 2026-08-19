@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { companyGarageIds } from "@/lib/branches";
-import { requireOwner } from "@/lib/action-guards";
+import { requireOwner, requireOperational } from "@/lib/action-guards";
 
 // Garage creation is operator-only — see scripts/create-garage.ts and
 // the shared src/lib/create-garage.ts. There is no public signup action.
@@ -36,26 +36,34 @@ export async function addBranchAction(formData: FormData) {
   revalidatePath("/owner/staff");
 }
 
-// Tier 2 #7 — owner configures the garage's bays/ramps (capacity).
+// Tier 2 #7 — operational: configure the garage's bays/ramps
+// (capacity). Widened from requireOwner to requireOperational
+// 2026-08-20 after audit surfaced the trap: /owner/bays is on the
+// MASTER-permitted operational list per AGENTS.md Key Decision #8,
+// but both mutating actions were owner-only — MASTER opened the
+// page, clicked Add / Remove, and got "Not authorized". Fifth
+// instance of the same "page opens to role but action rejects it"
+// pattern. Structural check in master-owner-boundary.test.ts now
+// catches this class at build time.
 export async function addBayAction(formData: FormData) {
-  const owner = await requireOwner();
+  const session = await requireOperational();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) redirect("/owner/bays?error=1");
   const existing = await prisma.bay.findFirst({
-    where: { garageId: owner.garageId, name },
+    where: { garageId: session.garageId, name },
     select: { id: true },
   });
   if (existing) redirect("/owner/bays?error=exists");
-  await prisma.bay.create({ data: { garageId: owner.garageId, name } });
+  await prisma.bay.create({ data: { garageId: session.garageId, name } });
   revalidatePath("/owner/bays");
 }
 
 export async function removeBayAction(formData: FormData) {
-  const owner = await requireOwner();
+  const session = await requireOperational();
   const bayId = String(formData.get("bayId") ?? "");
   await prisma.$transaction(async (tx) => {
     const bay = await tx.bay.findFirst({
-      where: { id: bayId, garageId: owner.garageId },
+      where: { id: bayId, garageId: session.garageId },
       select: { id: true },
     });
     if (!bay) return;

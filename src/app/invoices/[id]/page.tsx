@@ -14,19 +14,18 @@ import {
   emailInvoiceAction,
   voidInvoiceAction,
   reissueInvoiceAction,
-  // sendInvoiceToCustomerAction → /invoices/[id]/preview only.
-  // recordPaymentAction → /cashier Receivables row only.
-  // Both moved out so the edit page can only edit; mutations that
-  // affect the customer (WhatsApp send) or the books (payment) live
-  // on their own contextual surfaces.
+  // AR 2026-08-20: sendInvoiceToCustomerAction wired back in on the
+  // edit page's action bar, replacing the raw wa.me anchor that
+  // bypassed invoiceSentAt + InvoiceSend audit. The action also does
+  // recipient normalization + reissue-ledger post + wa.me redirect,
+  // so the whole IIFE that computed phone/msg/href here went with it.
+  // recordPaymentAction still lives only on /cashier Receivables.
+  sendInvoiceToCustomerAction,
 } from "@/app/actions/billing";
+import { MessageCircle } from "lucide-react";
 import { PrintButton } from "@/components/print-button";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { DocumentHeader } from "@/components/document-header";
-import { SendViaWhatsAppButton } from "@/components/SendViaWhatsAppButton";
-import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
-import { invoiceMessage } from "@/lib/po-message";
-import { appUrl } from "@/lib/whatsapp";
 // DISCOUNT_DESCRIPTION_MARKER moved out of billing.ts because that file
 // is"use server"and can only export async functions — exporting a
 // regexp from there broke the whole module under Turbopack on Vercel
@@ -286,53 +285,35 @@ export default async function InvoiceView({
           print output so the document the customer sees is just the
           invoice itself. */}
       <div className="flex flex-wrap gap-2 print:hidden">
-        {/* wa.me "Send via WhatsApp" — opens the staff's WhatsApp with
-            the customer's number + a drafted message + a link to the
-            customer-facing /c/invoice/{id} page. Staff hits Send from
-            their own WhatsApp; this is the interim path until the
-            shop connects the Cloud API (future upgrade, see wa.ts). */}
-        {(() => {
-          const phone = normalizeToE164(customer.waId ?? customer.phone);
-          const msg = invoiceMessage({
-            customer: { name: customer.name, lang: customer.lang },
-            garage: { name: inv.garage.name },
-            vehicle: {
-              make: inv.jobCard.vehicle.make,
-              model: inv.jobCard.vehicle.model,
-              year: inv.jobCard.vehicle.year ?? null,
-              plate: inv.jobCard.vehicle.plate ?? null,
-              vin: inv.jobCard.vehicle.vin ?? null,
-              engineSize: inv.jobCard.vehicle.engineSize ?? null,
-              fuelType: inv.jobCard.vehicle.fuelType ?? null,
-              jobNumber: inv.jobCard.number ?? null,
-            },
-            invoice: {
-              number: formatInvoiceNo(inv.number, inv.issuedAt.getFullYear()),
-              subtotal: Number(inv.subtotal),
-              vatAmount: Number(inv.vatAmount),
-              total,
-              lines: inv.lines.map((l) => ({
-                qty: Number(l.qty),
-                description: l.description,
-              })),
-            },
-            appUrl: appUrl(),
-            // Fallback to inv.id when a row somehow has no publicToken —
-            // the resolver's HMAC fallback path handles this cleanly.
-            // For the internal page's draft link (staff hasn't clicked
-            // Send yet), publicToken from Phase-1 backfill is always set.
-            invoiceId: inv.publicToken ?? inv.id,
-          });
-          return (
-            <SendViaWhatsAppButton
-              // Always tappable after 2026-08-11 (AR). When phone is
-              // valid → direct chat with customer; null → WhatsApp
-              // opens contact picker, cashier picks recipient.
-              href={buildWaMeUrl(phone, msg)}
-              label={t("waSend")}
-            />
-          );
-        })()}
+        {/* Send via WhatsApp — form-submits sendInvoiceToCustomerAction
+            (AR 2026-08-20). Previously a raw wa.me anchor that built
+            the message client-side and bypassed the server action, so
+            an operator could hand the customer their invoice while
+            invoiceSentAt stayed null and no InvoiceSend audit row was
+            written — a customer received their invoice while our
+            records said unsent.
+
+            Now identical to the send button on /invoices/[id]/preview:
+            action stamps invoiceSentAt, writes the audit row, posts
+            the reissue ledger if applicable, and redirects to the
+            same wa.me draft the raw anchor produced.
+
+            Gated on canEditInvoice — the action itself requires
+            INVOICE_ROLES; hiding the button for other roles keeps the
+            surface honest (no trap: page opens, submit rejects).
+            ADVISOR + TECH viewing the invoice never see the button. */}
+        {canEditInvoice(session.user.role) ? (
+          <form action={sendInvoiceToCustomerAction} className="contents">
+            <input type="hidden" name="invoiceId" value={inv.id} />
+            <button
+              type="submit"
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1ebe57] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+            >
+              <MessageCircle aria-hidden="true" className="h-4 w-4" />
+              {t("waSend")}
+            </button>
+          </form>
+        ) : null}
         <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
           🖨️ {t("invoicePrintInvoice")}
         </PrintButton>

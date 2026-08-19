@@ -117,7 +117,7 @@ export default async function EstimateEditor({
           // Pulled for <GarageBrand> in the header — same garageId
           // we're already scoping on, so no extra row, just the
           // existing one joined with logoUrl in scope.
-          garage: { select: { name: true, trn: true, logoUrl: true, country: true } },
+          garage: { select: { name: true, trn: true, address: true, logoUrl: true, country: true } },
           jobParts: { orderBy: { createdAt:"asc"} },
           // Slice 6b — show advances received against this job in the
           // UI block below. Ordered oldest-first so the audit list reads

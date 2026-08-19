@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireOperational } from "@/lib/action-guards";
+import { requireOperational, requireOwner } from "@/lib/action-guards";
+import type { Lang } from "@/lib/receptionist";
 
 // Self-serve account/garage settings. Each action is keyed to
 // session.user.id (or session.user.garageId for owner-only actions) —
@@ -183,4 +184,53 @@ export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
 
   revalidatePath("/settings");
   redirect("/settings?ok=labor-cost");
+}
+
+const SUPPORTED_LANGS = ["ar", "en", "hi", "ur"] as const;
+
+// Garage identity editor — AR 2026-08-19, Batch B. Name / TRN /
+// address / defaultLang printed on tax invoices and estimates.
+// Country + VAT rate stay read-only on the Settings page because
+// neither is a shop preference (country change re-derives VAT
+// strategy and currency, UAE VAT is a legal constant). Sits behind
+// the same guard as team management + logo — not operational.
+// Pinned by master-owner-boundary.test.ts OWNER_ONLY_ACTIONS.
+export async function updateGarageDetailsAction(formData: FormData) {
+  const session = await requireOwner();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const trnRaw = String(formData.get("trn") ?? "").trim();
+  const addressRaw = String(formData.get("address") ?? "").trim();
+  const langRaw = String(formData.get("defaultLang") ?? "").trim();
+
+  if (!name) back("garage-name-required");
+  if (name.length > 80) back("garage-name-too-long");
+  if (trnRaw.length > 40) back("trn-too-long");
+  if (addressRaw.length > 400) back("address-too-long");
+
+  // Blank string on any optional field = "clear it back to null".
+  // The Settings UI reflects this: leaving the field empty and
+  // saving removes the current value rather than sending a zero-
+  // length string on to the print header.
+  const trn = trnRaw === "" ? null : trnRaw;
+  const address = addressRaw === "" ? null : addressRaw;
+
+  // defaultLang picker only offers "" (no default set), "ar", "en".
+  // Anything else in formData is a tampered submit — reject to
+  // "unknown" rather than trust it.
+  let defaultLang: Lang | null = null;
+  if (langRaw !== "") {
+    if (!(SUPPORTED_LANGS as readonly string[]).includes(langRaw)) {
+      back("garage-lang-invalid");
+    }
+    defaultLang = langRaw as Lang;
+  }
+
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { name, trn, address, defaultLang },
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?ok=garage-details");
 }

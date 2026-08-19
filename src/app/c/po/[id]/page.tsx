@@ -64,6 +64,7 @@ export default async function PublicPurchaseOrder({
                 select: {
                     name: true,
                     trn: true,
+                    address: true,
                     country: true,
                     logoUrl: true,
                 },

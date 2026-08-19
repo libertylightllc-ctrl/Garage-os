@@ -100,7 +100,7 @@ export default async function JobCardPrint({
     where: { id, garageId: session.user.garageId },
     include: {
       vehicle: { include: { customer: true } },
-      garage: { select: { name: true, trn: true, country: true, logoUrl: true } },
+      garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true } },
     },
   });
   if (!job) notFound();

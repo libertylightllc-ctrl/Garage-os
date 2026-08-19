@@ -9,6 +9,7 @@ import {
   updateProfileEmailAction,
   updateDefaultPartsMarkupAction,
   updateDefaultLaborHourlyCostAction,
+  updateGarageDetailsAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -48,6 +49,12 @@ const ERR_KEY: Record<string, MessageKey> = {
   "markup-range": "settingsErrMarkupRange",
   "labor-cost-invalid": "settingsErrLaborCostInvalid",
   "labor-cost-range": "settingsErrLaborCostRange",
+  // Garage details (AR 2026-08-19, Batch B)
+  "garage-name-required": "settingsErrGarageNameRequired",
+  "garage-name-too-long": "settingsErrGarageNameTooLong",
+  "trn-too-long": "settingsErrTrnTooLong",
+  "address-too-long": "settingsErrAddressTooLong",
+  "garage-lang-invalid": "settingsErrGarageLangInvalid",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
@@ -57,6 +64,7 @@ const OK_KEY: Record<string, MessageKey> = {
   "logo-removed": "settingsOkLogoRemoved",
   "markup": "settingsOkMarkup",
   "labor-cost": "settingsOkLaborCost",
+  "garage-details": "settingsOkGarageDetails",
 };
 
 export default async function SettingsPage({
@@ -94,6 +102,10 @@ export default async function SettingsPage({
     ? await prisma.garage.findUnique({
         where: { id: session.user.garageId },
         select: {
+          name: true,
+          trn: true,
+          address: true,
+          defaultLang: true,
           logoUrl: true,
           defaultPartsMarkupPct: true,
           defaultLaborHourlyCost: true,
@@ -196,14 +208,109 @@ export default async function SettingsPage({
         </div>
       </section>
 
-      {/* Owner-only: Garage details (logo). Non-owners never see this
-          markup at all, so there's no information leak even before the
-          removeGarageLogoAction verifies role. */}
+      {/* Owner-only: Garage identity — name, TRN, address, default
+          language. Prints on tax invoices (UAE FTA Art. 59 requires
+          supplier name, TRN, address). Country + VAT rate render
+          read-only: country change is a legal event handled by
+          support; UAE VAT is a legal constant, not a shop setting.
+          The vatRate column exists in schema so Phase 2 multi-country
+          plugs in without a schema migration against invoice tables
+          that by then carry live history. */}
       {isOwner ? (
         <>
-          {/* Garage details — Phase C of the per-garage logo upload.
-              Only the logo is wired here for now; name + TRN edit
-              fields will land on this section in a later phase. */}
+          <section className="rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold">
+              {t("settingsSecGarageDetails")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-mute">
+              {t("settingsSecGarageDetailsHint")}
+            </p>
+            <form action={updateGarageDetailsAction} className="mt-4 flex flex-col gap-3">
+              <label className="text-xs text-text-mute">
+                {t("settingsGarageNameLabel")}
+                <input
+                  name="name"
+                  defaultValue={garage?.name ?? ""}
+                  required
+                  maxLength={80}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-xs text-text-mute">
+                {t("settingsGarageTrnLabel")}
+                <input
+                  name="trn"
+                  defaultValue={garage?.trn ?? ""}
+                  maxLength={40}
+                  inputMode="numeric"
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm tabular-nums"
+                />
+                <span className="mt-1 block text-[11px] text-text-mute">
+                  {t("settingsGarageTrnHint")}
+                </span>
+              </label>
+              <label className="text-xs text-text-mute">
+                {t("settingsGarageAddressLabel")}
+                <textarea
+                  name="address"
+                  defaultValue={garage?.address ?? ""}
+                  rows={3}
+                  maxLength={400}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-[11px] text-text-mute">
+                  {t("settingsGarageAddressHint")}
+                </span>
+              </label>
+              <label className="text-xs text-text-mute">
+                {t("settingsGarageDefaultLangLabel")}
+                <select
+                  name="defaultLang"
+                  defaultValue={garage?.defaultLang ?? ""}
+                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                >
+                  <option value="">{t("settingsGarageDefaultLangUnset")}</option>
+                  <option value="en">{t("settingsGarageDefaultLangEn")}</option>
+                  <option value="ar">{t("settingsGarageDefaultLangAr")}</option>
+                </select>
+                <span className="mt-1 block text-[11px] text-text-mute">
+                  {t("settingsGarageDefaultLangHint")}
+                </span>
+              </label>
+              {/* Read-only country + VAT rate. Rendered as plain
+                  labelled text (not disabled inputs) so nothing
+                  suggests you could edit them if you clicked hard
+                  enough. Both carry a small explainer line. */}
+              <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/70 bg-surface-2/30 p-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs text-text-mute">
+                    {t("settingsGarageCountryLabel")}
+                  </div>
+                  <div className="mt-0.5 text-sm">
+                    {t("settingsGarageCountryValueUae")}
+                  </div>
+                  <div className="mt-1 text-[11px] text-text-mute">
+                    {t("settingsGarageCountryLocked")}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-text-mute">
+                    {t("settingsGarageVatLabel")}
+                  </div>
+                  <div className="mt-0.5 text-sm tabular-nums">
+                    {t("settingsGarageVatValueUae")}
+                  </div>
+                  <div className="mt-1 text-[11px] text-text-mute">
+                    {t("settingsGarageVatLocked")}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+            </form>
+          </section>
+
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">
               {t("settingsSecGarageLogo")}

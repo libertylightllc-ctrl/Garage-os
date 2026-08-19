@@ -77,7 +77,7 @@ export default async function EstimatePreview({
       jobCard: {
         include: {
           vehicle: { include: { customer: true } },
-          garage: { select: { name: true, trn: true, country: true, logoUrl: true } },
+          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true } },
         },
       },
     },

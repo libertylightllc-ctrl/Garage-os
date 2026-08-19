@@ -94,6 +94,11 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
 const OWNER_ONLY_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/onboarding.ts", action: "addBranchAction" },
   { file: "src/app/actions/whatsapp-connect.ts", action: "connectWhatsAppAction" },
+  // Garage identity — name, TRN, address, default customer language.
+  // Sits with team management (owner-only) rather than the operational
+  // Pricing defaults — this is the shop's legal identity on tax
+  // invoices, not a day-to-day operations tweak.
+  { file: "src/app/actions/settings.ts", action: "updateGarageDetailsAction" },
 ];
 
 // Extract the source of a single top-level exported action function.

@@ -59,8 +59,12 @@ export function DocumentHeader({
         reference: string | null;
         refLabel: string;
     } | null;
-    /** Garage identity block on the end side. */
-    garage: { name: string; trn: string | null; country: string };
+    /** Garage identity block on the end side. `address` prints below
+     *  the country line when non-null (UAE FTA Art. 59 requires it on
+     *  every tax invoice; existing shops with no value keep printing
+     *  as before). Rendered with `whitespace-pre-line` so multi-line
+     *  addresses (P.O. Box / building / area / city) stack naturally. */
+    garage: { name: string; trn: string | null; address?: string | null; country: string };
     /**
      * Garage logo shown on the end side above the garage name. Callers
      * decide the fallback:
@@ -132,6 +136,11 @@ export function DocumentHeader({
                     <div className="font-medium">{garage.name}</div>
                     <div className="text-zinc-600">TRN: {garage.trn ?? "—"}</div>
                     <div className="text-zinc-600">{garage.country}</div>
+                    {garage.address ? (
+                        <div className="text-zinc-600 whitespace-pre-line">
+                            {garage.address}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </header>

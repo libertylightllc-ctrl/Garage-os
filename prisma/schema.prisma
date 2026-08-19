@@ -300,6 +300,20 @@ model Garage {
   // falls through to "en" as last resort. UAE default was Arabic
   // by fiat; making it a per-shop opt-in stops that assertion.
   defaultLang            Lang?
+  // Free-text address printed on tax invoices + estimates (AR
+  // 2026-08-19, Batch B — UAE FTA Art. 59 requires the supplier's
+  // address on every tax invoice). Multi-line rendered as-is via
+  // whitespace-pre-line on DocumentHeader.
+  address                String?
+  // Per-garage VAT rate as a stored 4-dp decimal (0.05 = 5 %).
+  // Column added with a UAE-default so Phase 2 (multi-country) can
+  // plug KSA in at 0.15 without a schema change against tables that
+  // by then carry live invoice history. Editable from Settings is
+  // deliberately NOT wired in Batch B — the UI shows "5% (UAE FTA)"
+  // read-only because UAE VAT is a legal constant, not a shop
+  // preference. `totalsFor` / VAT strategies still read the module
+  // constant today; the field switches on when multi-country lands.
+  vatRate                Decimal? @default(0.05) @db.Decimal(5, 4)
 
   users        User[]
   customers    Customer[]

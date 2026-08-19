@@ -164,6 +164,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           name: true,
           country: true,
           trn: true,
+          address: true,
           logoUrl: true,
         },
       },

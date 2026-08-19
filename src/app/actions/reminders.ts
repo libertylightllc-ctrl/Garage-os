@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { sendWhatsApp } from "@/lib/whatsapp";
 import { dueDateFor, reminderBody, REMINDER_TYPES, type ReminderType } from "@/lib/reminders";
 import { requireAdvisor } from "@/lib/action-guards";
+import { resolveCustomerLangForOutbound } from "@/lib/customer-lang";
 
 // ---------- Advisor: schedule reminders when a job completes ----------
 export async function scheduleRemindersAction(formData: FormData) {
@@ -60,7 +61,11 @@ async function sendOne(reminderId: string, garageId: string) {
 
   const customer = r.vehicle.customer;
   const vehicleLabel = `${r.vehicle.make} ${r.vehicle.model}`;
-  const lang = (customer.lang ?? "en") as "en" | "ar" | "hi" | "ur";
+  // AR 2026-08-19 — detect from the customer's latest inbound
+  // instead of trusting customer.lang (which is "ar" for every
+  // prod row via the schema default). Falls back to customer.lang
+  // when there's no inbound to detect from.
+  const lang = await resolveCustomerLangForOutbound(customer.id, garageId);
   const body = reminderBody(r.type as ReminderType, vehicleLabel, lang);
 
   await sendWhatsApp({

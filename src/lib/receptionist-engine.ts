@@ -14,10 +14,36 @@ import {
 import { ensurePublicToken } from "@/lib/document-tokens";
 import { messages, statusKey } from "@/i18n/config";
 
+import { detectLangFromBody } from "@/lib/lang-detect";
+
 const SUPPORTED: Lang[] = ["ar", "en", "hi", "ur"];
-function resolveLang(customerLang: string, body: string): Lang {
-  if (/[ऀ-ॿ]/.test(body)) return "hi"; // Devanagari script -> Hindi
-  return (SUPPORTED as string[]).includes(customerLang) ? (customerLang as Lang) : "en";
+
+/**
+ * AR 2026-08-19 rewrite. The old shape only detected Hindi from
+ * Devanagari and fell back to `customer.lang` for everything else —
+ * which was "ar" for every prod customer (schema default; no code
+ * path ever set another value; audit 2026-08-19). Result: an
+ * English customer message got an Arabic auto-reply.
+ *
+ * Returns:
+ *   - `{ lang, confident: true }` when the body signals a language.
+ *   - `{ lang, confident: false }` when the detector can't tell —
+ *     falls back to customer.lang (or "en" as last resort) and the
+ *     caller MUST route to human approval before shipping any auto
+ *     reply, per rule 4 (WhatsApp hand-off is not delivery — wrong-
+ *     language mis-messages on wa.me can't be retracted).
+ */
+function resolveLang(customerLang: string, body: string): { lang: Lang; confident: boolean } {
+  const detected = detectLangFromBody(body);
+  if (detected !== null) return { lang: detected, confident: true };
+  // Ambiguous body — no confident language signal in the message.
+  // Fall back to the stored customer.lang if it's one we support;
+  // otherwise last-resort "en". Either way, the caller routes to
+  // approval instead of auto-firing.
+  const stored = (SUPPORTED as string[]).includes(customerLang)
+    ? (customerLang as Lang)
+    : "en";
+  return { lang: stored, confident: false };
 }
 
 async function buildAutoReply(
@@ -76,7 +102,7 @@ export async function handleInbound(opts: {
   });
   if (rec.dupe || rec.mode === "HUMAN") return; // dupe, or advisor already handling
 
-  const lang: Lang = resolveLang(opts.customer.lang, opts.body);
+  const { lang, confident: langConfident } = resolveLang(opts.customer.lang, opts.body);
   const cls = classifyConversation(opts.body);
 
   // Meter the AI interaction (the Layer-2 margin trap).
@@ -96,16 +122,18 @@ export async function handleInbound(opts: {
 
   const base = { garageId: opts.garageId, customerId: opts.customer.id, waId: opts.waId, aiGenerated: true };
 
-  if (cls.route === "AUTO") {
-    const reply = await buildAutoReply(opts.garageId, opts.customer.id, cls.intent, lang);
-    await sendWhatsApp({ ...base, body: reply });
-  } else if (cls.route === "PROPOSE") {
-    // Draft a reply for the advisor to approve; tell the customer we're confirming.
+  // AR 2026-08-19 — auto-send only when the language is confident.
+  // Any auto-send from here (autoReply / holdingReply / handoffReply)
+  // requires langConfident=true. When false, queue the same reply as
+  // a draft for the advisor to review — the risk of firing in the
+  // wrong language on wa.me (business-rules.md rule 4: not
+  // retractable) outweighs a few seconds of advisor time.
+  const queueDraft = async (body: string) => {
     await prisma.whatsAppMessage.create({
       data: {
         threadId: rec.threadId,
         direction: "OUT",
-        body: draftFor(cls.intent, lang),
+        body,
         waMessageId: `draft-${randomUUID()}`,
         status: "draft",
         aiGenerated: true,
@@ -116,13 +144,42 @@ export async function handleInbound(opts: {
       where: { id: rec.threadId },
       data: { threadStatus: "OPEN" },
     });
-    await sendWhatsApp({ ...base, body: holdingReply(lang) });
+  };
+
+  if (cls.route === "AUTO") {
+    const reply = await buildAutoReply(opts.garageId, opts.customer.id, cls.intent, lang);
+    if (langConfident) {
+      await sendWhatsApp({ ...base, body: reply });
+    } else {
+      // Advisor decides both the wording and the language. Body is
+      // seeded with the detector's best guess; advisor can rewrite
+      // in the draft-card textarea before approving.
+      await queueDraft(reply);
+    }
+  } else if (cls.route === "PROPOSE") {
+    // Draft a reply for the advisor to approve.
+    await queueDraft(draftFor(cls.intent, lang));
+    // Holding line — "let me confirm with the team" — only fires
+    // automatically when we're confident it'll go out in the right
+    // language. Otherwise it queues alongside the substantive draft
+    // (two cards for the advisor to approve or discard).
+    if (langConfident) {
+      await sendWhatsApp({ ...base, body: holdingReply(lang) });
+    } else {
+      await queueDraft(holdingReply(lang));
+    }
   } else {
-    // HANDOFF
+    // HANDOFF — mark thread as needing human attention. The
+    // customer-facing acknowledgement fires auto only when
+    // language-confident; otherwise the advisor picks the language.
     await prisma.whatsAppThread.update({
       where: { id: rec.threadId },
       data: { threadStatus: "NEEDS_HUMAN" },
     });
-    await sendWhatsApp({ ...base, body: handoffReply(lang) });
+    if (langConfident) {
+      await sendWhatsApp({ ...base, body: handoffReply(lang) });
+    } else {
+      await queueDraft(handoffReply(lang));
+    }
   }
 }

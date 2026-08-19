@@ -27,10 +27,18 @@ export async function createBookingPublic(formData: FormData) {
   const garage = await prisma.garage.findUnique({ where: { id: garageId }, select: { id: true } });
   if (!garage || !phone || !text) throw new Error("Missing booking details");
 
+  // AR 2026-08-19 — hardcoded `lang: "ar"` removed. Every prod
+  // Customer used to be created Arabic regardless of what they
+  // actually spoke (schema default is also "ar" — the two hard-
+  // codes were redundant with the default). The AI reply engine
+  // now detects language per message (see src/lib/lang-detect.ts
+  // + receptionist-engine.ts). Existing rows stay as-is; the
+  // detector overrides at message time. Backfill of stored
+  // customer.lang is a follow-up (see the 2026-08-19 report).
   const customer = await prisma.customer.upsert({
     where: { garageId_phone: { garageId, phone } },
     update: { name: name || undefined },
-    create: { garageId, phone, name: name || "Customer", lang: "ar", waId: phone },
+    create: { garageId, phone, name: name || "Customer", waId: phone },
   });
 
   let vehicle = await prisma.vehicle.findFirst({ where: { customerId: customer.id, plate } });

@@ -76,14 +76,53 @@ export default async function ChatThread({
         )}
       </div>
 
+      {/* Conversation. AR 2026-08-19 — moved ABOVE the drafts block.
+          Drafts used to render first, which meant on a long thread the
+          advisor saw the draft card before the customer's most recent
+          message that prompted it. Now: read the thread in reading
+          order, then act on the draft at the bottom (closest to the
+          manual-reply input, which is the same mental model). */}
+      <ul className="flex flex-col gap-2">
+        {convo.map((m) => (
+          <li
+            key={m.id}
+            className={
+            "max-w-[80%] rounded-lg px-3 py-2 text-sm"+
+              (m.direction ==="IN"
+                ?"self-start bg-surface-2"
+                :"self-end bg-blue-600 text-white")
+            }
+          >
+            {m.body}
+            {m.aiGenerated ? (
+              <span className="ms-2 text-[10px] opacity-70">AI</span>
+            ) : null}
+            {/* AR 2026-08-19 — visible SIMULATED marker on any message
+                that was fabricated by the deleted test tools. Post-
+                deletion no new rows can carry this flag, but 4 historical
+                rows in prod are backfilled by migration
+                20260819140000_mark_simulated_whatsapp_messages. The
+                marker stays permanently so an audit reader can
+                distinguish the row from real customer speech. */}
+            {m.simulated ? (
+              <span className="ms-2 rounded-full border border-warning-500/40 bg-warning-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                {t("chatSimulatedTag")}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
       {/* Pending AI drafts to approve.
-          AR 2026-08-19: body is now editable so the advisor can fill in
+          AR 2026-08-19: body is editable so the advisor can fill in
           the `___` placeholder / strip the [draft] marker before
           Approve. approveDraftAction re-checks server-side via
           hasUnfilledPlaceholders() and redirects back with
           ?formError=draft-unfilled&msgId=<id> if the send would still
           have shipped a template. Banner renders on the matching
-          draft below. */}
+          draft below. Drafts now sit BELOW the convo (was above) so
+          the advisor reads the thread in order, then acts on the
+          draft at the bottom next to the manual-reply input. */}
       {drafts.map((d) => {
         const showBanner =
           formError === "draft-unfilled" && erroredDraftId === d.id;
@@ -127,38 +166,6 @@ export default async function ChatThread({
           </div>
         );
       })}
-
-      {/* Conversation */}
-      <ul className="flex flex-col gap-2">
-        {convo.map((m) => (
-          <li
-            key={m.id}
-            className={
-            "max-w-[80%] rounded-lg px-3 py-2 text-sm"+
-              (m.direction ==="IN"
-                ?"self-start bg-surface-2"
-                :"self-end bg-blue-600 text-white")
-            }
-          >
-            {m.body}
-            {m.aiGenerated ? (
-              <span className="ms-2 text-[10px] opacity-70">AI</span>
-            ) : null}
-            {/* AR 2026-08-19 — visible SIMULATED marker on any message
-                that was fabricated by the deleted test tools. Post-
-                deletion no new rows can carry this flag, but 4 historical
-                rows in prod are backfilled by migration
-                20260819140000_mark_simulated_whatsapp_messages. The
-                marker stays permanently so an audit reader can
-                distinguish the row from real customer speech. */}
-            {m.simulated ? (
-              <span className="ms-2 rounded-full border border-warning-500/40 bg-warning-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-                {t("chatSimulatedTag")}
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
 
       {/* Manual reply (advisor) */}
       <form action={sendManualAction} className="flex gap-2">

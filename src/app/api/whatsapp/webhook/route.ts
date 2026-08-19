@@ -42,8 +42,15 @@ export async function POST(req: Request) {
             select: { id: true, lang: true },
           });
           if (!customer) {
+            // AR 2026-08-19 — hardcoded lang:"ar" removed. The
+            // receptionist engine detects language per message via
+            // src/lib/lang-detect.ts; stored customer.lang is only
+            // a fallback for cold-start outbound-initiated sends.
+            // Schema default still applies (ar) as the least-bad
+            // starting point until the customer's first inbound
+            // arrives and the detector picks the real language.
             customer = await prisma.customer.create({
-              data: { garageId, phone: waId, waId, name: waId, lang: "ar" },
+              data: { garageId, phone: waId, waId, name: waId },
               select: { id: true, lang: true },
             });
           }

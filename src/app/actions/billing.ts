@@ -28,6 +28,7 @@ import {
   type LineKind,
 } from "@/lib/billing";
 import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
+import { resolveCustomerLangForOutbound } from "@/lib/customer-lang";
 import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { buildWaMeUrl, normalizeToE164 } from "@/lib/wa";
 import { invoiceMessage, estimateMessage } from "@/lib/po-message";
@@ -699,9 +700,14 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
   const rawPhone = customer.waId ?? customer.phone;
   const phoneE164 = normalizeToE164(rawPhone);
 
+  // AR 2026-08-19 — detect from the customer's latest inbound
+  // instead of trusting customer.lang (which is "ar" for every
+  // prod row — schema default; audit 2026-08-19). Falls back to
+  // customer.lang when there's no inbound to detect from.
+  const detectedLang = await resolveCustomerLangForOutbound(customer.id, user.garageId);
   const publicToken = await ensurePublicToken("estimate", est);
   const body = estimateMessage({
-    customer: { name: customer.name, lang: customer.lang },
+    customer: { name: customer.name, lang: detectedLang },
     garage: { name: est.jobCard.garage.name },
     vehicle: {
       make: est.jobCard.vehicle.make,
@@ -1405,7 +1411,9 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
               engineSize: true,
               fuelType: true,
               customer: {
-                select: { name: true, phone: true, waId: true, lang: true },
+                // id added AR 2026-08-19 so resolveCustomerLangForOutbound
+                // has the FK to detect from message history.
+                select: { id: true, name: true, phone: true, waId: true, lang: true },
               },
             },
           },
@@ -1431,9 +1439,13 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   // for rows created between backfill and this deploy. The
   // `invoiceMessage` builder's field is still named `invoiceId` for
   // now — it's the URL segment, whatever shape.
+  // AR 2026-08-19 — detect from the customer's latest inbound
+  // instead of trusting customer.lang. Same rationale as the
+  // estimate send path just above.
+  const detectedLang = await resolveCustomerLangForOutbound(customer.id, user.garageId);
   const publicToken = await ensurePublicToken("invoice", inv);
   const body = invoiceMessage({
-    customer: { name: customer.name, lang: customer.lang },
+    customer: { name: customer.name, lang: detectedLang },
     garage: { name: inv.garage.name },
     vehicle: {
       make: inv.jobCard.vehicle.make,

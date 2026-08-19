@@ -1621,7 +1621,23 @@ export async function recordPaymentAction(formData: FormData) {
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.payment.create({ data: { invoiceId: inv.id, amount, method } });
+    // AR 2026-08-20: paymentLedger's sourceId now points at the
+    // Payment row (payment.id), not the parent Invoice. The previous
+    // shape (sourceId = inv.id) was a bug present since the first
+    // commit of billing.ts (98e0402, 2026-05) — every paymentLedger
+    // row across prod carried an Invoice id under sourceType='PAYMENT',
+    // which made every row look orphan to any join on the Payment
+    // table. cleanup-orphan-ledger.mts wiped the whole subledger on
+    // 2026-08-20 as a result. Fixing the writer stops the next
+    // cleanup from re-wiping. Capture the created Payment's id via
+    // `select` so the sourceId is available before ledger insertion.
+    // paymentLedger and cleanup-orphan-ledger.mts are now internally
+    // consistent: writer uses payment.id, cleanup joins on payment.id,
+    // the trigger fires on Payment DELETE regardless.
+    const payment = await tx.payment.create({
+      data: { invoiceId: inv.id, amount, method },
+      select: { id: true },
+    });
     await tx.ledgerEntry.createMany({
       data: paymentLedger(amount).map((e) => ({
         garageId: user.garageId,
@@ -1629,7 +1645,7 @@ export async function recordPaymentAction(formData: FormData) {
         debit: e.debit,
         credit: e.credit,
         sourceType: "PAYMENT",
-        sourceId: inv.id,
+        sourceId: payment.id,
       })),
     });
     const paidSoFar = paidBefore + amount;

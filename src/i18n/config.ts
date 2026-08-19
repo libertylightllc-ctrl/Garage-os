@@ -1512,6 +1512,12 @@ const en = {
   remindersBucketDueMonth: "Due this month",
   remindersBucketUpcoming: "Upcoming",
   remindersBulkSendOverdue: "Send to all overdue →",
+  // AR 2026-08-19 — the new send-in-view bulk button carries the
+  // visible count so an advisor filtering to one customer sees "Send
+  // 1 shown", not the misleading unfiltered wording. Confirmation
+  // prompt is honest about hand-off vs delivery (rule 4).
+  remindersBulkSendOverdueN: "Send {n} shown →",
+  remindersBulkSendConfirm: "Hand off {n} WhatsApp reminder(s) to Meta? (One message per customer. wa.me doesn't confirm delivery — see docs/business-rules.md rule 4.)",
   remindersSendToCustomer: "Send to customer →",
   remindersReminderSingular: "reminder",
   remindersReminderPlural: "reminders",
@@ -2984,6 +2990,8 @@ const ar: typeof en = {
   remindersBucketDueMonth: "تستحق هذا الشهر",
   remindersBucketUpcoming: "قادمة",
   remindersBulkSendOverdue: "إرسال لكل المتأخرات ←",
+  remindersBulkSendOverdueN: "إرسال {n} من الظاهرة ←",
+  remindersBulkSendConfirm: "تسليم {n} تذكير عبر واتساب إلى Meta؟ (رسالة واحدة لكل عميل. رابط wa.me لا يؤكد التسليم — انظر docs/business-rules.md قاعدة 4.)",
   remindersSendToCustomer: "إرسال إلى العميل ←",
   remindersReminderSingular: "تذكير",
   remindersReminderPlural: "تذكيرات",

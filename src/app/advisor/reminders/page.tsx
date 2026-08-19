@@ -11,6 +11,7 @@ import {
   cancelReminderAction,
 } from "@/app/actions/reminders";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmButton } from "@/components/confirm-button";
 
 export const dynamic ="force-dynamic";
 
@@ -209,6 +210,14 @@ export default async function RemindersQueue({
   // Whether any reminders in the selected month are due on or before
   // today — drives the 'Send to all overdue this month →' bulk button.
   const hasOverdueInMonth = inMonth.some((r) => r.dueAt <= now);
+  // AR 2026-08-19 — Send-in-view fix. The bulk-send button used to
+  // post an empty form and the action re-queried ALL SCHEDULED
+  // reminders garage-wide, ignoring the filter + month view (INC
+  // 2026-08-18: filtering to one customer, then clicking the button,
+  // sent to every overdue customer's phone). The visible-overdue set
+  // is computed here and passed via hidden inputs so the action can
+  // only act on what the operator sees.
+  const overdueInView = inMonth.filter((r) => r.dueAt <= now);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
@@ -326,12 +335,31 @@ export default async function RemindersQueue({
           still visible per row inside each card). */}
       {inMonth.length > 0 ? (
         <section className="flex flex-col gap-3">
-          {hasOverdueInMonth ? (
+          {overdueInView.length > 0 ? (
             <div className="flex justify-end">
+              {/* AR 2026-08-19 — send-in-view only. Hidden inputs
+                  carry the exact ids the operator can see (filtered +
+                  month-scoped + overdue). The action iterates supplied
+                  ids and no longer re-queries the whole overdue book.
+                  ConfirmButton shows a native prompt with the count +
+                  a warning that WhatsApp receipts are hand-off (rule
+                  4). */}
               <form action={sendDueRemindersAction}>
-                <button className={BTN_PRIMARY}>
-                  {t("remindersBulkSendOverdue")}
-                </button>
+                {overdueInView.map((r) => (
+                  <input key={r.id} type="hidden" name="reminderId" value={r.id} />
+                ))}
+                <ConfirmButton
+                  className={BTN_PRIMARY}
+                  message={t("remindersBulkSendConfirm").replace(
+                    "{n}",
+                    String(overdueInView.length),
+                  )}
+                >
+                  {t("remindersBulkSendOverdueN").replace(
+                    "{n}",
+                    String(overdueInView.length),
+                  )}
+                </ConfirmButton>
               </form>
             </div>
           ) : null}

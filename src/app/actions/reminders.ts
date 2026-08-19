@@ -85,14 +85,40 @@ export async function sendReminderAction(formData: FormData) {
   revalidatePath("/advisor/reminders");
 }
 
-/** Stand-in for a scheduled Cron: send every reminder that's due now. */
-export async function sendDueRemindersAction() {
+/**
+ * Bulk-send reminders. AR 2026-08-19 rewrite.
+ *
+ * The old shape re-queried "every SCHEDULED reminder with dueAt <=
+ * now, for this garage" and ignored the client's filter + month
+ * scope entirely. On 2026-08-18 that shipped 4 reminders to 2
+ * customers' phones when the advisor had filtered to a third
+ * customer with 1 visible row. INC-report class: "the button did a
+ * thing the operator couldn't see".
+ *
+ * The new shape iterates ONLY the ids the caller supplied via
+ * hidden `reminderId` inputs — the filtered / month-scoped set the
+ * page rendered. Server-side, each id is still gated by
+ * garageId + status=SCHEDULED + dueAt<=now, so a hand-crafted POST
+ * with someone else's id / a not-yet-due id / an already-sent id
+ * quietly no-ops via sendOne's own guards.
+ *
+ * Kept as a manual button-triggered path (no separate cron caller
+ * today). If a scheduled cron ever wants to fire "all due now", it
+ * can call the pure `sendOne` in a loop from the cron handler —
+ * doesn't have to go through this action.
+ */
+export async function sendDueRemindersAction(formData: FormData) {
   const user = await requireAdvisor();
-  const due = await prisma.reminder.findMany({
-    where: { garageId: user.garageId, status: "SCHEDULED", dueAt: { lte: new Date() } },
-    select: { id: true },
-  });
-  for (const d of due) await sendOne(d.id, user.garageId);
+  const ids = formData.getAll("reminderId")
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((s) => s.length > 0);
+  // Zero ids submitted → nothing to do. Older callers that
+  // POSTed with no ids used to fire the whole overdue book;
+  // now they no-op. Any UI that wants "send everything overdue"
+  // must enumerate the ids first.
+  for (const id of ids) {
+    await sendOne(id, user.garageId);
+  }
   revalidatePath("/advisor/reminders");
 }
 

@@ -46,7 +46,11 @@ const {
   recordPaymentAction,
 } = await import("@/app/actions/billing");
 const { requestPartAction } = await import("@/app/actions/parts");
-const { addBayAction } = await import("@/app/actions/onboarding");
+// addBayAction was widened to OPERATIONAL (2026-08-20 role-gate
+// audit); MASTER can now add bays. Pin the MASTER-owner boundary
+// on addBranchAction instead — still requireOwner (financial /
+// admin, not operational), so the boundary assertion holds.
+const { addBranchAction } = await import("@/app/actions/onboarding");
 const { requireRole: requirePageRole } = await import("@/lib/guard");
 
 const P = "role-flow-test-";
@@ -118,6 +122,16 @@ async function cleanup() {
   await prisma.whatsAppThread.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.user.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Bay rows attached to this test's garage — MASTER now succeeds
+  // on addBayAction (widened 2026-08-20), so an accidental future
+  // seed would leave a Bay row that FK-blocks the garage delete
+  // below. Deleting by garageId prefix rather than by id prefix
+  // catches any Bay whose parent is our test garage.
+  await prisma.bay.deleteMany({ where: { garageId: { startsWith: P } } });
+  // Branches created via addBranchAction get a cuid, not our test
+  // prefix. Delete branches whose parent (branchOfId) is our test
+  // garage so the parent delete below doesn't FK-fail on them.
+  await prisma.garage.deleteMany({ where: { branchOfId: { startsWith: P } } });
   await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
 }
 
@@ -228,8 +242,11 @@ describe("per-role end-to-end flows", () => {
     expect(String(inv!.total)).toBe("420"); // 400 + 5% VAT
 
     // owner boundary holds BOTH ways:
-    // 1. owner-only ACTIONS throw
-    await expect(call(addBayAction, form({ name: "Bay X" }))).rejects.toThrow(/Not authorized/);
+    // 1. owner-only ACTIONS throw. addBranchAction is the pin —
+    //    creating a branch is admin (financial + org shape), stays
+    //    requireOwner(). addBayAction is operational (widened
+    //    2026-08-20 per role-gate audit) so it would no longer pin.
+    await expect(call(addBranchAction, form({ name: "Branch X" }))).rejects.toThrow(/Not authorized/);
     // 2. the owner DASHBOARD page guard redirects MASTER to its own home
     await expect(requirePageRole("OWNER")).rejects.toThrow("REDIRECT:/advisor");
   });

@@ -2,8 +2,10 @@
  * updateGarageDetailsAction — Batch B (AR 2026-08-19).
  *
  * The action edits Garage.{name,trn,address,defaultLang} scoped to
- * the caller's own garage. Owner-only (requireOwner) — MASTER +
- * ADVISOR + TECH + CASHIER refused. Test coverage:
+ * the caller's own garage. Operational (requireOperational — OWNER +
+ * MASTER) — ADVISOR + TECH + CASHIER refused. Widened 2026-08-20
+ * after narrow-gate audit; matches pricing-defaults precedent
+ * (2026-08-14). Test coverage:
  *
  *   A) OWNER happy path — all four fields updated, DB row reflects,
  *      redirect 'ok=garage-details'.
@@ -11,7 +13,7 @@
  *      long each redirect with the specific error slug.
  *   C) Blank optional fields clear to null (address / trn / lang).
  *   D) Invalid defaultLang value → redirect error, no DB write.
- *   E) MASTER, ADVISOR refused before any DB write.
+ *   E) MASTER allowed; ADVISOR refused before any DB write.
  *   F) Tenant isolation — a smuggled garageId in formData is
  *      IGNORED. The action only ever updates session.garageId.
  */
@@ -185,7 +187,7 @@ describe("updateGarageDetailsAction", () => {
     expect(g!.defaultLang).toBeNull();
   });
 
-  it("E) MASTER refused", async () => {
+  it("E) MASTER allowed — writes go through (widened 2026-08-20)", async () => {
     mockAuth.mockResolvedValue(
       await mockSessionAndSeed({
         id: P + "master-" + gA,
@@ -195,14 +197,14 @@ describe("updateGarageDetailsAction", () => {
     );
     await expect(
       updateGarageDetailsAction(form({
-        name: "hacked",
+        name: "Set by MASTER",
         trn: "",
         address: "",
         defaultLang: "",
       })),
-    ).rejects.toThrow(/Not authorized/);
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-details/);
     const g = await prisma.garage.findUnique({ where: { id: gA } });
-    expect(g!.name).toBe(`${gA} — seeded`);
+    expect(g!.name).toBe("Set by MASTER");
   });
 
   it("E) ADVISOR refused", async () => {

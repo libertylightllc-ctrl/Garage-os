@@ -208,15 +208,18 @@ export default async function SettingsPage({
         </div>
       </section>
 
-      {/* Owner-only: Garage identity — name, TRN, address, default
-          language. Prints on tax invoices (UAE FTA Art. 59 requires
-          supplier name, TRN, address). Country + VAT rate render
-          read-only: country change is a legal event handled by
-          support; UAE VAT is a legal constant, not a shop setting.
-          The vatRate column exists in schema so Phase 2 multi-country
-          plugs in without a schema migration against invoice tables
-          that by then carry live history. */}
-      {isOwner ? (
+      {/* Operational (OWNER + MASTER): Garage identity — name, TRN,
+          address, default language. Prints on tax invoices (UAE FTA
+          Art. 59 requires supplier name, TRN, address). Same guard
+          precedent as pricing defaults (2026-08-14): MASTER runs the
+          shop day-to-day and needs to be able to set the shop's own
+          identity fields. Country + VAT rate render read-only:
+          country change is a legal event handled by support; UAE VAT
+          is a legal constant, not a shop setting. The vatRate column
+          exists in schema so Phase 2 multi-country plugs in without
+          a schema migration against invoice tables that by then
+          carry live history. */}
+      {isOperational ? (
         <>
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">
@@ -310,7 +313,18 @@ export default async function SettingsPage({
               </div>
             </form>
           </section>
+        </>
+      ) : null}
 
+      {/* Garage logo — stays strictly OWNER. uploadGarageLogoAction
+          and removeGarageLogoAction both call requireRole("OWNER")
+          (see src/app/actions/garage-logo.ts); widening this section
+          to MASTER without also widening those actions would create
+          a trap (page renders, submit throws "Not authorized"). If
+          MASTER should be able to edit the logo, both surfaces need
+          to move together. Kept narrow here on purpose. */}
+      {isOwner ? (
+        <>
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">
               {t("settingsSecGarageLogo")}

@@ -86,6 +86,10 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // without the actions makes the form a trap — pin it here.
   { file: "src/app/actions/settings.ts", action: "updateDefaultPartsMarkupAction" },
   { file: "src/app/actions/settings.ts", action: "updateDefaultLaborHourlyCostAction" },
+  // Garage identity (AR 2026-08-20 — widened from requireOwner after
+  // narrow-gate audit; MASTER runs the shop day-to-day and needs to
+  // set its own name / TRN / address for tax invoices).
+  { file: "src/app/actions/settings.ts", action: "updateGarageDetailsAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER
@@ -94,11 +98,6 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
 const OWNER_ONLY_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/onboarding.ts", action: "addBranchAction" },
   { file: "src/app/actions/whatsapp-connect.ts", action: "connectWhatsAppAction" },
-  // Garage identity — name, TRN, address, default customer language.
-  // Sits with team management (owner-only) rather than the operational
-  // Pricing defaults — this is the shop's legal identity on tax
-  // invoices, not a day-to-day operations tweak.
-  { file: "src/app/actions/settings.ts", action: "updateGarageDetailsAction" },
 ];
 
 // Extract the source of a single top-level exported action function.

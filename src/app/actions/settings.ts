@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireOperational, requireOwner } from "@/lib/action-guards";
+import { requireOperational } from "@/lib/action-guards";
 import type { Lang } from "@/lib/receptionist";
 
 // Self-serve account/garage settings. Each action is keyed to
@@ -188,15 +188,17 @@ export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
 
 const SUPPORTED_LANGS = ["ar", "en", "hi", "ur"] as const;
 
-// Garage identity editor — AR 2026-08-19, Batch B. Name / TRN /
-// address / defaultLang printed on tax invoices and estimates.
-// Country + VAT rate stay read-only on the Settings page because
-// neither is a shop preference (country change re-derives VAT
-// strategy and currency, UAE VAT is a legal constant). Sits behind
-// the same guard as team management + logo — not operational.
-// Pinned by master-owner-boundary.test.ts OWNER_ONLY_ACTIONS.
+// Garage identity editor — AR 2026-08-19, Batch B; widened to
+// OPERATIONAL 2026-08-20 (same precedent as pricing defaults on
+// 2026-08-14). Name / TRN / address / defaultLang printed on tax
+// invoices and estimates. Country + VAT rate stay read-only on the
+// Settings page because neither is a shop preference — country
+// change re-derives VAT strategy + currency, UAE VAT is a legal
+// constant. MASTER runs the shop day-to-day; refusing MASTER the
+// ability to set the shop's own name and TRN makes no sense.
+// Pinned by master-owner-boundary.test.ts OPERATIONAL_ACTIONS.
 export async function updateGarageDetailsAction(formData: FormData) {
-  const session = await requireOwner();
+  const session = await requireOperational();
 
   const name = String(formData.get("name") ?? "").trim();
   const trnRaw = String(formData.get("trn") ?? "").trim();

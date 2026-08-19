@@ -1539,6 +1539,73 @@ model LedgerEntry {
   @@index([garageId, account])
 }
 
+// Written by the *_delete_guard BEFORE DELETE triggers on Invoice,
+// Payment, AdvancePayment. The app never inserts, updates, or deletes
+// these rows — Postgres does. See
+// prisma/migrations/20260819160000_ledger_source_delete_guard/migration.sql
+// for the trigger definitions and escape-hatch semantics.
+//
+// NOTE: only 'allowed' rows durably persist. The trigger writes a
+// 'blocked' row and then RAISEs, which aborts the outer transaction
+// and rolls the audit INSERT back along with the DELETE. The block
+// is what has value here — the SQL-editor vector this guards
+// couldn't reach an app-layer sink either. Column kept for a future
+// app-layer shim.
+model InvoiceDeleteAudit {
+  id          String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  invoiceId   String
+  garageId    String
+  number      Int
+  status      String
+  subtotal    Decimal   @db.Decimal(12, 2)
+  vatAmount   Decimal   @db.Decimal(12, 2)
+  total       Decimal   @db.Decimal(12, 2)
+  issuedAt    DateTime?
+  outcome     String
+  attemptedBy String
+  note        String?
+  attemptedAt DateTime  @default(now())
+
+  @@index([garageId])
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
+model PaymentDeleteAudit {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  paymentId   String
+  invoiceId   String
+  amount      Decimal  @db.Decimal(12, 2)
+  method      String
+  paidAt      DateTime
+  outcome     String
+  attemptedBy String
+  note        String?
+  attemptedAt DateTime @default(now())
+
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
+model AdvancePaymentDeleteAudit {
+  id               String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  advancePaymentId String
+  garageId         String
+  jobCardId        String
+  amount           Decimal   @db.Decimal(12, 2)
+  method           String
+  paidAt           DateTime
+  migratedAt       DateTime?
+  outcome          String
+  attemptedBy      String
+  note             String?
+  attemptedAt      DateTime  @default(now())
+
+  @@index([garageId])
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
 // ---------- WhatsApp ----------
 // Per-garage WhatsApp Business connection (Embedded Signup). Token stored ENCRYPTED.
 model WhatsAppAccount {

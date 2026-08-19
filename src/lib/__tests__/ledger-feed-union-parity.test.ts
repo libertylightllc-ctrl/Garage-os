@@ -19,6 +19,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { mergeLedgerFeed } from "@/lib/ledger-feed";
 import { runLedgerFeedUnion } from "@/lib/ledger-feed-query";
+import { withDeleteGuardBypass } from "@/lib/__tests__/helpers/ledger-guard-bypass";
 
 const P = "ledger-parity-";
 const gId = P + "garage";
@@ -28,10 +29,16 @@ const jobId = P + "job";
 const invIdBase = P + "inv-";
 
 async function cleanup() {
-  await prisma.payment.deleteMany({ where: { invoice: { garageId: gId } } });
-  await prisma.advancePayment.deleteMany({ where: { garageId: gId } });
-  await prisma.invoiceLine.deleteMany({ where: { invoice: { garageId: gId } } });
-  await prisma.invoice.deleteMany({ where: { garageId: gId } });
+  // Payment / AdvancePayment / non-DRAFT Invoice deletes now go
+  // through the ledger-source-delete triggers — cleanup routes through
+  // the bypass so seeded rows can be removed. See helpers/
+  // ledger-guard-bypass.ts for why.
+  await withDeleteGuardBypass(prisma, async (tx) => {
+    await tx.payment.deleteMany({ where: { invoice: { garageId: gId } } });
+    await tx.advancePayment.deleteMany({ where: { garageId: gId } });
+    await tx.invoiceLine.deleteMany({ where: { invoice: { garageId: gId } } });
+    await tx.invoice.deleteMany({ where: { garageId: gId } });
+  });
   await prisma.jobCard.deleteMany({ where: { garageId: gId } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: gId } } });
   await prisma.customer.deleteMany({ where: { garageId: gId } });

@@ -20,6 +20,7 @@
 import "dotenv/config";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
+import { withDeleteGuardBypass } from "@/lib/__tests__/helpers/ledger-guard-bypass";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -84,10 +85,14 @@ async function setupVehicle() {
 
 async function cleanup() {
   const where = { jobCard: { garageId: { startsWith: P } } };
-  await prisma.payment.deleteMany({ where: { invoice: where } });
+  // Payment / non-DRAFT Invoice deletes go through the ledger-source
+  // delete triggers — cleanup routes through the bypass.
+  await withDeleteGuardBypass(prisma, async (tx) => {
+    await tx.payment.deleteMany({ where: { invoice: where } });
+    await tx.invoiceLine.deleteMany({ where: { invoice: where } });
+    await tx.invoice.deleteMany({ where: { garageId: { startsWith: P } } });
+  });
   await prisma.ledgerEntry.deleteMany({ where: { garageId: { startsWith: P } } });
-  await prisma.invoiceLine.deleteMany({ where: { invoice: where } });
-  await prisma.invoice.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.estimateLine.deleteMany({ where: { estimate: where } });
   await prisma.estimate.deleteMany({ where });
   await prisma.jobStep.deleteMany({ where });

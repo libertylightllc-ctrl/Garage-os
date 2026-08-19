@@ -566,6 +566,13 @@ const en = {
   // simulateInbound removed 2026-08-19 alongside the deletion of
   // simulateInboundAction. See rule 7.
   chatSimulatedTag: "SIMULATED",
+  // AR 2026-08-19 — banner on a specific draft card when
+  // approveDraftAction refused to send because the body still
+  // contained a `___` placeholder or a [draft] marker. Advisor
+  // edits the textarea to fill in the real value, then re-clicks
+  // Approve. See src/lib/chat-draft.ts.
+  draftUnfilledTitle: "Can't send this draft yet",
+  draftUnfilledBody: "This draft still contains a placeholder (\"___\") or a \"[draft]\" marker. Fill in the real value or remove the marker, then approve again.",
   waConnect: "Connect WhatsApp",
   waConnectIntro: "Connect your garage's WhatsApp number so messages send from your own number.",
   waConnected: "Connected",
@@ -2139,6 +2146,8 @@ const ar: typeof en = {
   discard: "تجاهل",
   message: "رسالة",
   chatSimulatedTag: "محاكاة",
+  draftUnfilledTitle: "لا يمكن إرسال هذه المسودة بعد",
+  draftUnfilledBody: "لا تزال هذه المسودة تحتوي على «___» أو علامة «[مسودة]». أدخل القيمة الفعلية أو أزل العلامة، ثم وافق مرة أخرى.",
   waConnect: "ربط واتساب",
   waConnectIntro: "اربط رقم واتساب الخاص بورشتك لإرسال الرسائل من رقمك.",
   waConnected: "متصل",

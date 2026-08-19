@@ -14,8 +14,21 @@ import {
 
 export const dynamic ="force-dynamic";
 
-export default async function ChatThread({ params }: { params: Promise<{ id: string }> }) {
+export default async function ChatThread({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  // Optional — real Next-App-Router always supplies an object; keeping
+  // it optional avoids breaking existing unit tests that call this page
+  // directly. approveDraftAction redirects here with
+  // ?formError=draft-unfilled&msgId=<id> when a draft still carries a
+  // ___ placeholder or [draft] marker; the render below shows the
+  // banner on the matching draft card.
+  searchParams?: Promise<{ formError?: string; msgId?: string }>;
+}) {
   const { id } = await params;
+  const { formError, msgId: erroredDraftId } = (await searchParams) ?? {};
   const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
   const t = await getT();
 
@@ -63,29 +76,57 @@ export default async function ChatThread({ params }: { params: Promise<{ id: str
         )}
       </div>
 
-      {/* Pending AI drafts to approve */}
-      {drafts.map((d) => (
-        <div key={d.id} className="rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm dark:border-warning-500/30 dark:bg-warning-500/10">
-          <div className="mb-1 text-xs font-medium text-yellow-800 dark:text-yellow-300">
-            {t("pendingDraft")}
-          </div>
-          <p className="mb-2">{d.body}</p>
-          <div className="flex gap-2">
-            <form action={approveDraftAction}>
+      {/* Pending AI drafts to approve.
+          AR 2026-08-19: body is now editable so the advisor can fill in
+          the `___` placeholder / strip the [draft] marker before
+          Approve. approveDraftAction re-checks server-side via
+          hasUnfilledPlaceholders() and redirects back with
+          ?formError=draft-unfilled&msgId=<id> if the send would still
+          have shipped a template. Banner renders on the matching
+          draft below. */}
+      {drafts.map((d) => {
+        const showBanner =
+          formError === "draft-unfilled" && erroredDraftId === d.id;
+        return (
+          <div key={d.id} className="rounded-xl border border-warning-500/40 bg-warning-50 p-3 text-sm dark:border-warning-500/30 dark:bg-warning-500/10">
+            <div className="mb-1 text-xs font-medium text-yellow-800 dark:text-yellow-300">
+              {t("pendingDraft")}
+            </div>
+            {showBanner ? (
+              <div
+                role="alert"
+                className="mb-2 rounded-md border border-danger-500/40 bg-danger-50 px-3 py-2 text-xs text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500"
+              >
+                <div className="font-semibold">{t("draftUnfilledTitle")}</div>
+                <div className="mt-0.5">{t("draftUnfilledBody")}</div>
+              </div>
+            ) : null}
+            <form action={approveDraftAction} className="flex flex-col gap-2">
               <input type="hidden" name="messageId" value={d.id} />
-              <button className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold bg-success-600 text-white hover:bg-success-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-                {t("approveSend")}
-              </button>
+              <textarea
+                name="body"
+                defaultValue={d.body ?? ""}
+                required
+                rows={Math.min(6, Math.max(2, Math.ceil((d.body ?? "").length / 60)))}
+                className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+              />
+              <div className="flex gap-2">
+                <button className="inline-flex h-8 items-center justify-center rounded-lg px-3 text-xs font-semibold bg-success-600 text-white hover:bg-success-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                  {t("approveSend")}
+                </button>
+              </div>
             </form>
-            <form action={discardDraftAction}>
+            {/* Discard lives in its own form so a click doesn't submit
+                the edited body accidentally. */}
+            <form action={discardDraftAction} className="mt-2">
               <input type="hidden" name="messageId" value={d.id} />
               <button className="rounded-md border border-border px-3 py-1 text-xs">
                 {t("discard")}
               </button>
             </form>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Conversation */}
       <ul className="flex flex-col gap-2">

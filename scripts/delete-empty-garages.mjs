@@ -216,6 +216,20 @@ if (!args.commit) {
 console.log("=== Executing deletes in one transaction (all 4 garages) ===");
 try {
     await c.query("BEGIN");
+    // Defensive unlock of the ledger-source delete guards. Every
+    // Payment / AdvancePayment / non-DRAFT Invoice step here already
+    // has expectedZero:true and refused to reach this line unless the
+    // count was 0 — so today the DELETE affects 0 rows and the trigger
+    // never fires. But that's protection by coincidence: if a Payment
+    // ever sneaks into an "empty" garage between the count and the
+    // delete, the trigger would abort the whole transaction and roll
+    // back every other garage's cleanup with it. SET LOCAL keeps the
+    // flags in this txn only; every allowed delete audits with the
+    // whitelist ids so operator queries can distinguish this batch.
+    await c.query(`SET LOCAL app.allow_invoice_delete = 'true'`);
+    await c.query(`SET LOCAL app.allow_payment_delete = 'true'`);
+    await c.query(`SET LOCAL app.allow_advance_delete = 'true'`);
+    await c.query(`SET LOCAL app.delete_note = 'delete-empty-garages ${GARAGE_IDS.join(",")}'`);
     for (const step of STEPS) {
         const r = await c.query(step.del, [GARAGE_IDS]);
         if (r.rowCount > 0) {

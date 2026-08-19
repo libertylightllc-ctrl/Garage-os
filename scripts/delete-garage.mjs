@@ -153,6 +153,18 @@ if (!args.execute) {
 console.log("=== Executing deletes in one transaction ===");
 try {
   await c.query("BEGIN");
+  // Unlock the ledger-source delete guards for this transaction only.
+  // Migration 20260819160000_ledger_source_delete_guard refuses Payment,
+  // AdvancePayment, and non-DRAFT Invoice deletes without these flags.
+  // A whole-tenant purge is exactly the kind of legitimate operator
+  // cleanup the escape hatch was designed for. SET LOCAL scopes the
+  // flags to this BEGIN/COMMIT — the next unrelated session stays
+  // protected. Every allowed delete audits with note='delete-garage'
+  // plus the target garage id.
+  await c.query(`SET LOCAL app.allow_invoice_delete = 'true'`);
+  await c.query(`SET LOCAL app.allow_payment_delete = 'true'`);
+  await c.query(`SET LOCAL app.allow_advance_delete = 'true'`);
+  await c.query(`SET LOCAL app.delete_note = 'delete-garage ${gid}'`);
   for (const [name, , deleteSql] of STEPS) {
     const r = await c.query(deleteSql, [gid]);
     if (r.rowCount > 0) {

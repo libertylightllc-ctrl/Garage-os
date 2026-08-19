@@ -70,6 +70,20 @@ const smokeName = `Smoke Test ${runId}`;
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 
+// Ledger-source delete guards (migration
+// 20260819160000_ledger_source_delete_guard) refuse Payment /
+// AdvancePayment / non-DRAFT Invoice deletes unless the calling
+// session sets a per-table allow flag. Smoke cleanup is a
+// legitimate purge scoped to this run's own debris, so we set the
+// flags at session scope (not SET LOCAL — the whole script runs on
+// this one connection; SET LOCAL would only cover a wrapping
+// transaction). Every allowed delete leaves an audit row noting
+// this run id so real operator-driven deletes stay distinguishable.
+await client.query(`SET app.allow_invoice_delete = 'true'`);
+await client.query(`SET app.allow_payment_delete = 'true'`);
+await client.query(`SET app.allow_advance_delete = 'true'`);
+await client.query(`SET app.delete_note = 'smoke-cleanup run ${runId}'`);
+
 // Order matters — child rows first, then parents. Any join column
 // this script doesn't cover is safe to skip; the next run's fresh
 // prefix keeps them from interfering, and the weekly reseed

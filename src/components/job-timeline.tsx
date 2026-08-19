@@ -1,4 +1,5 @@
 import type { TimelineEvent } from "@/lib/job-timeline";
+import { fmtDate, fmtTime } from "@/lib/format-datetime";
 
 /**
  * Vertical, chronological audit list of everything that happened to a
@@ -38,25 +39,29 @@ export interface JobTimelineLabels {
 interface Props {
     events: TimelineEvent[];
     labels: JobTimelineLabels;
+    /** BCP-47 locale for date/time rendering (e.g. "en", "ar"). */
+    locale: string;
+    /** IANA timezone for date/time rendering (e.g. "Asia/Dubai"). */
+    timeZone: string;
     /** Server-rendered "now" used to compare day boundaries. Passed
      *  explicitly so the component is deterministic — same input,
      *  same output — and we don't read system time mid-render. */
     now?: Date;
 }
 
-const fmtTime = (d: Date) =>
-    d.toISOString().slice(11, 16);
-
-const fmtDate = (d: Date) =>
-    d.toISOString().slice(0, 10);
-
-function dayKey(d: Date): string {
-    return d.toISOString().slice(0, 10);
+// Day-bucket keys use the shop's local calendar (via toLocaleDateString
+// with the passed timeZone) so a job that arrived at 23:30 Dubai and
+// got claimed at 00:15 Dubai the next morning sits under two day
+// headers, not one — matching what the shop actually experienced.
+// `en-CA` renders as YYYY-MM-DD, giving a stable sortable key
+// independent of the display locale.
+function dayKey(d: Date, timeZone: string): string {
+    return d.toLocaleDateString("en-CA", { timeZone });
 }
 
-export function JobTimeline({ events, labels, now }: Props) {
+export function JobTimeline({ events, labels, locale, timeZone, now }: Props) {
     if (events.length === 0) return null;
-    const todayKey = (now ?? events[events.length - 1].at).toISOString().slice(0, 10);
+    const todayKey = dayKey(now ?? events[events.length - 1].at, timeZone);
 
     let lastDay = "";
     return (
@@ -72,7 +77,7 @@ export function JobTimeline({ events, labels, now }: Props) {
             <h2 className="text-sm font-semibold">{labels.title}</h2>
             <ol className="flex flex-col gap-0 rounded-xl border border-border">
                 {events.map((e, idx) => {
-                    const dKey = dayKey(e.at);
+                    const dKey = dayKey(e.at, timeZone);
                     const showDay = dKey !== lastDay;
                     lastDay = dKey;
                     const evLabel = labels.events[e.kindKey] ?? e.kindKey;
@@ -86,12 +91,12 @@ export function JobTimeline({ events, labels, now }: Props) {
                         >
                             {showDay ? (
                                 <p className="text-[10px] font-semibold uppercase tracking-wide text-text-mute">
-                                    {dKey === todayKey ? labels.today : fmtDate(e.at)}
+                                    {dKey === todayKey ? labels.today : fmtDate(e.at, locale, timeZone)}
                                 </p>
                             ) : null}
                             <div className="flex items-baseline gap-3">
-                                <span className="w-12 shrink-0 tabular-nums text-xs text-text-mute">
-                                    {fmtTime(e.at)}
+                                <span className="w-14 shrink-0 tabular-nums text-xs text-text-mute">
+                                    {fmtTime(e.at, locale, timeZone)}
                                 </span>
                                 <span className="flex-1 break-words">
                                     {evLabel}

@@ -375,6 +375,11 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               {t("mileageInLabel")}: {job.mileageIn}
             </p>
           ) : null}
+          {job.fuelLevel ? (
+            <p className="mt-1 text-xs text-text-mute">
+              {t("fuelLevelLabel")}: {t(`fuel_${job.fuelLevel}` as MessageKey)}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -945,7 +950,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
         </div>
       ) : null}
 
-      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} locale={locale} timeZone={tz} />
 
       {/* Activity */}
       <div>

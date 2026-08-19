@@ -29,7 +29,19 @@ import { PER_PAGE_OPTIONS, computeWindow } from "@/lib/pagination";
 
 export const dynamic ="force-dynamic";
 
-const money = (n: number) => `AED ${n.toFixed(2)}`;
+// AR outstanding + a few other cashier tiles can round to a tiny
+// negative from floating-point drift and render as "AED -0.00". Snap
+// values within a sub-fils band around zero to positive zero, and
+// use a unicode minus OUTSIDE the currency prefix for real negatives
+// (user convention: "−AED 12.50", not "AED -12.50"). The other 11
+// `money` helper copies across src/app carry the same latent defect
+// — filed as a separate extract-to-shared-helper follow-up.
+const money = (n: number) => {
+    const snapped = Math.abs(n) < 0.005 ? 0 : n;
+    return snapped < 0
+        ? `−AED ${(-snapped).toFixed(2)}`
+        : `AED ${snapped.toFixed(2)}`;
+};
 
 // ── Filter-row attribute helpers ─────────────────────────────────
 // Each row on the cashier dashboard renders with data-search +

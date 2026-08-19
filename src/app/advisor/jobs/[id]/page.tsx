@@ -735,7 +735,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         <JobProfitCard profit={profit} t={t} hasLabourRate={hasLabourRate} />
       ) : null}
 
-      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} locale={locale} timeZone={tz} />
 
       <JobTimePanel summary={jobTime} t={t} />
 

@@ -33,14 +33,16 @@ const SUPPORTED: Lang[] = ["ar", "en", "hi", "ur"];
  *     reply, per rule 4 (WhatsApp hand-off is not delivery — wrong-
  *     language mis-messages on wa.me can't be retracted).
  */
-function resolveLang(customerLang: string, body: string): { lang: Lang; confident: boolean } {
+function resolveLang(customerLang: string | null | undefined, body: string): { lang: Lang; confident: boolean } {
   const detected = detectLangFromBody(body);
   if (detected !== null) return { lang: detected, confident: true };
   // Ambiguous body — no confident language signal in the message.
   // Fall back to the stored customer.lang if it's one we support;
-  // otherwise last-resort "en". Either way, the caller routes to
-  // approval instead of auto-firing.
-  const stored = (SUPPORTED as string[]).includes(customerLang)
+  // otherwise last-resort "en". Customer.lang is nullable (AR
+  // 2026-08-19) — null means "we don't know", handled the same as
+  // an unrecognised value. Either way the caller routes to approval
+  // instead of auto-firing.
+  const stored = customerLang && (SUPPORTED as string[]).includes(customerLang)
     ? (customerLang as Lang)
     : "en";
   return { lang: stored, confident: false };
@@ -88,7 +90,7 @@ async function buildAutoReply(
  */
 export async function handleInbound(opts: {
   garageId: string;
-  customer: { id: string; lang: string };
+  customer: { id: string; lang: string | null };
   waId: string;
   waMessageId: string;
   body: string;

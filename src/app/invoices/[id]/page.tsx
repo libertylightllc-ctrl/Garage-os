@@ -1046,7 +1046,7 @@ export default async function InvoiceView({
       {/* Audit timeline — print:hidden so the customer-facing PDF
           doesn't expose internal staff actions. */}
       <div className="print:hidden">
-        <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+        <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} locale={locale} timeZone={tz} />
       </div>
 
       </aside>

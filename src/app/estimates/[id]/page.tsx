@@ -820,7 +820,7 @@ export default async function EstimateEditor({
         (Send/approve here simulates the customer; the real WhatsApp approval link is also sent on Send.)
       </p>
 
-      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} />
+      <JobTimeline events={timelineEvents} labels={buildTimelineLabels(t)} locale={locale} timeZone={tz} />
 
       </aside>
       </div>

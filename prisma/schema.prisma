@@ -295,6 +295,11 @@ model Garage {
   // doesn't rewrite historical labour cost — same "frozen at emit"
   // discipline as Invoice.customerTrn.
   defaultLaborHourlyCost Decimal? @db.Decimal(12, 2)
+  // Shop-wide fallback for cold-start outbound customer messages
+  // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
+  // falls through to "en" as last resort. UAE default was Arabic
+  // by fiat; making it a per-shop opt-in stops that assertion.
+  defaultLang            Lang?
 
   users        User[]
   customers    Customer[]
@@ -436,7 +441,13 @@ model Customer {
   name     String
   phone    String
   email    String? // optional, captured at reception
-  lang     Lang   @default(ar)
+  // Nullable + no default (AR 2026-08-19). Previous @default(ar)
+  // populated every prod row with "ar" regardless of whether the
+  // customer had ever indicated Arabic — a fabricated value that
+  // then drove wrong-language outbound sends. Null = "unknown, no
+  // signal yet"; resolveCustomerLangForOutbound falls back to
+  // Garage.defaultLang, then "en".
+  lang     Lang?
   trn      String? // for B2B invoices
   waId     String? // WhatsApp id
 

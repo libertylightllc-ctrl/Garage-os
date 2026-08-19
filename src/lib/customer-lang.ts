@@ -3,17 +3,12 @@
  * (reminders, initial estimates, initial invoices) — the paths that
  * fire without a fresh inbound message to detect from. AR 2026-08-19.
  *
- * Every prod customer.lang is "ar" (schema default; audit 2026-08-19).
- * Reading it blindly ships every reminder / estimate / invoice in
- * Arabic to English + Hindi + Urdu speakers alike. This helper looks
- * at the customer's most recent inbound WhatsApp message and runs
- * the detector on it; the detector is much more likely to be right
- * than the stored default. Fall back to stored customer.lang only
- * when there's no inbound to detect from (brand-new customer).
- *
- * One extra query per send. Small; the alternative is a
- * customer.lang backfill migration + a stateful re-detect on every
- * inbound, which is a separate change.
+ * Customer.lang is now NULLABLE (migration
+ * 20260819180000_customer_lang_nullable) — null = "we don't know
+ * yet". Previous @default(ar) manufactured "ar" for every prod row
+ * and drove wrong-language sends. Rule 7 (production write paths
+ * never fabricate): the record honestly says "unknown" until a real
+ * signal arrives.
  *
  * NOT used by handleInbound — that path has the incoming message
  * body in hand and runs the detector directly. This helper only
@@ -26,14 +21,22 @@ import type { Lang } from "@/lib/receptionist";
 
 const SUPPORTED: Lang[] = ["ar", "en", "hi", "ur"];
 
+function toSupported(v: string | null | undefined): Lang | null {
+  if (!v) return null;
+  return (SUPPORTED as string[]).includes(v) ? (v as Lang) : null;
+}
+
 /**
  * Resolve a language for an outbound WhatsApp message to `customerId`
- * within `garageId`. Preference order:
- *   1. Detect from the customer's most recent inbound message body,
- *      if any inbound exists AND the detector returns non-null.
- *   2. Fall back to the stored customer.lang, gated to SUPPORTED.
- *   3. Last resort: "en".
+ * within `garageId`. Preference order (each step falls through only
+ * if the previous returned no confident answer):
+ *   1. Detect from the customer's most recent inbound message body.
+ *   2. Stored customer.lang, if the row has one.
+ *   3. Garage.defaultLang, if the shop has one.
+ *   4. Last resort: "en".
  *
+ * The last-resort "en" is a communication choice, not a claim on
+ * record — Customer.lang stays null until a real signal arrives.
  * Kept garage-scoped to defeat any cross-tenant leak on a bad id.
  */
 export async function resolveCustomerLangForOutbound(
@@ -56,14 +59,16 @@ export async function resolveCustomerLangForOutbound(
     const detected = detectLangFromBody(latest.body);
     if (detected !== null) return detected;
   }
-  // No confident detection — fall back to the stored customer.lang.
-  // Re-read from DB rather than trust a caller-supplied value; the
-  // helper is the single point where "what language should we send
-  // in" is resolved for cold-start outbound.
+  // No confident detection — fall back through stored customer.lang,
+  // then garage.defaultLang, then "en". One combined query to avoid
+  // a second round-trip.
   const cust = await prisma.customer.findFirst({
     where: { id: customerId, garageId },
-    select: { lang: true },
+    select: { lang: true, garage: { select: { defaultLang: true } } },
   });
-  const stored = cust?.lang ?? "en";
-  return (SUPPORTED as string[]).includes(stored) ? (stored as Lang) : "en";
+  return (
+    toSupported(cust?.lang) ??
+    toSupported(cust?.garage?.defaultLang) ??
+    "en"
+  );
 }

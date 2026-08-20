@@ -554,6 +554,17 @@ export async function releaseJobAction(formData: FormData) {
     where: { id: jobId, claimedById: user.id }, // only the claimer can release
     data: { claimedById: null, claimedAt: null },
   });
+  // Close the WorkSession that was open under this claim. Without
+  // this, a released job left its session running — AA0076 showed
+  // 29.8h in Floor because MASTER released then re-claimed and the
+  // no-op branch of startWorkSession preserved the original
+  // startedAt. AR 2026-08-20 Finding 2 follow-up. Best-effort — the
+  // release happens even if the session close fails (matches the
+  // closeJobSessions contract in work-session.ts). A re-claim after
+  // this write opens a FRESH session because the old row now has
+  // endedAt set — the "already on this car" no-op filter only
+  // catches OPEN sessions.
+  await closeJobSessions(jobId, "JOB_CLOSED");
   revalidatePath("/technician");
 }
 
@@ -583,6 +594,14 @@ export async function reassignJobAction(formData: FormData) {
     where: { id: job.id },
     data: { assignedToId, claimedById: null, claimedAt: null },
   });
+  // Same rationale as releaseJobAction — a reassignment clears the
+  // claim, so any open WorkSession on the job must close too. If the
+  // new tech taps 'I'm on this car' after this, startWorkSession
+  // opens a fresh session (the old row's endedAt is set, so it no
+  // longer matches the OPEN-only filter that drives the no-op
+  // branch). AR 2026-08-20 Finding 2 follow-up. Best-effort — the
+  // reassignment happens even if the session close fails.
+  await closeJobSessions(job.id, "JOB_CLOSED");
   revalidatePath(`/advisor/jobs/${job.id}`);
   revalidatePath("/advisor");
   revalidatePath("/technician");

@@ -4,12 +4,22 @@ import { getT } from "@/i18n/server";
 
 /**
  * Tech-tracking slice 1 — the live "Floor right now" board: which tech
- * is on which car (and for how long), plus who's idle. Server component,
- * refreshes on page load. Rendered on the owner dashboard and, for
- * MASTER, at the top of the Workshop screen.
+ * is on which car, plus who's idle. Server component, refreshes on
+ * page load. Rendered on the owner dashboard and, for MASTER, at the
+ * top of the Workshop screen.
  *
  * jobHref: owner links into /advisor/jobs (their working surface);
  * the workshop strip links into /technician/jobs.
+ *
+ * NO per-row duration reading here anymore (AR 2026-08-20 Finding 2
+ * follow-up). The previous "⏱ 1788m" chip measured
+ * WorkSession.startedAt → now, which diverges from the JobTimings
+ * "Diagnosis: 3h 44m so far" caption on the same screen when a
+ * session leaks across a release + re-claim. Two clocks on one row
+ * showing different numbers for the same job is worse than one. The
+ * JobTimings caption under the card is the surviving read — it
+ * measures workflow-stage duration from JobCard.claimedAt, and that
+ * clock resets on re-claim.
  */
 export async function FloorNow({
   garageIds,
@@ -34,8 +44,6 @@ export async function FloorNow({
     console.error("[FloorNow] query failed — degrading to empty board:", e);
     failed = true;
   }
-  const now = Date.now();
-  const mins = (d: Date) => Math.max(1, Math.round((now - d.getTime()) / 60000));
 
   return (
     <section className="rounded-xl border border-border p-4">
@@ -62,10 +70,6 @@ export async function FloorNow({
                 {s.jobCard.vehicle.plate}
                 {s.jobCard.bay ? ` · ${s.jobCard.bay.name}` : ""}
               </Link>
-              <span className="tabular-nums text-success-600 dark:text-success-500">
-                ⏱ {mins(s.startedAt)}
-                {t("floorNowMin")}
-              </span>
             </li>
           ))}
         </ul>

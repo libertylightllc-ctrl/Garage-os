@@ -34,6 +34,7 @@ const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
 const { requestPartAction, orderPartRequestAction } = await import("@/app/actions/parts");
+const { releaseJobAction, reassignJobAction } = await import("@/app/actions/jobs");
 
 const P = "close-on-hold-test-";
 const gid = P + "g1";
@@ -59,7 +60,7 @@ async function cleanup() {
   await prisma.garage.deleteMany({ where: { id: gid } });
 }
 
-async function seedJobInRepair() {
+async function seedJobInRepair(opts: { claimedById?: string } = {}) {
   const customer = await prisma.customer.create({
     data: { garageId: gid, name: "C", phone: P + Math.random() },
   });
@@ -67,11 +68,17 @@ async function seedJobInRepair() {
     data: { customerId: customer.id, make: "T", model: "C", plate: "P-" + Math.random().toString(36).slice(2, 8) },
   });
   const job = await prisma.jobCard.create({
-    data: { garageId: gid, vehicleId: vehicle.id, status: "REPAIR", claimedById: techId },
+    data: {
+      garageId: gid,
+      vehicleId: vehicle.id,
+      status: "REPAIR",
+      claimedById: opts.claimedById ?? techId,
+      claimedAt: new Date(),
+    },
   });
   // Open work session on the job — this is what should get closed.
   const session = await prisma.workSession.create({
-    data: { garageId: gid, jobCardId: job.id, techId },
+    data: { garageId: gid, jobCardId: job.id, techId: opts.claimedById ?? techId },
   });
   return { job, session };
 }
@@ -157,6 +164,87 @@ describe("close-on-hold — parts sites", () => {
     const j = await prisma.jobCard.findUnique({ where: { id: job.id } });
     expect(j!.status).toBe("ON_HOLD");
     expect(j!.holdReason).toBe("AWAITING_PART");
+    const s = await prisma.workSession.findUnique({ where: { id: session.id } });
+    expect(s!.endedAt).not.toBeNull();
+    expect(s!.endReason).toBe("JOB_CLOSED");
+  });
+});
+
+describe("close-on-hold — claim lifecycle (AR 2026-08-20 follow-up)", () => {
+  // The AA0076 leak vector: releaseJobAction / reassignJobAction
+  // nulled claimedById + claimedAt but never called closeJobSessions.
+  // The session survived the release → next re-claim hit the
+  // "already on this car" no-op in startWorkSession → row's
+  // startedAt preserved from the ORIGINAL claim. Floor showed 29.8h
+  // for a job the tech had physically stopped ~26h before.
+  //
+  // Pin both close sites. Also assert the semantic AR asked to
+  // confirm: after release closes the session, a re-claim opens a
+  // FRESH row rather than reusing the old one.
+
+  it("releaseJobAction — the tech's open session closes with JOB_CLOSED", async () => {
+    const { job, session } = await seedJobInRepair();
+    mockAuth.mockResolvedValue({ user: { id: techId, garageId: gid, role: "TECH", email: "x", name: "x" } });
+
+    await releaseJobAction(form({ jobId: job.id }));
+
+    const j = await prisma.jobCard.findUnique({ where: { id: job.id } });
+    expect(j!.claimedById).toBeNull();
+    expect(j!.claimedAt).toBeNull();
+    const s = await prisma.workSession.findUnique({ where: { id: session.id } });
+    expect(s!.endedAt).not.toBeNull();
+    expect(s!.endReason).toBe("JOB_CLOSED");
+  });
+
+  it("re-claim after release opens a FRESH session (no 'already on this car' no-op)", async () => {
+    // AR's semantic question: one release + one re-claim = two
+    // sessions, with the gap uncovered. Pinned here — a re-claim
+    // via claimJobAction / startWorkAction that follows a release
+    // MUST create a new WorkSession row, not resurrect the closed
+    // one or preserve its startedAt.
+    const { job, session: first } = await seedJobInRepair();
+    mockAuth.mockResolvedValue({ user: { id: techId, garageId: gid, role: "TECH", email: "x", name: "x" } });
+
+    // Capture the release wallclock so we can assert the re-claim's
+    // startedAt is post-release rather than the leaked original.
+    // Small sleep so the second session's startedAt is measurably
+    // after the release timestamp under coarse system clocks.
+    const beforeRelease = new Date();
+    await releaseJobAction(form({ jobId: job.id }));
+    const s1 = await prisma.workSession.findUnique({ where: { id: first.id } });
+    expect(s1!.endedAt).not.toBeNull();
+    expect(s1!.endedAt!.getTime()).toBeGreaterThanOrEqual(beforeRelease.getTime());
+
+    // Simulate the re-claim's effect directly: startWorkSession is
+    // what claimJobAction calls after writing claimedById. Test the
+    // module boundary rather than the full claim flow because
+    // claimJobAction has its own conditional-update semantics that
+    // aren't the point of THIS test.
+    const { startWorkSession } = await import("@/lib/work-session");
+    await startWorkSession(gid, job.id, techId);
+
+    const openNow = await prisma.workSession.findMany({
+      where: { jobCardId: job.id, endedAt: null },
+    });
+    expect(openNow).toHaveLength(1);
+    // Linchpin: the open session is NOT the one we closed above.
+    expect(openNow[0].id).not.toBe(first.id);
+    // And it's a new row created after we started this test, not
+    // a resurrection of the closed one.
+    expect(openNow[0].startedAt.getTime()).toBeGreaterThanOrEqual(beforeRelease.getTime());
+  });
+
+  it("reassignJobAction — advisor reassigns → open session closes with JOB_CLOSED", async () => {
+    const { job, session } = await seedJobInRepair();
+    mockAuth.mockResolvedValue({ user: { id: advisorId, garageId: gid, role: "ADVISOR", email: "x", name: "x" } });
+
+    // Reassign to the shared pool (blank assignedToId — same shape
+    // as the /advisor UI's "un-assign" button).
+    await reassignJobAction(form({ jobId: job.id, assignedToId: "" }));
+
+    const j = await prisma.jobCard.findUnique({ where: { id: job.id } });
+    expect(j!.claimedById).toBeNull();
+    expect(j!.claimedAt).toBeNull();
     const s = await prisma.workSession.findUnique({ where: { id: session.id } });
     expect(s!.endedAt).not.toBeNull();
     expect(s!.endReason).toBe("JOB_CLOSED");

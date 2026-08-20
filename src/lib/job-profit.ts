@@ -63,6 +63,22 @@ export interface ProfitSession {
  * overtime tops out ~7-8h). If a genuine engine strip-down runs
  * over, the profit card will show "Unknown" and a shop that cares
  * can override manually. Better to under-attribute than to invent.
+ *
+ * ─── Do NOT align this with the 12h auto-close threshold ───
+ * The nightly auto-close cron uses 12h, not 8h. This is DELIBERATE
+ * (AR 2026-08-21). Two different questions, two different bars:
+ *
+ *   8h  → "don't trust this number for reporting" — reversible
+ *          judgement, cheap to be wrong (a legitimate long session
+ *          just reads as Unknown; the operator can still see the
+ *          raw duration on the session detail).
+ *   12h → "this session is abandoned; end it and stamp NULL cost" —
+ *          a destructive DB write on the WorkSession row. The bar
+ *          for closing a row is higher than the bar for excluding
+ *          it from a total.
+ *
+ * Aligning them (either direction) trades the wrong risk for the
+ * wrong safety. Keep them apart.
  */
 export const SUSPICIOUS_SESSION_MS = 8 * 60 * 60 * 1000;
 

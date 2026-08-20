@@ -41,6 +41,15 @@
 import { NextResponse } from "next/server";
 import { autoCloseStaleSessions } from "@/lib/work-session";
 
+// ─── Do NOT align this with SUSPICIOUS_SESSION_MS (8h) ───
+// The profit / Hours suspicious threshold is 8h; this destructive-
+// close threshold is 12h. Deliberately different (AR 2026-08-21):
+// the bar for closing a row (DB write, stamps NULL cost, cannot be
+// undone without an operator) is higher than the bar for excluding
+// it from a report (reversible judgement, session data untouched).
+// Aligning either direction trades the wrong risk for the wrong
+// safety. See the fuller note on SUSPICIOUS_SESSION_MS in
+// src/lib/job-profit.ts.
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
 export async function GET(req: Request): Promise<Response> {

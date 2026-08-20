@@ -1,6 +1,24 @@
 import { prisma } from "@/lib/prisma";
+import { SUSPICIOUS_SESSION_MS } from "@/lib/job-profit";
 
+// Two thresholds. Kept intentionally distinct because they answer
+// different operator questions.
+//
+//   STALE_SESSION_MIN (3h) — informational. "This session is long
+//     enough that a supervisor should probably look at it." Rendered
+//     as a ⚠ flag next to the row. Row STILL counts in totals.
+//
+//   SUSPICIOUS_SESSION_MIN (8h) — payroll-relevant. "This duration
+//     exceeds any single legitimate shift; we don't trust it as
+//     wrench-time." Row is EXCLUDED from totalMin / avgPerDayMin /
+//     carsTouched aggregates and appears on a coverage line ("N of
+//     M sessions excluded"). Matches the SUSPICIOUS_SESSION_MS rule
+//     in job-profit.ts — same threshold, same "flag rather than cap
+//     or rewrite" principle. Introduced AR 2026-08-20 after payroll
+//     figures on the Hours screen were including a 33h AA0076
+//     session (34h 1m total, 17h/day avg — a session nobody worked).
 export const STALE_SESSION_MIN = 180; // 3 hours — flag, never discard
+export const SUSPICIOUS_SESSION_MIN = SUSPICIOUS_SESSION_MS / 60_000; // 480 (8h) — exclude
 
 type SessionRow = {
   id: string;
@@ -23,6 +41,10 @@ export type JobTimeSummary = {
   sessionCount: number;
   byTech: TechTime[];
   stale: boolean;
+  /** Sessions ≥8h that were EXCLUDED from totalMin / byTech totals. */
+  excludedSessions: number;
+  /** Total minutes those excluded sessions would have contributed. */
+  excludedMin: number;
 };
 
 export type TechWrenchRow = {
@@ -32,6 +54,8 @@ export type TechWrenchRow = {
   carsTouched: number;
   avgPerCarMin: number;
   staleSessions: number;
+  /** Sessions ≥8h excluded from this tech's totals. */
+  excludedSessions: number;
 };
 
 function sessionMinutes(s: { startedAt: Date; endedAt: Date | null }, now: Date): number {
@@ -44,18 +68,33 @@ export function computeJobTimeSummary(
   now: Date = new Date(),
 ): JobTimeSummary {
   if (sessions.length === 0) {
-    return { totalMin: 0, sessionCount: 0, byTech: [], stale: false };
+    return {
+      totalMin: 0, sessionCount: 0, byTech: [], stale: false,
+      excludedSessions: 0, excludedMin: 0,
+    };
   }
 
   const byTech = new Map<string, { name: string; totalMin: number; sessions: number }>();
   let totalMin = 0;
   let stale = false;
+  let excludedSessions = 0;
+  let excludedMin = 0;
 
   for (const s of sessions) {
     const mins = sessionMinutes(s, now);
-    totalMin += mins;
     if (mins >= STALE_SESSION_MIN) stale = true;
 
+    // Suspicious rows are excluded from totals (see
+    // SUSPICIOUS_SESSION_MIN docstring). We track them so the UI
+    // can show "N of M sessions excluded" instead of silently
+    // shrinking the numbers.
+    if (mins >= SUSPICIOUS_SESSION_MIN) {
+      excludedSessions += 1;
+      excludedMin += mins;
+      continue;
+    }
+
+    totalMin += mins;
     const existing = byTech.get(s.techId);
     if (existing) {
       existing.totalMin += mins;
@@ -75,6 +114,8 @@ export function computeJobTimeSummary(
       sessions: v.sessions,
     })),
     stale,
+    excludedSessions,
+    excludedMin,
   };
 }
 
@@ -110,24 +151,37 @@ export function computeTechWrenchTime(
 ): TechWrenchRow[] {
   const byTech = new Map<
     string,
-    { name: string; totalMin: number; cars: Set<string>; staleSessions: number }
+    {
+      name: string; totalMin: number; cars: Set<string>;
+      staleSessions: number; excludedSessions: number;
+    }
   >();
 
   for (const s of sessions) {
     const mins = sessionMinutes(s, now);
-    const existing = byTech.get(s.techId);
-    if (existing) {
-      existing.totalMin += mins;
-      existing.cars.add(s.jobCardId);
-      if (mins >= STALE_SESSION_MIN) existing.staleSessions += 1;
-    } else {
-      byTech.set(s.techId, {
-        name: s.techName,
-        totalMin: mins,
-        cars: new Set([s.jobCardId]),
-        staleSessions: mins >= STALE_SESSION_MIN ? 1 : 0,
-      });
+    const isStale = mins >= STALE_SESSION_MIN;
+    const isSuspicious = mins >= SUSPICIOUS_SESSION_MIN;
+
+    let existing = byTech.get(s.techId);
+    if (!existing) {
+      existing = {
+        name: s.techName, totalMin: 0, cars: new Set(),
+        staleSessions: 0, excludedSessions: 0,
+      };
+      byTech.set(s.techId, existing);
     }
+    if (isStale) existing.staleSessions += 1;
+
+    // Suspicious rows: excluded from totalMin + carsTouched, counted
+    // in excludedSessions. carsTouched intentionally skips too — a
+    // 33h session on one car shouldn't count that car as "touched"
+    // in a way that inflates avgPerCarMin later.
+    if (isSuspicious) {
+      existing.excludedSessions += 1;
+      continue;
+    }
+    existing.totalMin += mins;
+    existing.cars.add(s.jobCardId);
   }
 
   return Array.from(byTech.entries())
@@ -138,6 +192,7 @@ export function computeTechWrenchTime(
       carsTouched: v.cars.size,
       avgPerCarMin: v.cars.size > 0 ? v.totalMin / v.cars.size : 0,
       staleSessions: v.staleSessions,
+      excludedSessions: v.excludedSessions,
     }))
     .sort((a, b) => b.totalMin - a.totalMin);
 }
@@ -175,6 +230,10 @@ export type TechDailyHistory = {
   totalDays: number;
   avgPerDayMin: number;
   staleSessions: number;
+  /** Sessions ≥8h excluded from totalMin / avgPerDayMin / per-day totals. */
+  excludedSessions: number;
+  /** Minutes those excluded sessions would have contributed. */
+  excludedMin: number;
 };
 
 type HistorySession = {
@@ -197,7 +256,11 @@ export function computeTechDailyHistory(
   tzOffsetMin: number = 240, // UAE +4h default
 ): TechDailyHistory {
   if (sessions.length === 0) {
-    return { days: [], totalMin: 0, totalCars: 0, totalDays: 0, avgPerDayMin: 0, staleSessions: 0 };
+    return {
+      days: [], totalMin: 0, totalCars: 0, totalDays: 0,
+      avgPerDayMin: 0, staleSessions: 0,
+      excludedSessions: 0, excludedMin: 0,
+    };
   }
 
   const dayKey = (d: Date): string => {
@@ -220,11 +283,27 @@ export function computeTechDailyHistory(
 
   const allCars = new Set<string>();
   let totalStale = 0;
+  let excludedSessions = 0;
+  let excludedMin = 0;
 
   for (const s of sessions) {
     const mins = sessionMinutes(s, now);
     const isStale = mins >= STALE_SESSION_MIN;
+    const isSuspicious = mins >= SUSPICIOUS_SESSION_MIN;
     if (isStale) totalStale++;
+
+    // Suspicious sessions (≥8h) are removed from every downstream
+    // total — day totalMin, car totalMin, totalCars, avgPerDayMin.
+    // Not silent: excludedSessions / excludedMin surface on the
+    // Hours page's coverage line. Same "flag rather than
+    // fabricate" rule as the profit card. AR 2026-08-20 — the 33h
+    // AA0076 session was inflating avgPerDayMin to 17h/day.
+    if (isSuspicious) {
+      excludedSessions += 1;
+      excludedMin += mins;
+      continue;
+    }
+
     const key = dayKey(s.startedAt);
     allCars.add(s.jobCardId);
 
@@ -287,6 +366,8 @@ export function computeTechDailyHistory(
     totalDays,
     avgPerDayMin: totalDays > 0 ? totalMin / totalDays : 0,
     staleSessions: totalStale,
+    excludedSessions,
+    excludedMin,
   };
 }
 

@@ -256,3 +256,107 @@ describe("computeTechDailyHistory", () => {
     expect(result.days[0].date > result.days[1].date).toBe(true);
   });
 });
+
+// ────────────────────────────────────────────────────────────────
+// Suspicious-session exclusion — AR 2026-08-20. The AA0076 33h
+// session was silently double-counting into Hours totals (34h total,
+// 17h/day avg). Rule from the profit-card work: sessions ≥8h are
+// EXCLUDED from totals and reported on a coverage line, matching
+// job-profit.ts SUSPICIOUS_SESSION_MS.
+// ────────────────────────────────────────────────────────────────
+
+const EIGHT_H = 8 * 60;
+const NINE_H = 9 * 60;
+
+describe("computeJobTimeSummary — suspicious-session exclusion", () => {
+  it("session under 8h counts normally", () => {
+    const sessions = [
+      { id: "s1", techId: "t1", techName: "Tariq", startedAt: ago(EIGHT_H - 1), endedAt: ago(0), endReason: "SWITCHED" },
+    ];
+    const r = computeJobTimeSummary(sessions, now);
+    expect(r.totalMin).toBe(EIGHT_H - 1);
+    expect(r.excludedSessions).toBe(0);
+    expect(r.excludedMin).toBe(0);
+  });
+
+  it("exactly 8h — flagged (threshold inclusive)", () => {
+    const sessions = [
+      { id: "s1", techId: "t1", techName: "Tariq", startedAt: ago(EIGHT_H), endedAt: ago(0), endReason: "SWITCHED" },
+    ];
+    const r = computeJobTimeSummary(sessions, now);
+    expect(r.totalMin).toBe(0);
+    expect(r.excludedSessions).toBe(1);
+    expect(r.excludedMin).toBe(EIGHT_H);
+    expect(r.byTech).toHaveLength(0);
+  });
+
+  it("33h AA0076-shaped session — excluded, matches the regression case", () => {
+    const sessions = [
+      { id: "s1", techId: "t1", techName: "Master", startedAt: ago(33 * 60), endedAt: ago(0), endReason: null },
+    ];
+    const r = computeJobTimeSummary(sessions, now);
+    expect(r.totalMin).toBe(0);
+    expect(r.sessionCount).toBe(1);
+    expect(r.excludedSessions).toBe(1);
+    expect(r.excludedMin).toBe(33 * 60);
+  });
+
+  it("mixed: 45m + 12h — the 45m counts, the 12h excluded", () => {
+    const sessions = [
+      { id: "s1", techId: "t1", techName: "Tariq", startedAt: ago(45), endedAt: ago(0), endReason: "SWITCHED" },
+      { id: "s2", techId: "t1", techName: "Tariq", startedAt: ago(12 * 60), endedAt: ago(0), endReason: null },
+    ];
+    const r = computeJobTimeSummary(sessions, now);
+    expect(r.totalMin).toBe(45);
+    expect(r.excludedSessions).toBe(1);
+    expect(r.excludedMin).toBe(12 * 60);
+    // Tariq's per-tech total ONLY includes the 45m — the linchpin
+    // for payroll not being inflated by the excluded row.
+    expect(r.byTech[0].totalMin).toBe(45);
+    expect(r.byTech[0].sessions).toBe(1);
+  });
+});
+
+describe("computeTechWrenchTime — suspicious-session exclusion", () => {
+  it("excluded session does NOT count into totalMin OR carsTouched", () => {
+    const sessions = [
+      { techId: "t1", techName: "Tariq", jobCardId: "j1", startedAt: ago(30), endedAt: ago(0) },
+      { techId: "t1", techName: "Tariq", jobCardId: "j2", startedAt: ago(NINE_H), endedAt: ago(0) },
+    ];
+    const r = computeTechWrenchTime(sessions, now);
+    expect(r).toHaveLength(1);
+    // Only j1's 30m counts.
+    expect(r[0].totalMin).toBe(30);
+    expect(r[0].carsTouched).toBe(1);
+    expect(r[0].avgPerCarMin).toBe(30);
+    expect(r[0].excludedSessions).toBe(1);
+  });
+});
+
+describe("computeTechDailyHistory — suspicious-session exclusion", () => {
+  const TZ = 240; // UAE +4
+  const hSession = (
+    jobCardId: string, jobNumber: number, make: string, plate: string,
+    startAgoMin: number, endAgoMin: number | null,
+  ) => ({
+    jobCardId, jobNumber, vehicleMake: make, vehiclePlate: plate,
+    startedAt: ago(startAgoMin),
+    endedAt: endAgoMin === null ? null : ago(endAgoMin),
+  });
+
+  it("day totals + avgPerDayMin exclude ≥8h; coverage line surfaces the count", () => {
+    const sessions = [
+      hSession("j1", 1, "Toyota", "A 123", 60, 30),   // 30m — counts
+      hSession("j1", 1, "Toyota", "A 123", 33 * 60, 0), // 33h — excluded (AA0076-shaped)
+    ];
+    const r = computeTechDailyHistory(sessions, now, TZ);
+    expect(r.excludedSessions).toBe(1);
+    expect(r.excludedMin).toBe(33 * 60);
+    // The excluded session doesn't even create a day row on its own —
+    // only the 30m session groups. So totalDays=1 and totalMin=30.
+    expect(r.totalMin).toBe(30);
+    expect(r.totalDays).toBe(1);
+    expect(r.avgPerDayMin).toBe(30);
+    expect(r.totalCars).toBe(1);
+  });
+});

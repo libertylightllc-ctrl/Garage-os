@@ -106,6 +106,14 @@ export default async function TechHoursPage({
         </p>
       ) : null}
 
+      {history.excludedSessions > 0 ? (
+        <p className="text-xs font-medium text-amber-600">
+          🚫 {t("wrenchExcludedCount")
+            .replace("{n}", String(history.excludedSessions))
+            .replace("{mins}", formatMin(history.excludedMin))}
+        </p>
+      ) : null}
+
       {history.days.length === 0 ? (
         <p className="text-sm text-text-mute">{t("techHoursNone")}</p>
       ) : (

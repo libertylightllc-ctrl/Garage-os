@@ -181,6 +181,18 @@ export default async function TechHoursLookupPage({
             </p>
           ) : null}
 
+          {/* Coverage line — sessions ≥8h are excluded from every
+              total above and reported here so the numbers stay
+              honest. AR 2026-08-20 — was silently double-counting a
+              33h AA0076 session into a 17h/day average. */}
+          {history.excludedSessions > 0 ? (
+            <p className="text-xs font-medium text-amber-600">
+              🚫 {t("wrenchExcludedCount")
+                .replace("{n}", String(history.excludedSessions))
+                .replace("{mins}", formatMin(history.excludedMin))}
+            </p>
+          ) : null}
+
           {history.days.length === 0 ? (
             <p className="text-sm text-text-mute">{t("techHoursNone")}</p>
           ) : (

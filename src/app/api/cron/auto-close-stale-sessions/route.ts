@@ -44,12 +44,28 @@ import { autoCloseStaleSessions } from "@/lib/work-session";
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
 export async function GET(req: Request): Promise<Response> {
+  // Unconditional startup log so a Vercel function log line ALWAYS
+  // exists per invocation, regardless of auth outcome. Added
+  // 2026-08-20 after a manual Vercel Run appeared to do nothing —
+  // there was no log line either way, so we couldn't tell if the
+  // route was 401'd, executed with zero candidates, or errored.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${secret}`) {
-      return new NextResponse("unauthorized", { status: 401 });
-    }
+  const authRequired = Boolean(secret);
+  const authHeader = req.headers.get("authorization") ?? "";
+  const authOk = !secret || authHeader === `Bearer ${secret}`;
+  console.log(
+    `[auto-close-stale-sessions] invoked at=${new Date().toISOString()} authRequired=${authRequired} authOk=${authOk} thresholdHours=12`,
+  );
+
+  if (secret && !authOk) {
+    // Log the mismatch shape (not the secret) so ops can spot
+    // "Vercel dashboard Run" vs "cron scheduler" vs "external curl"
+    // by header pattern. authHeader.startsWith("Bearer ") tells us
+    // whether ANY bearer was sent, without leaking either token.
+    console.warn(
+      `[auto-close-stale-sessions] 401 — no matching Authorization; bearer sent=${authHeader.startsWith("Bearer ")}`,
+    );
+    return new NextResponse("unauthorized", { status: 401 });
   }
 
   const closed = await autoCloseStaleSessions(TWELVE_HOURS_MS);

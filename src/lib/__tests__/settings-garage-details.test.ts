@@ -1,21 +1,21 @@
 /**
- * updateGarageDetailsAction — Batch B (AR 2026-08-19).
+ * Garage identity editors — AR 2026-08-19 (Batch B), split into four
+ * per-field actions 2026-08-20 after AR hit the two-tab overwrite:
+ * saving the address on one tab silently wiped the defaultLang that
+ * a fresh save on another tab had just written, because the old
+ * single-form shape posted every field on every save.
  *
- * The action edits Garage.{name,trn,address,defaultLang} scoped to
- * the caller's own garage. Operational (requireOperational — OWNER +
- * MASTER) — ADVISOR + TECH + CASHIER refused. Widened 2026-08-20
- * after narrow-gate audit; matches pricing-defaults precedent
- * (2026-08-14). Test coverage:
+ * Operational (requireOperational — OWNER + MASTER) — ADVISOR + TECH
+ * + CASHIER refused. Coverage:
  *
- *   A) OWNER happy path — all four fields updated, DB row reflects,
- *      redirect 'ok=garage-details'.
- *   B) Field-length caps — name too long, trn too long, address too
- *      long each redirect with the specific error slug.
- *   C) Blank optional fields clear to null (address / trn / lang).
- *   D) Invalid defaultLang value → redirect error, no DB write.
- *   E) MASTER allowed; ADVISOR refused before any DB write.
+ *   A) Each action writes ONLY its own column — the linchpin
+ *      assertion that makes the two-tab bug unrepresentable.
+ *   B) Field-length caps for name / TRN / address.
+ *   C) Blank optional fields clear to null (TRN / address / lang).
+ *   D) Invalid defaultLang value rejected.
+ *   E) MASTER allowed on each of the four; ADVISOR refused on each.
  *   F) Tenant isolation — a smuggled garageId in formData is
- *      IGNORED. The action only ever updates session.garageId.
+ *      ignored. Each action only ever writes session.garageId.
  */
 
 import "dotenv/config";
@@ -32,7 +32,12 @@ vi.mock("next/navigation", () => ({
 const mockAuth = vi.fn();
 vi.mock("@/auth", () => ({ auth: () => mockAuth() }));
 
-const { updateGarageDetailsAction } = await import("@/app/actions/settings");
+const {
+  updateGarageNameAction,
+  updateGarageTrnAction,
+  updateGarageAddressAction,
+  updateGarageDefaultLangAction,
+} = await import("@/app/actions/settings");
 
 const P = "settings-garage-details-test-";
 const gA = P + "garage-A";
@@ -66,181 +71,204 @@ beforeEach(async () => {
 });
 afterAll(cleanup);
 
-async function ownerOf(garageId: string) {
+async function operationalOf(garageId: string, role: "OWNER" | "MASTER" = "OWNER") {
   return mockSessionAndSeed({
-    id: P + "owner-" + garageId,
+    id: P + role.toLowerCase() + "-" + garageId,
     garageId,
-    role: "OWNER",
+    role,
   });
 }
 
-describe("updateGarageDetailsAction", () => {
-  it("A) OWNER: updates name, trn, address, defaultLang", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+describe("garage identity — per-field actions", () => {
+  it("A) name save touches ONLY name — trn / address / defaultLang untouched", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+
+    // Seed the other three fields with values so we can prove they
+    // survive a name save unmodified.
+    await prisma.garage.update({
+      where: { id: gA },
+      data: { trn: "100000000000042", address: "SEEDED ADDR", defaultLang: "ar" },
+    });
 
     await expect(
-      updateGarageDetailsAction(form({
-        name: "Deira Central Motors",
-        trn: "100000000000042",
-        address: "P.O. Box 12345\nShop 7, Al Ittihad Rd\nDeira, Dubai",
-        defaultLang: "ar",
-      })),
-    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-details/);
+      updateGarageNameAction(form({ name: "Deira Central Motors" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-name/);
 
     const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.name).toBe("Deira Central Motors");
+    // Linchpin — the three sibling fields DIDN'T move.
     expect(g!.trn).toBe("100000000000042");
-    expect(g!.address).toBe("P.O. Box 12345\nShop 7, Al Ittihad Rd\nDeira, Dubai");
+    expect(g!.address).toBe("SEEDED ADDR");
     expect(g!.defaultLang).toBe("ar");
-    // Other garage untouched.
-    const gOther = await prisma.garage.findUnique({ where: { id: gB } });
-    expect(gOther!.name).toBe(`${gB} — seeded`);
+  });
+
+  it("A) address save touches ONLY address — the two-tab overwrite bug (2026-08-20)", async () => {
+    // The exact incident: operator has Settings open on tab A with
+    // an old defaultLang=null in the DOM. Tab B sets defaultLang=ar.
+    // Tab A now saves the address. Under the old single-form shape,
+    // tab A's save would clobber defaultLang back to null. Split
+    // forms make it structurally impossible.
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({
+      where: { id: gA },
+      data: { defaultLang: "ar" }, // simulate tab B's earlier save
+    });
+
+    await expect(
+      updateGarageAddressAction(form({
+        address: "P.O. Box 12345\nShop 7, Al Ittihad Rd\nDeira, Dubai",
+      })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-address/);
+
+    const g = await prisma.garage.findUnique({ where: { id: gA } });
+    expect(g!.address).toBe("P.O. Box 12345\nShop 7, Al Ittihad Rd\nDeira, Dubai");
+    // defaultLang MUST have survived the address save.
+    expect(g!.defaultLang).toBe("ar");
+  });
+
+  it("A) trn save touches ONLY trn", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({
+      where: { id: gA },
+      data: { address: "SEEDED", defaultLang: "en" },
+    });
+    await expect(
+      updateGarageTrnAction(form({ trn: "100000000000099" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-trn/);
+    const g = await prisma.garage.findUnique({ where: { id: gA } });
+    expect(g!.trn).toBe("100000000000099");
+    expect(g!.address).toBe("SEEDED");
+    expect(g!.defaultLang).toBe("en");
+  });
+
+  it("A) defaultLang save touches ONLY defaultLang", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({
+      where: { id: gA },
+      data: { name: "Kept Name", trn: "TRN-KEEP", address: "ADDR-KEEP" },
+    });
+    await expect(
+      updateGarageDefaultLangAction(form({ defaultLang: "ar" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-default-lang/);
+    const g = await prisma.garage.findUnique({ where: { id: gA } });
+    expect(g!.defaultLang).toBe("ar");
+    expect(g!.name).toBe("Kept Name");
+    expect(g!.trn).toBe("TRN-KEEP");
+    expect(g!.address).toBe("ADDR-KEEP");
   });
 
   it("B) name required — empty name rejected", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "",
-        trn: "",
-        address: "",
-        defaultLang: "",
-      })),
+      updateGarageNameAction(form({ name: "" })),
     ).rejects.toThrow(/REDIRECT:\/settings\?error=garage-name-required/);
-
-    // No DB write.
     const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.name).toBe(`${gA} — seeded`);
   });
 
-  it("B) name > 80 chars rejected", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+  it("B) name > 80 rejected", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "x".repeat(81),
-        trn: "",
-        address: "",
-        defaultLang: "",
-      })),
+      updateGarageNameAction(form({ name: "x".repeat(81) })),
     ).rejects.toThrow(/REDIRECT:\/settings\?error=garage-name-too-long/);
   });
 
-  it("B) TRN > 40 chars rejected", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+  it("B) TRN > 40 rejected", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "OK",
-        trn: "1".repeat(41),
-        address: "",
-        defaultLang: "",
-      })),
+      updateGarageTrnAction(form({ trn: "1".repeat(41) })),
     ).rejects.toThrow(/REDIRECT:\/settings\?error=trn-too-long/);
   });
 
-  it("B) address > 400 chars rejected", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+  it("B) address > 400 rejected", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "OK",
-        trn: "",
-        address: "y".repeat(401),
-        defaultLang: "",
-      })),
+      updateGarageAddressAction(form({ address: "y".repeat(401) })),
     ).rejects.toThrow(/REDIRECT:\/settings\?error=address-too-long/);
   });
 
-  it("C) blank optional fields clear to null", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
-
-    // Seed with values.
-    await prisma.garage.update({
-      where: { id: gA },
-      data: { trn: "100000000000042", address: "OLD ADDR", defaultLang: "ar" },
-    });
-
+  it("C) blank optional TRN clears to null", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({ where: { id: gA }, data: { trn: "OLD" } });
     await expect(
-      updateGarageDetailsAction(form({
-        name: "Deira Central Motors",
-        trn: "",
-        address: "",
-        defaultLang: "",
-      })),
-    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-details/);
-
+      updateGarageTrnAction(form({ trn: "" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-trn/);
     const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.trn).toBeNull();
+  });
+
+  it("C) blank optional address clears to null", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({ where: { id: gA }, data: { address: "OLD ADDR" } });
+    await expect(
+      updateGarageAddressAction(form({ address: "" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-address/);
+    const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.address).toBeNull();
+  });
+
+  it("C) blank optional defaultLang clears to null", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
+    await prisma.garage.update({ where: { id: gA }, data: { defaultLang: "ar" } });
+    await expect(
+      updateGarageDefaultLangAction(form({ defaultLang: "" })),
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-default-lang/);
+    const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.defaultLang).toBeNull();
   });
 
   it("D) invalid defaultLang rejected, no DB write", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "OK",
-        trn: "",
-        address: "",
-        defaultLang: "es", // not supported
-      })),
+      updateGarageDefaultLangAction(form({ defaultLang: "es" })),
     ).rejects.toThrow(/REDIRECT:\/settings\?error=garage-lang-invalid/);
     const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.defaultLang).toBeNull();
   });
 
-  it("E) MASTER allowed — writes go through (widened 2026-08-20)", async () => {
-    mockAuth.mockResolvedValue(
-      await mockSessionAndSeed({
-        id: P + "master-" + gA,
-        garageId: gA,
-        role: "MASTER",
-      }),
-    );
+  it("E) MASTER allowed on every one of the four", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA, "MASTER"));
     await expect(
-      updateGarageDetailsAction(form({
-        name: "Set by MASTER",
-        trn: "",
-        address: "",
-        defaultLang: "",
-      })),
-    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-details/);
+      updateGarageNameAction(form({ name: "By MASTER" })),
+    ).rejects.toThrow(/ok=garage-name/);
+    await expect(
+      updateGarageTrnAction(form({ trn: "TRN-BY-MASTER" })),
+    ).rejects.toThrow(/ok=garage-trn/);
+    await expect(
+      updateGarageAddressAction(form({ address: "ADDR BY MASTER" })),
+    ).rejects.toThrow(/ok=garage-address/);
+    await expect(
+      updateGarageDefaultLangAction(form({ defaultLang: "ar" })),
+    ).rejects.toThrow(/ok=garage-default-lang/);
     const g = await prisma.garage.findUnique({ where: { id: gA } });
-    expect(g!.name).toBe("Set by MASTER");
+    expect(g!.name).toBe("By MASTER");
+    expect(g!.trn).toBe("TRN-BY-MASTER");
+    expect(g!.address).toBe("ADDR BY MASTER");
+    expect(g!.defaultLang).toBe("ar");
   });
 
-  it("E) ADVISOR refused", async () => {
+  it("E) ADVISOR refused on every one of the four", async () => {
     mockAuth.mockResolvedValue(
       await mockSessionAndSeed({
-        id: P + "adv-" + gA,
-        garageId: gA,
-        role: "ADVISOR",
+        id: P + "adv-" + gA, garageId: gA, role: "ADVISOR",
       }),
     );
-    await expect(
-      updateGarageDetailsAction(form({
-        name: "hacked",
-        trn: "",
-        address: "",
-        defaultLang: "",
-      })),
-    ).rejects.toThrow(/Not authorized/);
+    await expect(updateGarageNameAction(form({ name: "hack" }))).rejects.toThrow(/Not authorized/);
+    await expect(updateGarageTrnAction(form({ trn: "hack" }))).rejects.toThrow(/Not authorized/);
+    await expect(updateGarageAddressAction(form({ address: "hack" }))).rejects.toThrow(/Not authorized/);
+    await expect(updateGarageDefaultLangAction(form({ defaultLang: "ar" }))).rejects.toThrow(/Not authorized/);
     const g = await prisma.garage.findUnique({ where: { id: gA } });
     expect(g!.name).toBe(`${gA} — seeded`);
   });
 
-  it("F) tenant isolation — smuggled garageId in form ignored", async () => {
-    mockAuth.mockResolvedValue(await ownerOf(gA));
+  it("F) tenant isolation — smuggled garageId in form ignored (on name save)", async () => {
+    mockAuth.mockResolvedValue(await operationalOf(gA));
     await expect(
-      updateGarageDetailsAction(form({
+      updateGarageNameAction(form({
         name: "trying to touch B",
-        trn: "",
-        address: "",
-        defaultLang: "",
-        // Attempted attack: the form claims garageId=gB. The action
-        // MUST ignore it and write to session.garageId (=gA) only.
-        garageId: gB,
+        garageId: gB, // attempted attack
       })),
-    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-details/);
-
+    ).rejects.toThrow(/REDIRECT:\/settings\?ok=garage-name/);
     const a = await prisma.garage.findUnique({ where: { id: gA } });
     const b = await prisma.garage.findUnique({ where: { id: gB } });
     expect(a!.name).toBe("trying to touch B");

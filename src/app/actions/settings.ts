@@ -188,51 +188,79 @@ export async function updateDefaultLaborHourlyCostAction(formData: FormData) {
 
 const SUPPORTED_LANGS = ["ar", "en", "hi", "ur"] as const;
 
-// Garage identity editor — AR 2026-08-19, Batch B; widened to
-// OPERATIONAL 2026-08-20 (same precedent as pricing defaults on
-// 2026-08-14). Name / TRN / address / defaultLang printed on tax
-// invoices and estimates. Country + VAT rate stay read-only on the
-// Settings page because neither is a shop preference — country
-// change re-derives VAT strategy + currency, UAE VAT is a legal
-// constant. MASTER runs the shop day-to-day; refusing MASTER the
-// ability to set the shop's own name and TRN makes no sense.
-// Pinned by master-owner-boundary.test.ts OPERATIONAL_ACTIONS.
-export async function updateGarageDetailsAction(formData: FormData) {
+// Garage identity editors — split into four per-field actions
+// 2026-08-20 (was a single updateGarageDetailsAction from Batch B
+// on 2026-08-19; AR hit the two-tab overwrite class where saving
+// address wiped defaultLang because the stale <select> value posted
+// alongside). One form per input matches the precedent already in
+// this file for profile (name vs email) and pricing defaults (parts
+// markup vs labour hourly cost). Each write's SET clause names only
+// its own column, so a concurrent edit to a sibling field can never
+// be overwritten by a save on this one.
+//
+// Guards: all four use requireOperational() — MASTER runs the shop
+// and sets its own identity fields. Pinned by
+// master-owner-boundary.test.ts OPERATIONAL_ACTIONS.
+//
+// Blank string on any optional field = "clear it back to null" (the
+// UI reflects this — leaving a field empty and saving removes the
+// value rather than sending a zero-length string on to the print
+// header). Country + VAT rate stay read-only in the UI; there are
+// no actions here for them because they aren't shop preferences.
+
+export async function updateGarageNameAction(formData: FormData) {
   const session = await requireOperational();
-
   const name = String(formData.get("name") ?? "").trim();
-  const trnRaw = String(formData.get("trn") ?? "").trim();
-  const addressRaw = String(formData.get("address") ?? "").trim();
-  const langRaw = String(formData.get("defaultLang") ?? "").trim();
-
   if (!name) back("garage-name-required");
   if (name.length > 80) back("garage-name-too-long");
-  if (trnRaw.length > 40) back("trn-too-long");
-  if (addressRaw.length > 400) back("address-too-long");
-
-  // Blank string on any optional field = "clear it back to null".
-  // The Settings UI reflects this: leaving the field empty and
-  // saving removes the current value rather than sending a zero-
-  // length string on to the print header.
-  const trn = trnRaw === "" ? null : trnRaw;
-  const address = addressRaw === "" ? null : addressRaw;
-
-  // defaultLang picker only offers "" (no default set), "ar", "en".
-  // Anything else in formData is a tampered submit — reject to
-  // "unknown" rather than trust it.
-  let defaultLang: Lang | null = null;
-  if (langRaw !== "") {
-    if (!(SUPPORTED_LANGS as readonly string[]).includes(langRaw)) {
-      back("garage-lang-invalid");
-    }
-    defaultLang = langRaw as Lang;
-  }
-
   await prisma.garage.update({
     where: { id: session.garageId },
-    data: { name, trn, address, defaultLang },
+    data: { name },
   });
-
   revalidatePath("/settings");
-  redirect("/settings?ok=garage-details");
+  redirect("/settings?ok=garage-name");
+}
+
+export async function updateGarageTrnAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("trn") ?? "").trim();
+  if (raw.length > 40) back("trn-too-long");
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { trn: raw === "" ? null : raw },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=garage-trn");
+}
+
+export async function updateGarageAddressAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("address") ?? "").trim();
+  if (raw.length > 400) back("address-too-long");
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { address: raw === "" ? null : raw },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=garage-address");
+}
+
+export async function updateGarageDefaultLangAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("defaultLang") ?? "").trim();
+  // Picker only offers "" (no default set), "ar", "en". Anything else
+  // in formData is a tampered submit — reject rather than trust it.
+  let defaultLang: Lang | null = null;
+  if (raw !== "") {
+    if (!(SUPPORTED_LANGS as readonly string[]).includes(raw)) {
+      back("garage-lang-invalid");
+    }
+    defaultLang = raw as Lang;
+  }
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { defaultLang },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=garage-default-lang");
 }

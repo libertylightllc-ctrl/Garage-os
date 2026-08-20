@@ -86,10 +86,14 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // without the actions makes the form a trap — pin it here.
   { file: "src/app/actions/settings.ts", action: "updateDefaultPartsMarkupAction" },
   { file: "src/app/actions/settings.ts", action: "updateDefaultLaborHourlyCostAction" },
-  // Garage identity (AR 2026-08-20 — widened from requireOwner after
-  // narrow-gate audit; MASTER runs the shop day-to-day and needs to
-  // set its own name / TRN / address for tax invoices).
-  { file: "src/app/actions/settings.ts", action: "updateGarageDetailsAction" },
+  // Garage identity — split into four per-field actions 2026-08-20
+  // after AR hit the two-tab overwrite class. Each writes only its
+  // own column. All four operational, matching the pricing-defaults
+  // precedent.
+  { file: "src/app/actions/settings.ts", action: "updateGarageNameAction" },
+  { file: "src/app/actions/settings.ts", action: "updateGarageTrnAction" },
+  { file: "src/app/actions/settings.ts", action: "updateGarageAddressAction" },
+  { file: "src/app/actions/settings.ts", action: "updateGarageDefaultLangAction" },
   // Bays capacity — /owner/bays is on the MASTER-permitted list per
   // AGENTS.md Key Decision #8, but both mutating actions were still
   // requireOwner (fifth instance of the trap pattern, caught in the

@@ -9,7 +9,10 @@ import {
   updateProfileEmailAction,
   updateDefaultPartsMarkupAction,
   updateDefaultLaborHourlyCostAction,
-  updateGarageDetailsAction,
+  updateGarageNameAction,
+  updateGarageTrnAction,
+  updateGarageAddressAction,
+  updateGarageDefaultLangAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -64,7 +67,14 @@ const OK_KEY: Record<string, MessageKey> = {
   "logo-removed": "settingsOkLogoRemoved",
   "markup": "settingsOkMarkup",
   "labor-cost": "settingsOkLaborCost",
-  "garage-details": "settingsOkGarageDetails",
+  // Per-field OK codes — one per garage-identity input so the banner
+  // names the field that was saved. Rules out the "success message
+  // for a save that quietly overwrote a sibling field" class the old
+  // single-form shape allowed (AR 2026-08-20).
+  "garage-name": "settingsOkGarageName",
+  "garage-trn": "settingsOkGarageTrn",
+  "garage-address": "settingsOkGarageAddress",
+  "garage-default-lang": "settingsOkGarageDefaultLang",
 };
 
 export default async function SettingsPage({
@@ -228,90 +238,122 @@ export default async function SettingsPage({
             <p className="mt-0.5 text-xs text-text-mute">
               {t("settingsSecGarageDetailsHint")}
             </p>
-            <form action={updateGarageDetailsAction} className="mt-4 flex flex-col gap-3">
-              <label className="text-xs text-text-mute">
+            {/* Four separate forms — one per field — 2026-08-20. The
+                previous single-form shape submitted ALL four values
+                on every save, so an older tab's stale <select> value
+                could silently clobber a fresh sibling save from
+                another tab. Same precedent as the profile section
+                above (name vs email) and pricing defaults below
+                (markup vs labour). Each SET clause names only its
+                own column now — no cross-field overwrite is
+                representable. */}
+            <form action={updateGarageNameAction} className="mt-4 flex flex-col gap-2">
+              <label htmlFor="garage-name" className="text-xs text-text-mute">
                 {t("settingsGarageNameLabel")}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <input
+                  id="garage-name"
                   name="name"
                   defaultValue={garage?.name ?? ""}
                   required
                   maxLength={80}
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                 />
-              </label>
-              <label className="text-xs text-text-mute">
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+            </form>
+
+            <form action={updateGarageTrnAction} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <label htmlFor="garage-trn" className="text-xs text-text-mute">
                 {t("settingsGarageTrnLabel")}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <input
+                  id="garage-trn"
                   name="trn"
                   defaultValue={garage?.trn ?? ""}
                   maxLength={40}
                   inputMode="numeric"
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm tabular-nums"
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm tabular-nums"
                 />
-                <span className="mt-1 block text-[11px] text-text-mute">
-                  {t("settingsGarageTrnHint")}
-                </span>
-              </label>
-              <label className="text-xs text-text-mute">
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+              <span className="text-[11px] text-text-mute">
+                {t("settingsGarageTrnHint")}
+              </span>
+            </form>
+
+            <form action={updateGarageAddressAction} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <label htmlFor="garage-address" className="text-xs text-text-mute">
                 {t("settingsGarageAddressLabel")}
-                <textarea
-                  name="address"
-                  defaultValue={garage?.address ?? ""}
-                  rows={3}
-                  maxLength={400}
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                />
-                <span className="mt-1 block text-[11px] text-text-mute">
-                  {t("settingsGarageAddressHint")}
-                </span>
               </label>
-              <label className="text-xs text-text-mute">
+              <textarea
+                id="garage-address"
+                name="address"
+                defaultValue={garage?.address ?? ""}
+                rows={3}
+                maxLength={400}
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+              />
+              <span className="text-[11px] text-text-mute">
+                {t("settingsGarageAddressHint")}
+              </span>
+              <div>
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+            </form>
+
+            <form action={updateGarageDefaultLangAction} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <label htmlFor="garage-default-lang" className="text-xs text-text-mute">
                 {t("settingsGarageDefaultLangLabel")}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <select
+                  id="garage-default-lang"
                   name="defaultLang"
                   defaultValue={garage?.defaultLang ?? ""}
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
                 >
                   <option value="">{t("settingsGarageDefaultLangUnset")}</option>
                   <option value="en">{t("settingsGarageDefaultLangEn")}</option>
                   <option value="ar">{t("settingsGarageDefaultLangAr")}</option>
                 </select>
-                <span className="mt-1 block text-[11px] text-text-mute">
-                  {t("settingsGarageDefaultLangHint")}
-                </span>
-              </label>
-              {/* Read-only country + VAT rate. Rendered as plain
-                  labelled text (not disabled inputs) so nothing
-                  suggests you could edit them if you clicked hard
-                  enough. Both carry a small explainer line. */}
-              <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/70 bg-surface-2/30 p-3 sm:grid-cols-2">
-                <div>
-                  <div className="text-xs text-text-mute">
-                    {t("settingsGarageCountryLabel")}
-                  </div>
-                  <div className="mt-0.5 text-sm">
-                    {t("settingsGarageCountryValueUae")}
-                  </div>
-                  <div className="mt-1 text-[11px] text-text-mute">
-                    {t("settingsGarageCountryLocked")}
-                  </div>
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+              <span className="text-[11px] text-text-mute">
+                {t("settingsGarageDefaultLangHint")}
+              </span>
+            </form>
+
+            {/* Read-only country + VAT rate. Rendered as plain
+                labelled text (not disabled inputs) so nothing
+                suggests you could edit them if you clicked hard
+                enough. Both carry a small explainer line. */}
+            <div className="mt-4 grid grid-cols-1 gap-3 rounded-lg border border-border/70 bg-surface-2/30 p-3 sm:grid-cols-2">
+              <div>
+                <div className="text-xs text-text-mute">
+                  {t("settingsGarageCountryLabel")}
                 </div>
-                <div>
-                  <div className="text-xs text-text-mute">
-                    {t("settingsGarageVatLabel")}
-                  </div>
-                  <div className="mt-0.5 text-sm tabular-nums">
-                    {t("settingsGarageVatValueUae")}
-                  </div>
-                  <div className="mt-1 text-[11px] text-text-mute">
-                    {t("settingsGarageVatLocked")}
-                  </div>
+                <div className="mt-0.5 text-sm">
+                  {t("settingsGarageCountryValueUae")}
+                </div>
+                <div className="mt-1 text-[11px] text-text-mute">
+                  {t("settingsGarageCountryLocked")}
                 </div>
               </div>
               <div>
-                <Button type="submit">{t("settingsSave")}</Button>
+                <div className="text-xs text-text-mute">
+                  {t("settingsGarageVatLabel")}
+                </div>
+                <div className="mt-0.5 text-sm tabular-nums">
+                  {t("settingsGarageVatValueUae")}
+                </div>
+                <div className="mt-1 text-[11px] text-text-mute">
+                  {t("settingsGarageVatLocked")}
+                </div>
               </div>
-            </form>
+            </div>
           </section>
         </>
       ) : null}

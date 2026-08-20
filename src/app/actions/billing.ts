@@ -31,6 +31,7 @@ import { sendWhatsApp, appUrl } from "@/lib/whatsapp";
 import { resolveCustomerLangForOutbound } from "@/lib/customer-lang";
 import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { buildWaMeUrl, normalizeToE164 } from "@/lib/wa";
+import { closeJobSessions } from "@/lib/work-session";
 import { invoiceMessage, estimateMessage } from "@/lib/po-message";
 import { logInvoiceSend } from "@/lib/invoice-send-log";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
@@ -594,6 +595,10 @@ export async function setEstimateStatusAction(formData: FormData) {
           where: { id: est.jobCardId },
           data: { status: "ON_HOLD", heldFrom: job.status, holdReason: "AWAITING_APPROVAL" },
         });
+        // Wrench-time stops when a job pauses for extra-work
+        // approval — no work happens while we wait for the customer
+        // to bless the higher price. AR 2026-08-20 Finding 2.
+        await closeJobSessions(est.jobCardId, "JOB_CLOSED");
       }
     }
   }
@@ -776,6 +781,10 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
             holdReason: "AWAITING_APPROVAL",
           },
         });
+        // AR 2026-08-20 Finding 2 — same rationale as the sibling
+        // pause site earlier in this file: a job awaiting approval
+        // is not being worked, wrench-time must stop.
+        await closeJobSessions(est.jobCardId, "JOB_CLOSED");
       }
     }
   }

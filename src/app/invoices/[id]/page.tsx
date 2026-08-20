@@ -182,7 +182,11 @@ export default async function InvoiceView({
     ? await Promise.all([
         prisma.workSession.findMany({
           where: { jobCardId: inv.jobCardId, endedAt: { not: null } },
-          select: { laborCostSnapshot: true },
+          // startedAt/endedAt added AR 2026-08-20 so computeJobProfit
+          // can flag suspicious-duration sessions (≥8h) as unknown
+          // rather than crediting inflated labour cost. See
+          // SUSPICIOUS_SESSION_MS in @/lib/job-profit.
+          select: { laborCostSnapshot: true, startedAt: true, endedAt: true },
         }),
         // Direct-fit receipts on this job (AR 2026-08-16). Any
         // receipt whose cost isn't provably reflected on the

@@ -22,7 +22,18 @@ import { computeLaborCostSnapshot } from "@/lib/worksession-cost-snapshot";
  * as the Unknown coverage bucket.
  */
 
-export type EndReason = "SWITCHED" | "SENT_FOR_ESTIMATE" | "COMPLETED" | "JOB_CLOSED";
+// AUTO_CLOSED added AR 2026-08-20 (Finding 2). Written by the nightly
+// cron /api/cron/auto-close-stale-sessions for any session still open
+// >12h. Distinct from JOB_CLOSED because it carries no cost signal —
+// we don't know when the tech actually stopped, so laborCostSnapshot
+// stays null and the profit card handles the row as Unknown rather
+// than crediting the full elapsed duration as work.
+export type EndReason =
+  | "SWITCHED"
+  | "SENT_FOR_ESTIMATE"
+  | "COMPLETED"
+  | "JOB_CLOSED"
+  | "AUTO_CLOSED";
 
 /**
  * The tech is on THIS car now. Closes their previous open segment (any
@@ -124,6 +135,73 @@ export async function floorNow(garageIds: string[]) {
   ]);
   const busy = new Set(open.map((s) => s.tech.id));
   return { working: open, idle: techs.filter((t) => !busy.has(t.id)) };
+}
+
+/**
+ * Auto-close every session still open older than `olderThanMs` ago
+ * (AR 2026-08-20 Finding 2, nightly cron path). Distinct from
+ * closeJobSessions / closeTechSession because:
+ *
+ *   1. endReason = "AUTO_CLOSED" — the profit card treats this as
+ *      Unknown (via null laborCostSnapshot below), and an audit
+ *      query can distinguish "operator forgot to stop the clock"
+ *      from every other close cause.
+ *   2. laborCostSnapshot = NULL, always. We don't know when the
+ *      tech actually stopped — recording (elapsedTime × rate) as
+ *      "labour cost" would invent a number. Null routes the
+ *      session into the profit card's Unknown bucket, honest
+ *      about the missing signal.
+ *   3. endedAt stamped at now(), not at some fictional "when they
+ *      probably left". The elapsed duration is preserved as raw
+ *      data (startedAt is untouched, endedAt = now), but no cost
+ *      is derived from it.
+ *
+ * Returns per-session summary so the cron can log a pattern check
+ * ("tech X had N auto-closes in past week") without an extra query.
+ */
+export async function autoCloseStaleSessions(olderThanMs: number): Promise<Array<{
+  id: string;
+  techId: string;
+  techName: string | null;
+  jobCardId: string;
+  jobCardNumber: number | null;
+  startedAt: Date;
+  durationHours: number;
+}>> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - olderThanMs);
+  const stale = await prisma.workSession.findMany({
+    where: { endedAt: null, startedAt: { lt: cutoff } },
+    select: {
+      id: true,
+      startedAt: true,
+      tech: { select: { id: true, name: true } },
+      jobCard: { select: { id: true, number: true } },
+    },
+  });
+  if (stale.length === 0) return [];
+  await prisma.$transaction(
+    stale.map((s) =>
+      prisma.workSession.update({
+        where: { id: s.id },
+        data: {
+          endedAt: now,
+          endReason: "AUTO_CLOSED",
+          // Deliberately null — see docstring rationale.
+          laborCostSnapshot: null,
+        },
+      }),
+    ),
+  );
+  return stale.map((s) => ({
+    id: s.id,
+    techId: s.tech.id,
+    techName: s.tech.name,
+    jobCardId: s.jobCard.id,
+    jobCardNumber: s.jobCard.number,
+    startedAt: s.startedAt,
+    durationHours: Math.round(((now.getTime() - s.startedAt.getTime()) / 3_600_000) * 10) / 10,
+  }));
 }
 
 // ── internals ─────────────────────────────────────────────────────

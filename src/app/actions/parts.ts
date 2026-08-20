@@ -14,6 +14,7 @@ import {
 import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
 import { canLogWork } from "@/lib/claim";
 import { requireAnyRole, requireTech } from "@/lib/action-guards";
+import { closeJobSessions } from "@/lib/work-session";
 
 
 // Stages a job may be auto-paused from (linear, non-terminal, not already held).
@@ -138,6 +139,14 @@ export async function requestPartAction(formData: FormData) {
       where: { id: job.id },
       data: { status: "ON_HOLD", heldFrom: job.status as never, holdReason: "AWAITING_PART" },
     });
+    // Wrench-time stops when the tech asks for a part. Prior shape
+    // left the WorkSession open — tech taps request-part, walks to
+    // storage / phones the supplier / goes home — and the clock
+    // kept ticking against the invoice. AR 2026-08-20 Finding 2.
+    // Best-effort — the pause happens even if the session close
+    // fails (never blocks the job flow, matches the closeJobSessions
+    // contract in work-session.ts).
+    await closeJobSessions(job.id, "JOB_CLOSED");
   }
 
   revalidatePath(`/technician/jobs/${job.id}`);
@@ -229,6 +238,9 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
         where: { id: req.jobCardId },
         data: { status: "ON_HOLD", heldFrom: job.status as never, holdReason: "AWAITING_PART" },
       });
+      // Same rationale as the tech-side request flow above — a job
+      // paused for parts is not being worked. AR 2026-08-20 Finding 2.
+      await closeJobSessions(req.jobCardId, "JOB_CLOSED");
     }
   }
 

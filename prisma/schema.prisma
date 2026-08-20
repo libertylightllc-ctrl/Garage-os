@@ -1480,7 +1480,7 @@ model WorkSession {
   tech      User      @relation("TechWorkSessions", fields: [techId], references: [id])
   startedAt DateTime  @default(now())
   endedAt   DateTime? // null = live segment
-  endReason String?   // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED
+  endReason String?   // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED | AUTO_CLOSED (2026-08-20, nightly cron)
 
   // AR 2026-08-12 profit reporting Step 4 — labour cost frozen at
   // session close. Value = hours(session) × Garage.defaultLaborHourlyCost

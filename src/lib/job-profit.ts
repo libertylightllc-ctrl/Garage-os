@@ -36,6 +36,40 @@ export interface ProfitLine {
 export interface ProfitSession {
     /** Snapshotted at session close; null = unknown, not zero. */
     laborCostSnapshot: Prisma.Decimal | string | number | null;
+    /**
+     * Session start / close — used together to detect suspicious
+     * duration (see SUSPICIOUS_SESSION_MS). Both optional so
+     * existing unit tests that only care about cost math don't
+     * have to fabricate timestamps; production callers ALWAYS pass
+     * them (the Prisma select in advisor/jobs/[id] + invoices/[id]
+     * pulls both fields). When either is absent the duration check
+     * is skipped — the session counts as legitimate.
+     */
+    startedAt?: Date;
+    endedAt?: Date | null;
+}
+
+/**
+ * A session is "suspicious for profit purposes" when its duration is
+ * this long or longer. AR 2026-08-20 (Finding 2 report): no single
+ * legitimate shift exceeds 8h, and the observed inflation vector
+ * (tech doesn't stop the clock, tapping another car the next morning
+ * closes the previous segment as SWITCHED with a 16-hour duration)
+ * lands right in this range. Suspicious rows contribute NULL to
+ * laborCost — same handling as `laborCostSnapshot === null`. The
+ * raw session data is not rewritten; the interpretation shifts.
+ *
+ * Deliberately higher than a normal shift (a full shift with
+ * overtime tops out ~7-8h). If a genuine engine strip-down runs
+ * over, the profit card will show "Unknown" and a shop that cares
+ * can override manually. Better to under-attribute than to invent.
+ */
+export const SUSPICIOUS_SESSION_MS = 8 * 60 * 60 * 1000;
+
+function sessionDurationSuspicious(s: ProfitSession): boolean {
+    if (!s.startedAt || !s.endedAt) return false;
+    const ms = s.endedAt.getTime() - s.startedAt.getTime();
+    return ms >= SUSPICIOUS_SESSION_MS;
 }
 
 export interface JobProfit {
@@ -158,13 +192,20 @@ export function computeJobProfit(
         // FEE / other kinds contribute to revenue only; no cost side.
     }
 
+    // A session counts toward laborCost only when we have a snapshot
+    // AND the duration is plausible. Suspicious durations (≥8h — see
+    // SUSPICIOUS_SESSION_MS) are treated the same as null — the row
+    // is left uncounted, laborCovered doesn't tick, and the whole
+    // job's labour cost flips to Unknown per the coverage rule below.
+    // "Flag rather than cap" — the raw laborCostSnapshot value stays
+    // on the row untouched; the profit view refuses to trust it.
     let laborCostAccum = ZERO;
     let laborCovered = 0;
     for (const s of sessions) {
-        if (s.laborCostSnapshot !== null && s.laborCostSnapshot !== undefined) {
-            laborCovered += 1;
-            laborCostAccum = laborCostAccum.plus(new Prisma.Decimal(s.laborCostSnapshot));
-        }
+        if (s.laborCostSnapshot === null || s.laborCostSnapshot === undefined) continue;
+        if (sessionDurationSuspicious(s)) continue;
+        laborCovered += 1;
+        laborCostAccum = laborCostAccum.plus(new Prisma.Decimal(s.laborCostSnapshot));
     }
     const laborTotal = sessions.length;
 

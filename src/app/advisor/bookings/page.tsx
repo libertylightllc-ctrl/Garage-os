@@ -4,6 +4,7 @@ import { AppNav } from "@/components/app-nav";
 import { confirmBookingAction, rejectBookingAction } from "@/app/actions/intake";
 import type { IntakeProposal } from "@/lib/ai";
 import { getT } from "@/i18n/server";
+import { getViewableUrl } from "@/lib/storage";
 
 export const dynamic ="force-dynamic";
 
@@ -16,6 +17,20 @@ export default async function BookingsInbox() {
     include: { customer: true, vehicle: true },
     orderBy: { createdAt:"desc"},
   });
+
+  // Re-sign the first photo of every booking with a photo. Was
+  // rendering the raw stored signed URL which 404s after 7 days
+  // (AR 2026-08-21). Per-row awaits are fine for the inbox — the
+  // list is small and each booking has at most a single visible
+  // preview here.
+  const previewUrlById = new Map<string, string>();
+  await Promise.all(
+    bookings
+      .filter((b) => b.photoUrls.length > 0)
+      .map(async (b) => {
+        previewUrlById.set(b.id, await getViewableUrl(b.photoUrls[0]));
+      }),
+  );
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
@@ -50,7 +65,7 @@ export default async function BookingsInbox() {
                 ) : null}
                 {b.photoUrls.length > 0 ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.photoUrls[0]} alt="customer photo" className="mt-2 max-h-40 rounded-md"/>
+                  <img src={previewUrlById.get(b.id) ?? b.photoUrls[0]} alt="customer photo" className="mt-2 max-h-40 rounded-md"/>
                 ) : null}
                 <div className="mt-3 flex gap-2">
                   <form action={confirmBookingAction}>

@@ -13,28 +13,33 @@ import {
 } from "@/lib/storage";
 import { requireAdvisor } from "@/lib/action-guards";
 import { newPublicToken } from "@/lib/document-tokens";
+import { normalizeUaePhone } from "@/lib/normalize";
 
 // PUBLIC — customer booking (no auth; this is the WhatsApp/web booking surface).
 export async function createBookingPublic(formData: FormData) {
   const garageId = String(formData.get("garageId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
+  const phoneRaw = String(formData.get("phone") ?? "").trim();
   const make = String(formData.get("make") ?? "").trim() || "Vehicle";
   const model = String(formData.get("model") ?? "").trim() || "";
   const plate = String(formData.get("plate") ?? "").trim() || "—";
   const text = String(formData.get("text") ?? "").trim();
 
   const garage = await prisma.garage.findUnique({ where: { id: garageId }, select: { id: true } });
-  if (!garage || !phone || !text) throw new Error("Missing booking details");
+  if (!garage || !phoneRaw || !text) throw new Error("Missing booking details");
 
-  // AR 2026-08-19 — hardcoded `lang: "ar"` removed. Every prod
-  // Customer used to be created Arabic regardless of what they
-  // actually spoke (schema default is also "ar" — the two hard-
-  // codes were redundant with the default). The AI reply engine
-  // now detects language per message (see src/lib/lang-detect.ts
-  // + receptionist-engine.ts). Existing rows stay as-is; the
-  // detector overrides at message time. Backfill of stored
-  // customer.lang is a follow-up (see the 2026-08-19 report).
+  // AR 2026-08-21 — normalise the customer's phone before the upsert.
+  // Previously the raw form value hit garageId_phone directly, so
+  // "+971 50 123 4567", "0501234567", and "971501234567" from the
+  // same person on different days created 3 Customer rows. Moulkia
+  // intake normalises the same way (intake-moulkia.ts:311); this
+  // aligns the public booking path. Historical duplicates are NOT
+  // merged by this change — separate probe + operator-run job. If
+  // the input is blank after normalisation (all-punctuation garbage
+  // typed in), refuse rather than upsert on empty string.
+  const phone = normalizeUaePhone(phoneRaw);
+  if (!phone) throw new Error("Missing booking details");
+
   const customer = await prisma.customer.upsert({
     where: { garageId_phone: { garageId, phone } },
     update: { name: name || undefined },
@@ -113,18 +118,57 @@ export async function confirmBookingAction(formData: FormData) {
   if (booking.jobCard) redirect(`/advisor/jobs/${booking.jobCard.id}`);
   if (!booking.vehicleId) throw new Error("Booking has no vehicle");
 
-  const job = await prisma.jobCard.create({
-    data: {
-      garageId: user.garageId,
-      vehicleId: booking.vehicleId,
-      advisorId: user.id,
-      bookingId: booking.id,
-      status: "ARRIVED",
-      publicToken: newPublicToken(),
-    },
-    select: { id: true },
+  // Carry-over from Booking → JobCard (AR 2026-08-21 — was silently
+  // dropping the customer's own complaint text and any photos they
+  // uploaded on the public booking page):
+  //   - rawText → JobCard.complaint (the "customer said..." field
+  //     the tech reads first). Whitespace-trimmed; empty stays null
+  //     so the "no complaint" branch on the tech page renders
+  //     unchanged.
+  //   - photoUrls → one JobStep(type=PHOTO) per URL. Reuses the same
+  //     display path as the advisor's later check-in photos (see
+  //     checkInPhotoAction in jobs.ts:604) — no new column needed.
+  //     Transcript names them explicitly so the timeline reads
+  //     "Booking photo" not just an unlabelled thumbnail.
+  //
+  // Booking has no check-in condition field (schema:520 — Booking
+  // carries rawText / voiceNoteUrl / photoUrls / aiProposalJson;
+  // exterior/interior condition are captured at the JobCard reception
+  // stage). Nothing to lose there. voiceNoteUrl carry-over deferred —
+  // no JobStep type for audio today.
+  const complaint = booking.rawText?.trim() || null;
+  const photoUrls = booking.photoUrls ?? [];
+
+  const job = await prisma.$transaction(async (tx) => {
+    const created = await tx.jobCard.create({
+      data: {
+        garageId: user.garageId,
+        vehicleId: booking.vehicleId!,
+        advisorId: user.id,
+        bookingId: booking.id,
+        status: "ARRIVED",
+        publicToken: newPublicToken(),
+        complaint,
+      },
+      select: { id: true },
+    });
+    if (photoUrls.length > 0) {
+      await tx.jobStep.createMany({
+        data: photoUrls.map((url) => ({
+          jobCardId: created.id,
+          type: "PHOTO" as const,
+          transcript: "Booking photo",
+          photoUrl: url,
+        })),
+      });
+    }
+    await tx.booking.update({
+      where: { id: booking.id },
+      data: { status: "CONFIRMED" },
+    });
+    return created;
   });
-  await prisma.booking.update({ where: { id: booking.id }, data: { status: "CONFIRMED" } });
+
   revalidatePath("/advisor/bookings");
   redirect(`/advisor/jobs/${job.id}`);
 }

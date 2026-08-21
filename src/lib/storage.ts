@@ -424,3 +424,96 @@ export async function deleteLogoUpload(url: string): Promise<void> {
     }
   }
 }
+
+// ── Signed URL refresh (AR 2026-08-21) ────────────────────────────
+// saveUpload historically returned a signed URL with a 7-day TTL and
+// callers persisted it directly on the row (Booking.photoUrls,
+// JobStep.photoUrl, etc.). After 7 days that URL 404s and the photo
+// is gone from the operator's screen even though the object itself
+// is fine in the bucket. The header on saveUpload above admits
+// "future versions can refresh via a helper" — this IS the helper.
+//
+// Contract:
+//   - Input: whatever we previously stored (signed URL, local
+//     /api/files/... path, arbitrary opaque string).
+//   - Output: a URL good for right now. For supabase signed URLs
+//     the object key is parsed out and re-signed each call. For
+//     anything else (local dev files, external URLs, opaque
+//     values) the input passes through unchanged.
+//
+// Per-request memoisation: repeated renders of the same key inside
+// one server-render pass reuse one Storage API call. Callers pass a
+// small Map; the resolver itself is stateless so page renders don't
+// leak signed URLs across requests.
+
+const SIGNED_URL_RE = /\/storage\/v1\/(?:object|render)\/sign\/([^/]+)\/(.+?)(?:\?|$)/;
+
+interface ParsedSignedUrl { bucket: string; key: string }
+
+/**
+ * Best-effort parse of a Supabase signed URL into its bucket + key.
+ * Returns null when the URL doesn't match the signed shape — a local
+ * dev URL, an external image, or a previously-parsed shape from a
+ * different Supabase project. Non-throwing on purpose so the caller
+ * can pass anything.
+ */
+export function parseSupabaseSignedUrl(url: string): ParsedSignedUrl | null {
+  if (typeof url !== "string" || url.length === 0) return null;
+  const m = SIGNED_URL_RE.exec(url);
+  if (!m) return null;
+  try {
+    return { bucket: decodeURIComponent(m[1]), key: decodeURIComponent(m[2]) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return a URL good to render RIGHT NOW.
+ *
+ *   - Supabase signed URL → re-signed at SIGNED_URL_TTL_SECONDS.
+ *   - Anything else → passed through unchanged (local /api/files
+ *     path, blank string, opaque marker, external image).
+ *
+ * `cache` is an optional per-request Map. A single page render that
+ * shows 5 photos on the same object key issues one Storage call, not
+ * five. A page render that shows 5 photos on different keys still
+ * costs 5 calls (no batch-sign API on Supabase Storage today).
+ *
+ * NEVER throws — a re-sign failure falls back to the original URL so
+ * a temporary Storage hiccup doesn't blank the page. The rendered
+ * image will 404 in that case, same visible outcome as the pre-fix
+ * behaviour, so no regression.
+ */
+export async function getViewableUrl(
+  storedUrl: string,
+  cache?: Map<string, string>,
+): Promise<string> {
+  const parsed = parseSupabaseSignedUrl(storedUrl);
+  if (!parsed) return storedUrl;
+  const cacheKey = `${parsed.bucket}/${parsed.key}`;
+  const hit = cache?.get(cacheKey);
+  if (hit) return hit;
+  try {
+    const { data, error } = await supabaseStorage()
+      .from(parsed.bucket)
+      .createSignedUrl(parsed.key, SIGNED_URL_TTL_SECONDS);
+    if (error || !data?.signedUrl) return storedUrl;
+    cache?.set(cacheKey, data.signedUrl);
+    return data.signedUrl;
+  } catch (e) {
+    console.warn(`[storage] getViewableUrl re-sign failed for ${cacheKey}:`, e);
+    return storedUrl;
+  }
+}
+
+/**
+ * Convenience wrapper for the (very common) N-URL-per-render case.
+ * De-dups by object key across the input list so 5 references to the
+ * same photo only issue one Storage call. Preserves input order +
+ * length so callers can zip back into their existing render loops.
+ */
+export async function getViewableUrls(storedUrls: string[]): Promise<string[]> {
+  const cache = new Map<string, string>();
+  return Promise.all(storedUrls.map((u) => getViewableUrl(u, cache)));
+}

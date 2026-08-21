@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { handleInbound } from "@/lib/receptionist-engine";
+import { normalizeUaePhone } from "@/lib/normalize";
 
 // Meta webhook verification handshake.
 export async function GET(req: Request) {
@@ -36,28 +37,39 @@ export async function POST(req: Request) {
         const garageId = acct.garageId;
 
         for (const m of change.value?.messages ?? []) {
-          const waId = m.from;
+          // Meta passes waId as the E.164 without a leading '+' (per
+          // Cloud API webhook contract, e.g. "971501234567"). Match
+          // against both shapes — normalized (waId column, if the
+          // customer has previously chatted from this number) OR
+          // the phone column (which we now normalize on write). AR
+          // 2026-08-21 — was upserting on the raw waId even when the
+          // same customer's Customer row was keyed on a differently-
+          // formatted phone from the public booking or Moulkia
+          // intake, producing duplicate rows. normalizeUaePhone
+          // reduces every UAE-shaped format to the same 9-digit key.
+          const waIdRaw = m.from;
+          const normalized = normalizeUaePhone(waIdRaw);
           let customer = await prisma.customer.findFirst({
-            where: { garageId, OR: [{ waId }, { phone: waId }] },
+            where: {
+              garageId,
+              OR: [
+                { waId: waIdRaw },
+                { waId: normalized },
+                { phone: normalized },
+              ],
+            },
             select: { id: true, lang: true },
           });
           if (!customer) {
-            // AR 2026-08-19 — hardcoded lang:"ar" removed. The
-            // receptionist engine detects language per message via
-            // src/lib/lang-detect.ts; stored customer.lang is only
-            // a fallback for cold-start outbound-initiated sends.
-            // Schema default still applies (ar) as the least-bad
-            // starting point until the customer's first inbound
-            // arrives and the detector picks the real language.
             customer = await prisma.customer.create({
-              data: { garageId, phone: waId, waId, name: waId },
+              data: { garageId, phone: normalized, waId: normalized, name: normalized },
               select: { id: true, lang: true },
             });
           }
           await handleInbound({
             garageId,
             customer: { id: customer.id, lang: customer.lang },
-            waId,
+            waId: waIdRaw,
             waMessageId: m.id,
             body: m.text?.body ?? "",
           });

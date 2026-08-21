@@ -8,6 +8,7 @@ import { scheduleRemindersAction } from "@/app/actions/reminders";
 import { recordDeliveryAction } from "@/app/actions/delivery";
 import { priorityMeta } from "@/lib/priority";
 import { formatJobNo } from "@/lib/jobcard-fields";
+import { getViewableUrl } from "@/lib/storage";
 import { canRecordDelivery, deliveryStatus } from "@/lib/delivery";
 import { PhotoCapture } from "@/components/photo-capture";
 import { REMINDER_TYPES } from "@/lib/reminders";
@@ -64,6 +65,21 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   });
   if (!job) notFound();
   const tz = countryToTimeZone(job.garage.country);
+
+  // Re-sign every stored photo/audio URL for this render so a
+  // 7-day-old signed URL doesn't 404 the operator's screen (AR
+  // 2026-08-21). Per-request cache dedups repeated keys — a job
+  // whose intake photos happen to be referenced twice only signs
+  // each once.
+  const urlCache = new Map<string, string>();
+  const stepUrlMap = new Map<string, { photoUrl?: string; voiceNoteUrl?: string }>();
+  await Promise.all(
+    job.steps.map(async (s) => {
+      const p = s.photoUrl ? await getViewableUrl(s.photoUrl, urlCache) : undefined;
+      const v = s.voiceNoteUrl ? await getViewableUrl(s.voiceNoteUrl, urlCache) : undefined;
+      stepUrlMap.set(s.id, { photoUrl: p, voiceNoteUrl: v });
+    }),
+  );
 
   const techs = await prisma.user.findMany({
     where: { garageId: session.user.garageId, role:"TECH"},
@@ -758,9 +774,9 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                 </div>
                 {s.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.photoUrl} alt="job photo" className="mt-1 max-h-40 rounded-md"/>
+                  <img src={stepUrlMap.get(s.id)?.photoUrl ?? s.photoUrl} alt="job photo" className="mt-1 max-h-40 rounded-md"/>
                 ) : null}
-                {s.voiceNoteUrl ? <audio controls src={s.voiceNoteUrl} className="mt-1 w-full"/> : null}
+                {s.voiceNoteUrl ? <audio controls src={stepUrlMap.get(s.id)?.voiceNoteUrl ?? s.voiceNoteUrl} className="mt-1 w-full"/> : null}
                 {s.transcript ? <p className="text-text">{s.transcript}</p> : null}
               </li>
             ))}

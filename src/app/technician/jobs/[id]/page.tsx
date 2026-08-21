@@ -38,6 +38,7 @@ import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { getLocale, getT } from "@/i18n/server";
 import { fmtDateTime, fmtDate, countryToTimeZone } from "@/lib/format-datetime";
+import { getViewableUrl } from "@/lib/storage";
 import { partStatusKey } from "@/i18n/config";
 import type { MessageKey } from "@/i18n/config";
 import { DictateInput, DictateTextarea } from "@/components/dictate";
@@ -105,6 +106,19 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
   });
   if (!job) notFound();
   const tz = countryToTimeZone(job.garage.country);
+
+  // Re-sign stored photo / audio URLs so 7-day-expired signed URLs
+  // don't 404 the tech's screen (AR 2026-08-21). Per-request cache
+  // dedups repeated keys.
+  const urlCache = new Map<string, string>();
+  const stepUrlMap = new Map<string, { photoUrl?: string; voiceNoteUrl?: string }>();
+  await Promise.all(
+    job.steps.map(async (s) => {
+      const p = s.photoUrl ? await getViewableUrl(s.photoUrl, urlCache) : undefined;
+      const v = s.voiceNoteUrl ? await getViewableUrl(s.voiceNoteUrl, urlCache) : undefined;
+      stepUrlMap.set(s.id, { photoUrl: p, voiceNoteUrl: v });
+    }),
+  );
 
   // Workflow stepper inputs — derive on every render so a status/
   // estimate/payment change is reflected without us caching a
@@ -966,10 +980,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
                 </div>
                 {s.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.photoUrl} alt="job photo" className="max-h-48 rounded-md"/>
+                  <img src={stepUrlMap.get(s.id)?.photoUrl ?? s.photoUrl} alt="job photo" className="max-h-48 rounded-md"/>
                 ) : null}
                 {s.voiceNoteUrl ? (
-                  <audio controls src={s.voiceNoteUrl} className="w-full"/>
+                  <audio controls src={stepUrlMap.get(s.id)?.voiceNoteUrl ?? s.voiceNoteUrl} className="w-full"/>
                 ) : null}
                 {s.transcript ? <p className="text-text">{s.transcript}</p> : null}
               </li>

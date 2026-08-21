@@ -305,7 +305,7 @@ export default async function RemindersQueue({
               ? t("remindersCarSingular")
               : t("remindersCarPlural")}
           </>
-        ) : null}{""}
+        ) : null}{" "}
         {t("remindersSummaryDueIn")} {monthLabel}
       </p>
 
@@ -396,7 +396,7 @@ export default async function RemindersQueue({
                         </Badge>
                       ) : null}
                       <Badge tone="neutral" size="pill" className="tabular-nums">
-                        {g.rs.length}{""}
+                        {g.rs.length}{" "}
                         {g.rs.length === 1
                           ? t("remindersReminderSingular")
                           : t("remindersReminderPlural")}

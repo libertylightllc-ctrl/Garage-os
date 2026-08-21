@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { pluralize } from "@/i18n/plural";
 import { type JobStatus } from "@/lib/jobcard-status";
 import { priorityMeta } from "@/lib/priority";
 import {
@@ -29,6 +30,7 @@ export default async function TechnicianHome({
 }) {
   const session = await requireAnyRole(["TECH", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { taken } = await searchParams;
   const me = session.user.id;
   const garageId = session.user.garageId;
@@ -352,10 +354,7 @@ export default async function TechnicianHome({
                       <form action={sendForReestimateAction}>
                         <input type="hidden" name="jobId" value={j.id} />
                         <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-                          {t("extrasSendForApproval").replace(
-                          "{count}",
-                            String(extraCount),
-                          )}
+                          {pluralize(t, extraCount, "extrasSendForApproval", locale)}
                         </button>
                       </form>
                     ) : null}

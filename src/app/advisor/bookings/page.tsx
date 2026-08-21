@@ -51,7 +51,7 @@ export default async function BookingsInbox() {
             return (
               <li key={b.id} className="rounded-xl border border-border p-4 text-sm">
                 <div className="font-medium">
-                  {b.vehicle?.make} {b.vehicle?.model}{""}
+                  {b.vehicle?.make} {b.vehicle?.model}{" "}
                   <span className="text-text-mute">{b.vehicle?.plate}</span>
                 </div>
                 <div className="text-text-mute">

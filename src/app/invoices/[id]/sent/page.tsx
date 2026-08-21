@@ -41,7 +41,7 @@ export default async function InvoiceSent({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <AppNav role={session.user.role as"CASHIER"|"OWNER"|"ADVISOR"} active="accounts"/>
+      <AppNav role={session.user.role as "CASHIER" | "OWNER" | "ADVISOR" | "MASTER"} active="accounts"/>
 
       {/* Amber (warning) not green (success) — because the send isn't
           complete yet. The wa.me redirect fired; the operator still

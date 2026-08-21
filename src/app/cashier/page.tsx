@@ -611,7 +611,7 @@ export default async function CashierHome({
           tone="success"
           href="/cashier?tab=estimates&filter=approved"
         >
-          {t("counterApprovedEstimates")}{""}
+          {t("counterApprovedEstimates")}{" "}
           <span className="tabular-nums font-semibold">{counters.approvedEstimates}</span>
         </BadgeLink>
         {/* Ready for Invoice — tech-marked-complete jobs awaiting the
@@ -621,25 +621,25 @@ export default async function CashierHome({
             actually drills down to the matching section, mirroring the
             estimates counters above. */}
         <BadgeLink tone="info" href="/cashier?tab=invoices&filter=ready">
-          {t("counterReadyForInvoice")}{""}
+          {t("counterReadyForInvoice")}{" "}
           <span className="tabular-nums font-semibold">{counters.readyForInvoice}</span>
         </BadgeLink>
         <BadgeLink tone="warning" href="/cashier?tab=invoices&filter=unpaid">
-          {t("counterUnpaidInvoices")}{""}
+          {t("counterUnpaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.unpaidInvoices}</span>
         </BadgeLink>
         <BadgeLink tone="warning" href="/cashier?tab=invoices&filter=partially_paid">
-          {t("counterPartiallyPaidInvoices")}{""}
+          {t("counterPartiallyPaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">
             {counters.partiallyPaidInvoices}
           </span>
         </BadgeLink>
         <BadgeLink tone="danger" href="/cashier?tab=invoices&filter=overdue">
-          {t("counterOverdueInvoices")}{""}
+          {t("counterOverdueInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.overdueInvoices}</span>
         </BadgeLink>
         <BadgeLink tone="success" href="/cashier?tab=payments">
-          {t("counterPaidInvoices")}{""}
+          {t("counterPaidInvoices")}{" "}
           <span className="tabular-nums font-semibold">{counters.paidInvoices}</span>
         </BadgeLink>
       </div>
@@ -1270,7 +1270,7 @@ export default async function CashierHome({
                       <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-text-mute">
                         <span>{t("colVat")} {money(vat)}</span>
                         <span>
-                          {t("colDatePaid")}{""}
+                          {t("colDatePaid")}{" "}
                           {paidAt ? fmtDate(paidAt, locale, tz) :"—"}
                         </span>
                         <span>

@@ -734,7 +734,7 @@ export default async function InvoiceView({
                   : t("discountCurrentFixed").replace(
                     "{amount}",
                       money(discountLabelKey.value),
-                    )}{""}
+                    )}{" "}
                 · −{money(discountAmount)}
               </span>
             ) : (
@@ -956,12 +956,12 @@ export default async function InvoiceView({
         </Link>
       ) : inv.jobCard.invoiceDeliveredAt ? (
         <p className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-text-mute print:hidden">
-          ✅ {t("invoiceDeliveredBanner")} · {t("invoiceDeliveredAt")}{""}
+          ✅ {t("invoiceDeliveredBanner")} · {t("invoiceDeliveredAt")}{" "}
           {fmtDateTime(inv.jobCard.invoiceDeliveredAt, locale, tz)}
         </p>
       ) : inv.jobCard.invoiceSentAt ? (
         <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 print:hidden dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{""}
+          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{" "}
           {fmtDateTime(inv.jobCard.invoiceSentAt, locale, tz)}
         </p>
       ) : null}

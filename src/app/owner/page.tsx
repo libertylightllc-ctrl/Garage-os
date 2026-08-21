@@ -6,7 +6,8 @@ import { FloorNow } from "@/components/floor-now";
 import { classifyIntent } from "@/lib/copilot";
 import { safeLogAiEvent } from "@/lib/ai-event-log";
 import { companyGarageIds } from "@/lib/branches";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { pluralize } from "@/i18n/plural";
 import type { MessageKey } from "@/i18n/config";
 import {
   revenue,
@@ -215,6 +216,7 @@ export default async function OwnerHome({
 }) {
   const session = await requireRole("OWNER");
   const t = await getT();
+  const locale = await getLocale();
   const garageId = session.user.garageId;
   const now = new Date();
   // Owner sees ALL branches aggregated (company root + its branches).
@@ -408,7 +410,7 @@ export default async function OwnerHome({
                 </dl>
                 {wr.staleSessions > 0 ? (
                   <p className="mt-1 text-xs font-medium text-amber-600">
-                    ⚠ {t("wrenchStaleCount").replace("{n}", String(wr.staleSessions))}
+                    ⚠ {pluralize(t, wr.staleSessions, "wrenchStaleCount", locale)}
                   </p>
                 ) : null}
               </li>

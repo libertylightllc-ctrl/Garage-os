@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { getT, getLocale } from "@/i18n/server";
 import { countryToTimeZone, fmtDateTime } from "@/lib/format-datetime";
+import { pluralize } from "@/i18n/plural";
 
 export const dynamic ="force-dynamic";
 
@@ -146,7 +147,7 @@ export default async function ChatsInbox({
                   <span className="ms-2 flex shrink-0 items-center gap-1">
                     {unread > 0 ? (
                       <span
-                        aria-label={t("chatUnreadTag").replace("{n}", String(unread))}
+                        aria-label={pluralize(t, unread, "chatUnreadTag", locale)}
                         className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-danger-600 px-1.5 text-xs font-semibold text-white"
                       >
                         {unread}

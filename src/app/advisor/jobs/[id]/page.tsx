@@ -769,7 +769,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
                 <div className="text-text-mute">
                   {(
                     { PHOTO:"📷", VOICE:"🎤", PART_REQUEST:"📦", FINISH:"✅"} as Record<string, string>
-                  )[s.type] ??"•"}{""}
+                  )[s.type] ??"•"}{" "}
                   {s.type.replace("_","").toLowerCase()} · {s.tech?.name ??"Technician"}
                 </div>
                 {s.photoUrl ? (

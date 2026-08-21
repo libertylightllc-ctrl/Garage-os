@@ -315,7 +315,7 @@ export default async function InvoicePreview({
       {/* Footer note — three states matching the CTA above. */}
       {alreadyDelivered ? null : handedOff ? (
         <p className="rounded-xl border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{""}
+          📱 {t("invoiceHandedOffBanner")} · {t("invoiceSentAt")}{" "}
           {fmtDateTime(inv.jobCard.invoiceSentAt!, locale, tz)}
         </p>
       ) : (

@@ -37,6 +37,7 @@ import { QC_CHECKS, qcSignedOff, formatVehicleSpec } from "@/lib/jobcard-fields"
 import { AppNav } from "@/components/app-nav";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { getLocale, getT } from "@/i18n/server";
+import { pluralize } from "@/i18n/plural";
 import { fmtDateTime, fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { getViewableUrl } from "@/lib/storage";
 import { partStatusKey } from "@/i18n/config";
@@ -653,7 +654,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
             <form action={sendForReestimateAction} className="self-start">
               <input type="hidden" name="jobId" value={job.id} />
               <button className="inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold bg-danger-600 text-white hover:bg-danger-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
-                {t("extrasSendForApproval").replace("{count}", String(extraParts.length))}
+                {pluralize(t, extraParts.length, "extrasSendForApproval", locale)}
               </button>
             </form>
           ) : null}

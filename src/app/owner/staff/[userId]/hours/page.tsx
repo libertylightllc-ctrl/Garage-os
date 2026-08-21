@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { companyGarageIds } from "@/lib/branches";
 import { techDailyHistory } from "@/lib/work-session-reports";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { pluralize } from "@/i18n/plural";
 import type { MessageKey } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function TechHoursPage({
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { userId } = await params;
   const { range } = await searchParams;
 
@@ -102,7 +104,7 @@ export default async function TechHoursPage({
 
       {history.staleSessions > 0 ? (
         <p className="text-xs font-medium text-amber-600">
-          ⚠ {t("wrenchStaleCount").replace("{n}", String(history.staleSessions))}
+          ⚠ {pluralize(t, history.staleSessions, "wrenchStaleCount", locale)}
         </p>
       ) : null}
 
@@ -124,7 +126,7 @@ export default async function TechHoursPage({
                 <h2 className="text-sm font-semibold">{day.date}</h2>
                 <span className="text-xs tabular-nums text-text-mute">
                   {formatMin(day.totalMin)} · {day.carsTouched} {day.carsTouched === 1 ? t("wrenchCar") : t("wrenchCars").toLowerCase()}
-                  {day.staleSessions > 0 ? ` · ⚠ ${t("wrenchStaleCount").replace("{n}", String(day.staleSessions))}` : ""}
+                  {day.staleSessions > 0 ? ` · ⚠ ${pluralize(t, day.staleSessions, "wrenchStaleCount", locale)}` : ""}
                 </span>
               </div>
 

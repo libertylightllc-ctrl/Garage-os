@@ -250,6 +250,21 @@ body:has([data-app-shell]) [data-lang-switcher-fixed] { display: none; }
   .print\:hidden {
     display: none !important;
   }
+  /* AR 2026-08-22 (Batch 6 verify — PO print showed UNIT COST +
+     LINE TOTAL columns truncated off the right of the page). The
+     `body:has([data-app-shell])` selector above reserves 220px
+     inline-start padding for the desktop side nav — that reservation
+     is inert on paper (the side nav is `print:hidden`) but the
+     padding stayed, shrinking every print surface to A4 − 220px.
+     Wide tables (PO in ORDERED status with 7 columns) then clipped.
+     Zero the shell reservations on print so every document uses the
+     full A4 width. bottom-bar padding cleared for the same reason. */
+  body:has([data-app-shell]) {
+    padding-inline-start: 0 !important;
+  }
+  body:has([data-mobile-tab-bar]) {
+    padding-bottom: 0 !important;
+  }
 }
 
 @media print {

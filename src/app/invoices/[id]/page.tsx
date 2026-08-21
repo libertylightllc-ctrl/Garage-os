@@ -70,25 +70,45 @@ export default async function InvoiceView({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const inv = await prisma.invoice.findFirst({
-    where: { id, garageId: session.user.garageId },
-    include: {
-      lines: { orderBy: { createdAt:"asc"} },
-      payments: true,
-      garage: true,
-      jobCard: { include: { vehicle: { include: { customer: true } } } },
-      // Void + reissue cross-references (2026-08-10). `previousInvoice`
-      // is set on a correction row → the void it replaced.
-      // `replacedBy` is the reverse: set on a void → the correction
-      // that took over. Number + issuedAt are what the header shows.
-      previousInvoice: {
-        select: { id: true, number: true, issuedAt: true },
-      },
-      replacedBy: {
-        select: { id: true, number: true, issuedAt: true },
-      },
+  // SNAPSHOT-CONSISTENT READS (AR 2026-08-22). Stepper + estimate
+  // status pill + timeline all read the same snapshot — see sibling
+  // comment in src/app/advisor/jobs/[id]/page.tsx for the smoke #82
+  // evidence. Lines/payments come with inv via the join, so they're
+  // already snapshot-consistent with jobCard.status.
+  const { inv, latestEstimate, timelineEvents } = await prisma.$transaction(
+    async (tx) => {
+      const inv = await tx.invoice.findFirst({
+        where: { id, garageId: session.user.garageId },
+        include: {
+          lines: { orderBy: { createdAt: "asc" } },
+          payments: true,
+          garage: true,
+          jobCard: { include: { vehicle: { include: { customer: true } } } },
+          // Void + reissue cross-references (2026-08-10). `previousInvoice`
+          // is set on a correction row → the void it replaced.
+          // `replacedBy` is the reverse: set on a void → the correction
+          // that took over. Number + issuedAt are what the header shows.
+          previousInvoice: {
+            select: { id: true, number: true, issuedAt: true },
+          },
+          replacedBy: {
+            select: { id: true, number: true, issuedAt: true },
+          },
+        },
+      });
+      if (!inv) return { inv: null, latestEstimate: null, timelineEvents: [] };
+      const [latestEstimate, timelineEvents] = await Promise.all([
+        tx.estimate.findFirst({
+          where: { jobCardId: inv.jobCardId },
+          orderBy: { createdAt: "desc" },
+          select: { status: true },
+        }),
+        loadJobTimeline(inv.jobCardId, session.user.garageId, tx),
+      ]);
+      return { inv, latestEstimate, timelineEvents };
     },
-  });
+    { isolationLevel: "RepeatableRead" },
+  );
   if (!inv) notFound();
   const tz = countryToTimeZone(inv.garage.country);
   const t = await getT();
@@ -118,15 +138,9 @@ export default async function InvoiceView({
   const state = arState(total, paid, inv.dueDate, new Date());
   const customer = inv.jobCard.vehicle.customer;
 
-  // Workflow stepper — invoicePaid is just balance == 0 of THIS invoice
-  // (we don't bother fetching a sibling here; cashier viewing one
-  // invoice is viewing this job's invoice). latestEstimateStatus comes
-  // from a small companion query.
-  const latestEstimate = await prisma.estimate.findFirst({
-    where: { jobCardId: inv.jobCardId },
-    orderBy: { createdAt: "desc" },
-    select: { status: true },
-  });
+  // Workflow stepper — latestEstimate + timelineEvents come from the
+  // snapshot-consistent tx above so the stepper, estimate pill, and
+  // timeline can't render a split view of the same rows.
   const stepperState = workflowStage({
     status: inv.jobCard.status,
     heldFrom: inv.jobCard.heldFrom,
@@ -134,7 +148,6 @@ export default async function InvoiceView({
     latestEstimateStatus: latestEstimate?.status ?? null,
     invoicePaid: paid >= total - 0.005,
   });
-  const timelineEvents = await loadJobTimeline(inv.jobCardId, session.user.garageId);
   // Line edits stay unlocked while the invoice hasn't been DELIVERED
   // to the customer (2026-08-10 timestamp split). An operator who
   // handed off a wa.me draft but hasn't pressed Send inside WhatsApp

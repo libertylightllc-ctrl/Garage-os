@@ -103,11 +103,18 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
         await customerContext.close();
     }
 
-    // Step 8 — advisor sees APPROVED on the estimate row. Bounded
-    // wait on the specific text; page.goto already waits for load,
-    // so no separate networkidle needed. AR 2026-08-15.
+    // Step 8 — advisor sees APPROVED on the estimate row. page.goto
+    // already waits for load, so no separate networkidle. Timeout
+    // was 15s (AR 2026-08-15) as defensive buffer for the split-
+    // read race between prisma.jobCard.findFirst and loadJobTimeline
+    // — see run #82 (Aug 21) for the exact failure state. That race
+    // is fixed by wrapping the coupled reads in a RepeatableRead
+    // transaction (AR 2026-08-22) so page.goto now returns
+    // consistent state on the FIRST render. 5s is Vercel-safe head-
+    // room; if this timeout expires again the cause is new, not the
+    // one this timeout used to hide.
     await page.goto(`/advisor/jobs/${jobCardId}`);
     await expect(page.getByText(/APPROVED/).first()).toBeVisible({
-        timeout: 15_000,
+        timeout: 5_000,
     });
 });

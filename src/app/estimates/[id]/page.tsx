@@ -97,44 +97,90 @@ export default async function EstimateEditor({
   // number for the cashier's browser to view-source out of.
   const canShowCost = canSeeMargin(role);
 
-  const est = await prisma.estimate.findFirst({
-    where: { id, jobCard: { garageId: session.user.garageId } },
-    include: {
-      // 3b — include the linked catalog part (if any) so linked lines can
-      // show a SKU + stock hint in the editor. Display only.
-      lines: {
-        orderBy: { createdAt:"asc"},
-        include: { part: { select: { sku: true, qtyOnHand: true, reorderLevel: true } } },
-      },
-      jobCard: {
-        // jobCard.status is what gates 'Generate Invoice' per spec —
-        // the cashier must NOT be able to invoice while the technician
-        // is still doing the work. Only TECH_COMPLETE (or beyond,
-        // when an invoice already exists) unlocks the action.
+  // SNAPSHOT-CONSISTENT READS (AR 2026-08-22). Every read that
+  // participates in the stepper / status pills / timeline needs to
+  // agree on one snapshot — see the sibling comment in
+  // src/app/advisor/jobs/[id]/page.tsx for the full rationale (smoke
+  // #82 evidence: SENT estimate row + "approved by customer" timeline
+  // row on the same page). Reads left outside the tx (finding /
+  // parts / etc. below) don't cross-reference status.
+  const { est, latestEstimate, latestInvoice, timelineEvents } = await prisma.$transaction(
+    async (tx) => {
+      const est = await tx.estimate.findFirst({
+        where: { id, jobCard: { garageId: session.user.garageId } },
         include: {
-          vehicle: true,
-          finding: true,
-          // Pulled for <GarageBrand> in the header — same garageId
-          // we're already scoping on, so no extra row, just the
-          // existing one joined with logoUrl in scope.
-          garage: { select: { name: true, trn: true, address: true, logoUrl: true, country: true } },
-          jobParts: { orderBy: { createdAt:"asc"} },
-          // Slice 6b — show advances received against this job in the
-          // UI block below. Ordered oldest-first so the audit list reads
-          // naturally top-to-bottom.
-          advancePayments: { orderBy: { receivedAt:"asc"} },
-          // Also pull sibling approved estimates so the SUM-based
-          // approved-total ceiling matches what the server action uses
-          // for its overpayment block. Same query, no round trip.
-          estimates: {
-            where: { status:"APPROVED"},
-            select: { id: true, total: true },
+          // 3b — include the linked catalog part (if any) so linked lines can
+          // show a SKU + stock hint in the editor. Display only.
+          lines: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              part: {
+                select: { sku: true, qtyOnHand: true, reorderLevel: true },
+              },
+            },
           },
+          jobCard: {
+            // jobCard.status is what gates 'Generate Invoice' per spec —
+            // the cashier must NOT be able to invoice while the technician
+            // is still doing the work. Only TECH_COMPLETE (or beyond,
+            // when an invoice already exists) unlocks the action.
+            include: {
+              vehicle: true,
+              finding: true,
+              // Pulled for <GarageBrand> in the header — same garageId
+              // we're already scoping on, so no extra row, just the
+              // existing one joined with logoUrl in scope.
+              garage: {
+                select: {
+                  name: true,
+                  trn: true,
+                  address: true,
+                  logoUrl: true,
+                  country: true,
+                },
+              },
+              jobParts: { orderBy: { createdAt: "asc" } },
+              // Slice 6b — show advances received against this job in the
+              // UI block below. Ordered oldest-first so the audit list reads
+              // naturally top-to-bottom.
+              advancePayments: { orderBy: { receivedAt: "asc" } },
+              // Also pull sibling approved estimates so the SUM-based
+              // approved-total ceiling matches what the server action uses
+              // for its overpayment block. Same query, no round trip.
+              estimates: {
+                where: { status: "APPROVED" },
+                select: { id: true, total: true },
+              },
+            },
+          },
+          invoice: { select: { id: true } },
         },
-      },
-      invoice: { select: { id: true } },
+      });
+      if (!est) {
+        return {
+          est: null,
+          latestEstimate: null,
+          latestInvoice: null,
+          timelineEvents: [],
+        };
+      }
+      const [latestEstimate, latestInvoice, timelineEvents] = await Promise.all([
+        tx.estimate.findFirst({
+          where: { jobCardId: est.jobCardId },
+          orderBy: { createdAt: "desc" },
+          select: { status: true },
+        }),
+        tx.invoice.findFirst({
+          where: { jobCardId: est.jobCardId },
+          orderBy: { createdAt: "desc" },
+          select: { total: true, payments: { select: { amount: true } } },
+        }),
+        loadJobTimeline(est.jobCardId, session.user.garageId, tx),
+      ]);
+      return { est, latestEstimate, latestInvoice, timelineEvents };
     },
-  });
+    { isolationLevel: "RepeatableRead" },
+  );
   if (!est) notFound();
   const tz = countryToTimeZone(est.jobCard.garage.country);
   // Pull the job-card status out for readability — it drives the
@@ -154,21 +200,8 @@ export default async function EstimateEditor({
   const usedParts = est.jobCard.jobParts.filter((p) => p.kind ==="USED");
   const workNotes = est.jobCard.workNotes;
 
-  // Workflow stepper — latest estimate on this job + latest invoice.
-  // est itself is one of those estimates; we may be looking at an OLD
-  // revision, so query for the actual most recent one.
-  const [latestEstimate, latestInvoice] = await Promise.all([
-    prisma.estimate.findFirst({
-      where: { jobCardId: est.jobCardId },
-      orderBy: { createdAt: "desc" },
-      select: { status: true },
-    }),
-    prisma.invoice.findFirst({
-      where: { jobCardId: est.jobCardId },
-      orderBy: { createdAt: "desc" },
-      select: { total: true, payments: { select: { amount: true } } },
-    }),
-  ]);
+  // Workflow stepper — inputs pulled from the tx above so stepper,
+  // estimate pills, and timeline all read the same snapshot.
   const invoicePaid = latestInvoice
     ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
       Number(latestInvoice.total) - 0.005
@@ -180,7 +213,6 @@ export default async function EstimateEditor({
     latestEstimateStatus: latestEstimate?.status ?? null,
     invoicePaid,
   });
-  const timelineEvents = await loadJobTimeline(est.jobCardId, session.user.garageId);
 
   const editable = canEditEstimate && est.status ==="DRAFT";
 

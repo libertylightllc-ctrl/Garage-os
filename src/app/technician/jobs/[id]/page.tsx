@@ -76,35 +76,66 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     listening: t("dictateListening"),
     error: t("dictateError"),
   };
-  const job = await prisma.jobCard.findFirst({
-    where: { id, garageId: session.user.garageId },
-    include: {
-      vehicle: true,
-      // garage.country is used to derive the render timezone via
-      // countryToTimeZone(). Server-side toLocaleString without an
-      // explicit timezone silently uses UTC on Vercel.
-      garage: { select: { country: true } },
-      steps: { orderBy: { createdAt:"desc"} },
-      partRequests: { orderBy: { createdAt:"desc"} },
-      helpers: { include: { tech: { select: { id: true, name: true } } } },
-      finding: true,
-      jobParts: { orderBy: { createdAt:"asc"} },
-      estimates: {
-        where: { status:"APPROVED"},
-        // approvedAt is the cutoff for 'work proof' — any photo, voice
-        // note, or finding edit AFTER that timestamp counts as evidence
-        // that the tech has actually started the repair, vs. just
-        // landing on the page right after the customer approved.
-        select: { id: true, approvedAt: true },
-        orderBy: { approvedAt:"desc"},
-        take: 1,
-      },
-      qcBy: { select: { name: true } },
-      // invoices include removed — the terminal-state banner that
-      // referenced it was deleted per spec. Terminal-state jobs now
-      // redirect off this route entirely.
+  // SNAPSHOT-CONSISTENT READS (AR 2026-08-22). Tech page's stepper
+  // + APPROVED-estimate hasWorkProof gate + timeline all must read
+  // the same snapshot — see sibling comment in
+  // src/app/advisor/jobs/[id]/page.tsx for the smoke #82 evidence.
+  const { job, latestEstimate, latestInvoice, timelineEvents } = await prisma.$transaction(
+    async (tx) => {
+      const job = await tx.jobCard.findFirst({
+        where: { id, garageId: session.user.garageId },
+        include: {
+          vehicle: true,
+          // garage.country is used to derive the render timezone via
+          // countryToTimeZone(). Server-side toLocaleString without an
+          // explicit timezone silently uses UTC on Vercel.
+          garage: { select: { country: true } },
+          steps: { orderBy: { createdAt: "desc" } },
+          partRequests: { orderBy: { createdAt: "desc" } },
+          helpers: { include: { tech: { select: { id: true, name: true } } } },
+          finding: true,
+          jobParts: { orderBy: { createdAt: "asc" } },
+          estimates: {
+            where: { status: "APPROVED" },
+            // approvedAt is the cutoff for 'work proof' — any photo, voice
+            // note, or finding edit AFTER that timestamp counts as evidence
+            // that the tech has actually started the repair, vs. just
+            // landing on the page right after the customer approved.
+            select: { id: true, approvedAt: true },
+            orderBy: { approvedAt: "desc" },
+            take: 1,
+          },
+          qcBy: { select: { name: true } },
+          // invoices include removed — the terminal-state banner that
+          // referenced it was deleted per spec. Terminal-state jobs now
+          // redirect off this route entirely.
+        },
+      });
+      if (!job) {
+        return {
+          job: null,
+          latestEstimate: null,
+          latestInvoice: null,
+          timelineEvents: [],
+        };
+      }
+      const [latestEstimate, latestInvoice, timelineEvents] = await Promise.all([
+        tx.estimate.findFirst({
+          where: { jobCardId: id },
+          orderBy: { createdAt: "desc" },
+          select: { status: true },
+        }),
+        tx.invoice.findFirst({
+          where: { jobCardId: id },
+          orderBy: { createdAt: "desc" },
+          select: { total: true, payments: { select: { amount: true } } },
+        }),
+        loadJobTimeline(job.id, session.user.garageId, tx),
+      ]);
+      return { job, latestEstimate, latestInvoice, timelineEvents };
     },
-  });
+    { isolationLevel: "RepeatableRead" },
+  );
   if (!job) notFound();
   const tz = countryToTimeZone(job.garage.country);
 
@@ -121,23 +152,10 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     }),
   );
 
-  // Workflow stepper inputs — derive on every render so a status/
-  // estimate/payment change is reflected without us caching a
-  // "stage" field somewhere else. Two cheap queries: most-recent
-  // Estimate.status, plus most-recent Invoice + payments to know
-  // if it's been paid in full.
-  const [latestEstimate, latestInvoice] = await Promise.all([
-    prisma.estimate.findFirst({
-      where: { jobCardId: id },
-      orderBy: { createdAt: "desc" },
-      select: { status: true },
-    }),
-    prisma.invoice.findFirst({
-      where: { jobCardId: id },
-      orderBy: { createdAt: "desc" },
-      select: { total: true, payments: { select: { amount: true } } },
-    }),
-  ]);
+  // Workflow stepper inputs — latestEstimate + latestInvoice +
+  // timelineEvents come from the snapshot-consistent tx above.
+  // jobTimeSummary is a separate read (work-session totals only —
+  // no cross-read invariant with the status pills).
   const invoicePaid =
     latestInvoice
       ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
@@ -150,10 +168,7 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
     latestEstimateStatus: latestEstimate?.status ?? null,
     invoicePaid,
   });
-  const [timelineEvents, jobTime] = await Promise.all([
-    loadJobTimeline(job.id, session.user.garageId),
-    jobTimeSummary(job.id),
-  ]);
+  const jobTime = await jobTimeSummary(job.id);
 
   // Per spec: finished jobs are not the technician's concern. If the
   // job has moved past TECH_COMPLETE — INVOICED, DELIVERED, or

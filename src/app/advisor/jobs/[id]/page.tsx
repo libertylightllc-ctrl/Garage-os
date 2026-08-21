@@ -46,23 +46,68 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const t = await getT();
   const locale = await getLocale();
 
-  const job = await prisma.jobCard.findFirst({
-    where: { id, garageId: session.user.garageId },
-    include: {
-      vehicle: { include: { customer: true } },
-      // garage.country is used to derive the render timezone via
-      // countryToTimeZone(). Without it every date on this page
-      // rendered as UTC on Vercel — 4h behind Dubai wall clock.
-      garage: { select: { country: true } },
-      estimates: {
-        orderBy: { createdAt:"desc"},
-        include: { invoice: { select: { id: true } } },
-      },
-      steps: { orderBy: { createdAt:"desc"}, include: { tech: { select: { name: true } } } },
-      qcBy: { select: { name: true } },
-      deliveredBy: { select: { name: true } },
+  // SNAPSHOT-CONSISTENT READS (AR 2026-08-22, smoke #82 evidence).
+  //
+  // These three reads *must* agree on the same DB snapshot:
+  //   1. jobCard.findFirst → job.status + job.estimates[].status
+  //      (drive the workflow stepper + the estimate row's badge).
+  //   2. invoice.findFirst → invoicePaid (drives the stepper's
+  //      "Paid" state too).
+  //   3. loadJobTimeline → estimate.approvedAt / invoice payments
+  //      (drive the timeline event list).
+  //
+  // Before the wrapper, three independent Prisma round-trips could
+  // straddle a mid-page commit (customer approves between round-trip
+  // 1 and round-trip 3) — the page then rendered "Estimate SENT" in
+  // the estimate row while the timeline showed "approved by customer"
+  // for the same estimate. Exact artifact captured in Playwright run
+  // #82 (Aug 21) — smoke assertion `getByText(APPROVED)` failed while
+  // the timeline row on the SAME render read "approved by customer".
+  //
+  // `RepeatableRead` pins the transaction to the snapshot at its
+  // first statement — all three reads see the same state, or they
+  // all miss it. Postgres runs read-only tx effectively for free
+  // (no locks acquired, no write-side cost); the only wall-clock
+  // change is that the three queries share one connection instead
+  // of three from the pool.
+  //
+  // Reads left OUTSIDE the tx are ones with no cross-read invariant
+  // to preserve — techs, reminders, bays, profit invoice/sessions,
+  // signed-URL rehydration. They can safely race with concurrent
+  // writes because nothing on the page cross-references them.
+  const { job, latestInvoice, timelineEvents } = await prisma.$transaction(
+    async (tx) => {
+      const job = await tx.jobCard.findFirst({
+        where: { id, garageId: session.user.garageId },
+        include: {
+          vehicle: { include: { customer: true } },
+          // garage.country is used to derive the render timezone via
+          // countryToTimeZone(). Without it every date on this page
+          // rendered as UTC on Vercel — 4h behind Dubai wall clock.
+          garage: { select: { country: true } },
+          estimates: {
+            orderBy: { createdAt: "desc" },
+            include: { invoice: { select: { id: true } } },
+          },
+          steps: {
+            orderBy: { createdAt: "desc" },
+            include: { tech: { select: { name: true } } },
+          },
+          qcBy: { select: { name: true } },
+          deliveredBy: { select: { name: true } },
+        },
+      });
+      if (!job) return { job: null, latestInvoice: null, timelineEvents: [] };
+      const latestInvoice = await tx.invoice.findFirst({
+        where: { jobCardId: id },
+        orderBy: { createdAt: "desc" },
+        select: { total: true, payments: { select: { amount: true } } },
+      });
+      const timelineEvents = await loadJobTimeline(job.id, session.user.garageId, tx);
+      return { job, latestInvoice, timelineEvents };
     },
-  });
+    { isolationLevel: "RepeatableRead" },
+  );
   if (!job) notFound();
   const tz = countryToTimeZone(job.garage.country);
 
@@ -114,13 +159,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const assignedName = techName(job.assignedToId);
 
   // Workflow stepper state — most recent estimate (already pulled
-  // desc) + invoice paid-ness from a small companion query.
+  // desc) + invoice paid-ness. latestInvoice + timelineEvents come
+  // from the snapshot-consistent tx above; jobTimeSummary is a
+  // separate read (work-session totals — no cross-read invariant).
   const latestEstimateStatus = job.estimates[0]?.status ?? null;
-  const latestInvoice = await prisma.invoice.findFirst({
-    where: { jobCardId: id },
-    orderBy: { createdAt: "desc" },
-    select: { total: true, payments: { select: { amount: true } } },
-  });
   const invoicePaid = latestInvoice
     ? latestInvoice.payments.reduce((s, p) => s + Number(p.amount), 0) >=
       Number(latestInvoice.total) - 0.005
@@ -132,10 +174,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     latestEstimateStatus,
     invoicePaid,
   });
-  const [timelineEvents, jobTime] = await Promise.all([
-    loadJobTimeline(job.id, session.user.garageId),
-    jobTimeSummary(job.id),
-  ]);
+  const jobTime = await jobTimeSummary(job.id);
 
   // AR 2026-08-12 profit reporting Step 5 — per-job profit card on
   // the internal job page. Only rendered once an invoice exists —

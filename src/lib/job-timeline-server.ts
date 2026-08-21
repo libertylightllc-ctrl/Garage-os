@@ -1,17 +1,29 @@
 // Server-side loader: fetch every audit-relevant relation for a job
 // + the garage's user directory, hand them to buildJobTimeline, and
 // return the sorted events. Each job-view page calls this once.
+//
+// Optional `client` parameter (AR 2026-08-22) — the caller can pass a
+// Prisma transaction client so the timeline's estimate/invoice reads
+// share a snapshot with the page's OTHER reads of the same rows.
+// Without this, the page's main jobCard query and this loader's
+// estimate.findMany can straddle a mid-page commit (customer approve
+// lands in the DB after the main query, before the timeline query),
+// producing the state that surfaced on smoke #82: estimate row reads
+// SENT while the timeline reads "approved by customer". See
+// src/app/advisor/jobs/[id]/page.tsx for the wrapping transaction.
 
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { buildJobTimeline, type TimelineEvent } from "@/lib/job-timeline";
 
 export async function loadJobTimeline(
     jobId: string,
     garageId: string,
+    client: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<TimelineEvent[]> {
     const [job, steps, finding, partRequests, estimates, invoices, advancePayments, users] =
         await Promise.all([
-            prisma.jobCard.findFirst({
+            client.jobCard.findFirst({
                 where: { id: jobId, garageId },
                 select: {
                     createdAt: true,
@@ -31,26 +43,26 @@ export async function loadJobTimeline(
                     moulkiaConsentAt: true,
                 },
             }),
-            prisma.jobStep.findMany({
+            client.jobStep.findMany({
                 where: { jobCardId: jobId },
                 select: { type: true, createdAt: true, techId: true, transcript: true },
                 orderBy: { createdAt: "asc" },
             }),
-            prisma.jobFinding.findFirst({
+            client.jobFinding.findFirst({
                 where: { jobCardId: jobId },
                 select: { submittedAt: true, techId: true },
             }),
-            prisma.partRequest.findMany({
+            client.partRequest.findMany({
                 where: { jobCardId: jobId },
                 select: { description: true, qty: true, createdAt: true, requestedById: true },
                 orderBy: { createdAt: "asc" },
             }),
-            prisma.estimate.findMany({
+            client.estimate.findMany({
                 where: { jobCardId: jobId },
                 select: { createdAt: true, sentAt: true, deliveredAt: true, approvedAt: true, status: true },
                 orderBy: { createdAt: "asc" },
             }),
-            prisma.invoice.findMany({
+            client.invoice.findMany({
                 where: { jobCardId: jobId },
                 select: {
                     createdAt: true,
@@ -58,12 +70,12 @@ export async function loadJobTimeline(
                 },
                 orderBy: { createdAt: "asc" },
             }),
-            prisma.advancePayment.findMany({
+            client.advancePayment.findMany({
                 where: { jobCardId: jobId },
                 select: { amount: true, receivedAt: true },
                 orderBy: { receivedAt: "asc" },
             }),
-            prisma.user.findMany({
+            client.user.findMany({
                 where: { garageId },
                 select: { id: true, name: true, role: true },
             }),

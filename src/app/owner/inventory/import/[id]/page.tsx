@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
 import type { MessageKey } from "@/i18n/config";
+import { pluralize } from "@/i18n/plural";
 import { Button } from "@/components/ui/button";
 import { confirmPartsImportAction, discardPartsImportAction } from "@/app/actions/parts-import";
 
@@ -23,6 +24,7 @@ export default async function PartsImportReviewPage({
 }) {
   const session = await requireAnyRole(["OWNER", "MASTER"]);
   const t = await getT();
+  const locale = await getLocale();
   const { id } = await params;
   const { error } = await searchParams;
 
@@ -49,10 +51,10 @@ export default async function PartsImportReviewPage({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("importReviewTitle")}</h1>
           <p className="text-sm text-muted-foreground">
             {imp.supplierName ? <>{imp.supplierName} · </> : null}
-            {imp.lines.length} {t(imp.lines.length === 1 ? "importDetectedOne" : "importDetected")}
+            {pluralize(t, imp.lines.length, "importDetected", locale)}
             {flaggedCount > 0 ? (
               <span className="ms-2 rounded-full bg-warning-50 px-2 py-0.5 text-xs font-medium text-warning-600 dark:bg-warning-500/10">
-                {flaggedCount} {t(flaggedCount === 1 ? "importFlaggedOne" : "importFlagged")}
+                {pluralize(t, flaggedCount, "importFlagged", locale)}
               </span>
             ) : null}
           </p>

@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/guard";
-import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { companyGarageIds } from "@/lib/branches";
-import { ACCOUNTS } from "@/lib/billing";
 import { getT } from "@/i18n/server";
+import { computeDailyAnalytics } from "@/lib/analytics-daily";
 
 export const dynamic ="force-dynamic";
 
@@ -24,13 +23,6 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
   * window (7 / 14 / 30 / 90 / 365); links at the top swap it.
   */
 
-function startOfUtcDay(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 const VALID_DAYS = new Set([7, 14, 30, 90, 365]);
 
 export default async function OwnerAnalytics({
@@ -41,96 +33,21 @@ export default async function OwnerAnalytics({
   const session = await requireRole("OWNER");
   const t = await getT();
   const gids = await companyGarageIds(session.user.garageId);
-  const now = new Date();
   const { days: rawDays } = await searchParams;
   const days = (() => {
     const n = Number(rawDays);
     return Number.isFinite(n) && VALID_DAYS.has(n) ? n : 30;
   })();
 
-  // Window: midnight UTC `days` ago through now. Aggregating per UTC
-  // day keeps the math timezone-agnostic and consistent with how the
-  // owner dashboard reads 'today'.
-  const todayStart = startOfUtcDay(now);
-  const fromD = new Date(todayStart.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
-
-  // Pull each datum in parallel. We could hand-roll one big query but
-  // the explicit four-stream shape keeps every chart's data source
-  // legible.
-  const [salesLedger, vatLedger, jobsCreated, invoicesIssued] = await Promise.all([
-    prisma.ledgerEntry.findMany({
-      where: {
-        garageId: { in: gids },
-        account: ACCOUNTS.SALES,
-        createdAt: { gte: fromD },
-      },
-      select: { createdAt: true, credit: true, debit: true },
-    }),
-    prisma.ledgerEntry.findMany({
-      where: {
-        garageId: { in: gids },
-        account: ACCOUNTS.VAT_PAYABLE,
-        createdAt: { gte: fromD },
-      },
-      select: { createdAt: true, credit: true, debit: true },
-    }),
-    prisma.jobCard.findMany({
-      where: { garageId: { in: gids }, createdAt: { gte: fromD } },
-      select: { createdAt: true },
-    }),
-    prisma.invoice.findMany({
-      where: { garageId: { in: gids }, issuedAt: { gte: fromD } },
-      select: { issuedAt: true, total: true },
-    }),
-  ]);
-
-  // Bucket per UTC day. Pre-seed every day in the window so charts
-  // render gaps as zeroes (a missing day on the right edge would
-  // otherwise mislead the eye).
-  type Bucket = { day: string; revenue: number; vat: number; jobs: number; invoiceSum: number; invoiceCount: number };
-  const buckets = new Map<string, Bucket>();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(fromD.getTime() + i * 24 * 60 * 60 * 1000);
-    const key = ymd(d);
-    buckets.set(key, { day: key, revenue: 0, vat: 0, jobs: 0, invoiceSum: 0, invoiceCount: 0 });
-  }
-  const bump = (d: Date, fn: (b: Bucket) => void) => {
-    const b = buckets.get(ymd(d));
-    if (b) fn(b);
-  };
-  for (const e of salesLedger) {
-    // Credit-normal: revenue is credit minus debit.
-    bump(e.createdAt, (b) => {
-      b.revenue += Number(e.credit) - Number(e.debit);
-    });
-  }
-  for (const e of vatLedger) {
-    bump(e.createdAt, (b) => {
-      b.vat += Number(e.credit) - Number(e.debit);
-    });
-  }
-  for (const j of jobsCreated) {
-    bump(j.createdAt, (b) => {
-      b.jobs += 1;
-    });
-  }
-  for (const inv of invoicesIssued) {
-    bump(inv.issuedAt, (b) => {
-      b.invoiceSum += Number(inv.total);
-      b.invoiceCount += 1;
-    });
-  }
-  const series = Array.from(buckets.values());
-
-  // Headline totals — sum across the window. Avg ticket is total
-  // invoice sum / count (across the window, not the daily mean of
-  // daily means — that would be misleading on low-volume days).
-  const revenueTotal = series.reduce((s, b) => s + b.revenue, 0);
-  const vatTotal = series.reduce((s, b) => s + b.vat, 0);
-  const jobsTotal = series.reduce((s, b) => s + b.jobs, 0);
-  const invSumTotal = series.reduce((s, b) => s + b.invoiceSum, 0);
-  const invCountTotal = series.reduce((s, b) => s + b.invoiceCount, 0);
-  const avgTicket = invCountTotal > 0 ? invSumTotal / invCountTotal : 0;
+  // Aggregation extracted to src/lib/analytics-daily.ts so the CSV
+  // export route hits the exact same numbers (AR 2026-08-21).
+  const { series, totals } = await computeDailyAnalytics(gids, days);
+  const revenueTotal = totals.revenue;
+  const vatTotal = totals.vat;
+  const jobsTotal = totals.jobs;
+  const invSumTotal = totals.invoiceSum;
+  const invCountTotal = totals.invoiceCount;
+  const avgTicket = totals.avgTicket;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
@@ -145,30 +62,42 @@ export default async function OwnerAnalytics({
           filled slate background. The seams between buttons (subtle
           dividers) read as 'these are mutually-exclusive options' at
           a glance. */}
-      <div
-        role="tablist"
-        aria-label={t("analyticsWindowSelector")}
-        className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
-      >
-        {[7, 14, 30, 90, 365].map((n) => {
-          const isActive = n === days;
-          return (
-            <Link
-              key={n}
-              href={`/owner/analytics?days=${n}`}
-              role="tab"
-              aria-selected={isActive}
-              className={
-                "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-semibold tabular-nums transition-colors " +
-                (isActive
-                  ? "bg-surface text-text shadow-sm dark:bg-brand-900 dark:text-white"
-                  : "text-text-mute hover:bg-surface hover:text-text dark:hover:bg-brand-900/40")
-              }
-            >
-              {n}d
-            </Link>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          role="tablist"
+          aria-label={t("analyticsWindowSelector")}
+          className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
+        >
+          {[7, 14, 30, 90, 365].map((n) => {
+            const isActive = n === days;
+            return (
+              <Link
+                key={n}
+                href={`/owner/analytics?days=${n}`}
+                role="tab"
+                aria-selected={isActive}
+                className={
+                  "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-semibold tabular-nums transition-colors " +
+                  (isActive
+                    ? "bg-surface text-text shadow-sm dark:bg-brand-900 dark:text-white"
+                    : "text-text-mute hover:bg-surface hover:text-text dark:hover:bg-brand-900/40")
+                }
+              >
+                {n}d
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* CSV export — same window as the selected days. Server
+            route matches the page's numbers exactly (shared aggregation
+            in @/lib/analytics-daily). AR 2026-08-21 Batch 2. */}
+        <a
+          href={`/api/analytics/export?days=${days}`}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-sm font-semibold text-text-mute hover:bg-surface-2 hover:text-text transition-colors"
+        >
+          ⤓ {t("analyticsCsvDownload")}
+        </a>
       </div>
 
       {/* Headline totals — same shape as the existing owner dashboard

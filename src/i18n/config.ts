@@ -1225,6 +1225,13 @@ const en = {
   bayLabel: "Bay",
   noBay: "No bay",
   baysInUse: "in use",
+  bayEmpty: "Empty",
+  bayMultipleOccupants: "⚠ {n} active jobs on this bay — data glitch, please investigate",
+  chatSearchPlaceholder: "Search by customer, phone, or message",
+  chatSearchClear: "Clear",
+  chatNoSearchResults: "No chats match your search.",
+  chatUnreadTag: "{n} unread",
+  analyticsCsvDownload: "Download CSV",
   bayExists: "That bay name already exists.",
 
   // estimate editor + invoice
@@ -2754,6 +2761,13 @@ const ar: typeof en = {
   bayLabel: "المنصة",
   noBay: "بدون منصة",
   baysInUse: "قيد الاستخدام",
+  bayEmpty: "فارغ",
+  bayMultipleOccupants: "⚠ {n} مهام نشطة على هذا الرصيف — خلل بيانات، يرجى التحقق",
+  chatSearchPlaceholder: "ابحث بالعميل أو الهاتف أو الرسالة",
+  chatSearchClear: "مسح",
+  chatNoSearchResults: "لا توجد محادثات تطابق بحثك.",
+  chatUnreadTag: "{n} غير مقروءة",
+  analyticsCsvDownload: "تحميل CSV",
   bayExists: "اسم المنصة موجود بالفعل.",
 
   costLabel: "التكلفة",

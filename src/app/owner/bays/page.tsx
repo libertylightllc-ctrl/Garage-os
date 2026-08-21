@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
@@ -19,11 +20,27 @@ export default async function BaysPage({
   const { error } = await searchParams;
   const garageId = session.user.garageId;
 
-  const bays = await prisma.bay.findMany({ where: { garageId }, orderBy: { name:"asc"} });
-  // How many bays are currently occupied by an active car.
-  const inUse = await prisma.jobCard.count({
-    where: { garageId, bayId: { not: null }, status: { notIn: ["DELIVERED","CANCELLED"] } },
+  // AR 2026-08-21 — include the active JobCard(s) parked in each
+  // bay so the operator can see WHICH car is where, not just how
+  // many bays are occupied. Two active jobs on one bay is a data
+  // glitch (no unique constraint on Bay ↔ active JobCard); we
+  // render both with a warning marker rather than silently pick
+  // one.
+  const bays = await prisma.bay.findMany({
+    where: { garageId },
+    orderBy: { name: "asc" },
+    include: {
+      jobCards: {
+        where: { status: { notIn: ["DELIVERED", "CANCELLED"] } },
+        select: {
+          id: true, number: true, status: true,
+          vehicle: { select: { make: true, model: true, plate: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
+  const inUse = bays.filter((b) => b.jobCards.length > 0).length;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-5xl xl:max-w-6xl">
@@ -50,18 +67,42 @@ export default async function BaysPage({
           stay inline on each list row. */}
       <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
       <ul className="flex flex-col gap-1 lg:col-span-2">
-        {bays.map((b) => (
-          <li
-            key={b.id}
-            className="flex items-center justify-between rounded-xl border border-border p-3 text-sm"
-          >
-            <span className="font-medium">🛠️ {b.name}</span>
-            <form action={removeBayAction}>
-              <input type="hidden" name="bayId" value={b.id} />
-              <button className="text-xs text-danger-700 hover:underline">{t("remove")}</button>
-            </form>
-          </li>
-        ))}
+        {bays.map((b) => {
+          const occupancy = b.jobCards.length;
+          return (
+            <li
+              key={b.id}
+              className="flex flex-col gap-1 rounded-xl border border-border p-3 text-sm"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium">🛠️ {b.name}</span>
+                <form action={removeBayAction}>
+                  <input type="hidden" name="bayId" value={b.id} />
+                  <button className="text-xs text-danger-700 hover:underline">{t("remove")}</button>
+                </form>
+              </div>
+              {occupancy === 0 ? (
+                <span className="text-xs text-text-mute">{t("bayEmpty")}</span>
+              ) : (
+                <ul className="flex flex-col gap-0.5 text-xs text-text-mute">
+                  {occupancy > 1 ? (
+                    <li className="text-warning-700 dark:text-warning-500">
+                      ⚠ {t("bayMultipleOccupants").replace("{n}", String(occupancy))}
+                    </li>
+                  ) : null}
+                  {b.jobCards.map((jc) => (
+                    <li key={jc.id}>
+                      <Link href={`/advisor/jobs/${jc.id}`} className="hover:underline">
+                        {jc.vehicle.make} {jc.vehicle.model} · {jc.vehicle.plate}
+                        {jc.number ? ` · JC-${jc.number}` : ""}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <form action={addBayAction} className="mt-6 flex gap-2 rounded-xl border border-border p-4 lg:mt-0">

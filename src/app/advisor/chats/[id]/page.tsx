@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
+import { getT, getLocale } from "@/i18n/server";
+import { countryToTimeZone, fmtDateTime } from "@/lib/format-datetime";
 import {
   takeOverAction,
   releaseAction,
@@ -37,9 +38,27 @@ export default async function ChatThread({
     include: {
       customer: { select: { name: true, phone: true } },
       messages: { orderBy: { createdAt:"asc"} },
+      garage: { select: { country: true } },
     },
   });
   if (!thread) notFound();
+  const locale = await getLocale();
+  const tz = countryToTimeZone(thread.garage.country);
+
+  // AR 2026-08-21 — stamp lastReadAt on every open so the inbox
+  // unread count resets. Best-effort: a Storage / DB blip must not
+  // prevent the operator from actually reading the thread, so a
+  // failure logs and continues. Race with an inbound message
+  // arriving mid-render is fine; the next open re-stamps.
+  //
+  // .catch pattern rather than try/catch so the update runs "in
+  // parallel" with page render (it's fired but not awaited before
+  // JSX evaluation). Chat detail pages already render in server
+  // sequence; the fire-and-forget is acceptable because a missed
+  // stamp just means one extra unread on next inbox load.
+  void prisma.whatsAppThread
+    .update({ where: { id: thread.id }, data: { lastReadAt: new Date() } })
+    .catch((e) => console.warn("[chat] failed to stamp lastReadAt:", e));
 
   const drafts = thread.messages.filter((m) => m.state ==="PENDING_APPROVAL");
   const convo = thread.messages.filter((m) => m.state !=="PENDING_APPROVAL");
@@ -97,6 +116,13 @@ export default async function ChatThread({
             {m.aiGenerated ? (
               <span className="ms-2 text-[10px] opacity-70">AI</span>
             ) : null}
+            {/* Per-message timestamp — inline in the bubble so the
+                thread reads chronologically without needing to expand
+                or hover. Matches the shape used on the invoice + job
+                pages. AR 2026-08-21 (Batch 2). */}
+            <span className="ms-2 text-[10px] tabular-nums opacity-70">
+              {fmtDateTime(m.createdAt, locale, tz)}
+            </span>
             {/* AR 2026-08-19 — visible SIMULATED marker on any message
                 that was fabricated by the deleted test tools. Post-
                 deletion no new rows can carry this flag, but 4 historical

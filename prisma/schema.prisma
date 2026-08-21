@@ -1659,6 +1659,12 @@ model WhatsAppThread {
   threadStatus     WaThreadStatus  @default(OPEN)
   assignedAdvisorId String?
   lastMessageAt    DateTime?
+  // Advisor's last-viewed timestamp — the inbox counts inbound
+  // messages with createdAt > lastReadAt as unread and renders a
+  // pill count. Stamped on every /advisor/chats/[id] page load.
+  // Null = never opened; every inbound reads as unread. AR
+  // 2026-08-21 — Chats had no unread signal at all.
+  lastReadAt       DateTime?
 
   messages WhatsAppMessage[]
 

@@ -10,6 +10,8 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "check:pii-urls": "node scripts/check-pii-in-urls.mjs",
+    "db:preflight": "node scripts/db-preflight.mjs",
+    "pretest": "node scripts/db-preflight.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:init": "prisma dev --name garageos --detach",

@@ -8,6 +8,9 @@ import { getT } from "@/i18n/server";
 import { FriendlyStatusBadge } from "@/components/friendly-status-badge";
 import { JobTimings } from "@/components/job-timings";
 import { ButtonLink } from "@/components/ui/button";
+import { canSeeMargin } from "@/lib/permissions";
+import { computeJobProfit } from "@/lib/job-profit";
+import { compareReceiptToInvoice } from "@/lib/direct-fit-receipt";
 
 export const dynamic ="force-dynamic";
 
@@ -104,6 +107,122 @@ export default async function AdvisorHome() {
   // Server-side 'now' for the in-progress duration captions (no client clock
   // — every row reads from the same wall time on render).
   const now = new Date();
+
+  // Step 8 (AR 2026-08-22) — per-job margin chip on the list, with a
+  // coverage badge when incomplete. Gated by canSeeMargin so only
+  // advisor/owner/master see it; tech and cashier get no signal here.
+  // Only computed for jobs that have an invoice — margin needs frozen
+  // InvoiceLine.unitCost (per Step 5 spec §Cost model). Everything
+  // pre-invoice would be a moving live-catalog estimate; the spec
+  // explicitly excludes that.
+  const canShowMargin = canSeeMargin(session.user.role);
+  const marginByJobId = new Map<string, { pct: number | null; covered: number; total: number }>();
+  if (canShowMargin && jobs.length > 0) {
+    const jobIds = jobs.map((j) => j.id);
+    try {
+      // Batch-load invoice lines + sessions + receipts for every
+      // active job. Bounded by jobs.length (active workload — small,
+      // usually < 50). Each map is jobId-keyed for O(1) lookup below.
+      const [invLines, sessions, receipts] = await Promise.all([
+        prisma.invoice.findMany({
+          where: { jobCardId: { in: jobIds } },
+          orderBy: { createdAt: "desc" },
+          select: {
+            jobCardId: true,
+            lines: { select: { kind: true, qty: true, lineTotal: true, unitCost: true } },
+          },
+        }),
+        prisma.workSession.findMany({
+          where: { jobCardId: { in: jobIds }, endedAt: { not: null } },
+          select: {
+            jobCardId: true,
+            laborCostSnapshot: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        }),
+        prisma.jobPartReceipt.findMany({
+          where: { jobCardId: { in: jobIds } },
+          select: {
+            jobCardId: true,
+            qty: true,
+            receivedUnitCost: true,
+            purchaseOrderLine: {
+              select: {
+                sourceEstimateLine: {
+                  select: {
+                    unitCost: true,
+                    estimate: { select: { invoice: { select: { id: true } } } },
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ]);
+      // Keep only the MOST RECENT invoice per job (first entry in the
+      // desc-ordered list). Older invoices are voided/superseded — we
+      // want the live one, mirroring the per-job card's query.
+      const linesByJob = new Map<string, typeof invLines[number]["lines"]>();
+      for (const inv of invLines) {
+        if (!linesByJob.has(inv.jobCardId)) linesByJob.set(inv.jobCardId, inv.lines);
+      }
+      const sessionsByJob = new Map<string, typeof sessions>();
+      for (const s of sessions) {
+        const arr = sessionsByJob.get(s.jobCardId) ?? [];
+        arr.push(s);
+        sessionsByJob.set(s.jobCardId, arr);
+      }
+      const receiptsByJob = new Map<string, typeof receipts>();
+      for (const r of receipts) {
+        const arr = receiptsByJob.get(r.jobCardId) ?? [];
+        arr.push(r);
+        receiptsByJob.set(r.jobCardId, arr);
+      }
+      for (const j of jobs) {
+        const lines = linesByJob.get(j.id);
+        if (!lines) continue; // no invoice yet — no margin to show
+        const jSessions = (sessionsByJob.get(j.id) ?? []).map((s) => ({
+          laborCostSnapshot: s.laborCostSnapshot,
+          startedAt: s.startedAt ?? undefined,
+          endedAt: s.endedAt ?? undefined,
+        }));
+        const jReceipts = (receiptsByJob.get(j.id) ?? []).map((r) => {
+          const cmp = compareReceiptToInvoice({
+            receivedUnitCost: Number(r.receivedUnitCost),
+            qty: r.qty,
+            sourceEstimateLine: r.purchaseOrderLine.sourceEstimateLine
+              ? {
+                  unitCost:
+                    r.purchaseOrderLine.sourceEstimateLine.unitCost === null
+                      ? null
+                      : Number(r.purchaseOrderLine.sourceEstimateLine.unitCost),
+                  estimateHasInvoice: Boolean(
+                    r.purchaseOrderLine.sourceEstimateLine.estimate.invoice,
+                  ),
+                }
+              : null,
+          });
+          return { status: cmp.status, totalDelta: cmp.totalDelta };
+        });
+        const p = computeJobProfit(lines, jSessions, jReceipts);
+        // Coverage = parts covered + labour covered (out of totals).
+        // Same shape as JobProfitCard reads. Zero-total sides count as
+        // fully-covered (nothing to be missing).
+        const covered = p.coverage.partsCovered + p.coverage.laborCovered;
+        const total = p.coverage.partsTotal + p.coverage.laborTotal;
+        marginByJobId.set(j.id, {
+          pct: p.grossMarginPct === null ? null : Number(p.grossMarginPct),
+          covered,
+          total,
+        });
+      }
+    } catch (e) {
+      // Non-fatal — if the margin fan-out fails we simply omit the
+      // chip. The primary job list stays functional.
+      console.error("[advisor] margin fan-out failed — omitting chips:", e);
+    }
+  }
   const reasonLabel = (r: string | null) =>
     (
       {
@@ -202,6 +321,45 @@ export default async function AdvisorHome() {
                       {reasonLabel(job.holdReason)}
                     </span>
                   ) : null}
+                  {/* Step 8 (AR 2026-08-22) — margin chip w/ coverage.
+                      "—" when margin is null (any Unknown side); the
+                      coverage suffix "(2/3)" makes the reason visible
+                      instead of a bare dash. Only rendered when the
+                      job has an invoice (marginByJobId gets an entry
+                      only for those). */}
+                  {(() => {
+                    const m = marginByJobId.get(job.id);
+                    if (!m) return null;
+                    const full = m.total > 0 && m.covered === m.total;
+                    const chipCls =
+                      m.pct === null
+                        ? "border-border text-text-mute"
+                        : m.pct >= 20
+                          ? "border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-200"
+                          : m.pct > 0
+                            ? "border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-200"
+                            : "border-rose-300 text-rose-800 dark:border-rose-800 dark:text-rose-200";
+                    return (
+                      <span
+                        className={
+                          "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium tabular-nums " +
+                          chipCls
+                        }
+                        title={
+                          full
+                            ? `Margin — all lines have cost data (${m.total} of ${m.total})`
+                            : `Margin coverage: ${m.covered} of ${m.total} lines have cost data`
+                        }
+                      >
+                        {t("marginChipLabel")} {m.pct === null ? "—" : `${Number(m.pct).toFixed(1)}%`}
+                        {full ? null : (
+                          <span className="opacity-70">
+                            ({m.covered}/{m.total})
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </span>
               </Link>
             </li>

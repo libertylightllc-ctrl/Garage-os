@@ -4,6 +4,8 @@ import { AppNav } from "@/components/app-nav";
 import { companyGarageIds } from "@/lib/branches";
 import { getT } from "@/i18n/server";
 import { computeDailyAnalytics } from "@/lib/analytics-daily";
+import { computePeriodProfit } from "@/lib/period-profit";
+import { PeriodProfitCard } from "@/components/period-profit-card";
 
 export const dynamic ="force-dynamic";
 
@@ -42,6 +44,17 @@ export default async function OwnerAnalytics({
   // Aggregation extracted to src/lib/analytics-daily.ts so the CSV
   // export route hits the exact same numbers (AR 2026-08-21).
   const { series, totals } = await computeDailyAnalytics(gids, days);
+
+  // Per-period profit widget (AR 2026-08-22, profit reporting Step 6).
+  // Runs a second query set — same range, different math: reads
+  // frozen InvoiceLine.unitCost via computeJobProfit per invoice
+  // instead of the ledger's Sales Revenue - Part.cost naive
+  // subtraction. See src/lib/period-profit.ts for why we can't
+  // reuse the ledger totals for this reading (missing-cost signal
+  // is lost in the aggregate).
+  const now = new Date();
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const periodProfit = await computePeriodProfit(gids, from, now);
   const revenueTotal = totals.revenue;
   const vatTotal = totals.vat;
   const jobsTotal = totals.jobs;
@@ -98,7 +111,31 @@ export default async function OwnerAnalytics({
         >
           ⤓ {t("analyticsCsvDownload")}
         </a>
+        {/* Step 7 — per-part profit report (AR 2026-08-22). */}
+        <Link
+          href={`/owner/analytics/parts?days=${days}`}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-sm font-semibold text-text-mute hover:bg-surface-2 hover:text-text transition-colors"
+        >
+          {t("partProfitLinkFromAnalytics")}
+        </Link>
       </div>
+
+      {/* Per-period profit — Step 6 (AR 2026-08-22). Sits ABOVE the
+          ledger-based metric grid because Profit is the number the
+          owner is here for; ticket/VAT/jobs are supporting data.
+          Coverage is rendered at the same visual weight as Revenue
+          and Profit per profit-reporting-spec.md §Coverage discipline. */}
+      <PeriodProfitCard
+        title={t("periodProfitTitle").replace("{days}", String(days))}
+        profit={periodProfit}
+        footnote={t("periodProfitFootnote")}
+        labels={{
+          revenue: t("periodProfitRevenue"),
+          profit: t("periodProfitProfit"),
+          coverage: t("periodProfitCoverage"),
+          coverageOf: t("periodProfitCoverageOf"),
+        }}
+      />
 
       {/* Headline totals — same shape as the existing owner dashboard
           metric cards so the eye reads them as continuous data. */}

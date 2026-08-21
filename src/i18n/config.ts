@@ -1704,6 +1704,35 @@ const en = {
   analyticsJobsPerDay: "Jobs per day",
   analyticsAvgTicketPerDay: "Average ticket per day",
   analyticsWindowSelector: "Time window",
+  // AR 2026-08-22 Batch 5 Step 6 — per-period profit widget.
+  periodProfitTitle: "Profit — last {days} days",
+  periodProfitRevenue: "Revenue",
+  periodProfitProfit: "Profit",
+  periodProfitCoverage: "Coverage",
+  periodProfitCoverageOf: "{covered} of {total} invoices",
+  periodProfitFootnote:
+    "Margins use weighted-average part cost, not per-unit cost. Invoices with any missing cost data are excluded from Profit but count against Coverage.",
+  // AR 2026-08-22 Batch 5 Step 7 — per-part report.
+  partProfitTitle: "Per-part profit",
+  partProfitSubtitle:
+    "Which catalogue parts earn, and which sell at or below cost. Same coverage rule as the per-period widget.",
+  partProfitLinkFromAnalytics: "Per-part profit report →",
+  partProfitBackToAnalytics: "Back to analytics",
+  partProfitEmpty:
+    "No PART lines were invoiced in this window. Widen the window to see historical rollups.",
+  partProfitEarners: "Earners",
+  partProfitEarnersSubtitle: "Parts with positive profit, largest first.",
+  partProfitEarnersEmpty: "No parts turned a profit in this window.",
+  partProfitLosers: "Break-even or losing",
+  partProfitLosersSubtitle:
+    "Parts selling at or below their weighted-average cost. Biggest loss first.",
+  partProfitLosersEmpty:
+    "No parts sold at or below cost in this window.",
+  partProfitUnknowns: "Coverage incomplete",
+  partProfitUnknownsSubtitle:
+    "At least one invoice line for this part is missing cost data. Profit and margin can't be computed until every line has a cost.",
+  // AR 2026-08-22 Batch 5 Step 8 — margin chip on advisor jobs list.
+  marginChipLabel: "margin",
   min: "min",
   sampleUpDown: "Are we up or down this week?",
   sampleProfit: "How much profit this month?",
@@ -3227,6 +3256,32 @@ const ar: typeof en = {
   analyticsJobsPerDay: "المهام يوميًا",
   analyticsAvgTicketPerDay: "متوسط الفاتورة يوميًا",
   analyticsWindowSelector: "النطاق الزمني",
+  periodProfitTitle: "الربح — آخر {days} يومًا",
+  periodProfitRevenue: "الإيرادات",
+  periodProfitProfit: "الربح",
+  periodProfitCoverage: "التغطية",
+  periodProfitCoverageOf: "{covered} من {total} فواتير",
+  periodProfitFootnote:
+    "تُحسب الهوامش بمتوسط تكلفة القطع المرجّح، وليس بتكلفة كل وحدة على حدة. الفواتير التي تنقصها بيانات تكلفة تُستبعد من الربح لكنها تُحتسب ضمن التغطية.",
+  partProfitTitle: "ربح لكل قطعة",
+  partProfitSubtitle:
+    "أي القطع تحقق ربحًا، وأيها تُباع بسعر التكلفة أو أقل. تنطبق قاعدة التغطية نفسها.",
+  partProfitLinkFromAnalytics: "تقرير الربح لكل قطعة →",
+  partProfitBackToAnalytics: "العودة إلى التحليلات",
+  partProfitEmpty:
+    "لا توجد بنود قطع في فواتير هذه النافذة. وسِّع النطاق لعرض السجل التاريخي.",
+  partProfitEarners: "المُربحة",
+  partProfitEarnersSubtitle: "القطع ذات الربح الموجب، الأكبر أولًا.",
+  partProfitEarnersEmpty: "لا توجد قطع محققة للربح في هذه النافذة.",
+  partProfitLosers: "عند التعادل أو خاسرة",
+  partProfitLosersSubtitle:
+    "قطع تُباع بسعر التكلفة المرجّحة أو أقل. الأكبر خسارة أولًا.",
+  partProfitLosersEmpty:
+    "لا توجد قطع بيعت عند التكلفة أو أقل في هذه النافذة.",
+  partProfitUnknowns: "التغطية ناقصة",
+  partProfitUnknownsSubtitle:
+    "يوجد بند فاتورة واحد على الأقل لهذه القطعة تنقصه بيانات التكلفة. لا يمكن حساب الربح والهامش حتى تكتمل تكاليف كل البنود.",
+  marginChipLabel: "هامش",
   min: "دقيقة",
   sampleUpDown: "هل نحن في ارتفاع أم انخفاض هذا الأسبوع؟",
   sampleProfit: "كم الربح هذا الشهر؟",

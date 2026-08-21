@@ -1,17 +1,29 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { GET } from "../route";
+
+// Mock `@/auth` BEFORE importing the route — the real module boots
+// next-auth v5 which pulls `next/server` in a shape vitest can't
+// resolve ("Cannot find module 'next/server'"). Same pattern used by
+// intake-phone-normalization.test.ts. `authReturns` is mutable so a
+// single test can flip it to null to exercise the 401 branch.
+let authReturns: { user: { id: string } } | null = { user: { id: "test-user" } };
+vi.mock("@/auth", () => ({ auth: async () => authReturns }));
+
+const { GET } = await import("../route");
 
 // Serve-route hardening (defence-in-depth over upload-side validation):
-//   1. Extension allowlist first → 404 on miss. Kills the "one PR adds
+//   1. Session gate first → 401 when unauthenticated. Filenames are
+//      opaque but not a real access control; a link that leaks (Slack,
+//      email) shouldn't hand any anonymous caller the file.
+//   2. Extension allowlist → 404 on miss. Kills the "one PR adds
 //      .svg to CONTENT_TYPES" regression: the route refuses to serve
 //      any extension it doesn't recognise, regardless of what
 //      CONTENT_TYPES says.
-//   2. X-Content-Type-Options: nosniff on every response. Prevents
+//   3. X-Content-Type-Options: nosniff on every response. Prevents
 //      browsers from re-classifying an `image/*` response as text/html
 //      based on byte-sniffing.
-//   3. Content-Disposition switch — inline for images (advisor / tech
+//   4. Content-Disposition switch — inline for images (advisor / tech
 //      workflows depend on <img src="/api/files/…"> rendering), attachment
 //      for audio (top-level navigation would download rather than render).
 
@@ -113,6 +125,34 @@ describe("/api/files/[name] — serve-route hardening", () => {
             // allowlisted ext, the read would fail because the file
             // doesn't exist. Either way: not 200.
             expect(res.status).toBe(404);
+        });
+    });
+
+    describe("session gate (AR 2026-08-21 — leaked-link defence)", () => {
+        // Flip the mock to unauthenticated for this block; restore
+        // after so the hardening tests above keep working if
+        // reordered. See also src/app/api/files/[name]/route.ts:47.
+        it("returns 401 when auth() resolves to null (leaked link, no session)", async () => {
+            const prior = authReturns;
+            authReturns = null;
+            try {
+                const res = await callGET(pngName);
+                expect(res.status).toBe(401);
+            } finally {
+                authReturns = prior;
+            }
+        });
+
+        it("returns 401 when session has no user.id (malformed session shape)", async () => {
+            const prior = authReturns;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            authReturns = { user: {} as any };
+            try {
+                const res = await callGET(pngName);
+                expect(res.status).toBe(401);
+            } finally {
+                authReturns = prior;
+            }
         });
     });
 });

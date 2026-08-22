@@ -129,21 +129,90 @@ export async function createPurchaseOrderAction(formData: FormData) {
   // verbatim.
   const defaultVehicle = await parseVehicleFormFields(formData, user.garageId, "vehicle_");
 
-  const po = await prisma.purchaseOrder.create({
-    data: {
-      garageId: user.garageId, // from session — never from input
-      supplierId: supplier.id,
-      // Persist the author's intent. Reload no longer drops mode — the
-      // detail page reads intent off the PO row itself and the title
-      // reads "Purchase Order (draft)" for a DRAFT+ORDER doc instead
-      // of falsely calling it a Request for Quotation.
-      intent: mode === "order" ? "ORDER" : "QUOTE",
-      reference: optional(formData.get("reference")),
-      note: optional(formData.get("note")),
-      ...buildPoDefaultVehicleSnapshot(defaultVehicle),
-      publicToken: newPublicToken(),
-    },
-    select: { id: true },
+  // Hydrated lines from a job (AR 2026-08-22 Batch 9). The
+  // /owner/purchasing/new page's HydrateLinesFromJob component posts
+  // `line_i_description` / `line_i_qty` / `line_i_partId` fields
+  // when the operator loaded a job's part requests. If absent, keep
+  // the existing "create empty shell → redirect to detail" flow;
+  // when present, create PO + lines in one transaction so the doc
+  // is ready to send in one screen.
+  //
+  // Manual entry is preserved — the operator can still land on the
+  // detail page after creation and add more lines by hand (including
+  // when no hydrated lines came through). Nothing here forces the
+  // hydrated path.
+  interface HydratedLineInput {
+    description: string;
+    qty: number;
+    partId: string | null;
+  }
+  const hydratedLines: HydratedLineInput[] = [];
+  // Line indexes come from the client-side table, which never removes
+  // rows without reindexing — but be defensive and iterate every
+  // present index up to a safe cap. The form serialisation naturally
+  // caps at ~200 fields via the browser's form limits; 100 rows is
+  // more than any real quotation.
+  for (let i = 0; i < 100; i++) {
+    const desc = String(formData.get(`line_${i}_description`) ?? "").trim();
+    const qtyRaw = String(formData.get(`line_${i}_qty`) ?? "").trim();
+    if (!desc && !qtyRaw) continue;
+    if (!desc) fail("A hydrated part line is missing its description.", backTo);
+    const qty = parsePositiveInt(qtyRaw);
+    if (qty === null) fail("A hydrated part line has an invalid quantity.", backTo);
+    const partIdRaw = String(formData.get(`line_${i}_partId`) ?? "").trim();
+    // Verify partId belongs to this garage before trusting the form —
+    // a tampered submit could point at another garage's Part row.
+    let partId: string | null = null;
+    if (partIdRaw) {
+      const part = await prisma.part.findFirst({
+        where: { id: partIdRaw, garageId: user.garageId },
+        select: { id: true },
+      });
+      partId = part?.id ?? null; // silently drop unknown → free-text line
+    }
+    hydratedLines.push({ description: desc, qty, partId });
+  }
+
+  const po = await prisma.$transaction(async (tx) => {
+    const created = await tx.purchaseOrder.create({
+      data: {
+        garageId: user.garageId, // from session — never from input
+        supplierId: supplier.id,
+        // Persist the author's intent. Reload no longer drops mode — the
+        // detail page reads intent off the PO row itself and the title
+        // reads "Purchase Order (draft)" for a DRAFT+ORDER doc instead
+        // of falsely calling it a Request for Quotation.
+        intent: mode === "order" ? "ORDER" : "QUOTE",
+        reference: optional(formData.get("reference")),
+        note: optional(formData.get("note")),
+        ...buildPoDefaultVehicleSnapshot(defaultVehicle),
+        publicToken: newPublicToken(),
+      },
+      select: { id: true },
+    });
+
+    if (hydratedLines.length > 0) {
+      // Each hydrated line inherits the doc-level default vehicle
+      // snapshot — matches the from-estimate flow's rule (every
+      // line under a single-job PO points at the same car). No
+      // unitCost: hydration is for quotations; cost is what we're
+      // asking the supplier for.
+      const vehicleSnapshot = buildStandaloneVehicleSnapshot(defaultVehicle);
+      for (const l of hydratedLines) {
+        await tx.purchaseOrderLine.create({
+          data: {
+            purchaseOrderId: created.id,
+            partId: l.partId,
+            description: l.description,
+            qty: l.qty,
+            unitCost: null,
+            ...vehicleSnapshot,
+          },
+        });
+      }
+    }
+
+    return created;
   });
 
   revalidatePath("/owner/purchasing");

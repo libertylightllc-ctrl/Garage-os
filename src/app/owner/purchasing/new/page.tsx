@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { createPurchaseOrderAction } from "@/app/actions/purchasing";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { VehicleMatchFill } from "@/components/vehicle-match-fill";
+import { HydrateLinesFromJob } from "@/components/hydrate-lines-from-job";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,34 @@ export default async function NewPurchaseOrderPage({
                 cost input can render as required (order) or optional
                 (quote). No server-side write difference. */}
             <input type="hidden" name="mode" value={mode} />
+
+            {/* Quotation-only: load the technician's requested parts
+                from a job number, so the shop can ask the supplier to
+                quote the exact parts on the technician's list without
+                a second-screen detour. AR 2026-08-22 Batch 9.
+                Not shown on ?mode=order — an order should be placed
+                after the operator already has real prices in hand,
+                which is a different flow (start from an estimate). */}
+            {mode === "quote" ? (
+              <HydrateLinesFromJob
+                label={t("hydrateJobLegend")}
+                inputLabel={t("vehicleJobNumberLabel")}
+                inputPlaceholder={t("vehicleJobNumberPlaceholder")}
+                loadLabel={t("hydrateJobLoad")}
+                loadingLabel={t("hydrateJobLoading")}
+                clearLabel={t("hydrateJobClear")}
+                loadedFormat={t("hydrateJobLoaded")}
+                notFoundFormat={t("hydrateJobNotFound")}
+                emptyFormat={t("hydrateJobEmpty")}
+                genericErrorFormat={t("hydrateJobError")}
+                tableHeaders={{
+                  description: t("hydrateJobColDescription"),
+                  qty: t("hydrateJobColQty"),
+                  remove: t("hydrateJobColRemove"),
+                }}
+              />
+            ) : null}
+
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("poSupplier")}</span>
               <select

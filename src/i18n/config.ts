@@ -489,6 +489,20 @@ const en = {
   poDefaultVehicleLegend: "For which vehicle?",
   poDefaultVehicleHint:
     "Pick a plate already in the garage, or type make and model for a car we haven't seen. All fields optional — an advisor asking a supplier to quote often has only make and model.",
+  // AR 2026-08-22 Batch 9 — hydrate quotation lines from a job's
+  // technician-requested parts. Removes the two-screen detour: no
+  // more create-empty-shell → separate from-estimate step.
+  hydrateJobLegend: "Load parts from a job (optional)",
+  hydrateJobLoad: "Load",
+  hydrateJobLoading: "Loading…",
+  hydrateJobClear: "Clear",
+  hydrateJobLoaded: "Loaded {count} part(s) from {number} — {vehicle}. Edit or remove before submit.",
+  hydrateJobNotFound: "Job card #{n} not found in this garage. Check the number and try again.",
+  hydrateJobEmpty: "No open part requests on this job. Add lines by hand below, or use a different job.",
+  hydrateJobError: "Couldn't load parts. Please try again.",
+  hydrateJobColDescription: "Part",
+  hydrateJobColQty: "Qty",
+  hydrateJobColRemove: "Remove line",
   vehiclePlateLabel: "Plate",
   vehiclePlatePlaceholder: "e.g. A 12345",
   vehicleMakeLabel: "Make",
@@ -2176,6 +2190,17 @@ const ar: typeof en = {
   addPoLineHint:
     "اختر من الكتالوج، أو اكتب وصفًا حرًا لقطعة غير موجودة في المخزون.",
   poDefaultVehicleLegend: "لأي مركبة؟",
+  hydrateJobLegend: "تحميل قطع من مهمة (اختياري)",
+  hydrateJobLoad: "تحميل",
+  hydrateJobLoading: "جاري التحميل…",
+  hydrateJobClear: "مسح",
+  hydrateJobLoaded: "تم تحميل {count} قطعة من {number} — {vehicle}. يمكنك التعديل أو الحذف قبل الإرسال.",
+  hydrateJobNotFound: "بطاقة المهمة رقم {n} غير موجودة في هذا الجراج. راجع الرقم وحاول مجددًا.",
+  hydrateJobEmpty: "لا توجد طلبات قطع مفتوحة على هذه المهمة. أضف بنودًا يدويًا أدناه، أو استخدم مهمة أخرى.",
+  hydrateJobError: "تعذّر تحميل القطع. يرجى المحاولة مجددًا.",
+  hydrateJobColDescription: "القطعة",
+  hydrateJobColQty: "الكمية",
+  hydrateJobColRemove: "حذف البند",
   poDefaultVehicleHint:
     "اختر لوحة موجودة في المرآب، أو اكتب الصنع والموديل لسيارة غير مسجّلة. كل الحقول اختيارية — عادةً ما يعرف الاستشاري الصنع والموديل فقط عند طلب عرض السعر.",
   vehiclePlateLabel: "اللوحة",

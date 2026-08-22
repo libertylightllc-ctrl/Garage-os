@@ -112,6 +112,118 @@ describe("createPurchaseOrderAction", { retry: 3 }, () => {
     mockAuth.mockResolvedValueOnce({ user: { id: "x", role: "ADVISOR", garageId: gA, email: "x", name: "x" } });
     await expect(createPurchaseOrderAction(form({ supplierId: s.id }))).rejects.toThrow("Not authorized");
   });
+
+  // AR 2026-08-22 Batch 9 — hydrated lines from a job's tech-requested
+  // parts, posted as line_i_* fields alongside the supplier + mode.
+  // Removes the two-screen flow; the PO ships with lines in one action.
+  describe("hydrated lines", { retry: 3 }, () => {
+    it("creates the PO with all hydrated lines in one transaction", async () => {
+      const s = await supplier(gA);
+      mockAuth.mockResolvedValueOnce(owner(gA));
+      const to = await call(
+        createPurchaseOrderAction,
+        form({
+          supplierId: s.id,
+          mode: "quote",
+          line_0_description: "Front brake pads",
+          line_0_qty: "2",
+          line_1_description: "Oil filter",
+          line_1_qty: "1",
+        }),
+      );
+      expect(to).toMatch(/^\/owner\/purchasing\/.+\?mode=quote$/);
+      const pos = await prisma.purchaseOrder.findMany({
+        where: { garageId: gA },
+        include: { lines: { orderBy: { createdAt: "asc" } } },
+      });
+      expect(pos.length).toBe(1);
+      expect(pos[0].lines.length).toBe(2);
+      // Hydration is for quotations — unitCost stays null (we're
+      // asking the supplier for it).
+      expect(pos[0].lines[0].unitCost).toBeNull();
+      expect(pos[0].lines[0].description).toBe("Front brake pads");
+      expect(pos[0].lines[0].qty).toBe(2);
+      expect(pos[0].lines[1].description).toBe("Oil filter");
+      expect(pos[0].lines[1].qty).toBe(1);
+    });
+
+    it("silently drops a partId that belongs to another garage — line survives as free-text", async () => {
+      // Tampered submit: form claims a partId from garage B, but the
+      // caller is in A. The line still lands (description + qty are
+      // fine), but the partId is stripped rather than linking to a
+      // foreign part.
+      const s = await supplier(gA);
+      const foreign = await part(gB, "B-1");
+      mockAuth.mockResolvedValueOnce(owner(gA));
+      await call(
+        createPurchaseOrderAction,
+        form({
+          supplierId: s.id,
+          mode: "quote",
+          line_0_description: "Air filter",
+          line_0_qty: "1",
+          line_0_partId: foreign.id,
+        }),
+      );
+      const po = await prisma.purchaseOrder.findFirst({
+        where: { garageId: gA },
+        include: { lines: true },
+      });
+      expect(po?.lines[0].partId).toBeNull();
+      expect(po?.lines[0].description).toBe("Air filter");
+    });
+
+    it("refuses a hydrated line with a missing description", async () => {
+      const s = await supplier(gA);
+      mockAuth.mockResolvedValueOnce(owner(gA));
+      const to = await call(
+        createPurchaseOrderAction,
+        form({
+          supplierId: s.id,
+          mode: "quote",
+          // description absent, qty present → the form is malformed
+          line_0_qty: "2",
+        }),
+      );
+      expect(to).toContain("error=");
+      // No PO written on the aborted transaction — verify.
+      expect(
+        (await prisma.purchaseOrder.findMany({ where: { garageId: gA } })).length,
+      ).toBe(0);
+    });
+
+    it("refuses a hydrated line with a zero or negative quantity", async () => {
+      const s = await supplier(gA);
+      mockAuth.mockResolvedValueOnce(owner(gA));
+      const to = await call(
+        createPurchaseOrderAction,
+        form({
+          supplierId: s.id,
+          mode: "quote",
+          line_0_description: "Wiper blade",
+          line_0_qty: "0",
+        }),
+      );
+      expect(to).toContain("error=");
+      expect(
+        (await prisma.purchaseOrder.findMany({ where: { garageId: gA } })).length,
+      ).toBe(0);
+    });
+
+    it("empty hydration (no line_i_* fields) keeps the existing shell-then-detail flow", async () => {
+      const s = await supplier(gA);
+      mockAuth.mockResolvedValueOnce(owner(gA));
+      await call(
+        createPurchaseOrderAction,
+        form({ supplierId: s.id, mode: "quote" }),
+      );
+      const po = await prisma.purchaseOrder.findFirst({
+        where: { garageId: gA },
+        include: { lines: true },
+      });
+      expect(po?.lines.length).toBe(0);
+    });
+  });
 });
 
 async function draftPO(garageId: string) {

@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendInvoiceToCustomerAction } from "@/app/actions/billing";
 import { balanceDue, formatInvoiceNo } from "@/lib/billing";
+import { CustomerPhoneNudge } from "@/components/customer-phone-nudge";
+import { normalizeToE164 } from "@/lib/wa";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
@@ -79,6 +81,11 @@ export default async function InvoicePreview({
   const paid = inv.payments.reduce((s, p) => s + Number(p.amount), 0);
   const balance = balanceDue(total, paid);
   const customer = inv.jobCard.vehicle.customer;
+  // AR 2026-08-23 — soft nudge above the Send button when the
+  // customer's phone can't be normalised. See sibling comment on
+  // the estimate preview page.
+  const customerPhoneRaw = customer.waId ?? customer.phone ?? null;
+  const customerPhoneWillPrefill = normalizeToE164(customerPhoneRaw) !== null;
   // 2026-08-10 timestamp split: the Send button hides once the
   // customer has confirmed-DELIVERED the invoice. A wa.me hand-off
   // by itself (invoiceSentAt set, invoiceDeliveredAt null) is
@@ -300,15 +307,27 @@ export default async function InvoicePreview({
             {fmtDateTime(inv.jobCard.invoiceDeliveredAt!, locale, tz)}
           </p>
         ) : (
-          <form action={sendInvoiceToCustomerAction}>
-            <input type="hidden" name="invoiceId" value={inv.id} />
-            <button
-              type="submit"
-              className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-            >
-              {handedOff ? t("invoiceResendViaWhatsApp") : t("sendInvoiceToCustomer")}
-            </button>
-          </form>
+          <div className="flex flex-col gap-2">
+            {!customerPhoneWillPrefill ? (
+              <CustomerPhoneNudge
+                rawPhone={customerPhoneRaw}
+                labels={{
+                  heading: t("phoneNudgeHeading"),
+                  rawLabel: t("phoneNudgeRawLabel"),
+                  rawNone: t("phoneNudgeRawNone"),
+                }}
+              />
+            ) : null}
+            <form action={sendInvoiceToCustomerAction}>
+              <input type="hidden" name="invoiceId" value={inv.id} />
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+              >
+                {handedOff ? t("invoiceResendViaWhatsApp") : t("sendInvoiceToCustomer")}
+              </button>
+            </form>
+          </div>
         )}
       </div>
 

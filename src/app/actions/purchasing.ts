@@ -1412,6 +1412,16 @@ export async function sendPurchaseOrderWhatsAppAction(formData: FormData) {
     // No usable phone — this shouldn't normally reach the action because
     // the button is disabled server-side. But defence in depth: bounce
     // back cleanly rather than throw.
+    //
+    // DELIBERATE DIVERGENCE from sendEstimateToCustomerAction +
+    // sendInvoiceToCustomerAction (src/app/actions/billing.ts).
+    // AR 2026-08-23 — do NOT unify. Customer sends fall through to
+    // the contact-picker URL so the cashier can still get the
+    // invoice/estimate out (with a soft-nudge banner on the preview
+    // page telling them to fix the record). A supplier send bounces
+    // because a purchase order with no recipient is useless — the
+    // supplier record should be fixed before the doc goes out.
+    // Aligning them either direction trades one bad UX for another.
     redirect(detailPath);
   }
 

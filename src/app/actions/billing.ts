@@ -727,6 +727,22 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
   const customer = est.jobCard.vehicle.customer;
   const rawPhone = customer.waId ?? customer.phone;
   const phoneE164 = normalizeToE164(rawPhone);
+  // DELIBERATE DIVERGENCE from sendPurchaseOrderWhatsAppAction
+  // (src/app/actions/purchasing.ts). AR 2026-08-23 — do NOT unify.
+  //
+  //   Customer send:  bad/missing phone → phoneE164 = null →
+  //                   buildWaMeUrl returns the contact-picker URL →
+  //                   cashier still gets the invoice/estimate out
+  //                   (picks the recipient inside WhatsApp).
+  //   Supplier send:  bad/missing phone → early redirect back to the
+  //                   PO detail page. Fix the supplier record before
+  //                   the doc can go out.
+  //
+  // The asymmetry is intentional: a customer needs their invoice/
+  // estimate; a PO to nobody is useless. The customer flow prefers
+  // hand-off + a soft nudge (see preview-page banner) to fix the
+  // record later; the supplier flow prefers to block. Aligning them
+  // (either direction) trades one bad UX for another.
 
   // AR 2026-08-19 — detect from the customer's latest inbound
   // instead of trusting customer.lang (which is "ar" for every
@@ -1470,6 +1486,14 @@ export async function sendInvoiceToCustomerAction(formData: FormData) {
   // buildWaMeUrl falls back to the contact-picker URL so the cashier
   // can still send the invoice, they just pick the recipient inside
   // WhatsApp. The customer-record cleanup happens as its own concern.
+  //
+  // DELIBERATE DIVERGENCE from sendPurchaseOrderWhatsAppAction
+  // (src/app/actions/purchasing.ts). AR 2026-08-23 — do NOT unify.
+  // The customer flow chooses hand-off + a soft nudge (see the
+  // preview-page banner) over blocking on bad data; the supplier
+  // flow bounces because a PO to nobody is useless. Aligning them
+  // (either direction) trades one bad UX for another. See the
+  // sibling comment in sendEstimateToCustomerAction above.
   const rawPhone = customer.waId ?? customer.phone;
   const phoneE164 = normalizeToE164(rawPhone);
 

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { sendEstimateToCustomerAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
 import { DocumentHeader } from "@/components/document-header";
+import { CustomerPhoneNudge } from "@/components/customer-phone-nudge";
+import { normalizeToE164 } from "@/lib/wa";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
@@ -93,6 +95,14 @@ export default async function EstimatePreview({
 
   const customer = est.jobCard.vehicle.customer;
   const garage = est.jobCard.garage;
+  // AR 2026-08-23 — soft nudge above the Send button when the
+  // customer's phone can't be normalised. The action still lets the
+  // send through (contact-picker fallback) — see the DELIBERATE
+  // DIVERGENCE note on sendEstimateToCustomerAction. This banner
+  // just makes the reason visible so the operator fixes the record
+  // for next time.
+  const customerPhoneRaw = customer.waId ?? customer.phone ?? null;
+  const customerPhoneWillPrefill = normalizeToE164(customerPhoneRaw) !== null;
   // Non-declined lines only — declined items are customer-skipped and
   // shouldn't appear on the preview the customer sees.
   const lines = est.lines.filter((l) => !l.declined);
@@ -299,6 +309,18 @@ export default async function EstimatePreview({
             redirects the browser to it, so WhatsApp opens with the
             message drafted. The action is idempotent — same form
             renders on the SENT-state pill below with a Resend label. */}
+        {!customerPhoneWillPrefill && (isDraft || est.status === "SENT") ? (
+          <div className="w-full sm:w-auto">
+            <CustomerPhoneNudge
+              rawPhone={customerPhoneRaw}
+              labels={{
+                heading: t("phoneNudgeHeading"),
+                rawLabel: t("phoneNudgeRawLabel"),
+                rawNone: t("phoneNudgeRawNone"),
+              }}
+            />
+          </div>
+        ) : null}
         <form action={sendEstimateToCustomerAction}>
           <input type="hidden" name="estimateId" value={est.id} />
           {isDraft ? (

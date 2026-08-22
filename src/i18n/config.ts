@@ -1222,6 +1222,14 @@ const en = {
   // on any resend before this gate landed.
   lineFormErr_estimate_already_approved: "The customer has already approved this estimate. Re-sending would wipe the approval. Open the WhatsApp thread for a follow-up message instead of re-sending the estimate.",
   lineFormErr_estimate_already_rejected: "The customer has already rejected this estimate. Create a new estimate to send a revised quote instead of re-sending this one.",
+  // AR 2026-08-23 — soft nudge above the WhatsApp Send button on
+  // estimate / invoice preview pages when the customer's phone can't
+  // be normalised to E.164. The send still works (falls through to
+  // WhatsApp's contact picker); this banner tells the operator why
+  // WhatsApp is about to ask them to pick the recipient.
+  phoneNudgeHeading: "Customer phone couldn't be read as a valid number. WhatsApp will ask you to pick the recipient. Fix it on the customer record so it works next time.",
+  phoneNudgeRawLabel: "On file:",
+  phoneNudgeRawNone: "(none captured)",
   lineFormErr_zeroPartsHeading: "Lines priced at AED 0.00:",
   lineFormErr_sendAnyway: "Send anyway (these are genuinely free)",
   lineFormErr_generateAnyway: "Generate anyway (these are genuinely free)",
@@ -2838,6 +2846,9 @@ const ar: typeof en = {
   lineFormErr_zero_part_lines_invoice: "ستُصدَر الفاتورة ببنود «قطعة» بسعر 0.00 درهم. أدخل أسعارًا حقيقية، أو ضع البنود على «مرفوض»، أو استخدم «إصدار على أي حال» إذا كانت مجانية فعلًا. رقم الفاتورة يُستهلَك من تسلسل بلا فجوات — التصحيح بعد الإصدار يتطلب إبطالًا وإعادة إصدار.",
   lineFormErr_estimate_already_approved: "لقد وافق العميل على هذا التقدير مسبقًا. إعادة الإرسال ستُلغي الموافقة. افتح محادثة واتساب لإرسال رسالة متابعة بدلًا من إعادة إرسال التقدير.",
   lineFormErr_estimate_already_rejected: "رفض العميل هذا التقدير مسبقًا. أنشئ تقديرًا جديدًا لإرسال عرض مُنقَّح بدلًا من إعادة إرسال هذا.",
+  phoneNudgeHeading: "تعذّر قراءة رقم هاتف العميل كرقم صالح. سيطلب منك واتساب اختيار المستلم. صحّح الرقم في سجل العميل حتى يعمل الإرسال مباشرة في المرة القادمة.",
+  phoneNudgeRawLabel: "المسجّل:",
+  phoneNudgeRawNone: "(لم يُسجَّل)",
   lineFormErr_zeroPartsHeading: "بنود بسعر 0.00 درهم:",
   lineFormErr_sendAnyway: "إرسال على أي حال (هذه مجانية فعلًا)",
   lineFormErr_generateAnyway: "إصدار على أي حال (هذه مجانية فعلًا)",

@@ -321,6 +321,18 @@ export default async function EstimatePreview({
             // AR 2026-08-16 — pill now sits next to a Resend submit
             // button, mirroring the invoice preview's post-send state
             // (invoiceResendViaWhatsApp).
+            //
+            // AR 2026-08-23 — Resend button ONLY renders while the
+            // customer hasn't decided yet (status SENT). Was
+            // unconditional on any non-DRAFT, which meant an APPROVED
+            // or REJECTED estimate also showed the button — clicking
+            // it fired sendEstimateToCustomerAction, which then (via
+            // the OLD `isFirstSend = status !== "SENT"` bug at
+            // billing.ts:747) silently reverted APPROVED → SENT and
+            // wiped approvedAt. The server-side gate now refuses those
+            // cases outright (see the action); this UI change removes
+            // the affordance so a well-meaning advisor never sees the
+            // click that would fire that gate.
             <div className="flex items-center gap-2">
               <span className="inline-flex h-12 items-center justify-center rounded-lg bg-warning-50 px-5 text-base font-semibold text-warning-700 dark:bg-warning-500/10 dark:text-warning-500">
                 📱{" "}
@@ -328,12 +340,14 @@ export default async function EstimatePreview({
                   ? `${t("estimateSentAt")} ${fmtDate(est.sentAt, locale, tz)}`
                   : t("estimateSentAt")}
               </span>
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
-              >
-                {t("estimateResendViaWhatsApp")}
-              </button>
+              {est.status === "SENT" ? (
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                >
+                  {t("estimateResendViaWhatsApp")}
+                </button>
+              ) : null}
             </div>
           )}
         </form>

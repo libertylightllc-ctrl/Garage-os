@@ -645,6 +645,9 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
       id: true,
       jobCardId: true,
       status: true,
+      // AR 2026-08-23 — sentAt is now the "first send" signal, not
+      // `status !== "SENT"`. See the isFirstSend derivation below.
+      sentAt: true,
       subtotal: true,
       vatAmount: true,
       total: true,
@@ -680,6 +683,26 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
     },
   });
   if (!est) throw new Error("Estimate not found in this garage");
+
+  // AR 2026-08-23 — refuse to hand off an estimate the customer
+  // has already decided on. Previous shape used
+  //   `isFirstSend = est.status !== "SENT"`
+  // which silently OVERWROTE approvedAt with "SENT" on any resend of
+  // an APPROVED (or REJECTED) row, wiping the customer's decision
+  // and leaving no audit trail. An advisor tapping Resend on an
+  // already-decided estimate almost certainly meant to open the
+  // customer thread for a follow-up, not to reset the workflow.
+  //
+  // Rejected outright at the action layer (server-side truth).
+  // The preview page continues to render the estimate; the banner
+  // (lineFormErr_estimate_already_approved / …_rejected) tells the
+  // advisor what happened. No row is touched.
+  if (est.status === "APPROVED") {
+    redirect(`/estimates/${estimateId}/preview?formError=estimate-already-approved`);
+  }
+  if (est.status === "REJECTED") {
+    redirect(`/estimates/${estimateId}/preview?formError=estimate-already-rejected`);
+  }
 
   // Exit gate — AR 2026-08-18. Refuse to hand off an estimate that
   // contains a non-declined PART line at 0.00. Same class as the
@@ -744,7 +767,15 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
   });
   const waHref = buildWaMeUrl(phoneE164, body);
 
-  const isFirstSend = est.status !== "SENT";
+  // AR 2026-08-23 — isFirstSend is now derived from `sentAt === null`,
+  // not `status !== "SENT"`. The old derivation would fire true on
+  // an APPROVED row (APPROVED !== SENT) and the `{ status: "SENT" }`
+  // patch would then overwrite the customer's decision. The
+  // APPROVED/REJECTED early-refuse above closes that class of
+  // silent revert; the sentAt-based derivation here also makes the
+  // "first send" concept semantic-truthful (a resend of a
+  // successfully-sent estimate legitimately has sentAt set).
+  const isFirstSend = est.sentAt === null;
 
   // Stamp sentAt + (first-send only) flip status. Same pattern as
   // sendInvoiceToCustomerAction: sentAt is a per-hand-off timestamp,

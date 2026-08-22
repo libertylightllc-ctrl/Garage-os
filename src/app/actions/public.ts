@@ -34,12 +34,35 @@ function revalidateEstimateStaffSurfaces(jobCardId: string, estimateId: string) 
 
 export async function approveEstimatePublic(formData: FormData) {
   const id = await resolveDocumentToken("estimate", String(formData.get("token") ?? ""));
-  if (!id) return;
+  if (!id) {
+    // AR 2026-08-23 — diagnostic log for the smoke #100 puzzle
+    // (customer surface rendered `estimateApprovedMsg` per the /c/
+    // page's `est.status === "APPROVED"` gate, but the advisor page
+    // moments later observed status=SENT + approvedAt=null). Every
+    // early return + successful commit gets a line in Vercel logs so
+    // the next failing run pins down whether the tx ran, whether it
+    // committed, and what the visible state was around it. Remove
+    // after the class of failure is understood + closed.
+    console.log("[approveEstimate] token→id resolved null, no-op");
+    return;
+  }
   const est = await prisma.estimate.findUnique({
     where: { id },
     include: { jobCard: { include: { vehicle: { include: { customer: true } } } } },
   });
-  if (!est || est.status !== "SENT") return;
+  if (!est) {
+    console.log("[approveEstimate] no est row id=", id, "no-op");
+    return;
+  }
+  if (est.status !== "SENT") {
+    console.log(
+      "[approveEstimate] id=", id,
+      "status=", est.status,
+      "approvedAt=", est.approvedAt,
+      "→ refuse (not SENT); no-op",
+    );
+    return;
+  }
   // Transaction — approval flips TWO rows (estimate + jobCard). A crash
   // between them used to leave a half-approved state (customer sees
   // APPROVED, advisor sees the job still paused). AR 2026-08-18.
@@ -53,6 +76,22 @@ export async function approveEstimatePublic(formData: FormData) {
       data: { status: "APPROVED", heldFrom: null, holdReason: null, holdNote: null },
     }),
   ]);
+  // Immediate post-commit read-back so the log records the state the
+  // NEXT reader (advisor page) would observe. If this shows APPROVED
+  // + a timestamp but the advisor render seconds later shows SENT +
+  // null, something REVERTS between commits and reads and the
+  // per-request log points at when.
+  const readback = await prisma.estimate.findUnique({
+    where: { id },
+    select: { status: true, approvedAt: true },
+  });
+  console.log(
+    "[approveEstimate] id=", id,
+    "jobCardId=", est.jobCardId,
+    "committed=OK",
+    "readbackStatus=", readback?.status,
+    "readbackApprovedAt=", readback?.approvedAt?.toISOString(),
+  );
   const c = est.jobCard.vehicle.customer;
   await logInbound(c.garageId, c.id, c.waId ?? c.phone, "APPROVE");
   revalidatePath(`/c/estimate/${id}`);

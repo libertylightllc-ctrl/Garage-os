@@ -76,7 +76,15 @@ export type LineFormErrorCode =
   // to override (the courtesy/warranty case). See
   // findZeroPricedPartLines below.
   | "zero-part-lines-estimate"
-  | "zero-part-lines-invoice";
+  | "zero-part-lines-invoice"
+  // AR 2026-08-23 — refusing to hand off an estimate the customer
+  // already decided on (APPROVED or REJECTED). Previous shape used
+  // `isFirstSend = status !== "SENT"`, which silently flipped an
+  // APPROVED row back to SENT on any resend, wiping the customer's
+  // decision. Now refused outright at the action, surfaced as this
+  // banner. See sendEstimateToCustomerAction in billing.ts.
+  | "estimate-already-approved"
+  | "estimate-already-rejected";
 
 export const LINE_FORM_ERROR_CODES: ReadonlySet<LineFormErrorCode> = new Set<LineFormErrorCode>([
   "price-required",
@@ -87,6 +95,8 @@ export const LINE_FORM_ERROR_CODES: ReadonlySet<LineFormErrorCode> = new Set<Lin
   "kind-unknown",
   "zero-part-lines-estimate",
   "zero-part-lines-invoice",
+  "estimate-already-approved",
+  "estimate-already-rejected",
 ]);
 
 /**

@@ -113,17 +113,13 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     //   5s  (AR 2026-08-22) — race fixed by wrapping the coupled
     //     reads in a RepeatableRead transaction; assumed 5s was
     //     enough Vercel-safe headroom.
-    //   15s (AR 2026-08-23) — the 5s was wrong. Smoke #100 on 033e56e
-    //     failed 3/3 retries with the same shape (advisor page
-    //     rendered SENT + no "approved by customer" timeline entry),
-    //     meaning the customer approve action + serverless revalidate
-    //     round-trip on Vercel staging genuinely takes 5-10s under
-    //     load, not because of the old race. Widening back to 15s
-    //     acknowledges Vercel latency; the RepeatableRead tx still
-    //     stands — it's what makes the state CONSISTENT when it
-    //     arrives, not what makes it arrive faster.
+    //   [attempted revert to 15s on 2026-08-23 — WRONG; snapshot
+    //   showed approvedAt genuinely null at advisor render time,
+    //   not a stale-read race. A longer wait can't turn null
+    //   into a value. Kept at 5s so the class of failure surfaces
+    //   sharply the next time it fires.]
     await page.goto(`/advisor/jobs/${jobCardId}`);
     await expect(page.getByText(/APPROVED/).first()).toBeVisible({
-        timeout: 15_000,
+        timeout: 5_000,
     });
 });

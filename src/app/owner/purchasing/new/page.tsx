@@ -122,6 +122,10 @@ export default async function NewPurchaseOrderPage({
                   qty: t("hydrateJobColQty"),
                   remove: t("hydrateJobColRemove"),
                 }}
+                sourceLabels={{
+                  findings: t("hydrateJobSourceFindings"),
+                  request: t("hydrateJobSourceRequest"),
+                }}
               />
             ) : null}
 

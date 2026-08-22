@@ -503,6 +503,12 @@ const en = {
   hydrateJobColDescription: "Part",
   hydrateJobColQty: "Qty",
   hydrateJobColRemove: "Remove line",
+  // Source-chip labels. "findings" = the tech's "parts required"
+  // list (JobPart, common case); "request" = the separate
+  // PartRequest widget (less common). Chip lets the operator see
+  // which list a hydrated row came from at a glance.
+  hydrateJobSourceFindings: "tech findings",
+  hydrateJobSourceRequest: "part request",
   vehiclePlateLabel: "Plate",
   vehiclePlatePlaceholder: "e.g. A 12345",
   vehicleMakeLabel: "Make",
@@ -2201,6 +2207,8 @@ const ar: typeof en = {
   hydrateJobColDescription: "القطعة",
   hydrateJobColQty: "الكمية",
   hydrateJobColRemove: "حذف البند",
+  hydrateJobSourceFindings: "من ملاحظات الفني",
+  hydrateJobSourceRequest: "طلب قطعة",
   poDefaultVehicleHint:
     "اختر لوحة موجودة في المرآب، أو اكتب الصنع والموديل لسيارة غير مسجّلة. كل الحقول اختيارية — عادةً ما يعرف الاستشاري الصنع والموديل فقط عند طلب عرض السعر.",
   vehiclePlateLabel: "اللوحة",

@@ -57,12 +57,26 @@ interface Props {
         qty: string;
         remove: string;
     };
+    sourceLabels: {
+        findings: string;
+        request: string;
+    };
 }
 
 interface HydratedLine {
     description: string;
     qty: number;
     partId: string | null;
+    /**
+     * Which source the row came from:
+     *   - "findings" → JobPart (kind=REQUIRED/EXTRA) — the tech's
+     *     "Technician findings & parts required" list. Common case.
+     *   - "request"  → PartRequest widget. Less common.
+     * Rendered as a small chip next to the description so the
+     * operator can tell which list a row came from at a glance
+     * (useful when both sources exist and dedup collapsed them).
+     */
+    source: "findings" | "request";
 }
 
 interface HydratedJob {
@@ -93,6 +107,7 @@ export function HydrateLinesFromJob(props: Props) {
         emptyFormat,
         genericErrorFormat,
         tableHeaders,
+        sourceLabels,
     } = props;
 
     const [rawInput, setRawInput] = useState("");
@@ -144,7 +159,12 @@ export function HydrateLinesFromJob(props: Props) {
                     engineSize: string | null;
                     fuelType: string | null;
                 } | null;
-                parts: HydratedLine[];
+                parts: Array<{
+                    description: string;
+                    qty: number;
+                    partId: string | null;
+                    source: "findings" | "request";
+                }>;
             } = await res.json();
 
             const vehicleLabel = data.vehicle
@@ -361,6 +381,26 @@ export function HydrateLinesFromJob(props: Props) {
                                                 value={l.partId}
                                             />
                                         ) : null}
+                                        {/* Source chip — findings vs request.
+                                            AR 2026-08-22: after JC-107 was
+                                            reported "no open requests" while
+                                            the estimate showed 3 tech
+                                            findings, both sources feed the
+                                            hydrator. Chip so the operator
+                                            can see which list each row came
+                                            from at a glance. */}
+                                        <span
+                                            className={
+                                                "ms-2 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium " +
+                                                (l.source === "findings"
+                                                    ? "border-brand-300/60 text-brand-700 dark:border-brand-800/50 dark:text-brand-300"
+                                                    : "border-border text-muted-foreground")
+                                            }
+                                        >
+                                            {l.source === "findings"
+                                                ? sourceLabels.findings
+                                                : sourceLabels.request}
+                                        </span>
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                         <input

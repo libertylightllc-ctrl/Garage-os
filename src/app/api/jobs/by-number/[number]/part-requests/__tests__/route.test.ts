@@ -37,6 +37,7 @@ async function req(number: string | number): Promise<Response> {
 }
 
 async function cleanup() {
+  await prisma.jobPart.deleteMany({ where: { jobCard: { garageId: { startsWith: P } } } });
   await prisma.partRequest.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
   await prisma.vehicle.deleteMany({ where: { customer: { garageId: { startsWith: P } } } });
@@ -62,15 +63,34 @@ beforeEach(async () => {
       plate: "A 1",
     },
   });
-  // JC#77 in garage A with a mix of statuses
+  // JC#77 in garage A. Two sources feed the hydrator; seed BOTH so
+  // dedup + source labelling can be pinned. AR 2026-08-22 — this
+  // is the JC-107 lesson: the "Technician findings & parts
+  // required" section lives on JobPart (kind=REQUIRED/EXTRA), not
+  // PartRequest, and it's the common case.
   await prisma.jobCard.create({
     data: { id: jobA, garageId: gA, vehicleId: vehId, number: 77 },
   });
+  // Source 1 — tech's "parts required" list on the job page.
+  await prisma.jobPart.createMany({
+    data: [
+      // These three make it to the hydrator:
+      { jobCardId: jobA, description: "Brake pads", qty: 2, kind: "REQUIRED" },
+      { jobCardId: jobA, description: "Suspension bushes set", qty: 1, kind: "REQUIRED" },
+      { jobCardId: jobA, description: "Extra: rear light bulb", qty: 1, kind: "EXTRA" },
+      // USED is already fitted; must be excluded.
+      { jobCardId: jobA, description: "Coolant top-up (fitted)", qty: 1, kind: "USED" },
+    ],
+  });
+  // Source 2 — separate PartRequest widget.
   await prisma.partRequest.createMany({
     data: [
-      { garageId: gA, jobCardId: jobA, description: "Front pads", qty: 2, status: "REQUESTED" },
       { garageId: gA, jobCardId: jobA, description: "Oil filter", qty: 1, status: "ORDERED" },
       { garageId: gA, jobCardId: jobA, description: "Wiper blade", qty: 1, status: "ARRIVED" },
+      // Same as JobPart above — different casing/spacing on purpose;
+      // the dedup step must collapse these to a single row.
+      { garageId: gA, jobCardId: jobA, description: "  brake pads ", qty: 4, status: "REQUESTED" },
+      // Excluded — already fitted / withdrawn.
       { garageId: gA, jobCardId: jobA, description: "Air filter (already fitted)", qty: 1, status: "FULFILLED" },
       { garageId: gA, jobCardId: jobA, description: "Cabin filter (cancelled)", qty: 1, status: "CANCELLED" },
     ],
@@ -100,13 +120,60 @@ const owner = (garageId: string) => ({
 });
 
 describe("/api/jobs/by-number/[n]/part-requests", () => {
-  it("returns only REQUESTED / ORDERED / ARRIVED — never FULFILLED or CANCELLED", async () => {
+  it("surfaces tech findings (JobPart REQUIRED/EXTRA) alongside PartRequest, deduping description overlaps", async () => {
     mockAuth.mockResolvedValueOnce(owner(gA));
     const res = await req(77);
     expect(res.status).toBe(200);
     const body = await res.json();
-    const descs = body.parts.map((p: { description: string }) => p.description).sort();
-    expect(descs).toEqual(["Front pads", "Oil filter", "Wiper blade"]);
+    // Expected rows after dedup:
+    //   Brake pads              (from JobPart REQUIRED — wins over
+    //                            PartRequest "brake pads" with
+    //                            different casing/spacing)
+    //   Suspension bushes set   (JobPart REQUIRED)
+    //   Extra: rear light bulb  (JobPart EXTRA)
+    //   Oil filter              (PartRequest ORDERED)
+    //   Wiper blade             (PartRequest ARRIVED)
+    // Excluded:
+    //   Coolant top-up (fitted)       — JobPart USED
+    //   Air filter (already fitted)   — PartRequest FULFILLED
+    //   Cabin filter (cancelled)      — PartRequest CANCELLED
+    const descs = body.parts.map((p: { description: string }) => p.description);
+    expect(descs).toEqual([
+      "Brake pads",
+      "Suspension bushes set",
+      "Extra: rear light bulb",
+      "Oil filter",
+      "Wiper blade",
+    ]);
+    // Findings ordered first (added to the map first), then requests.
+    // Source labels let the UI show which list each row came from.
+    const sources = body.parts.map((p: { source: string }) => p.source);
+    expect(sources).toEqual(["findings", "findings", "findings", "request", "request"]);
+    // The dedup kept the JobPart's canonical wording + qty, not the
+    // PartRequest's typo'd re-type (qty 2 vs 4).
+    expect(body.parts[0].qty).toBe(2);
+    expect(body.parts[0].description).toBe("Brake pads");
+  });
+
+  it("job with only PartRequest (no findings) — all rows land as source=request", async () => {
+    await prisma.jobPart.deleteMany({ where: { jobCardId: jobA } });
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const body = await (await req(77)).json();
+    const sources = new Set(body.parts.map((p: { source: string }) => p.source));
+    expect(sources).toEqual(new Set(["request"]));
+    // Same three unfulfilled/uncancelled PartRequests as the fixture,
+    // now that the JobPart layer is gone: brake pads / oil filter /
+    // wiper blade.
+    expect(body.parts.length).toBe(3);
+  });
+
+  it("job with only findings (no PartRequest) — all rows land as source=findings", async () => {
+    await prisma.partRequest.deleteMany({ where: { jobCardId: jobA } });
+    mockAuth.mockResolvedValueOnce(owner(gA));
+    const body = await (await req(77)).json();
+    const sources = new Set(body.parts.map((p: { source: string }) => p.source));
+    expect(sources).toEqual(new Set(["findings"]));
+    expect(body.parts.length).toBe(3); // REQUIRED×2 + EXTRA×1
   });
 
   it("returns the job's vehicle for the hydrator to pre-fill", async () => {
@@ -122,15 +189,17 @@ describe("/api/jobs/by-number/[n]/part-requests", () => {
     expect(body.jobCardId).toBe(jobA);
   });
 
-  it("404 not-found is DISTINCT from 200-with-empty-parts (bad number vs job-with-no-open-requests)", async () => {
+  it("404 not-found is DISTINCT from 200-with-empty-parts (bad number vs job-with-neither-source)", async () => {
     mockAuth.mockResolvedValueOnce(owner(gA));
     const missing = await req(9999);
     expect(missing.status).toBe(404);
     const missingBody = await missing.json();
     expect(missingBody).toEqual({ error: "not-found", number: 9999 });
 
-    // Now a job that exists but has no open requests → 200 + parts:[].
-    // Different chip in the UI, different code path.
+    // Now a job that exists but has NEITHER findings NOR requests
+    // → 200 + parts:[]. The honest empty message the spec asked us
+    // to keep for a job that genuinely has neither source.
+    await prisma.jobPart.deleteMany({ where: { jobCardId: jobA } });
     await prisma.partRequest.deleteMany({ where: { jobCardId: jobA } });
     mockAuth.mockResolvedValueOnce(owner(gA));
     const empty = await req(77);

@@ -3,14 +3,47 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Hydrate a quotation from a job's part requests (AR 2026-08-22
- * Batch 9). Owner types a JC# on /owner/purchasing/new, the client
- * calls this route, the response's `parts` seed the lines and the
- * `vehicle` block fills the doc-level default vehicle inputs. One
- * screen instead of two — a technician's requested parts are the
- * exact list a shop needs quoted, so this becomes the default path
- * (the estimate-line conversion at /owner/purchasing/from-estimate
- * stays as the priced-quote path).
+ * Hydrate a quotation from a job's parts-to-source list (AR
+ * 2026-08-22 Batch 9, extended 2026-08-22 after JC-107 discovery).
+ *
+ * Two sources are surfaced together, in this order:
+ *
+ *   1. JobPart rows with kind IN (REQUIRED, EXTRA) — the "Technician
+ *      findings & parts required" section on both the technician
+ *      job page and the advisor's estimate editor. This is the
+ *      COMMON case; the technician writes what the car needs
+ *      straight into this list during diagnosis. See
+ *      docs/Job-Card-Data-Model.md for the field.
+ *
+ *      Excluded here:
+ *        - kind=USED    (already fitted; not for quoting)
+ *
+ *      NOT excluded even when estimateLineId is set: the advisor
+ *      may have picked a catalog price without a fresh supplier
+ *      quote; the shop may still want to re-quote. The operator
+ *      can remove any hydrated row before submit.
+ *
+ *   2. PartRequest rows with status IN (REQUESTED, ORDERED,
+ *      ARRIVED) — a distinct widget the tech uses less often, but
+ *      it's the historical entry point and we still support it.
+ *      FULFILLED (fitted) and CANCELLED (withdrawn) drop out for
+ *      the same reason USED drops from JobPart.
+ *
+ * DEDUPLICATION
+ * A part can appear in both sources (the tech typed it into
+ * findings AND raised a request). The dedup key is:
+ *   - partId when both sides have a partId and they match, else
+ *   - trim(lowercase(description))
+ * JobPart wins on collision — it carries the tech's canonical
+ * wording; PartRequest is often re-typed from memory.
+ *
+ * FAILURE MODES (spec-required distinction)
+ *   404 { error: "not-found" }  → JC# doesn't exist in this garage.
+ *   200 { parts: [] }           → JC# exists but neither source has
+ *                                 anything to quote right now.
+ * The client renders different chips for each. Silent match:null
+ * on a bad number was the exact failure the spec asked to
+ * eliminate.
  *
  * Contract:
  *   GET /api/jobs/by-number/{number}/part-requests
@@ -18,24 +51,18 @@ import { prisma } from "@/lib/prisma";
  *       jobCardId: string,
  *       jobNumber: number,
  *       vehicle: { id, make, model, year, plate, vin, engineSize, fuelType } | null,
- *       parts: [{ description: string, qty: number, partId: string | null }],
+ *       parts: [{
+ *         description: string,
+ *         qty: number,
+ *         partId: string | null,
+ *         source: "findings" | "request",
+ *       }],
  *     }
  *   → 400 non-integer / non-positive number
  *   → 401 not signed in
  *   → 403 signed in but not OWNER/MASTER
  *   → 404 no job with this number in this garage
  *          { error: "not-found", number: N }
- *
- * `parts` filters to statuses REQUESTED / ORDERED / ARRIVED — the
- * ones the shop still needs to source or track. FULFILLED means the
- * part was already fitted; CANCELLED means the tech withdrew the
- * request. Neither should show up on a fresh quotation.
- *
- * The response INTENTIONALLY separates "job exists but no open
- * requests" (200 with parts: []) from "job doesn't exist" (404). The
- * client renders different messaging for each — silently returning
- * an empty match on a bad JC# is exactly the failure the spec asked
- * us to eliminate.
  *
  * Garage scoping: the WHERE joins on jobCard.garageId. A JC# that
  * exists only in another garage returns 404, byte-identical to "no
@@ -81,12 +108,27 @@ export async function GET(
                     fuelType: true,
                 },
             },
-            // Deliberately narrow status filter — see the block comment
-            // above. Ordered ASC so the hydrated table reads in the
-            // order the tech asked (matches the technician job page).
+            // Source 1 — "Technician findings & parts required" list.
+            // Ordered ASC so the hydrated table reads in the order
+            // the tech wrote them (matches both the technician job
+            // page and the estimate editor).
+            jobParts: {
+                where: { kind: { in: ["REQUIRED", "EXTRA"] } },
+                select: {
+                    description: true,
+                    qty: true,
+                    partId: true,
+                },
+                orderBy: { createdAt: "asc" },
+            },
+            // Source 2 — the separate PartRequest widget.
             partRequests: {
                 where: { status: { in: ["REQUESTED", "ORDERED", "ARRIVED"] } },
-                select: { description: true, qty: true, partId: true },
+                select: {
+                    description: true,
+                    qty: true,
+                    partId: true,
+                },
                 orderBy: { createdAt: "asc" },
             },
         },
@@ -97,6 +139,47 @@ export async function GET(
             { error: "not-found", number },
             { status: 404 },
         );
+    }
+
+    interface Hydrated {
+        description: string;
+        qty: number;
+        partId: string | null;
+        source: "findings" | "request";
+    }
+    const seen = new Map<string, Hydrated>();
+
+    // Dedup key: partId when present, else normalised description.
+    // Two rows with different partIds but the same description are
+    // treated as distinct — the partId is authoritative when set
+    // (different suppliers of the same brake pad, different sides
+    // of the car, etc.).
+    const keyFor = (row: { partId: string | null; description: string }) =>
+        row.partId ? `p:${row.partId}` : `d:${row.description.trim().toLowerCase()}`;
+
+    for (const j of job.jobParts) {
+        const key = keyFor(j);
+        if (!seen.has(key)) {
+            seen.set(key, {
+                description: j.description,
+                qty: j.qty,
+                partId: j.partId,
+                source: "findings",
+            });
+        }
+    }
+    for (const r of job.partRequests) {
+        const key = keyFor(r);
+        // JobPart wins on collision — its wording is the tech's
+        // authored text; PartRequest may be a re-type.
+        if (!seen.has(key)) {
+            seen.set(key, {
+                description: r.description,
+                qty: r.qty,
+                partId: r.partId,
+                source: "request",
+            });
+        }
     }
 
     return NextResponse.json({
@@ -114,10 +197,6 @@ export async function GET(
                   fuelType: job.vehicle.fuelType,
               }
             : null,
-        parts: job.partRequests.map((p) => ({
-            description: p.description,
-            qty: p.qty,
-            partId: p.partId,
-        })),
+        parts: [...seen.values()],
     });
 }

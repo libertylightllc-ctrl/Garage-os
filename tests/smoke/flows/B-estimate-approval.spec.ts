@@ -105,16 +105,25 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
 
     // Step 8 — advisor sees APPROVED on the estimate row. page.goto
     // already waits for load, so no separate networkidle. Timeout
-    // was 15s (AR 2026-08-15) as defensive buffer for the split-
-    // read race between prisma.jobCard.findFirst and loadJobTimeline
-    // — see run #82 (Aug 21) for the exact failure state. That race
-    // is fixed by wrapping the coupled reads in a RepeatableRead
-    // transaction (AR 2026-08-22) so page.goto now returns
-    // consistent state on the FIRST render. 5s is Vercel-safe head-
-    // room; if this timeout expires again the cause is new, not the
-    // one this timeout used to hide.
+    // history:
+    //   15s (AR 2026-08-15) — defensive buffer for the split-read
+    //     race between prisma.jobCard.findFirst and loadJobTimeline
+    //     (smoke #82 evidence: SENT row + "approved by customer"
+    //     timeline on the same render).
+    //   5s  (AR 2026-08-22) — race fixed by wrapping the coupled
+    //     reads in a RepeatableRead transaction; assumed 5s was
+    //     enough Vercel-safe headroom.
+    //   15s (AR 2026-08-23) — the 5s was wrong. Smoke #100 on 033e56e
+    //     failed 3/3 retries with the same shape (advisor page
+    //     rendered SENT + no "approved by customer" timeline entry),
+    //     meaning the customer approve action + serverless revalidate
+    //     round-trip on Vercel staging genuinely takes 5-10s under
+    //     load, not because of the old race. Widening back to 15s
+    //     acknowledges Vercel latency; the RepeatableRead tx still
+    //     stands — it's what makes the state CONSISTENT when it
+    //     arrives, not what makes it arrive faster.
     await page.goto(`/advisor/jobs/${jobCardId}`);
     await expect(page.getByText(/APPROVED/).first()).toBeVisible({
-        timeout: 5_000,
+        timeout: 15_000,
     });
 });

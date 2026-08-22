@@ -4,9 +4,9 @@ import { bypassHeaders } from "../support/vercel-bypass";
 import {
     bookManualIntake,
     customerEstimateUrl,
-    markJobTechComplete,
     sendEstimateToCustomer,
     sendJobForEstimate,
+    techMarkCompleteWithPhoto,
 } from "../support/flows";
 
 /**
@@ -87,10 +87,12 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     // Step 6b — the cashier's "Generate Invoice" button gates on
     // jobCard.status === "TECH_COMPLETE" (per estimates/[id]/page.tsx
     // line ~638). Estimate APPROVED alone isn't enough; the tech has
-    // to Mark Complete. Bypass the UI (proof-of-work photo requirement
-    // impractical to fake in smoke) via direct DB update — see the
-    // helper for why this shortcut is safe.
-    await markJobTechComplete(jobCardId);
+    // to Mark Complete. Drive the REAL UI path — upload a real PNG so
+    // the hasWorkProof gate opens, click Mark Complete, then assert
+    // markCompleteAction fully committed (WorkSession closed with
+    // endReason=COMPLETED). See the helper for the full four-step
+    // rationale and the specific regression class it guards against.
+    await techMarkCompleteWithPhoto(browser, jobCardId);
 
     // Step 7 — switch to cashier. Fresh context with cashier's
     // storageState — mid-test role switch is standard Playwright.

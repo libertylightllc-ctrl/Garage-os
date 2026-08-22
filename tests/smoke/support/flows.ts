@@ -1,4 +1,5 @@
 import type { Browser, Page } from "@playwright/test";
+import path from "node:path";
 import { smokeCustomerName, smokePhone, smokePlate } from "./unique-id";
 import { storageStatePath } from "./roles";
 import { bypassHeaders } from "./vercel-bypass";
@@ -397,6 +398,161 @@ export async function markJobTechComplete(
         if (res.rowCount !== 1) {
             throw new Error(
                 `markJobTechComplete: expected to update 1 job, updated ${res.rowCount} (jobId=${jobCardId})`,
+            );
+        }
+    } finally {
+        await client.end();
+    }
+}
+
+/**
+ * Real UI-driven Mark Complete — proves markCompleteAction end-to-end,
+ * unlike markJobTechComplete() above which shortcuts the action with a
+ * raw UPDATE. Every downstream flow uses the shortcut; this helper is
+ * for the ONE flow (C) that guards against regressions in the action
+ * itself: the status flip, workCompletedAt stamp, closeJobSessions
+ * ("COMPLETED") call, and the revalidatePath fan-out.
+ *
+ * Prerequisites: the job must be APPROVED (customer has approved the
+ * estimate). The tech must already be the claimer (or an accepted
+ * helper); we don't re-claim here.
+ *
+ * The four steps map 1:1 to the real workflow:
+ *
+ *   1. /technician — tap "I'm on this car" to open a WorkSession.
+ *      Necessary because sendJobForEstimate closed the claim's
+ *      session earlier (endReason=SENT_FOR_ESTIMATE). Without a live
+ *      session at Mark Complete time, closeJobSessions("COMPLETED")
+ *      closes zero rows — the endReason='COMPLETED' assertion below
+ *      would then find nothing to assert against and silently pass,
+ *      exactly the leak class this helper exists to close.
+ *
+ *   2. /technician/jobs/{id} — setInputFiles a real 67-byte PNG onto
+ *      the addStepAction file input. The client component fires its
+ *      change handler, renders the preview + "Use this photo →"
+ *      submit; click that to POST the step. This satisfies the
+ *      hasWorkProof gate (a PHOTO JobStep created AFTER the
+ *      estimate's approvedAt), so the Mark Complete button will
+ *      render on next RSC render.
+ *
+ *   3. Click "Mark Complete →" scoped to a form whose hidden jobId
+ *      matches — NOT .first() on the label alone. Two identical
+ *      forms carry this button (banner + Repair section), so the
+ *      form-scoped selector is the honest way to say "the button
+ *      for this job". Guards against a future refactor that adds
+ *      a third Mark Complete button for a different job on the
+ *      same page.
+ *
+ *   4. Post-redirect DB check — every WorkSession row for the job
+ *      MUST have endedAt IS NOT NULL, and at least one MUST carry
+ *      endReason='COMPLETED'. The redirect alone only proves the
+ *      action didn't throw; a swallowed closeJobSessions failure
+ *      (its own contract is "log-and-continue", see
+ *      src/lib/work-session.ts:94) would leave clocks running and
+ *      feed fiction into the P&L report — the specific regression
+ *      class this assertion is here to catch.
+ */
+export async function techMarkCompleteWithPhoto(
+    browser: Browser,
+    jobCardId: string,
+): Promise<void> {
+    const fixturePath = path.resolve(__dirname, "..", "fixtures", "tiny.png");
+    const ctx = await browser.newContext({
+        storageState: storageStatePath("tech"),
+        extraHTTPHeaders: bypassHeaders(),
+    });
+    try {
+        const page = await ctx.newPage();
+
+        // Step 1 — open a WorkSession by tapping "I'm on this car"
+        // on /technician. Scope by the jobId hidden so multi-row
+        // dashboards stay unambiguous; wait for the form to detach
+        // (revalidatePath replaces it with the "On this car" chip)
+        // as the deterministic post-action signal. Was tempted to
+        // wait on text=/On this car/ but "On this car" is a
+        // substring of "I'm on this car" — Playwright would resolve
+        // instantly against pre-click state.
+        await page.goto("/technician");
+        const startWorkForm = page
+            .locator(
+                `form:has(input[name="jobId"][value="${jobCardId}"]):has(button:has-text("I'm on this car"))`,
+            )
+            .first();
+        await startWorkForm
+            .locator('button:has-text("I\'m on this car")')
+            .click({ timeout: 10_000 });
+        await startWorkForm.waitFor({ state: "detached", timeout: 15_000 });
+
+        // Step 2 — upload a real PNG. The <input type="file"
+        // name="file"> is sr-only inside the addStepAction form
+        // (scoped by type=PHOTO). Playwright's setInputFiles fires
+        // a native change event; the React onChange in
+        // src/components/photo-capture.tsx renders the preview +
+        // "Use this photo →" submit.
+        await page.goto(`/technician/jobs/${jobCardId}`);
+        const photoInput = page.locator(
+            'form:has(input[name="type"][value="PHOTO"]) input[type="file"][name="file"]',
+        );
+        await photoInput.setInputFiles(fixturePath);
+        await page
+            .getByRole("button", { name: /Use this photo/i })
+            .click({ timeout: 10_000 });
+
+        // Step 3 — the Mark Complete button only appears on the next
+        // RSC render (hasWorkProof gate now true). Scope by form —
+        // NOT .first() on the label — so a future refactor that
+        // introduces a same-labelled button for a different job
+        // fails the test loud instead of silently clicking the wrong
+        // one. Two forms match today (banner + Repair section); both
+        // fire the same action with the same jobId, so clicking
+        // either is correct.
+        const markCompleteForm = page
+            .locator(
+                `form:has(input[name="jobId"][value="${jobCardId}"]):has(button:has-text("Mark Complete"))`,
+            )
+            .first();
+        await markCompleteForm
+            .locator('button:has-text("Mark Complete")')
+            .waitFor({ state: "visible", timeout: 15_000 });
+        await markCompleteForm
+            .locator('button:has-text("Mark Complete")')
+            .click({ timeout: 10_000 });
+        await page.waitForURL(/\/marked-complete/, { timeout: 15_000 });
+    } finally {
+        await ctx.close();
+    }
+
+    // Step 4 — DB check. The redirect only proves markCompleteAction
+    // returned normally. closeJobSessions swallows its own errors
+    // (see src/lib/work-session.ts:94) — a session write failure
+    // would leave a live WorkSession row and feed a fiction into
+    // the P&L report. Assert the actual DB state instead of
+    // trusting the redirect as proof of completeness.
+    const client = new pg.Client({ connectionString: resolveSmokeDbUrl() });
+    await client.connect();
+    try {
+        const res = await client.query<{
+            endedAt: Date | null;
+            endReason: string | null;
+        }>(
+            `SELECT "endedAt", "endReason" FROM "WorkSession" WHERE "jobCardId" = $1`,
+            [jobCardId],
+        );
+        if (res.rowCount === 0) {
+            throw new Error(
+                `techMarkCompleteWithPhoto: expected WorkSession rows for job ${jobCardId}, found none — the tech's claim or 'I'm on this car' click didn't open a session, so the endReason='COMPLETED' assertion would be trivially unmeetable.`,
+            );
+        }
+        const stillOpen = res.rows.filter((r) => r.endedAt === null);
+        if (stillOpen.length > 0) {
+            throw new Error(
+                `techMarkCompleteWithPhoto: ${stillOpen.length}/${res.rowCount} WorkSession rows for job ${jobCardId} still have endedAt=NULL after Mark Complete — closeJobSessions likely swallowed a failure. Rows: ${JSON.stringify(res.rows)}`,
+            );
+        }
+        const completed = res.rows.filter((r) => r.endReason === "COMPLETED");
+        if (completed.length === 0) {
+            throw new Error(
+                `techMarkCompleteWithPhoto: no WorkSession row for job ${jobCardId} carries endReason='COMPLETED' — markCompleteAction ran without calling closeJobSessions("COMPLETED"). Rows: ${JSON.stringify(res.rows)}`,
             );
         }
     } finally {

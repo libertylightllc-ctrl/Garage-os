@@ -246,61 +246,77 @@ export default async function CashierHome({
     select: { country: true },
   });
   const tz = countryToTimeZone(garage?.country ?? "UAE");
-  const [invoices, ledger, jobs] = await Promise.all([
-    prisma.invoice.findMany({
-      // Exclude VOIDed rows from the dashboard's active receivables
-      // + counter math. A voided invoice keeps its number for audit
-      // (visible on /invoices/[id] directly) but doesn't count as
-      // money owed. Correction invoices land here under the new
-      // number they took at reissue time.
-      where: { garageId, status: { not: "VOID" } },
-      include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
-      orderBy: { issuedAt:"desc"},
-    }),
-    prisma.ledgerEntry.findMany({ where: { garageId } }),
-    // Active jobs that need cashier attention at some point in the
-    // lifecycle. We INCLUDE the INVOICED status now — once the invoice
-    // is created the cashier still has to tap 'Send Invoice to Customer'
-    // from the dashboard, so unsent invoices need to surface here. We
-    // drop INVOICED+sent jobs in JS (they live in Receivables only).
-    prisma.jobCard.findMany({
-      where: { garageId, status: { notIn: ["DELIVERED","CANCELLED"] } },
-      include: {
-        vehicle: { include: { customer: true } },
-        // Latest estimate drives the friendly status (SENT → 'Awaiting customer
-        // approval', else 'Estimate under process'). Pulled WITHOUT `take`
-        // because the Approved row also needs to find the APPROVED
-        // sibling for routing — if a stray empty DRAFT exists alongside
-        // an APPROVED one (the double-tap race), the 'Generate Invoice'
-        // link must land on the APPROVED estimate's id, not the
-        // most-recent (empty) one. Most jobs have 1-3 estimates max so
-        // dropping `take: 1` is cheap.
-        estimates: {
-          orderBy: { createdAt:"desc"},
-          // `total` added for the Approved/Rejected estimate rows that
-          // show 'AED <total>' beside the status badge so the cashier
-          // sees pipeline value without clicking in.
-          select: { id: true, status: true, sentAt: true, total: true },
-        },
-        // Latest invoice id — needed to target sendInvoiceToCustomerAction
-        // from the dashboard's 'Send Invoice to Customer' button.
-        invoices: {
+  // SNAPSHOT-CONSISTENT READS (AR 2026-08-22). The three reads below
+  // cross-reference: invoices feed the Receivables list AND aggregate
+  // into ledger's Sales Revenue / VAT Payable / Cash-Bank totals; the
+  // status pills on jobs' embedded estimates + invoices are the same
+  // rows the invoices list renders. A recordPaymentAction commit
+  // landing between statements at READ COMMITTED (Postgres default)
+  // can show a payment reflected in ledger totals but not yet in the
+  // invoice row's status, or vice versa. RepeatableRead pins one
+  // snapshot for all three. Same fix shape as the four job-detail
+  // pages in 437b23c — see that commit for the smoke #82 evidence.
+  const { invoices, ledger, jobs } = await prisma.$transaction(
+    async (tx) => {
+      const [invoices, ledger, jobs] = await Promise.all([
+        tx.invoice.findMany({
+          // Exclude VOIDed rows from the dashboard's active receivables
+          // + counter math. A voided invoice keeps its number for audit
+          // (visible on /invoices/[id] directly) but doesn't count as
+          // money owed. Correction invoices land here under the new
+          // number they took at reissue time.
+          where: { garageId, status: { not: "VOID" } },
+          include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
           orderBy: { issuedAt:"desc"},
-          take: 1,
-          select: { id: true, number: true, total: true },
-        },
-      },
-      orderBy: [
-        // Cars freshly handed off (status=ESTIMATE) bubble to the top so
-        // the cashier sees them first.
-        { status:"asc"},
-        { createdAt:"desc"},
-      ],
-    }),
-    // (Counters used to depend on a separate Estimate.groupBy round
-    // trip; they're now derived from `jobs` below — keeps counter ==
-    // section count by construction and saves a query.)
-  ]);
+        }),
+        tx.ledgerEntry.findMany({ where: { garageId } }),
+        // Active jobs that need cashier attention at some point in the
+        // lifecycle. We INCLUDE the INVOICED status now — once the invoice
+        // is created the cashier still has to tap 'Send Invoice to Customer'
+        // from the dashboard, so unsent invoices need to surface here. We
+        // drop INVOICED+sent jobs in JS (they live in Receivables only).
+        tx.jobCard.findMany({
+          where: { garageId, status: { notIn: ["DELIVERED","CANCELLED"] } },
+          include: {
+            vehicle: { include: { customer: true } },
+            // Latest estimate drives the friendly status (SENT → 'Awaiting customer
+            // approval', else 'Estimate under process'). Pulled WITHOUT `take`
+            // because the Approved row also needs to find the APPROVED
+            // sibling for routing — if a stray empty DRAFT exists alongside
+            // an APPROVED one (the double-tap race), the 'Generate Invoice'
+            // link must land on the APPROVED estimate's id, not the
+            // most-recent (empty) one. Most jobs have 1-3 estimates max so
+            // dropping `take: 1` is cheap.
+            estimates: {
+              orderBy: { createdAt:"desc"},
+              // `total` added for the Approved/Rejected estimate rows that
+              // show 'AED <total>' beside the status badge so the cashier
+              // sees pipeline value without clicking in.
+              select: { id: true, status: true, sentAt: true, total: true },
+            },
+            // Latest invoice id — needed to target sendInvoiceToCustomerAction
+            // from the dashboard's 'Send Invoice to Customer' button.
+            invoices: {
+              orderBy: { issuedAt:"desc"},
+              take: 1,
+              select: { id: true, number: true, total: true },
+            },
+          },
+          orderBy: [
+            // Cars freshly handed off (status=ESTIMATE) bubble to the top so
+            // the cashier sees them first.
+            { status:"asc"},
+            { createdAt:"desc"},
+          ],
+        }),
+        // (Counters used to depend on a separate Estimate.groupBy round
+        // trip; they're now derived from `jobs` below — keeps counter ==
+        // section count by construction and saves a query.)
+      ]);
+      return { invoices, ledger, jobs };
+    },
+    { isolationLevel: "RepeatableRead" },
+  );
 
   // Cashier dashboard buckets — each surfaces a different"what's mine to
   // do now"question. Estimate-state buckets (pendingEstimateJobs etc)

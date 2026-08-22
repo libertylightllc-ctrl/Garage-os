@@ -123,6 +123,17 @@ export default async function PublicPurchaseOrder({
         defaultVehicleFuelType: po.defaultVehicleFuelType,
         defaultVehicleJobNumber: po.defaultVehicleJobNumber,
     });
+    // AR 2026-08-23 — same shape as the internal PO page. Full
+    // vehicle details render ONCE above the table:
+    //   singleVehicle    → one-line caption
+    //   multi-vehicle    → one row per distinct car in a compact block
+    // Per-row Vehicle cell drops to plate + JC# alone (or make/model
+    // when no plate). Was 7 lines per row, which overflowed A4 and
+    // cut UNIT COST + LINE TOTAL off the printed page.
+    const singleVehicle =
+        vehicles.allResolved && vehicles.distinct.length === 1
+            ? vehicles.distinct[0]
+            : null;
 
     return (
         <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-5 p-6">
@@ -149,6 +160,99 @@ export default async function PublicPurchaseOrder({
                 logoUrl={po.garage.logoUrl}
             />
 
+            {/* Vehicle context up top so per-row cells stay short.
+                AR 2026-08-23 — was rendering seven-line vehicle stacks
+                per row on multi-vehicle POs, blowing the table past
+                A4 and cutting UNIT COST + LINE TOTAL off page 1. */}
+            {singleVehicle ? (
+                <section className="rounded-lg border border-border/60 bg-surface-2/40 px-3 py-2 text-xs">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-text-mute">
+                        {t("colVehicle")}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                        {singleVehicle.make || singleVehicle.model ? (
+                            <span className="font-medium">
+                                {[
+                                    singleVehicle.make,
+                                    singleVehicle.model,
+                                    singleVehicle.year != null
+                                        ? String(singleVehicle.year)
+                                        : null,
+                                ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                            </span>
+                        ) : null}
+                        {singleVehicle.engineSize || singleVehicle.fuelType ? (
+                            <span className="text-text-mute">
+                                {[singleVehicle.engineSize, singleVehicle.fuelType]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                            </span>
+                        ) : null}
+                        {singleVehicle.plate ? (
+                            <span className="font-medium">{singleVehicle.plate}</span>
+                        ) : null}
+                        {singleVehicle.vin ? (
+                            <span className="font-mono text-text-mute">
+                                VIN {singleVehicle.vin}
+                            </span>
+                        ) : null}
+                        {singleVehicle.jobNumber != null ? (
+                            <span className="text-text-mute">
+                                JC-{singleVehicle.jobNumber}
+                            </span>
+                        ) : null}
+                    </div>
+                </section>
+            ) : vehicles.distinct.length > 1 ? (
+                <section className="rounded-lg border border-border/60 bg-surface-2/40 px-3 py-2 text-xs">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-text-mute">
+                        {t("colVehicles")}
+                    </div>
+                    <ul className="mt-1 flex flex-col gap-1">
+                        {vehicles.distinct.map((v, i) => (
+                            <li
+                                key={`${v.plate ?? ""}-${v.jobNumber ?? ""}-${i}`}
+                                className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5"
+                            >
+                                {v.plate ? (
+                                    <span className="font-medium">{v.plate}</span>
+                                ) : null}
+                                {v.jobNumber != null ? (
+                                    <span className="text-text-mute">
+                                        JC-{v.jobNumber}
+                                    </span>
+                                ) : null}
+                                {v.make || v.model ? (
+                                    <span>
+                                        {[
+                                            v.make,
+                                            v.model,
+                                            v.year != null ? String(v.year) : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                    </span>
+                                ) : null}
+                                {v.engineSize || v.fuelType ? (
+                                    <span className="text-text-mute">
+                                        {[v.engineSize, v.fuelType]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                    </span>
+                                ) : null}
+                                {v.vin ? (
+                                    <span className="font-mono text-text-mute">
+                                        VIN {v.vin}
+                                    </span>
+                                ) : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
             {/* Read-only lines table. RFQs render unit cost as "—"
                 (asking the supplier to fill it in), POs render the
                 agreed price. Total row lives below the table. */}
@@ -157,11 +261,16 @@ export default async function PublicPurchaseOrder({
                     <thead className="bg-surface-2 text-xs uppercase tracking-wide text-text-mute">
                         <tr>
                             <th className="px-3 py-2 text-left">{t("partName")}</th>
-                            {/* Hide the whole Vehicle column when no line
-                                on this document has a vehicle. Supplier-
-                                facing surfaces show nothing rather than
-                                "(no vehicle linked)" — internal wording. */}
-                            {vehicles.anyResolved ? (
+                            {/* Vehicle column shows only when this PO has
+                                MORE THAN ONE distinct car — the block above
+                                already carries the vehicle context for the
+                                single-vehicle case, and dropping the column
+                                keeps the table narrow enough to fit A4 without
+                                truncating UNIT COST / LINE TOTAL. Old rule
+                                (anyResolved) rendered the column even for
+                                single-vehicle POs; new rule (distinct > 1)
+                                matches the internal PO page. AR 2026-08-23. */}
+                            {vehicles.distinct.length > 1 ? (
                                 <th className="px-3 py-2 text-left">{t("colVehicle")}</th>
                             ) : null}
                             <th className="px-3 py-2 text-right">{t("poOrdered")}</th>
@@ -186,53 +295,36 @@ export default async function PublicPurchaseOrder({
                                             {l.part?.sku ?? l.sku ?? ""}
                                         </span>
                                     </td>
-                                    {vehicles.anyResolved ? (
+                                    {vehicles.distinct.length > 1 ? (
                                         <td className="px-3 py-2 text-xs">
                                             {lineVehicle ? (
-                                                // 2026-08-02 (fix #3 followup):
-                                                // each detail on its own row so
-                                                // the supplier can identify the
-                                                // right part. Null rows hide.
-                                                <div className="space-y-0.5">
-                                                    {lineVehicle.make || lineVehicle.model ? (
-                                                        <div className="font-medium">
+                                                // AR 2026-08-23 — condensed to
+                                                // plate + JC# (or make/model when
+                                                // no plate). Full details for
+                                                // every distinct vehicle live in
+                                                // the "Vehicles on this order"
+                                                // block above the table; the row
+                                                // only needs to say WHICH car it
+                                                // belongs to.
+                                                <div className="flex flex-col gap-0.5">
+                                                    {lineVehicle.plate ? (
+                                                        <span className="font-medium">
+                                                            {lineVehicle.plate}
+                                                        </span>
+                                                    ) : lineVehicle.make || lineVehicle.model ? (
+                                                        <span className="font-medium">
                                                             {[lineVehicle.make, lineVehicle.model]
                                                                 .filter(Boolean)
                                                                 .join(" ")}
-                                                        </div>
-                                                    ) : null}
-                                                    {lineVehicle.year != null ? (
-                                                        <div className="text-[11px] text-muted-foreground">
-                                                            {lineVehicle.year}
-                                                        </div>
-                                                    ) : null}
-                                                    {lineVehicle.engineSize || lineVehicle.fuelType ? (
-                                                        <div className="text-[11px] text-muted-foreground">
-                                                            {[lineVehicle.engineSize, lineVehicle.fuelType]
-                                                                .filter(Boolean)
-                                                                .join(" ")}
-                                                        </div>
-                                                    ) : null}
-                                                    {lineVehicle.plate ? (
-                                                        <div className="text-[11px] font-medium">
-                                                            {lineVehicle.plate}
-                                                        </div>
-                                                    ) : null}
-                                                    {lineVehicle.vin ? (
-                                                        <div className="font-mono text-[10px] text-muted-foreground">
-                                                            VIN {lineVehicle.vin}
-                                                        </div>
+                                                        </span>
                                                     ) : null}
                                                     {lineVehicle.jobNumber != null ? (
-                                                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                        <span className="text-[10px] uppercase tracking-wide text-text-mute">
                                                             JC-{lineVehicle.jobNumber}
-                                                        </div>
+                                                        </span>
                                                     ) : null}
                                                 </div>
                                             ) : (
-                                                // Empty cell — supplier doesn't
-                                                // see internal wording. Nothing
-                                                // is rendered here.
                                                 <span aria-hidden="true">&nbsp;</span>
                                             )}
                                         </td>

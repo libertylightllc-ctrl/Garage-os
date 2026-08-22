@@ -137,6 +137,12 @@ export default async function EstimateEditor({
                   address: true,
                   logoUrl: true,
                   country: true,
+                  // AR 2026-08-22 — prefill the PriceThisPartRow's
+                  // Markup input from the shop's setting so pricing
+                  // by markup is one edit (type cost), not two
+                  // (type cost + type markup). Null = no default,
+                  // Markup opens blank.
+                  defaultPartsMarkupPct: true,
                 },
               },
               jobParts: { orderBy: { createdAt: "asc" } },
@@ -227,10 +233,22 @@ export default async function EstimateEditor({
     priced: t("priceThisPart_priced"),
     qty: t("colQty"),
     unitCost: t("priceThisPart_unitCost"),
+    // AR 2026-08-22 — tri-input now includes Markup % + Margin
+    // + "from default" hint. Same shape as the main estimate line
+    // editor (CostPricedInputs), reused directly. Uses the same
+    // markupLabel / marginLabel the main editor already passes so
+    // both surfaces stay in sync.
+    markup: t("markupLabel"),
     unitPrice: t("priceThisPart_unitPrice"),
+    margin: t("marginLabel"),
+    markupFromDefault: t("priceThisPart_markupFromDefault"),
     save: t("priceThisPart_save"),
     cancel: t("priceThisPart_cancel"),
   };
+  const defaultPartsMarkupPct =
+    est.jobCard.garage.defaultPartsMarkupPct != null
+      ? Number(est.jobCard.garage.defaultPartsMarkupPct)
+      : null;
   const canDecline = canEditEstimate && !est.invoice; // skip lines until the invoice is cut
 
   // 3b — read-only stock hint (reuses 3a's rules) + optional catalog picker
@@ -403,6 +421,7 @@ export default async function EstimateEditor({
                   estimateId={est.id}
                   editable={editable}
                   currency="AED"
+                  defaultMarkupPct={defaultPartsMarkupPct}
                   labels={priceThisPartLabels}
                 />
               ))}
@@ -436,6 +455,7 @@ export default async function EstimateEditor({
                   estimateId={est.id}
                   editable={editable}
                   currency="AED"
+                  defaultMarkupPct={defaultPartsMarkupPct}
                   labels={priceThisPartLabels}
                 />
               ))}

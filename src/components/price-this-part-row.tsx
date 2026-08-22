@@ -24,6 +24,7 @@
 
 import { useState } from "react";
 import { addLineFromPartAction } from "@/app/actions/billing";
+import { CostPricedInputs } from "@/components/cost-priced-inputs";
 
 export interface PriceThisPartRowProps {
   jobPart: {
@@ -43,19 +44,35 @@ export interface PriceThisPartRowProps {
   estimateId: string;
   editable: boolean;
   currency: string;
+  /**
+   * Garage default parts markup %, if the shop has set one on
+   * settings. Prefilled into the Markup field when the form opens
+   * so pricing by markup is one edit (type cost), not two (type
+   * cost + type markup). Null when the shop has no default — the
+   * Markup field opens blank in that case.
+   */
+  defaultMarkupPct: number | null;
   labels: {
     priceThisPart: string;
     priced: string;
     qty: string;
     unitCost: string;
+    /** e.g. "Markup %" — the tri-input's Markup label. */
+    markup: string;
     unitPrice: string;
+    /** e.g. "Margin" — line-total profit display under the inputs. */
+    margin: string;
+    /**
+     * e.g. "from garage default" — hint under the Markup field when
+     * the prefilled value came from Garage.defaultPartsMarkupPct and
+     * the advisor hasn't changed it.
+     */
+    markupFromDefault: string;
     save: string;
     cancel: string;
   };
 }
 
-const FIELD =
-  "h-10 rounded-lg border border-border bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 const BTN_PRIMARY =
   "inline-flex h-10 items-center justify-center rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60";
 const BTN_SECONDARY =
@@ -69,6 +86,7 @@ export function PriceThisPartRow({
   estimateId,
   editable,
   currency,
+  defaultMarkupPct,
   labels,
 }: PriceThisPartRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -117,58 +135,55 @@ export function PriceThisPartRow({
     );
   }
 
-  // State 3 (expanded) — inline form. Submits addLineFromPartAction
-  // with the tuple the server expects (estimateId, jobPartId, qty,
-  // unitCost, unitPrice). All money fields are `required` — the
-  // server's parseMoney is the second gate. Blank fields never
-  // become zero (rule 5).
+  // State 3 (expanded) — inline form. Delegates the tri-input
+  // pricing block to CostPricedInputs so the two-way binding
+  // (cost×markup → price, price override → markup) is the SAME
+  // implementation as the main estimate line editor. The
+  // previous shape was a divergent 3-input form that quietly
+  // missed the Markup % field for months — see AR 2026-08-22
+  // JC-cmt4q2hpy. Reusing the shared component removes the
+  // divergence class.
+  //
+  // Prefill discipline:
+  //   qty        → the tech's requested qty (advisor can adjust)
+  //   unitCost   → blank (rule 5: blank ≠ zero — advisor types
+  //                the real cost for THIS job)
+  //   markupPct  → garage's defaultPartsMarkupPct if set, else
+  //                blank. When prefilled, CostPricedInputs shows a
+  //                small "from default" hint under the field until
+  //                the advisor changes the value.
+  //   unitPrice  → blank; derives when advisor types cost (given
+  //                markup is prefilled). Advisor can also type a
+  //                price directly and the markup recomputes.
+  //
+  // Server: addLineFromPartAction reads unitCost + unitPrice from
+  // the form and re-derives markupPct from the ratio (see
+  // src/app/actions/billing.ts). Posting a markupPct field is
+  // harmless — the server ignores it and re-derives. No server
+  // change was needed for this batch.
   return (
     <li className="rounded-lg border border-border bg-surface-2 p-3">
       <div className="mb-2 text-base font-medium">• {label}</div>
       <form action={addLineFromPartAction} className="flex flex-col gap-2">
         <input type="hidden" name="estimateId" value={estimateId} />
         <input type="hidden" name="jobPartId" value={jobPart.id} />
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col text-xs text-text-mute">
-            {labels.qty}
-            <input
-              name="qty"
-              type="number"
-              min="1"
-              step="1"
-              inputMode="numeric"
-              defaultValue={jobPart.qty}
-              required
-              className={`${FIELD} w-20 text-right`}
-            />
-          </label>
-          <label className="flex flex-col text-xs text-text-mute">
-            {labels.unitCost}
-            <input
-              name="unitCost"
-              type="number"
-              step="any"
-              min="0"
-              inputMode="decimal"
-              placeholder="0.00"
-              required
-              className={`${FIELD} w-32 text-right`}
-            />
-          </label>
-          <label className="flex flex-col text-xs text-text-mute">
-            {labels.unitPrice}
-            <input
-              name="unitPrice"
-              type="number"
-              step="any"
-              min="0"
-              inputMode="decimal"
-              placeholder="0.00"
-              required
-              className={`${FIELD} w-32 text-right`}
-            />
-          </label>
-        </div>
+        <CostPricedInputs
+          initial={{
+            qty: jobPart.qty,
+            unitCost: null,
+            markupPct: defaultMarkupPct,
+            unitPrice: null,
+          }}
+          labels={{
+            qty: labels.qty,
+            cost: labels.unitCost,
+            markup: labels.markup,
+            unit: labels.unitPrice,
+            margin: labels.margin,
+            markupFromDefault: labels.markupFromDefault,
+          }}
+          markupFromDefault={defaultMarkupPct != null}
+        />
         <div className="flex flex-wrap gap-2">
           <button type="submit" className={BTN_PRIMARY}>
             {labels.save}

@@ -1194,6 +1194,10 @@ const en = {
   priceThisPart_save: "Save",
   priceThisPart_cancel: "Cancel",
   priceThisPart_priced: "Priced",
+  // AR 2026-08-22 — hint under the Markup % field when the value
+  // was prefilled from Garage.defaultPartsMarkupPct rather than
+  // typed by the advisor. Hides the moment the advisor changes it.
+  priceThisPart_markupFromDefault: "from garage default",
   // AR 2026-08-18 — banner shown on /estimates/[id] and /invoices/[id]
   // when a server action redirects with ?formError=<code>. Every
   // code in LINE_FORM_ERROR_CODES (src/lib/billing.ts) needs a matching
@@ -2815,6 +2819,7 @@ const ar: typeof en = {
   priceThisPart_save: "حفظ",
   priceThisPart_cancel: "إلغاء",
   priceThisPart_priced: "مُسعَّر",
+  priceThisPart_markupFromDefault: "من الإعداد الافتراضي للجراج",
   lineFormErrorTitle: "تعذّر حفظ هذا البند",
   lineFormErr_generic: "لم يُحفظ البند. تحقّق من القيم وحاول مجدّدًا.",
   lineFormErr_price_required: "سعر الوحدة مطلوب — الحقل الفارغ ليس صفرًا. أدخل السعر، أو إن كان البند مجانيًا فعلًا (ضمان/مجاملة) فاكتب 0 صراحةً.",

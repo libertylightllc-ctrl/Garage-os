@@ -585,10 +585,17 @@ export default async function PurchaseOrderDetailPage({
                 {singleVehicle ? null : (
                   <th className="px-4 py-3">{t("colVehicle")}</th>
                 )}
-                <th className="px-4 py-3 text-right">{t("poOrdered")}</th>
-                {showReceiving ? <th className="px-4 py-3 text-right">{t("poReceived")}</th> : null}
-                {showReceiving ? <th className="px-4 py-3 text-right">{t("poOutstanding")}</th> : null}
-                {showReturned ? <th className="px-4 py-3 text-right">{t("poReturned")}</th> : null}
+                {/* AR 2026-08-23 — 7 columns (Ordered, Received,
+                    Outstanding, Returned, Unit cost, Line total,
+                    plus edit-actions) forced a horizontal scrollbar
+                    on the internal page and cut off Unit cost/Line
+                    total in print. Collapsed to a single Qty column:
+                    the base number is Ordered; a "/ N" appears when
+                    any qty received; outstanding/returned render as
+                    a small second line only when non-zero. Four
+                    number columns for what is usually 1, 1, 0, 0
+                    was wasted width. */}
+                <th className="px-4 py-3 text-right">{t("colQty")}</th>
                 <th className="px-4 py-3 text-right">{t("poUnitCost")}</th>
                 <th className="px-4 py-3 text-right">{t("poLineTotal")}</th>
                 {isDraft ? <th className="px-4 py-3" /> : null}
@@ -672,25 +679,34 @@ export default async function PurchaseOrderDetailPage({
                           className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-right text-sm tabular-nums"
                         />
                       ) : (
-                        l.qty
+                        // Combined qty display (AR 2026-08-23) —
+                        // top line: `2` or `2 / 1` (ordered / received);
+                        // muted suffix lines only when non-zero:
+                        // "1 outstanding" and "1 returned". Four
+                        // separate columns collapsed here.
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span>
+                            {l.qty}
+                            {showReceiving ? (
+                              <span className="text-muted-foreground">
+                                {" / "}
+                                {l.receivedQty}
+                              </span>
+                            ) : null}
+                          </span>
+                          {showReceiving && outstanding > 0 ? (
+                            <span className="text-[10px] font-medium text-warning-600">
+                              {outstanding} {t("poOutstanding").toLowerCase()}
+                            </span>
+                          ) : null}
+                          {showReturned && l.returnedQty > 0 ? (
+                            <span className="text-[10px] text-muted-foreground">
+                              {l.returnedQty} {t("poReturned").toLowerCase()}
+                            </span>
+                          ) : null}
+                        </div>
                       )}
                     </td>
-                    {showReceiving ? (
-                      <td className="px-4 py-3 text-right tabular-nums">{l.receivedQty}</td>
-                    ) : null}
-                    {showReceiving ? (
-                      <td
-                        className={
-                          "px-4 py-3 text-right tabular-nums " +
-                          (outstanding > 0 ? "font-medium text-warning-600" : "text-muted-foreground")
-                        }
-                      >
-                        {outstanding}
-                      </td>
-                    ) : null}
-                    {showReturned ? (
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{l.returnedQty}</td>
-                    ) : null}
                     <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                       {isDraft ? (
                         // Blank = awaiting quote (Layer 0). If the row's
@@ -774,7 +790,12 @@ export default async function PurchaseOrderDetailPage({
               })}
               {po.lines.length === 0 ? (
                 <tr>
-                  <td colSpan={(isDraft ? 6 : 5) - (singleVehicle ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={
+                    // AR 2026-08-23 — column count after collapse:
+                    //   Description + (Vehicle when !singleVehicle)
+                    //   + Qty + Unit cost + Line total + (actions when isDraft)
+                    (isDraft ? 5 : 4) + (singleVehicle ? 0 : 1)
+                  } className="px-4 py-8 text-center text-muted-foreground">
                     {t("noPoLines")}
                   </td>
                 </tr>

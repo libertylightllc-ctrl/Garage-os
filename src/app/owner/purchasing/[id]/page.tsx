@@ -494,6 +494,57 @@ export default async function PurchaseOrderDetailPage({
                 ) : null}
               </div>
             </section>
+          ) : vehicles.distinct.length > 1 ? (
+            /* Multi-vehicle documents (AR 2026-08-23 — normal + deliberate
+               path, not an edge case; a garage often orders parts for
+               several cars in one PO). Full details for every distinct
+               vehicle listed once here; the per-row Vehicle column below
+               drops to plate + JC# alone so the supplier can identify a
+               line at a glance without wading through the same
+               make/model/year/engine/VIN block seven times. */
+            <section className="mt-2 rounded-lg border border-border/60 bg-surface-2/40 px-3 py-2 text-xs print:border-transparent print:bg-transparent print:px-0 print:py-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("colVehicles")}
+              </div>
+              <ul className="mt-1 flex flex-col gap-1">
+                {vehicles.distinct.map((v, i) => (
+                  <li
+                    key={`${v.plate ?? ""}-${v.jobNumber ?? ""}-${i}`}
+                    className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5"
+                  >
+                    {v.plate ? (
+                      <span className="font-medium">{v.plate}</span>
+                    ) : null}
+                    {v.jobNumber != null ? (
+                      <span className="text-muted-foreground">
+                        JC-{v.jobNumber}
+                      </span>
+                    ) : null}
+                    {v.make || v.model ? (
+                      <span>
+                        {[
+                          v.make,
+                          v.model,
+                          v.year != null ? String(v.year) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      </span>
+                    ) : null}
+                    {v.engineSize || v.fuelType ? (
+                      <span className="text-muted-foreground">
+                        {[v.engineSize, v.fuelType].filter(Boolean).join(" ")}
+                      </span>
+                    ) : null}
+                    {v.vin ? (
+                      <span className="font-mono text-muted-foreground">
+                        VIN {v.vin}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
         </div>
 
@@ -565,49 +616,36 @@ export default async function PurchaseOrderDetailPage({
                     {singleVehicle ? null : (
                       <td className="px-4 py-3 text-xs">
                         {lineVehicle ? (
-                          // 2026-08-02 (fix #3 followup): each detail on
-                          // its own row so a supplier can identify the
-                          // right part. "Toyota Land Cruiser 2021" alone
-                          // isn't enough to pick a filter for a specific
-                          // trim; the engine + plate + VIN are what
-                          // matter. Rows that are null just don't render.
-                          // AR 2026-08-17 — only rendered on multi-
-                          // vehicle docs; single-vehicle docs show the
-                          // vehicle once in the caption above.
-                          <div className="space-y-0.5">
-                            {lineVehicle.make || lineVehicle.model ? (
-                              <div className="font-medium">
+                          // AR 2026-08-23 — condensed per-row cell.
+                          // The full vehicle details for every distinct
+                          // car on this PO live in the "Vehicles on
+                          // this order" block above the table, so the
+                          // per-row cell only needs to disambiguate
+                          // WHICH car each line is for. Plate + JC#
+                          // is the identity every UAE workshop uses
+                          // to talk about a car; make/model fills in
+                          // when the line has no plate (fleet stock
+                          // orders where the shop hasn't assigned to
+                          // a specific car yet). Was previously six
+                          // stacked lines per row, which wasted paper
+                          // and buried the difference between two
+                          // rows that pointed at different cars.
+                          <div className="flex flex-col gap-0.5">
+                            {lineVehicle.plate ? (
+                              <span className="font-medium">
+                                {lineVehicle.plate}
+                              </span>
+                            ) : lineVehicle.make || lineVehicle.model ? (
+                              <span className="font-medium">
                                 {[lineVehicle.make, lineVehicle.model]
                                   .filter(Boolean)
                                   .join(" ")}
-                              </div>
-                            ) : null}
-                            {lineVehicle.year != null ? (
-                              <div className="text-[11px] text-muted-foreground">
-                                {lineVehicle.year}
-                              </div>
-                            ) : null}
-                            {lineVehicle.engineSize || lineVehicle.fuelType ? (
-                              <div className="text-[11px] text-muted-foreground">
-                                {[lineVehicle.engineSize, lineVehicle.fuelType]
-                                  .filter(Boolean)
-                                  .join(" ")}
-                              </div>
-                            ) : null}
-                            {lineVehicle.plate ? (
-                              <div className="text-[11px] font-medium">
-                                {lineVehicle.plate}
-                              </div>
-                            ) : null}
-                            {lineVehicle.vin ? (
-                              <div className="font-mono text-[10px] text-muted-foreground">
-                                VIN {lineVehicle.vin}
-                              </div>
+                              </span>
                             ) : null}
                             {lineVehicle.jobNumber != null ? (
-                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                                 JC-{lineVehicle.jobNumber}
-                              </div>
+                              </span>
                             ) : null}
                           </div>
                         ) : (

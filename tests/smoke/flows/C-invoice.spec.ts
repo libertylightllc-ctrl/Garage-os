@@ -74,11 +74,26 @@ test("Flow C — cashier generates invoice + records payment", async ({ page, br
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref!);
-        await customerPage.click('form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")');
-        // Wait for the approved banner — matches Flow B's pattern.
-        // AR 2026-08-15.
+        // Wait for the approve POST response BEFORE the finally-block
+        // context close, then assert the specific approved-banner text.
+        // See Flow B for the smoke #102 dissection — broad regex phantom-
+        // matched on SENT-state DOM and the close aborted an in-flight
+        // approve tx. AR 2026-08-23.
+        const responsePromise = customerPage.waitForResponse(
+            (r) =>
+                r.url() === customerHref &&
+                r.request().method() === "POST" &&
+                r.status() === 200,
+            { timeout: 15_000 },
+        );
+        await customerPage.click(
+            'form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")',
+        );
+        await responsePromise;
         await expect(
-            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+            customerPage
+                .getByText(/You approved this estimate|لقد وافقت على هذا التقدير/)
+                .first(),
         ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();

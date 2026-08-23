@@ -91,13 +91,34 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
         // The approve form submits to approveEstimatePublic. Match the
         // form (not the reject one) by its distinctive submit button
         // label — "Approve" is the primary label per the customer i18n.
-        await customerPage.click('form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")');
-        // Server action redirects back to the same customer page with
-        // status=APPROVED — the "approved" banner should render.
-        // Was networkidle + body-innerText scan — now a bounded
-        // deterministic wait on the banner text itself. AR 2026-08-15.
+        //
+        // Wait for the POST response BEFORE the finally-block context
+        // close, or the close aborts an in-flight approve tx and the
+        // advisor page reads SENT. AR 2026-08-23 — smoke #102 dissection
+        // (customer POST fired at t+40995ms, context closed at t+41084ms,
+        // 89ms window, tx never committed).
+        //
+        // Assertion text is the SPECIFIC `estimateApprovedMsg` banner
+        // (both locales), NOT a broad `/approved/i` regex. The broad
+        // regex phantom-matched on SENT-state DOM in smoke #102 (element
+        // wasn't in any captured snapshot; likely a Vercel Live iframe
+        // or aria-live announcement Playwright's snapshotter didn't
+        // reach) and passed for the wrong reason, hiding the abort race.
+        const responsePromise = customerPage.waitForResponse(
+            (r) =>
+                r.url() === customerHref &&
+                r.request().method() === "POST" &&
+                r.status() === 200,
+            { timeout: 15_000 },
+        );
+        await customerPage.click(
+            'form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")',
+        );
+        await responsePromise;
         await expect(
-            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+            customerPage
+                .getByText(/You approved this estimate|لقد وافقت على هذا التقدير/)
+                .first(),
         ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();
@@ -113,11 +134,11 @@ test("Flow B — estimate reaches APPROVED via customer link", async ({ page, br
     //   5s  (AR 2026-08-22) — race fixed by wrapping the coupled
     //     reads in a RepeatableRead transaction; assumed 5s was
     //     enough Vercel-safe headroom.
-    //   [attempted revert to 15s on 2026-08-23 — WRONG; snapshot
-    //   showed approvedAt genuinely null at advisor render time,
-    //   not a stale-read race. A longer wait can't turn null
-    //   into a value. Kept at 5s so the class of failure surfaces
-    //   sharply the next time it fires.]
+    //   5s  (AR 2026-08-23) — kept at 5s. Smoke #102 flaked here 3x;
+    //     turned out to be the customer-side abort race above, NOT
+    //     an advisor-side latency issue. Fixing the customer wait
+    //     removed the SENT-state observations; timeout stays tight
+    //     so a real regression surfaces sharply.
     await page.goto(`/advisor/jobs/${jobCardId}`);
     await expect(page.getByText(/APPROVED/).first()).toBeVisible({
         timeout: 5_000,

@@ -145,13 +145,24 @@ test("Flow E — invoice edit page prints nothing internal", async ({
     try {
         const customerPage = await customerContext.newPage();
         await customerPage.goto(customerHref);
+        // Wait for the approve POST response BEFORE the finally-block
+        // context close, then assert the specific approved-banner text.
+        // See Flow B for the smoke #102 dissection. AR 2026-08-23.
+        const responsePromise = customerPage.waitForResponse(
+            (r) =>
+                r.url() === customerHref &&
+                r.request().method() === "POST" &&
+                r.status() === 200,
+            { timeout: 15_000 },
+        );
         await customerPage.click(
             'form:has(input[name="token"]) button:has-text("Approve"), form:has(input[name="token"]) button:has-text("موافق")',
         );
-        // Wait for the approved banner — matches Flow B/C/D's pattern.
-        // AR 2026-08-15.
+        await responsePromise;
         await expect(
-            customerPage.getByText(/approved|تمت الموافقة/i).first(),
+            customerPage
+                .getByText(/You approved this estimate|لقد وافقت على هذا التقدير/)
+                .first(),
         ).toBeVisible({ timeout: 15_000 });
     } finally {
         await customerContext.close();

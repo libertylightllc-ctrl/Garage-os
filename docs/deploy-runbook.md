@@ -115,6 +115,56 @@ Requires temporarily disabling branch protection because
 
 Only use this if the Vercel dashboard is genuinely unreachable.
 
+### Return to a stable tag
+
+Distinct from "roll back the last bad commit" — this is for jumping to
+a specific known-good snapshot marked with an annotated tag like
+`stable-2026-08-23`. Use when a series of promotions have piled up
+and the "just revert HEAD" path won't cleanly untangle them.
+
+Both routes below get to the same place. Use whichever the situation
+allows.
+
+**Fast (Vercel Instant Rollback, ~10 seconds, no git touched):**
+
+1. `git rev-parse <tag>^{commit}` locally to get the exact SHA the tag
+   points at (e.g. `git rev-parse stable-2026-08-23^{commit}`).
+2. Vercel dashboard → Deployments → filter by "Production".
+3. Find the row whose commit SHA matches (short SHA is shown in the
+   commit column). If there are several Production deployments for
+   that SHA, pick the most recent one.
+4. Click "…" → **Promote to Production**. `garageos.shop` swaps
+   immediately.
+
+Same caveat as the Fast rollback above: the `production` branch head
+still shows whatever was there before, so `git log origin/production`
+disagrees with the live site until you also do the git reset below.
+Do the git reset at your leisure — nothing serves from the branch
+head, Vercel serves what was last promoted.
+
+**Slow (git-only, when Vercel dashboard is unreachable):**
+
+Requires temporarily disabling branch protection (see the force-push
+notes in the Slow rollback above). Once bypass is enabled:
+
+```bash
+git fetch origin --tags
+git checkout production
+git reset --hard stable-2026-08-23
+git push --force-with-lease origin production
+```
+
+Re-enable protection immediately. Vercel picks up the new
+`production` HEAD and builds + promotes on its own within a few
+minutes (slower than Instant Rollback because it's a full rebuild,
+not a swap).
+
+If the stable tag pre-dates a schema migration currently on prod,
+the rebuild's `prisma migrate deploy` step won't roll the migration
+back — Prisma applies migrations forward only. In that case you need
+a hand-written down-migration OR restore from the nightly DB backup;
+neither is in scope for this runbook. Ask before doing either.
+
 ---
 
 ## What commit is production serving?

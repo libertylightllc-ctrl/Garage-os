@@ -1,30 +1,58 @@
 # Disaster Recovery — GarageOS
 
 What this document is: the **runbook** for restoring the production database
-from an off-Supabase backup. Last drilled **2026-06-29**, end-to-end, on
-real prod data, on AR's Windows machine — every command below worked.
+from an off-Supabase backup.
 
-If everything goes wrong at the same time — Supabase project deleted, our
-database corrupted, somebody fat-fingered a DROP — this is what gets us
-back online.
+**Read §1 first — Supabase provides no recovery on the current plan, so
+this runbook is not a backup story, it is the ONLY recovery path.**
+
+Last drilled **2026-06-29**, end-to-end, on real prod data, on AR's
+Windows machine. Backup pipeline has been exercised every night since;
+the RESTORE path hasn't been re-drilled since then and its dependencies
+(Postgres 17 image, Windows GPG path, B2 credentials structure) have
+had two months to drift. Re-drill before treating this as production
+insurance.
 
 ---
 
 ## 1. What we have
 
+> **Supabase provides NO recovery on this project's plan.** GarageOS
+> production is on the Supabase Free plan (confirmed in the Supabase
+> dashboard, 2026-08-23). Free tier has zero scheduled backups and
+> Point-in-Time Recovery is not available — the "Backups" tab is
+> empty and PITR requires a paid plan. Retention window is 0.
+>
+> If the production database is lost, corrupted, or the Supabase
+> project is deleted, **Supabase has nothing to restore from**. The
+> nightly B2 backup below is not a second layer — it is the sole
+> recovery path.
+>
+> Upgrading to a paid Supabase plan (Pro = daily backups, 14-day
+> retention; +$10/mo PITR add-on for minute-granularity) is the
+> supported path to a "restore from within Supabase itself" option.
+> Until that decision is made, treat the B2 pipeline as load-
+> bearing: any nightly failure is a P0.
+
 | Layer | Where it lives | Retention |
 |-------|----------------|-----------|
 | Daily encrypted SQL dump | Backblaze B2 bucket `garageos-backups-prod` | 90 days (lifecycle rule) |
+| Daily encrypted files archive (garage-logos + garage-uploads) | Same B2 bucket, `files/` prefix | 90 days (same lifecycle rule) |
 | Encryption key | GitHub Actions secret `GPG_PASSPHRASE` + AR's password manager | — |
 | Restore tool | `scripts/restore-from-dump.mjs` (this repo) | — |
 | Verification probe | `scripts/probe-restore.mjs` (recreate from runbook §5 below) | — |
+| Dead-man-switch | Healthchecks.io ping, gated on both DB + files upload succeeding | — |
 
 The dump is `pg_dump --schema=public --clean --if-exists` of the live
 Supabase Postgres, gzipped, then GPG AES-256 symmetric-encrypted with the
 passphrase. Backblaze never sees plaintext.
 
-The backup job (`.github/workflows/nightly-backup.yml`) is **manual trigger
-only** at the time of this drill. Phase 6 will switch it to a nightly cron.
+The backup job (`.github/workflows/nightly-backup.yml`) runs nightly at
+22:00 UTC (02:00 UAE, off-peak). Confirmed running + succeeding as of
+2026-08-23 (last five nights all green). The dead-man-switch fires only
+when both the DB dump AND the files archive complete — a silent failure
+of either half stops the ping and Healthchecks alerts within its
+configured grace window.
 
 ## 2. RPO / RTO targets
 

@@ -1,17 +1,27 @@
 /**
- * Phone normalization on public intake paths (AR 2026-08-21).
+ * Phone normalisation on public intake paths.
  *
- * Public booking + WhatsApp webhook previously created / upserted
- * Customer rows on the RAW phone the caller sent. The same person
- * typing "+971 50 123 4567" one day and "0501234567" the next
- * produced two rows. Moulkia intake had normalizeUaePhone() wired
- * (intake-moulkia.ts:311); these two paths did not.
+ * AR 2026-08-21 (original): pin that createBookingPublic runs
+ * normalizeUaePhone before the upsert so "+971 50 123 4567" /
+ * "0501234567" / "971501234567" of the same person collapse to
+ * one Customer row (previously created three).
+ *
+ * AR 2026-08-23 (contract change): the four write paths now route
+ * through `normalizeCustomerPhoneForWrite` and store E.164 shape
+ * ("971501234567") — NOT the 9-digit legacy shape ("501234567").
+ * Unresolvable input (a real string that isn't dialable) is stored
+ * RAW with phoneNeedsReview=true rather than refused — losing the
+ * number is worse than a flagged row. Only truly-blank input is
+ * refused.
  *
  * Fix pins:
  *   A) createBookingPublic: three format variants of the SAME UAE
- *      phone all resolve to one Customer row.
- *   B) Blank / all-punctuation phone after normalization is refused
- *      (rejected with "Missing booking details").
+ *      phone all resolve to one Customer row, stored as E.164.
+ *   B) Bare 9-digit UAE mobile (leading 0 dropped in copy-paste)
+ *      resolves to E.164 too — the two normalisers now agree.
+ *   C) Unresolvable input (all-punctuation, "call me at 5pm")
+ *      is stored raw with phoneNeedsReview=true, NOT refused.
+ *   D) Truly-blank input (empty string) IS refused — nothing to store.
  *
  * Cleanup by garage prefix.
  */
@@ -63,7 +73,7 @@ beforeEach(async () => {
 afterAll(cleanup);
 
 describe("createBookingPublic — phone normalisation", () => {
-  it("three format variants resolve to ONE Customer row", async () => {
+  it("three format variants resolve to ONE Customer row, stored as E.164", async () => {
     const base = {
       garageId: gid, name: "Ahmed",
       make: "Toyota", model: "Camry", plate: "AAA 111",
@@ -79,7 +89,10 @@ describe("createBookingPublic — phone normalisation", () => {
 
     const customers = await prisma.customer.findMany({ where: { garageId: gid } });
     expect(customers).toHaveLength(1);
-    expect(customers[0].phone).toBe("501234567");
+    // AR 2026-08-23 — write-time contract stores E.164, not the
+    // 9-digit legacy shape. Was "501234567" under normalizeUaePhone.
+    expect(customers[0].phone).toBe("971501234567");
+    expect(customers[0].phoneNeedsReview).toBe(false);
 
     // Three bookings on the ONE customer.
     const bookings = await prisma.booking.findMany({ where: { garageId: gid } });
@@ -87,19 +100,42 @@ describe("createBookingPublic — phone normalisation", () => {
     for (const b of bookings) expect(b.customerId).toBe(customers[0].id);
   });
 
-  it("blank phone after normalisation is refused", async () => {
-    // All-punctuation input — normalizeUaePhone strips it to "".
+  it("bare 9-digit UAE mobile (leading 0 lost) resolves to E.164 too", async () => {
+    // AR 2026-08-23 — the exact shape that used to be storable as
+    // "567424133" and rejected at wa.me send time. Widened
+    // normalizeToE164 now prefixes 971 at the write path, so the
+    // send path can direct-dial next time.
+    await expect(
+      createBookingPublic(form({
+        garageId: gid, name: "Ahmed",
+        make: "Toyota", model: "Camry", plate: "AAA 222",
+        text: "AC not cold", phone: "567424133",
+      })),
+    ).rejects.toThrow(/REDIRECT/);
+    const customers = await prisma.customer.findMany({ where: { garageId: gid } });
+    expect(customers).toHaveLength(1);
+    expect(customers[0].phone).toBe("971567424133");
+    expect(customers[0].phoneNeedsReview).toBe(false);
+  });
+
+  it("unresolvable input is stored raw with phoneNeedsReview=true, NOT refused", async () => {
+    // "()-+" strips to just "+" then to empty digits — E.164 rejects.
+    // AR 2026-08-23 contract: store raw, flag it, keep going. Losing
+    // what the caller typed is worse than a flagged row.
     await expect(
       createBookingPublic(form({
         garageId: gid, name: "X", phone: "()-+",
         make: "T", model: "C", plate: "P",
         text: "test",
       })),
-    ).rejects.toThrow(/Missing booking details/);
-    expect(await prisma.customer.count({ where: { garageId: gid } })).toBe(0);
+    ).rejects.toThrow(/REDIRECT/);
+    const customers = await prisma.customer.findMany({ where: { garageId: gid } });
+    expect(customers).toHaveLength(1);
+    expect(customers[0].phone).toBe("()-+");
+    expect(customers[0].phoneNeedsReview).toBe(true);
   });
 
-  it("blank phone in the form is refused (same error)", async () => {
+  it("truly-blank phone (empty string) IS refused — nothing to store", async () => {
     await expect(
       createBookingPublic(form({
         garageId: gid, name: "X", phone: "",

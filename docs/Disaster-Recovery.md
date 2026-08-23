@@ -17,7 +17,7 @@ back online.
 | Daily encrypted SQL dump | Backblaze B2 bucket `garageos-backups-prod` | 90 days (lifecycle rule) |
 | Encryption key | GitHub Actions secret `GPG_PASSPHRASE` + AR's password manager | — |
 | Restore tool | `scripts/restore-from-dump.mjs` (this repo) | — |
-| Verification probe | `scripts/probe-restore.mjs` (recreate from runbook §4 below) | — |
+| Verification probe | `scripts/probe-restore.mjs` (recreate from runbook §5 below) | — |
 
 The dump is `pg_dump --schema=public --clean --if-exists` of the live
 Supabase Postgres, gzipped, then GPG AES-256 symmetric-encrypted with the
@@ -34,12 +34,59 @@ only** at the time of this drill. Phase 6 will switch it to a nightly cron.
 - **RTO** (time to back online from a cold restore): **~15 minutes** end-to-end
   on a fresh Postgres, drilled, including the Vercel DATABASE_URL swap.
 
-## 3. The restore procedure
+## 3. Which recovery path — pick before you type
+
+**The one distinction that matters at 2 am: Vercel Instant Rollback
+fixes CODE. Never DATA.** If a deploy corrupted rows, rolling back
+the deploy puts the old code in front of the corrupted rows. The
+symptom clears, the damage remains, and the next legitimate write
+propagates it. This table exists so nobody reasons that out under
+pressure.
+
+| Scenario | First move | Then |
+|---|---|---|
+| **Bad schema migration, no data mutated yet** (added a column that broke a query, wrong FK cascade, etc.) | Vercel Instant Rollback — 10s, live traffic swaps back to the prior deploy. See `docs/deploy-runbook.md` "Roll back" for the click path. | Author a corrective migration; deploy through the normal main → staging → production path. The schema drift (old code + new migration) is only tolerable if the added column is nullable or if the removed column isn't referenced by the reverted code. Verify with a smoke run before considering it resolved. |
+| **Migration mutated or dropped rows** (backfill, `NOT NULL` conversion with a default, a `DELETE FROM ... WHERE ...` in the migration SQL, a type cast that silently truncated) | **Instant Rollback does NOT help.** Code goes back; data doesn't come back. Go straight to §4 restore-from-B2. | Up to 24 h of data loss (whatever's happened since the last nightly cron). Post-restore, run the verification probe in §5 before swapping Vercel's `DATABASE_URL` back onto the restored DB. |
+| **Data corruption not caused by a migration** (bug in a server action, misfired script, mass-update through Supabase SQL editor with a bad WHERE) | Same as row above — Instant Rollback fixes nothing. Restore from B2 per §4. Also consider Supabase's own daily-backup dashboard if the incident is fresh AND you're within Supabase's retention window (see §1). | Fix the offending code path BEFORE swapping DATABASE_URL back, or the same bug re-runs on the restored data. |
+| **Whole DB corrupted / Supabase project deleted / total loss** | §4 restore-from-B2. Then §4d to swap Vercel onto a fresh Postgres. | RTO ~15 min drilled; longer if you also have to stand up a new Postgres project. |
+| **Data corruption caught inside Supabase's own retention window** and PITR is on | Supabase dashboard → Database → Backups → point-in-time restore. Minute-granularity, minimal data loss. | Self-service on Pro+ plans; requires a Supabase Support ticket on Free tier. Confirm the plan in the dashboard BEFORE assuming this path is available. |
+
+### Prisma migrations are forward-only. Plan for that BEFORE you deploy one.
+
+`prisma migrate deploy` applies migrations in order and NEVER reverses
+them. There is no `prisma migrate down`. A migration that mutates
+data — backfill, `NOT NULL` conversion, type cast that reshapes
+values, `DELETE FROM ... WHERE ...` — has **no automatic reverse**.
+
+The only paths back are:
+
+1. **Hand-written reverse migration.** Author a new forward migration
+   that undoes the change (write the inverse SQL yourself), commit,
+   deploy. Requires that the reverse is actually expressible: adding
+   a dropped column back is easy; recovering the values the drop
+   destroyed is impossible without a backup.
+2. **Restore-and-replay.** §4 restore from B2 dump → swap Vercel per
+   §4d → replay any writes that happened AFTER the backup but BEFORE
+   the bad migration, if you have the audit trail to do so (server
+   action logs, WhatsApp webhook history, ledger entries). Losses
+   between backup and incident are the RPO tax.
+
+Before shipping any migration that mutates data:
+- Read the `.sql` file yourself; don't trust `migrate dev` to generate
+  something safe.
+- Verify last night's B2 backup succeeded (Healthchecks.io dashboard).
+- If the migration is high-risk (destructive, large table, irreversible
+  in the "recovering the values" sense), take a manual pre-migration
+  dump: `bash scripts/backup-prod-db.sh` before running deploy.
+
+---
+
+## 4. The restore procedure
 
 Two halves: **secret half** (you do this — it needs the passphrase + B2
 credentials) and **mechanical half** (anyone with repo access can do it).
 
-### 3a. Secret half — download + decrypt (5 min)
+### 4a. Secret half — download + decrypt (5 min)
 
 You need:
 - Backblaze B2 web UI access (or the application key in 1Password)
@@ -85,7 +132,7 @@ secret half.
 > it exits silently because it can't prompt the terminal, leaving a
 > zero-byte output file (a bug we hit during the drill).
 
-### 3b. Mechanical half — apply the dump (5 min)
+### 4b. Mechanical half — apply the dump (5 min)
 
 Prereq: local Postgres reachable on `localhost:51214` (the Prisma 7 dev DB
 — `npm run db:dev` starts it). The restore script creates a separate
@@ -117,7 +164,7 @@ If any chunk fails, the script aborts with `--- statement ---` showing the
 exact SQL that broke. **Don't keep running.** Debug, drop the partial DB,
 re-run.
 
-### 3c. Boot the app against the restore
+### 4c. Boot the app against the restore
 
 Temporarily flip `.env.local` to point at the restored DB:
 
@@ -155,7 +202,7 @@ hand instead — same signal, more clicks.
 
 That confirms the app is reading real prod data from the restore.
 
-### 3d. Real disaster — swap Vercel onto the restored DB
+### 4d. Real disaster — swap Vercel onto the restored DB
 
 If this is an actual recovery (not a drill), you also need to:
 
@@ -169,7 +216,7 @@ If this is an actual recovery (not a drill), you also need to:
 3. Trigger a Vercel redeploy. Within ~90 sec the live site is on the
    restored data.
 
-## 4. How to verify the restore is real prod data
+## 5. How to verify the restore is real prod data
 
 This is the smell test — does the data look like prod, or has gunzip
 silently produced garbage?
@@ -202,7 +249,7 @@ Expected pattern (numbers will differ as time passes):
 If the VAT/sales ratio is wildly off, the dump is corrupt and you should
 restore from the previous night's backup instead.
 
-## 5. Cleanup after a drill
+## 6. Cleanup after a drill
 
 After verifying, leave nothing sensitive on disk:
 
@@ -221,7 +268,7 @@ Remove-Item backups\restore.log -Force -ErrorAction SilentlyContinue
 The encrypted `.gpg` file in `backups/` is fine to keep — it matches what's
 in B2 and `backups/` is gitignored. Or delete it; doesn't matter.
 
-## 5b. Restore FILES (Supabase Storage)
+## 6b. Restore FILES (Supabase Storage)
 
 The nightly job also backs up the Storage buckets (`garage-logos`,
 `garage-uploads`) as an encrypted tarball in B2 under the `files/`
@@ -266,13 +313,13 @@ aws s3 sync ./garage-uploads "s3://garage-uploads" \
    downloads. Restoring (writing back) needs a write-capable key, so
    don't try to reuse the nightly backup key for the re-upload step.
 
-## 6. Known gotchas (from the 2026-06-29 drill)
+## 7. Known gotchas (from the 2026-06-29 drill)
 
 These are the surprises we hit. Future-you should know.
 
 - **GPG silently exits without pinentry.** Git for Windows ships GPG but
   no pinentry helper. Without `--pinentry-mode loopback --passphrase-fd 0`,
-  decrypt fails silently with a zero-byte output. Use the §3a recipe.
+  decrypt fails silently with a zero-byte output. Use the §4a recipe.
 
 - **`.NET` file APIs ignore PowerShell's `cd`.** `[System.IO.File]::OpenRead("dump.sql.gz")`
   resolves against `Environment.CurrentDirectory` (often `C:\Windows\System32`),
@@ -312,7 +359,7 @@ These are the surprises we hit. Future-you should know.
   `query would be affected by row-level security policy for table…`.
   Set once with `ALTER ROLE backup_reader BYPASSRLS;`.
 
-## 7. What's NOT in this runbook
+## 8. What's NOT in this runbook
 
 - **WhatsApp tokens.** The `WhatsAppAccount` table holds encrypted access
   tokens. They restore fine, but Meta may have rotated them out from under
@@ -320,7 +367,7 @@ These are the surprises we hit. Future-you should know.
   recovery.
 - **Supabase Storage objects** (uploaded photos, voice notes, garage logos).
   ✅ NOW COVERED (Phase 7, 2026-07-04) — backed up nightly by
-  `scripts/backup-prod-files.sh` to B2 `files/`. Restore procedure: §5b.
+  `scripts/backup-prod-files.sh` to B2 `files/`. Restore procedure: §6b.
 - **The Auth schema.** We don't use Supabase Auth for staff (we use NextAuth
   with our own User table, which IS in `public`). Customer auth is
   passwordless via WhatsApp — no auth state to restore.

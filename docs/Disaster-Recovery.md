@@ -28,9 +28,29 @@ insurance.
 > nightly B2 backup below is not a second layer — it is the sole
 > recovery path.
 >
-> Upgrading to a paid Supabase plan (Pro = daily backups, 14-day
-> retention; +$10/mo PITR add-on for minute-granularity) is the
-> supported path to a "restore from within Supabase itself" option.
+> Upgrading to Supabase Pro ($25/month) adds 7-day platform-side
+> daily backups. Adding PITR is +$10/month on top of Pro for
+> minute-granularity restore. Not deciding yet — but the trade-off
+> is worth writing down rather than rediscovered under pressure:
+>
+> - **Our B2 pipeline** covers *loss of the Supabase project* — the
+>   dump lives in a different vendor's storage, encrypted with a key
+>   Supabase never sees, and can restore onto a fresh Postgres
+>   anywhere. It does NOT cover *loss of the B2 pipeline itself* —
+>   if the nightly cron silently stops, the passphrase is lost, the
+>   restore script rots against a stack drift, or the B2 bucket
+>   itself has an outage, we have no fallback.
+> - **Supabase Pro daily backups** cover the exact failure mode
+>   ours can't: *our own recovery pipeline is what failed*. Supabase
+>   holds their own snapshots at their end; if our B2 pipeline is
+>   what broke on the day we need it, their console-restore is a
+>   second, independent path. It does NOT cover loss of the Supabase
+>   project itself (their snapshots are inside their platform).
+>
+> They cover different failure classes. On the current Free plan,
+> the only class covered is "Supabase failed / went away" via B2 —
+> and only IF our B2 pipeline is itself healthy on the day.
+>
 > Until that decision is made, treat the B2 pipeline as load-
 > bearing: any nightly failure is a P0.
 

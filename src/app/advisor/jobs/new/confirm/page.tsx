@@ -269,7 +269,7 @@ export default async function ReceptionForm({ searchParams }: { searchParams: Pr
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-text-mute">
               {t("mobile")}
-              <input name="phone" type="tel" defaultValue={sp.phone ?? dbPhone} placeholder="+9715XXXXXXXX" required className={FIELD} />
+              <input name="phone" type="tel" inputMode="tel" pattern="^\+?[\d\s\-()]+$" title="Digits only, optional leading + or 0. Spaces and dashes are OK. UAE mobile: 0501234567 or +971501234567." defaultValue={sp.phone ?? dbPhone} placeholder="+9715XXXXXXXX" required className={FIELD} />
             </label>
             <label className="text-xs text-text-mute">
               {t("email")}

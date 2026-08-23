@@ -534,6 +534,16 @@ const en = {
     "Fields belong to the customer, not the car — updating here changes every vehicle they own in one step.",
   customerNameLabel: "Name",
   customerPhoneLabel: "Phone",
+  // AR 2026-08-23. Rendered under the phone field on the customer
+  // detail page when Customer.phoneNeedsReview is true — the number
+  // was accepted (nothing is refused at write time) but can't be
+  // resolved to a wa.me-compatible E.164, so sends will fall through
+  // to the WhatsApp contact picker. Fixing the number here clears
+  // the flag and restores direct-send.
+  customerPhoneNeedsReview:
+    "This number couldn't be read as a valid mobile. WhatsApp sends fall back to the contact picker until it's corrected.",
+  customerPhonePatternHint:
+    "Digits only, optional leading + or 0. Spaces and dashes are OK. UAE mobile: 0501234567 or +971501234567.",
   customerSaveButton: "Save",
   customerVehiclesHeading: "Vehicles",
   customerNoVehicles: "No vehicles on this customer yet.",
@@ -2253,6 +2263,10 @@ const ar: typeof en = {
     "هذه الحقول تخصّ العميل وليس السيارة — تحديثها هنا يسري على كل مركباته دفعة واحدة.",
   customerNameLabel: "الاسم",
   customerPhoneLabel: "الهاتف",
+  customerPhoneNeedsReview:
+    "تعذّر قراءة هذا الرقم كرقم جوال صحيح. سترتد رسائل واتساب إلى شاشة اختيار المستلم حتى يُصحَّح.",
+  customerPhonePatternHint:
+    "أرقام فقط، مع إمكانية بدء الرقم بـ + أو 0. المسافات والشرطات مسموح بها. جوال إماراتي: 0501234567 أو +971501234567.",
   customerSaveButton: "حفظ",
   customerVehiclesHeading: "المركبات",
   customerNoVehicles: "لا توجد مركبات لهذا العميل بعد.",

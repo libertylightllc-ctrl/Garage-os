@@ -464,6 +464,16 @@ model Customer {
   lang     Lang?
   trn      String? // for B2B invoices
   waId     String? // WhatsApp id
+  // AR 2026-08-23. Set on write when the input phone couldn't be
+  // resolved to an E.164 shape wa.me would accept — a real-looking
+  // but unusable number ("call at 5pm", a landline typed as a
+  // 6-digit local, a foreign shape with no country code, etc). The
+  // send path degrades to the WhatsApp contact picker so the doc
+  // still goes out; this flag lets the customer detail page surface
+  // WHY, so an advisor can fix the record on next contact. See
+  // src/lib/normalize.ts `normalizeCustomerPhoneForWrite` for the
+  // four write paths that set it.
+  phoneNeedsReview Boolean @default(false)
 
   vehicles  Vehicle[]
   bookings  Booking[]

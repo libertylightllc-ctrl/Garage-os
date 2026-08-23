@@ -26,7 +26,7 @@ import {
 import { requireAdvisor } from "@/lib/action-guards";
 import { newPublicToken } from "@/lib/document-tokens";
 import { clampPriority } from "@/lib/priority";
-import { normalizeVin, normalizeUaePhone, normalizePlate } from "@/lib/normalize";
+import { normalizeVin, normalizeCustomerPhoneForWrite, normalizePlate } from "@/lib/normalize";
 
 
 function buildQuery(params: Record<string, string>): string {
@@ -308,7 +308,14 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
   // rows with un-normalised plate/vin. Slice 1a's backfill collapses
   // these once run.
   const ownerName = get("ownerName");
-  const phone = normalizeUaePhone(get("phone"));
+  // AR 2026-08-23 — write-time contract, replaces the bare
+  // normalizeUaePhone call. Resolvable input → E.164 stored +
+  // phoneNeedsReview=false. Unresolvable input → raw stored +
+  // phoneNeedsReview=true. See src/lib/normalize.ts. Empty input is
+  // caught by the required-field guard at line ~377 (`!phone`).
+  const phoneResolved = normalizeCustomerPhoneForWrite(get("phone"));
+  const phone = phoneResolved?.phone ?? "";
+  const phoneNeedsReview = phoneResolved?.needsReview ?? false;
   const email = get("email") || null;
   const plateRaw = get("plate");
   const plate = plateRaw ? normalizePlate(plateRaw) : "";
@@ -528,8 +535,8 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       const previousOwner = existing.customer;
       const newCustomer = await tx.customer.upsert({
         where: { garageId_phone: { garageId: user.garageId, phone } },
-        update: { name: ownerName, email },
-        create: { garageId: user.garageId, name: ownerName, phone, email },
+        update: { name: ownerName, email, phoneNeedsReview },
+        create: { garageId: user.garageId, name: ownerName, phone, email, phoneNeedsReview },
         select: { id: true },
       });
       if (newCustomer.id !== previousOwner.id) {
@@ -574,7 +581,7 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       if (!existing) throw new Error("Vehicle not found in this garage");
       await tx.customer.update({
         where: { id: existing.customerId },
-        data: { name: ownerName, phone, email },
+        data: { name: ownerName, phone, email, phoneNeedsReview },
       });
       await tx.vehicle.update({
         where: { id: existing.id },
@@ -608,8 +615,8 @@ export async function createCustomerVehicleJobAction(formData: FormData) {
       }
       const customer = await tx.customer.upsert({
         where: { garageId_phone: { garageId: user.garageId, phone } },
-        update: { name: ownerName, email },
-        create: { garageId: user.garageId, name: ownerName, phone, email },
+        update: { name: ownerName, email, phoneNeedsReview },
+        create: { garageId: user.garageId, name: ownerName, phone, email, phoneNeedsReview },
         select: { id: true },
       });
       const vehicle = await tx.vehicle.create({

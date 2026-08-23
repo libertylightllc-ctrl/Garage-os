@@ -50,10 +50,6 @@ describe("normalizeToE164 — all 8 cases", () => {
     // "509633280" passed straight through and wa.me opened a chat with
     // nobody. The gate insists on a recognised GCC country code prefix.
     describe("GCC country-code gate (2026-08-10)", () => {
-        it("rejects 9-digit UAE mobile with the leading 0 lost (the AHMED case)", () => {
-            // Repro of the real INV-2026-0039 recipient we found in prod.
-            expect(normalizeToE164("509633280")).toBeNull();
-        });
         it("rejects a foreign (UK) E.164 — not in GCC", () => {
             expect(normalizeToE164("+441234567890")).toBeNull();
         });
@@ -67,6 +63,39 @@ describe("normalizeToE164 — all 8 cases", () => {
             expect(normalizeToE164("974501234567")).toBe("974501234567"); // Qatar
             expect(normalizeToE164("973301234567")).toBe("973301234567"); // Bahrain
             expect(normalizeToE164("965501234567")).toBe("965501234567"); // Kuwait
+        });
+    });
+
+    // Bare 9-digit UAE mobile (leading 0 dropped in copy-paste) — AR
+    // 2026-08-23. Previously rejected by the country-code gate, which
+    // meant the customer-write path (normalizeUaePhone, which does
+    // apply this rule) and the send path (normalizeToE164, which did
+    // not) disagreed: a "567424133" typed at intake was stored fine
+    // and rejected at send time, leaving the cashier with a picker-
+    // fallback wa.me and no explanation. The two normalisers now
+    // agree — every UAE-mobile shape resolves to the same E.164.
+    describe("bare 9-digit UAE mobile (2026-08-23)", () => {
+        it("accepts 567424133 (the AR-flagged case) as 971567424133", () => {
+            expect(normalizeToE164("567424133")).toBe("971567424133");
+        });
+        it("accepts 501234567 as 971501234567 — same rule as normalizeUaePhone", () => {
+            expect(normalizeToE164("501234567")).toBe("971501234567");
+        });
+        it("accepts 509633280 (was the AHMED case; now resolves)", () => {
+            expect(normalizeToE164("509633280")).toBe("971509633280");
+        });
+        it("still rejects a 9-digit not starting with 5 — not a UAE mobile", () => {
+            // Landline / other shape; keep the country-code gate for these.
+            expect(normalizeToE164("412345678")).toBeNull();
+        });
+        it("still rejects a 9-digit starting with 5 that's already ambiguous with a real country code", () => {
+            // 555 would match the "starts with 5" rule but the gated
+            // shape is unambiguous domestic (9 digits, no country code
+            // prefix, starts with 5). Kept for docs — same behaviour.
+            expect(normalizeToE164("555123456")).toBe("971555123456");
+        });
+        it("respects a custom default country when the local rule fires", () => {
+            expect(normalizeToE164("567424133", "966")).toBe("966567424133");
         });
     });
 });

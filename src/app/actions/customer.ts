@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdvisor } from "@/lib/action-guards";
 import { prisma } from "@/lib/prisma";
+import { normalizeCustomerPhoneForWrite } from "@/lib/normalize";
 
 /**
  * Update the customer's editable identity fields — name, phone, TRN.
@@ -43,11 +44,22 @@ export async function updateCustomerAction(formData: FormData) {
     if (!rawName) throw new Error("Customer name is required.");
     if (!rawPhone) throw new Error("Customer phone is required.");
 
+    // AR 2026-08-23 — route through the shared write-time contract.
+    // Before this, the customer-edit form stored `phone: rawPhone`
+    // with NO normalisation at all — the worst of the four write
+    // paths, since this is the surface an advisor uses to CORRECT a
+    // bad number. Store E.164 when the input resolves; store raw +
+    // needsReview when it doesn't so the flag surfaces next time.
+    const resolved = normalizeCustomerPhoneForWrite(rawPhone);
+    if (!resolved) throw new Error("Customer phone is required.");
+    const { phone, needsReview: phoneNeedsReview } = resolved;
+
     await prisma.customer.updateMany({
         where: { id: customerId, garageId: user.garageId },
         data: {
             name: rawName,
-            phone: rawPhone,
+            phone,
+            phoneNeedsReview,
             trn: rawTrn === "" ? null : rawTrn,
         },
     });

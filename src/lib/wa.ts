@@ -75,6 +75,20 @@ export function normalizeToE164(
 
     // Any non-digit slipped through (e.g. a stray "+") → reject.
     if (!/^\d+$/.test(digits)) return null;
+
+    // Bare 9-digit UAE mobile (leading zero dropped in copy-paste) —
+    // "567424133" / "501234567" — unambiguously local, prefix the
+    // country code. Same rule `normalizeUaePhone` applies for
+    // canonicalisation; before AR 2026-08-23 this branch lived only in
+    // normalizeUaePhone, so a raw 9-digit passed the customer-write
+    // path but the send path (normalizeToE164) rejected it, leaving
+    // the cashier with a picker-fallback wa.me and no explanation.
+    // A local mobile that starts with anything other than 5 is not a
+    // real UAE mobile; leave those to the country-code gate below.
+    if (digits.length === 9 && digits.startsWith("5")) {
+        digits = defaultCountry + digits;
+    }
+
     // E.164 allows 8-15 digits including country code; be permissive
     // enough for real GCC numbers (~11-12 digits) and reject obvious
     // junk like a 3-digit typo.

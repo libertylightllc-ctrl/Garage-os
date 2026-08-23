@@ -13,7 +13,7 @@ import {
 } from "@/lib/storage";
 import { requireAdvisor } from "@/lib/action-guards";
 import { newPublicToken } from "@/lib/document-tokens";
-import { normalizeUaePhone } from "@/lib/normalize";
+import { normalizeCustomerPhoneForWrite } from "@/lib/normalize";
 
 // PUBLIC — customer booking (no auth; this is the WhatsApp/web booking surface).
 export async function createBookingPublic(formData: FormData) {
@@ -28,22 +28,25 @@ export async function createBookingPublic(formData: FormData) {
   const garage = await prisma.garage.findUnique({ where: { id: garageId }, select: { id: true } });
   if (!garage || !phoneRaw || !text) throw new Error("Missing booking details");
 
-  // AR 2026-08-21 — normalise the customer's phone before the upsert.
-  // Previously the raw form value hit garageId_phone directly, so
-  // "+971 50 123 4567", "0501234567", and "971501234567" from the
-  // same person on different days created 3 Customer rows. Moulkia
-  // intake normalises the same way (intake-moulkia.ts:311); this
-  // aligns the public booking path. Historical duplicates are NOT
-  // merged by this change — separate probe + operator-run job. If
-  // the input is blank after normalisation (all-punctuation garbage
-  // typed in), refuse rather than upsert on empty string.
-  const phone = normalizeUaePhone(phoneRaw);
-  if (!phone) throw new Error("Missing booking details");
+  // AR 2026-08-23 — route through the shared write-time contract.
+  // Resolvable input → E.164 stored + needsReview=false. Unresolvable
+  // input (a real string that isn't a dialable number) → raw stored
+  // + needsReview=true so the customer detail page can highlight it
+  // for an advisor to fix. Refuse only when the input is blank —
+  // "we lost the number entirely" is genuinely missing data. See
+  // `normalizeCustomerPhoneForWrite` for the contract; before AR
+  // 2026-08-23 this path used `normalizeUaePhone` which stored a
+  // 9-digit shape the send path (`normalizeToE164`) then rejected,
+  // leaving the cashier with a picker-fallback wa.me and no
+  // explanation.
+  const resolved = normalizeCustomerPhoneForWrite(phoneRaw);
+  if (!resolved) throw new Error("Missing booking details");
+  const { phone, needsReview: phoneNeedsReview } = resolved;
 
   const customer = await prisma.customer.upsert({
     where: { garageId_phone: { garageId, phone } },
-    update: { name: name || undefined },
-    create: { garageId, phone, name: name || "Customer", waId: phone },
+    update: { name: name || undefined, phoneNeedsReview },
+    create: { garageId, phone, phoneNeedsReview, name: name || "Customer", waId: phone },
   });
 
   let vehicle = await prisma.vehicle.findFirst({ where: { customerId: customer.id, plate } });

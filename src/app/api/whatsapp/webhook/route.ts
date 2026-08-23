@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { handleInbound } from "@/lib/receptionist-engine";
-import { normalizeUaePhone } from "@/lib/normalize";
+import { normalizeUaePhone, normalizeCustomerPhoneForWrite } from "@/lib/normalize";
 
 // Meta webhook verification handshake.
 export async function GET(req: Request) {
@@ -48,21 +48,41 @@ export async function POST(req: Request) {
           // intake, producing duplicate rows. normalizeUaePhone
           // reduces every UAE-shaped format to the same 9-digit key.
           const waIdRaw = m.from;
-          const normalized = normalizeUaePhone(waIdRaw);
+          // Legacy 9-digit shape kept as a lookup key ONLY — bridges
+          // customers stored before AR 2026-08-23 (when writes went
+          // through `normalizeUaePhone`). The 9-digit clause below
+          // becomes dead once step-4 backfill migrates legacy rows to
+          // E.164; leaving it in until then keeps the webhook idempotent
+          // across the transition.
+          const legacyLookup = normalizeUaePhone(waIdRaw);
+          const resolvedForWrite = normalizeCustomerPhoneForWrite(waIdRaw);
+          // Meta always sends E.164 without the plus, so resolvedForWrite
+          // should always resolve here. The `?? waIdRaw` fallback is
+          // defence — an inbound whose sender ID can't be normalised
+          // still creates a row rather than 500ing the webhook.
+          const writePhone = resolvedForWrite?.phone ?? waIdRaw;
+          const writePhoneNeedsReview = resolvedForWrite?.needsReview ?? true;
           let customer = await prisma.customer.findFirst({
             where: {
               garageId,
               OR: [
                 { waId: waIdRaw },
-                { waId: normalized },
-                { phone: normalized },
+                { waId: legacyLookup },
+                { phone: legacyLookup },
+                { phone: writePhone },
               ],
             },
             select: { id: true, lang: true },
           });
           if (!customer) {
             customer = await prisma.customer.create({
-              data: { garageId, phone: normalized, waId: normalized, name: normalized },
+              data: {
+                garageId,
+                phone: writePhone,
+                waId: writePhone,
+                name: writePhone,
+                phoneNeedsReview: writePhoneNeedsReview,
+              },
               select: { id: true, lang: true },
             });
           }

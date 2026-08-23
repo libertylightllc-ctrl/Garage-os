@@ -66,7 +66,7 @@ export default async function CustomerBooking({
         <input type="hidden" name="garageId" value={garageId} />
         <div className="flex gap-2">
           <input name="name" placeholder={t("name")} className={field} />
-          <input name="phone" placeholder={t("phone")} required className={field} />
+          <input name="phone" type="tel" inputMode="tel" pattern="^\+?[\d\s\-()]+$" title={t("customerPhonePatternHint")} placeholder={t("phone")} required className={field} />
         </div>
         <div className="flex gap-2">
           <input name="make" placeholder={t("make")} className={field} />

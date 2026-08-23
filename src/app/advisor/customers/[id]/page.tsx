@@ -46,6 +46,7 @@ export default async function CustomerDetailPage({
       id: true,
       name: true,
       phone: true,
+      phoneNeedsReview: true,
       trn: true,
       // Every vehicle the customer owns. Ordered by createdAt so the
       // list stays stable regardless of visit history.
@@ -175,10 +176,25 @@ export default async function CustomerDetailPage({
             </span>
             <input
               name="phone"
+              type="tel"
+              inputMode="tel"
+              // Loose shape guard on the client — must start with `+`
+              // or a digit, must contain a digit, and can carry spaces
+              // / dashes / parens in between. The server's
+              // `normalizeCustomerPhoneForWrite` is the source of
+              // truth; this just catches "abc" before the round-trip.
+              pattern="^\+?[\d\s\-()]+$"
+              title="Digits only, optional leading + or 0. Spaces and dashes are OK. UAE mobile: 0501234567 or +971501234567."
               required
               defaultValue={customer.phone}
-              className="rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono tabular-nums"
+              aria-invalid={customer.phoneNeedsReview || undefined}
+              className={`rounded-md border ${customer.phoneNeedsReview ? "border-warning-500" : "border-border"} bg-transparent px-3 py-2 text-sm font-mono tabular-nums`}
             />
+            {customer.phoneNeedsReview ? (
+              <span className="text-[11px] text-warning-700 dark:text-warning-500">
+                ⚠️ {t("customerPhoneNeedsReview")}
+              </span>
+            ) : null}
           </label>
         </div>
         <label className="flex flex-col gap-1">

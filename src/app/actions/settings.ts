@@ -271,6 +271,14 @@ export async function updateGarageAddressAction(formData: FormData) {
   redirect("/settings?ok=garage-address");
 }
 
+// Sole writer of Garage.defaultLang. No other Prisma call, raw SQL,
+// trigger, or migration touches this column. Reports of "the language
+// got wiped after I saved something unrelated" (five occurrences up
+// to 2026-08-25) were all stale-page reads from the browser session,
+// closed after a direct DB read confirmed the stored value was still
+// correct. See `docs/business-rules.md` §8 — the reading rule for
+// the class, and the specific closure note for this column. Do not
+// re-open without a direct DB read that disagrees with the UI.
 export async function updateGarageDefaultLangAction(formData: FormData) {
   const session = await requireOperational();
   const raw = String(formData.get("defaultLang") ?? "").trim();

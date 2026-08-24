@@ -228,6 +228,42 @@ treatment on read (an audit reader sees "(SIMULATED)" on every such
 row for its lifetime). See `WhatsAppMessage.simulated` and the
 2026-08-19 chat-tools deletion.
 
+## 8. Stale reads look like writes
+
+When a persisted field appears to have been silently wiped and no
+writer in the audit can be shown to touch it, the read side is the
+next place to look — not more writer auditing. Browser cache, Next.js
+RSC caches, service worker shells, Vercel Data Cache, and stale
+client bundles across a deploy all produce the same user-visible
+symptom as a real wipe: the page shows the "before" state after a
+"nothing-related" save. Both classes deserve the same first move
+whenever a report comes in — a direct DB read of the row in
+question, before any code investigation.
+
+**Common violation shape**: `field X got wiped when I saved unrelated
+field Y` reports opened repeatedly. Each round audits the writers
+again and finds nothing. Reports keep coming because the underlying
+diagnosis — assumed to be a writer bug — never gets ruled out at the
+DB. A direct query would have closed it the first time.
+
+**Correct shape**: on the first report, before touching code, an
+operator script reads the row via `import "./lib/target-prod.mjs";
+prisma.<table>.findMany({select:{id:true, ...suspect fields...}})`
+and reports the actual stored value. If the DB agrees with the "old"
+state the user saw, the writers are innocent — investigate render /
+cache / bundle. If the DB disagrees, the writer audit is the right
+path.
+
+**Closed instance — `Garage.defaultLang`** (2026-08-25). Reported
+wiped five times. All five were stale-page reads from the browser
+session, confirmed on the fifth report by a direct read that showed
+Demo Garage still had `defaultLang = 'ar'` and the just-saved
+`defaultPaymentTerms` alongside it, both updated within seconds of
+each other. Full writer audit: only `updateGarageDefaultLangAction`
+at `src/app/actions/settings.ts` writes the column; no Prisma
+middleware, no DB triggers, additive-only migration. Do not
+re-audit. If the report resurfaces, read the row first.
+
 ---
 
 ## How to use this doc

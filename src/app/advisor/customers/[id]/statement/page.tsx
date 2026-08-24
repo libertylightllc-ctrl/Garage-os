@@ -196,9 +196,14 @@ export default async function CustomerStatementPage({
                                     HTML never contains the margin
                                     number. AR 2026-08-25 verify. */}
                                 {showCost ? (
-                                    <th className="px-2 py-2 text-right" data-print-omit-cost>
-                                        {t("statementColMargin")}
-                                    </th>
+                                    <>
+                                        <th className="px-2 py-2 text-right" data-print-omit-cost>
+                                            {t("statementColCost")}
+                                        </th>
+                                        <th className="px-2 py-2 text-right" data-print-omit-cost>
+                                            {t("statementColMargin")}
+                                        </th>
+                                    </>
                                 ) : null}
                             </tr>
                         </thead>
@@ -244,9 +249,14 @@ export default async function CustomerStatementPage({
                                             )}
                                         </td>
                                         {showCost ? (
-                                            <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
-                                                {inv.margin != null ? money(inv.margin) : <span className="text-text-mute">—</span>}
-                                            </td>
+                                            <>
+                                                <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                                    {inv.cost != null ? money(inv.cost) : <span className="text-text-mute">—</span>}
+                                                </td>
+                                                <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                                    {inv.margin != null ? money(inv.margin) : <span className="text-text-mute">—</span>}
+                                                </td>
+                                            </>
                                         ) : null}
                                     </tr>
                                 );

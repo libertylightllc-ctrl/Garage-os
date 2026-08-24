@@ -1,45 +1,57 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 
 /**
- * Client-side toggle for cost + margin blocks on any printable
- * page that renders customer-facing on paper. Used on
- * /advisor/vehicles/[id]/history (Batch A) and
- * /advisor/customers/[id]/statement (Batch B). Off by default —
- * these documents end up in a customer's hand and the default
- * view must be safe to show.
+ * Cost + margin visibility toggle. URL-param driven, SERVER-side.
  *
- * The toggle stamps a `<style>` tag with a state-driven rule that
- * hides every element carrying `data-cost-cell`. The @media print
- * clause below the state rule is the load-bearing bit — regardless
- * of the toggle's on/off state, print ALWAYS hides these cells.
- * Belt-and-braces: every element that carries `data-cost-cell` also
- * carries `data-print-omit-cost`, whose global rule in globals.css
- * already hides it on print (added AR 2026-08-14 for the profit
- * panel). Two independent rules; either alone is sufficient.
+ * The toggle flips a `?showCost=1` param on the current page URL.
+ * The page reads that param and passes `includeCost` into the
+ * loader. When off, the loader returns null for every cost/margin
+ * field — the numbers never reach the client HTML.
  *
- * Renamed from VehicleHistoryCostToggle 2026-08-25 (Batch B) — the
- * component is generic; the vehicle-history name was misleading
- * once the statement page reused it.
+ * AR 2026-08-25 verify: the previous client-side CSS toggle left
+ * the cost numbers in the server-rendered payload for anyone who
+ * view-sourced. Same class of leak as the cashier cost fix.
+ *
+ * Rendered as two `<Link>`s (on / off) so state survives page
+ * refresh, back/forward, print (browser prints whatever the URL
+ * currently shows), and copy-paste of the URL to a colleague. No
+ * client JS, no cookies, no state to reason about.
+ *
+ * Callers pass the base pathname + the current searchParams as an
+ * object so any other params on the page (e.g. `?asOf=` on the
+ * statement) survive the toggle click. AR 2026-08-25.
  */
-export function CostVisibilityToggle() {
-    const [show, setShow] = useState(false);
+export function CostVisibilityToggle({
+    basePath,
+    currentParams,
+    showCost,
+}: {
+    /** Page pathname without query, e.g. `/advisor/customers/abc/statement`. */
+    basePath: string;
+    /** All existing search params on the page. We rebuild the query
+     *  from these so the `?showCost=` flip preserves everything else. */
+    currentParams: Record<string, string | undefined>;
+    /** Current state — the page has already read `?showCost=1` (or not)
+     *  and passed the resolved boolean here. */
+    showCost: boolean;
+}) {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(currentParams)) {
+        if (k === "showCost") continue; // we set this ourselves
+        if (v != null && v !== "") params.set(k, v);
+    }
+    if (!showCost) params.set("showCost", "1");
+    // else: OFF state — drop the param entirely to leave a clean URL.
+    const nextHref = `${basePath}${params.toString() ? `?${params}` : ""}`;
+
     return (
-        <>
-            <label className="print:hidden inline-flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-text-mute">
-                <input
-                    type="checkbox"
-                    checked={show}
-                    onChange={(e) => setShow(e.target.checked)}
-                    className="h-4 w-4 accent-brand-900 dark:accent-white"
-                />
-                Show cost + margin (screen only — never printed)
-            </label>
-            <style>{`
-                [data-cost-cell] { display: ${show ? "" : "none"}; }
-                @media print { [data-cost-cell] { display: none !important; } }
-            `}</style>
-        </>
+        <Link
+            href={nextHref}
+            className="print:hidden inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 text-xs font-semibold hover:bg-surface-3"
+            // No client JS. Reload happens through the standard link.
+            prefetch={false}
+        >
+            {showCost ? "◉" : "○"} {showCost ? "Hide cost + margin" : "Show cost + margin"}
+        </Link>
     );
 }

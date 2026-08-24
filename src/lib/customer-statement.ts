@@ -134,10 +134,21 @@ function daysBetween(earlier: Date, later: Date): number {
     return Math.floor((later.getTime() - earlier.getTime()) / MS_PER_DAY);
 }
 
+/**
+ * Cost + margin gate. `includeCost=false` (default) means every
+ * StatementInvoiceRow returns cost=null + margin=null; the loader
+ * does not expose unitCost anywhere in the returned shape. The
+ * client-side render therefore has NO cost data to display — the
+ * "cost toggle" is a URL param handled server-side, not a
+ * client-side CSS hide. AR 2026-08-25 verify: same class of fix
+ * as the cashier cost leak; a CSS-only hide left the numbers in
+ * the HTML payload for anyone who view-sourced.
+ */
 export async function loadCustomerStatement(
     customerId: string,
     garageId: string,
     asOfDate: Date,
+    includeCost: boolean = false,
 ): Promise<CustomerStatement | null> {
     const customer = await prisma.customer.findFirst({
         where: { id: customerId, garageId },
@@ -192,10 +203,18 @@ export async function loadCustomerStatement(
         const total = Number(inv.total);
         const outstanding = Number((total - paid).toFixed(2));
         const daysPastDue = Math.max(0, daysBetween(inv.dueDate, asOfDate));
-        const cost = inv.lines.length > 0
-            ? Number(inv.lines.reduce((s, l) => s + Number(l.qty) * Number(l.unitCost ?? 0), 0).toFixed(2))
-            : null;
-        const margin = cost !== null ? Number((total - cost).toFixed(2)) : null;
+        // Cost/margin ONLY when the caller opted in. When off, both
+        // fields are null in the returned shape — the numbers don't
+        // reach the client (and thus don't reach the HTML payload).
+        // See the fn's includeCost param doc for the AR verify note.
+        let cost: number | null = null;
+        let margin: number | null = null;
+        if (includeCost) {
+            cost = inv.lines.length > 0
+                ? Number(inv.lines.reduce((s, l) => s + Number(l.qty) * Number(l.unitCost ?? 0), 0).toFixed(2))
+                : null;
+            margin = cost !== null ? Number((total - cost).toFixed(2)) : null;
+        }
         return {
             invoiceId: inv.id,
             invoiceNumber: inv.number,

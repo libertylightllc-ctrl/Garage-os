@@ -104,7 +104,7 @@ describe("loadVehicleHistory — garage scope", () => {
     it("returns a shape when the vehicle IS in the garage, with the caller's garage on it", async () => {
         state.vehicle = baseVehicle();
         state.jobs = [];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h).not.toBeNull();
         expect(h!.garage.id).toBe(GID);
         expect(h!.currentOwner.name).toBe("Current Owner");
@@ -124,7 +124,7 @@ describe("loadVehicleHistory — revenue source per entry", () => {
             },
             estimate: { status: "APPROVED", total: 480, lines: [] }, // shouldn't be used
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         const e = h!.entries[0];
         expect(e.source).toBe("invoice");
         expect(e.revenue).toBe(500);
@@ -140,7 +140,7 @@ describe("loadVehicleHistory — revenue source per entry", () => {
                 lines: [{ kind: "LABOR", description: "Diagnosis", qty: 1, unitCost: 0, lineTotal: 200 }],
             },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         const e = h!.entries[0];
         expect(e.source).toBe("estimate");
         expect(e.revenue).toBe(480);
@@ -154,7 +154,7 @@ describe("loadVehicleHistory — revenue source per entry", () => {
             job({ id: "j2", number: 2, createdAt: new Date("2026-02-01"), estimate: { status: "SENT", total: 480 } }),
             job({ id: "j3", number: 3, createdAt: new Date("2026-03-01"), estimate: { status: "REJECTED", total: 480 } }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         for (const e of h!.entries) {
             expect(e.source).toBe("none");
             expect(e.revenue).toBeNull();
@@ -178,7 +178,7 @@ describe("loadVehicleHistory — cost is Σ(qty * unitCost), null when no source
                 ],
             },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].cost).toBe(700);
         expect(h!.entries[0].margin).toBe(300);
     });
@@ -186,7 +186,7 @@ describe("loadVehicleHistory — cost is Σ(qty * unitCost), null when no source
     it("cost NULL (not zero) when there is no source at all", async () => {
         state.vehicle = baseVehicle();
         state.jobs = [job({ id: "j1", number: 1, createdAt: new Date("2026-01-01") })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].cost).toBeNull();
         expect(h!.entries[0].margin).toBeNull();
     });
@@ -200,7 +200,7 @@ describe("loadVehicleHistory — cost is Σ(qty * unitCost), null when no source
                 lines: [{ kind: "LABOR", description: "Diag only", qty: 1, unitCost: 0, lineTotal: 200 }],
             },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].cost).toBe(0);
         expect(h!.entries[0].margin).toBe(200);
     });
@@ -215,7 +215,7 @@ describe("loadVehicleHistory — outstanding balance per invoice", () => {
             id: "j1", number: 1, createdAt: new Date("2026-01-01"),
             invoice: { id: "i1", number: 100, total: 500, status: "PAID", payments: [{ amount: 500 }] },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].outstanding).toBe(0);
     });
 
@@ -225,7 +225,7 @@ describe("loadVehicleHistory — outstanding balance per invoice", () => {
             id: "j1", number: 1, createdAt: new Date("2026-01-01"),
             invoice: { id: "i1", number: 100, total: 500, status: "SENT", payments: [{ amount: 200 }] },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].outstanding).toBe(300);
     });
 
@@ -235,7 +235,7 @@ describe("loadVehicleHistory — outstanding balance per invoice", () => {
             id: "j1", number: 1, createdAt: new Date("2026-01-01"),
             estimate: { status: "APPROVED", total: 300 },
         })];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].outstanding).toBeNull();
     });
 });
@@ -249,7 +249,7 @@ describe("loadVehicleHistory — owner-at-job-time across transfers", () => {
             job({ id: "j1", number: 1, createdAt: new Date("2026-01-01") }),
             job({ id: "j2", number: 2, createdAt: new Date("2026-06-01") }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.hasChangedHands).toBe(false);
         for (const e of h!.entries) expect(e.ownerAtJobTime).toBeNull();
     });
@@ -270,7 +270,7 @@ describe("loadVehicleHistory — owner-at-job-time across transfers", () => {
             job({ id: "j2", number: 2, createdAt: new Date("2026-03-15") }), // AT → New Owner
             job({ id: "j3", number: 3, createdAt: new Date("2026-06-01") }), // AFTER → New Owner
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.hasChangedHands).toBe(true);
         expect(h!.entries[0].ownerAtJobTime?.name).toBe("Old Owner");
         expect(h!.entries[1].ownerAtJobTime?.name).toBe("New Owner");
@@ -299,10 +299,89 @@ describe("loadVehicleHistory — owner-at-job-time across transfers", () => {
             job({ id: "j2", number: 2, createdAt: new Date("2026-03-01") }), // Second
             job({ id: "j3", number: 3, createdAt: new Date("2026-07-01") }), // Third
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[0].ownerAtJobTime?.name).toBe("First Owner");
         expect(h!.entries[1].ownerAtJobTime?.name).toBe("Second Owner");
         expect(h!.entries[2].ownerAtJobTime?.name).toBe("Third Owner");
+    });
+});
+
+// ── Cost/margin server-side gate (AR 2026-08-25 verify) ─────────────
+
+describe("loadVehicleHistory — cost/margin gate (server-side)", () => {
+    // Pins the fix for the CSS-only leak: previously the toggle hid
+    // cost/margin cells in the DOM but the numbers were in the
+    // server-rendered HTML for anyone who view-sourced. Now the
+    // loader's includeCost=false (default) returns null for every
+    // cost/margin field, so the data never crosses the boundary.
+
+    it("default call (no includeCost) → every entry's cost + margin are null even when line data exists", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [job({
+            id: "j1", number: 1, createdAt: new Date("2026-01-01"),
+            invoice: {
+                id: "i1", number: 100, total: 1000, status: "PAID",
+                lines: [{ kind: "PART", description: "x", qty: 2, unitCost: 100, lineTotal: 500 }],
+            },
+        })];
+        const h = await loadVehicleHistory(VID, GID); // default
+        expect(h!.entries[0].cost).toBeNull();
+        expect(h!.entries[0].margin).toBeNull();
+        // Totals also zeroed when off — aggregate doesn't leak per-row
+        // cost via summation.
+        expect(h!.totals.lifetimeCost).toBe(0);
+        expect(h!.totals.lifetimeMargin).toBe(0);
+    });
+
+    it("includeCost=false explicit → same as default (null cost/margin)", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [job({
+            id: "j1", number: 1, createdAt: new Date("2026-01-01"),
+            invoice: {
+                id: "i1", number: 100, total: 1000, status: "PAID",
+                lines: [{ kind: "PART", description: "x", qty: 2, unitCost: 100, lineTotal: 500 }],
+            },
+        })];
+        const h = await loadVehicleHistory(VID, GID, false);
+        expect(h!.entries[0].cost).toBeNull();
+        expect(h!.entries[0].margin).toBeNull();
+    });
+
+    it("includeCost=true → cost + margin ARE returned", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [job({
+            id: "j1", number: 1, createdAt: new Date("2026-01-01"),
+            invoice: {
+                id: "i1", number: 100, total: 1000, status: "PAID",
+                lines: [{ kind: "PART", description: "x", qty: 2, unitCost: 100, lineTotal: 500 }],
+            },
+        })];
+        const h = await loadVehicleHistory(VID, GID, true);
+        expect(h!.entries[0].cost).toBe(200);
+        expect(h!.entries[0].margin).toBe(800);
+    });
+
+    // Render-grep proof per AR's verify pattern: seeded value must
+    // be absent from the off-state payload and present in the on-
+    // state payload. If a future edit reintroduces cost/margin in
+    // the off state, this fails.
+    it("PROOF: seeded cost 787.77 absent from off-state payload, present when on", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [job({
+            id: "j1", number: 1, createdAt: new Date("2026-01-01"),
+            invoice: {
+                id: "i1", number: 100, total: 2000, status: "PAID",
+                lines: [{ kind: "PART", description: "x", qty: 1, unitCost: 787.77, lineTotal: 1000 }],
+            },
+        })];
+        const off = await loadVehicleHistory(VID, GID, false);
+        const offPayload = JSON.stringify(off);
+        expect(offPayload).not.toContain("787.77");
+        expect(offPayload).not.toContain("1212.23"); // 2000 − 787.77 margin
+        const on = await loadVehicleHistory(VID, GID, true);
+        const onPayload = JSON.stringify(on);
+        expect(onPayload).toContain("787.77");
+        expect(onPayload).toContain("1212.23");
     });
 });
 
@@ -316,7 +395,7 @@ describe("loadVehicleHistory — mileage-decrease flag", () => {
             job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: 15_000 }),
             job({ id: "j3", number: 3, createdAt: new Date("2026-12-01"), mileageIn: 20_000 }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         for (const e of h!.entries) {
             expect(e.mileageDecreased).toBe(false);
             expect(e.mileageDecreasedFrom).toBeNull();
@@ -333,7 +412,7 @@ describe("loadVehicleHistory — mileage-decrease flag", () => {
             job({ id: "j2", number: 2, createdAt: new Date("2026-08-17"), mileageIn: 12_345 }), // ← flagged
             job({ id: "j3", number: 3, createdAt: new Date("2026-09-01"), mileageIn: 20_500 }), // honest, > peak
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         // entries returned chronological ASC by the loader, page reverses
         expect(h!.entries[0].mileageDecreased).toBe(false);
         expect(h!.entries[1].mileageDecreased).toBe(true);
@@ -347,7 +426,7 @@ describe("loadVehicleHistory — mileage-decrease flag", () => {
             job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: 20_000 }),
             job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: null }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.entries[1].mileageDecreased).toBe(false);
     });
 
@@ -357,7 +436,7 @@ describe("loadVehicleHistory — mileage-decrease flag", () => {
             job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: null }),
             job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: 15_000 }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         for (const e of h!.entries) expect(e.mileageDecreased).toBe(false);
     });
 
@@ -367,7 +446,7 @@ describe("loadVehicleHistory — mileage-decrease flag", () => {
             job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: 20_000 }),
             job({ id: "j2", number: 2, createdAt: new Date("2026-01-08"), mileageIn: 20_000 }),
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         for (const e of h!.entries) expect(e.mileageDecreased).toBe(false);
     });
 });
@@ -394,7 +473,7 @@ describe("loadVehicleHistory — lifetime totals across every entry", () => {
             }),
             job({ id: "j3", number: 3, createdAt: new Date("2026-03-01") }), // no source
         ];
-        const h = await loadVehicleHistory(VID, GID);
+        const h = await loadVehicleHistory(VID, GID, true);
         expect(h!.totals.visits).toBe(3);
         expect(h!.totals.lifetimeRevenue).toBe(800);
         expect(h!.totals.lifetimeCost).toBe(300);

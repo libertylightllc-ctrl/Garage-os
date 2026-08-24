@@ -80,6 +80,78 @@ beforeEach(() => {
     state.advances = [];
 });
 
+// ── Cost/margin server-side gate (AR 2026-08-25 verify) ────────────
+
+describe("loadCustomerStatement — cost/margin gate (server-side)", () => {
+    // Pins the fix for the CSS-only leak. Same fix shape as
+    // loadVehicleHistory: the numbers never enter the returned
+    // payload unless the caller explicitly opts in.
+
+    it("default call (no includeCost arg) → invoice cost + margin are null even when line data exists", async () => {
+        state.customer = baseCustomer();
+        state.invoices = [invoice({
+            id: "i1", number: 100,
+            issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"),
+            total: 1000, lines: [{ qty: 2, unitCost: 100 }],
+        })];
+        // No 4th arg → default false
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        expect(s!.invoices[0].cost).toBeNull();
+        expect(s!.invoices[0].margin).toBeNull();
+    });
+
+    it("includeCost=false explicit → same as default", async () => {
+        state.customer = baseCustomer();
+        state.invoices = [invoice({
+            id: "i1", number: 100,
+            issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"),
+            total: 1000, lines: [{ qty: 2, unitCost: 100 }],
+        })];
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), false);
+        expect(s!.invoices[0].cost).toBeNull();
+        expect(s!.invoices[0].margin).toBeNull();
+    });
+
+    it("includeCost=true → cost + margin ARE returned", async () => {
+        state.customer = baseCustomer();
+        state.invoices = [invoice({
+            id: "i1", number: 100,
+            issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"),
+            total: 1000, lines: [{ qty: 2, unitCost: 100 }],
+        })];
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
+        expect(s!.invoices[0].cost).toBe(200);
+        expect(s!.invoices[0].margin).toBe(800);
+    });
+
+    // Render-grep proof per AR's verify pattern: seed a distinctive
+    // cost value, serialize the loader's returned object (which is
+    // exactly what the page renders into the HTML), grep for the
+    // seeded value + the derived margin. Expect zero occurrences
+    // when off; expect >0 when on. Proves the fix at the payload
+    // boundary — the same test would fail if a future edit
+    // reintroduced cost/margin in the off state.
+    it("PROOF: seeded cost value 787.77 is ABSENT from off-state payload, PRESENT when on", async () => {
+        state.customer = baseCustomer();
+        state.invoices = [invoice({
+            id: "i1", number: 100,
+            issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"),
+            total: 2000,
+            lines: [{ qty: 1, unitCost: 787.77 }],
+        })];
+        // Off — no cost, no margin, no derived numbers anywhere.
+        const off = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), false);
+        const offPayload = JSON.stringify(off);
+        expect(offPayload).not.toContain("787.77");
+        expect(offPayload).not.toContain("1212.23"); // 2000 − 787.77
+        // On — both appear.
+        const on = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
+        const onPayload = JSON.stringify(on);
+        expect(onPayload).toContain("787.77");
+        expect(onPayload).toContain("1212.23");
+    });
+});
+
 // ── Bucket boundaries ────────────────────────────────────────────
 
 describe("bucketFor — exact boundary math", () => {
@@ -104,7 +176,7 @@ describe("loadCustomerStatement — garage scope", () => {
 
     it("returns a shape with the caller's garage embedded", async () => {
         state.customer = baseCustomer();
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s).not.toBeNull();
         expect(s!.garage.id).toBe(GID);
         expect(s!.customer.name).toBe("Ahmed");
@@ -121,7 +193,7 @@ describe("loadCustomerStatement — invoice inclusion rules", () => {
             issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"),
             total: 500, payments: [500],
         })];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices).toHaveLength(1);
         expect(s!.invoices[0].fullyPaid).toBe(true);
         expect(s!.invoices[0].outstanding).toBe(0);
@@ -137,7 +209,7 @@ describe("loadCustomerStatement — invoice inclusion rules", () => {
     it("VOID invoices are absent — the loader's WHERE filters them at the DB, this test documents the contract", async () => {
         state.customer = baseCustomer();
         state.invoices = []; // simulating what the WHERE returns after filtering VOID
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices).toHaveLength(0);
         expect(s!.aging.invoicesOutstanding).toBe(0);
     });
@@ -161,7 +233,7 @@ describe("loadCustomerStatement — aging rollup", () => {
             invoice({ id: "iD", number: 4, issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-06-15"), total: 400 }),
             invoice({ id: "iE", number: 5, issuedAt: new Date("2026-04-01"), dueDate: new Date("2026-04-15"), total: 500 }),
         ];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.aging.current).toBe(100);
         expect(s!.aging.d1_30).toBe(200);
         expect(s!.aging.d31_60).toBe(300);
@@ -178,7 +250,7 @@ describe("loadCustomerStatement — aging rollup", () => {
             total: 1000, payments: [400],
         })];
         // 2026-08-25 − 2026-07-01 = 55 days → 31_60
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices[0].outstanding).toBe(600);
         expect(s!.aging.d31_60).toBe(600);
         expect(s!.aging.invoicesOutstanding).toBe(600);
@@ -199,7 +271,7 @@ describe("loadCustomerStatement — unmigrated advances net against outstanding"
             { id: "a1", receivedAt: new Date("2026-07-15"), method: "CASH", amount: 200,
               jobCard: { number: 42, vehicle: { plate: "A 12345" } } },
         ];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.aging.invoicesOutstanding).toBe(500);
         expect(s!.aging.advancesCredit).toBe(200);
         expect(s!.aging.netBalance).toBe(300);
@@ -216,7 +288,7 @@ describe("loadCustomerStatement — unmigrated advances net against outstanding"
             { id: "a1", receivedAt: new Date("2026-07-15"), method: "CARD", amount: 300,
               jobCard: { number: 42, vehicle: { plate: "A 12345" } } },
         ];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.aging.netBalance).toBe(-200);
     });
 
@@ -228,7 +300,7 @@ describe("loadCustomerStatement — unmigrated advances net against outstanding"
             total: 750,
         })];
         state.advances = [];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.aging.advancesCredit).toBe(0);
         expect(s!.aging.netBalance).toBe(750);
     });
@@ -244,7 +316,7 @@ describe("loadCustomerStatement — invoices sorted issuedAt ASC (accountant rea
             invoice({ id: "iB", number: 11, issuedAt: new Date("2026-03-01"), dueDate: new Date("2026-04-01"), total: 200 }),
             invoice({ id: "iC", number: 12, issuedAt: new Date("2026-06-01"), dueDate: new Date("2026-07-01"), total: 300 }),
         ];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices.map((i) => i.invoiceNumber)).toEqual([10, 11, 12]);
     });
 });
@@ -263,7 +335,7 @@ describe("loadCustomerStatement — per-invoice cost / margin", () => {
                 { qty: 1, unitCost: 300 }, // 300
             ],
         })];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices[0].cost).toBe(500);
         expect(s!.invoices[0].margin).toBe(500);
     });
@@ -276,7 +348,7 @@ describe("loadCustomerStatement — per-invoice cost / margin", () => {
             total: 1000,
             lines: [],
         })];
-        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"));
+        const s = await loadCustomerStatement(CID, GID, new Date("2026-08-25"), true);
         expect(s!.invoices[0].cost).toBeNull();
         expect(s!.invoices[0].margin).toBeNull();
     });

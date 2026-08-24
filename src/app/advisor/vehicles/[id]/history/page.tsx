@@ -42,15 +42,24 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
  */
 export default async function VehicleHistoryPrintablePage({
     params,
+    searchParams,
 }: {
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ showCost?: string }>;
 }) {
     const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
     const { id } = await params;
+    const sp = await searchParams;
     const t = await getT();
     const locale = await getLocale();
 
-    const history = await loadVehicleHistory(id, session.user.garageId);
+    // Server-side cost gate. ?showCost=1 → the loader fetches +
+    // returns cost/margin. Anything else → the loader returns null
+    // for every cost field, and the numbers never enter the HTML.
+    // AR 2026-08-25 verify — replaces the client-side CSS toggle.
+    const showCost = sp.showCost === "1";
+
+    const history = await loadVehicleHistory(id, session.user.garageId, showCost);
     if (!history) notFound();
 
     // Country falls back to UAE — every prod garage today is UAE and
@@ -86,7 +95,11 @@ export default async function VehicleHistoryPrintablePage({
                     ← {t("vehicleHistoryBack")}
                 </Link>
                 <div className="flex items-center gap-2">
-                    <CostVisibilityToggle />
+                    <CostVisibilityToggle
+                        basePath={`/advisor/vehicles/${id}/history`}
+                        currentParams={sp}
+                        showCost={showCost}
+                    />
                     <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2">
                         🖨 {t("printLabel")}
                     </PrintButton>
@@ -172,20 +185,24 @@ export default async function VehicleHistoryPrintablePage({
                                 <th className="px-2 py-2 text-left">{t("vehicleHistoryColWork")}</th>
                                 <th className="px-2 py-2 text-left">{t("vehicleHistoryColParts")}</th>
                                 <th className="px-2 py-2 text-right">{t("vehicleHistoryColRevenue")}</th>
-                                <th
-                                    className="px-2 py-2 text-right"
-                                    data-cost-cell
-                                    data-print-omit-cost
-                                >
-                                    {t("vehicleHistoryColCost")}
-                                </th>
-                                <th
-                                    className="px-2 py-2 text-right"
-                                    data-cost-cell
-                                    data-print-omit-cost
-                                >
-                                    {t("vehicleHistoryColMargin")}
-                                </th>
+                                {/* Cost/margin columns only render when
+                                    the URL param says so. Off-state
+                                    HTML doesn't contain the numbers at
+                                    all — server-side gate, not a CSS
+                                    hide. AR 2026-08-25 verify. Print
+                                    also strips them via
+                                    [data-print-omit-cost] as
+                                    belt-and-braces for the show-state. */}
+                                {showCost ? (
+                                    <>
+                                        <th className="px-2 py-2 text-right" data-print-omit-cost>
+                                            {t("vehicleHistoryColCost")}
+                                        </th>
+                                        <th className="px-2 py-2 text-right" data-print-omit-cost>
+                                            {t("vehicleHistoryColMargin")}
+                                        </th>
+                                    </>
+                                ) : null}
                                 <th className="px-2 py-2 text-left">{t("vehicleHistoryColStatus")}</th>
                             </tr>
                         </thead>
@@ -265,20 +282,16 @@ export default async function VehicleHistoryPrintablePage({
                                             <span className="text-text-mute">—</span>
                                         )}
                                     </td>
-                                    <td
-                                        className="px-2 py-2 text-right tabular-nums"
-                                        data-cost-cell
-                                        data-print-omit-cost
-                                    >
-                                        {e.cost != null ? money(e.cost) : <span className="text-text-mute">—</span>}
-                                    </td>
-                                    <td
-                                        className="px-2 py-2 text-right tabular-nums"
-                                        data-cost-cell
-                                        data-print-omit-cost
-                                    >
-                                        {e.margin != null ? money(e.margin) : <span className="text-text-mute">—</span>}
-                                    </td>
+                                    {showCost ? (
+                                        <>
+                                            <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                                {e.cost != null ? money(e.cost) : <span className="text-text-mute">—</span>}
+                                            </td>
+                                            <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                                {e.margin != null ? money(e.margin) : <span className="text-text-mute">—</span>}
+                                            </td>
+                                        </>
+                                    ) : null}
                                     <td className="px-2 py-2">
                                         {/* Raw JobStatus — the vocabulary an
                                             advisor uses day-to-day (DELIVERED,
@@ -309,20 +322,16 @@ export default async function VehicleHistoryPrintablePage({
                                         </div>
                                     ) : null}
                                 </td>
-                                <td
-                                    className="px-2 py-2 text-right tabular-nums"
-                                    data-cost-cell
-                                    data-print-omit-cost
-                                >
-                                    {money(history.totals.lifetimeCost)}
-                                </td>
-                                <td
-                                    className="px-2 py-2 text-right tabular-nums"
-                                    data-cost-cell
-                                    data-print-omit-cost
-                                >
-                                    {money(history.totals.lifetimeMargin)}
-                                </td>
+                                {showCost ? (
+                                    <>
+                                        <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                            {money(history.totals.lifetimeCost)}
+                                        </td>
+                                        <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                            {money(history.totals.lifetimeMargin)}
+                                        </td>
+                                    </>
+                                ) : null}
                                 <td />
                             </tr>
                         </tfoot>

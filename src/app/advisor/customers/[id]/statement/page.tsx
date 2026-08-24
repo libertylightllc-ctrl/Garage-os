@@ -41,7 +41,7 @@ export default async function CustomerStatementPage({
     searchParams,
 }: {
     params: Promise<{ id: string }>;
-    searchParams: Promise<{ asOf?: string }>;
+    searchParams: Promise<{ asOf?: string; showCost?: string }>;
 }) {
     const session = await requireAnyRole(["ADVISOR", "OWNER", "MASTER"]);
     const { id } = await params;
@@ -60,7 +60,13 @@ export default async function CustomerStatementPage({
         asOfDate = new Date();
     }
 
-    const statement = await loadCustomerStatement(id, session.user.garageId, asOfDate);
+    // Server-side cost gate — the numbers never enter the returned
+    // shape (and therefore never enter the HTML) unless the URL says
+    // so. AR 2026-08-25 verify: previous CSS-only hide left the
+    // margin values in the payload for view-source.
+    const showCost = sp.showCost === "1";
+
+    const statement = await loadCustomerStatement(id, session.user.garageId, asOfDate, showCost);
     if (!statement) notFound();
 
     const country = statement.garage.country ?? "UAE";
@@ -98,7 +104,11 @@ export default async function CustomerStatementPage({
                     ← {t("statementBackToCustomer")}
                 </Link>
                 <div className="flex items-center gap-2">
-                    <CostVisibilityToggle />
+                    <CostVisibilityToggle
+                        basePath={`/advisor/customers/${id}/statement`}
+                        currentParams={sp}
+                        showCost={showCost}
+                    />
                     <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2">
                         🖨 {t("printLabel")}
                     </PrintButton>
@@ -181,13 +191,15 @@ export default async function CustomerStatementPage({
                                 <th className="px-2 py-2 text-right">{t("statementColPaid")}</th>
                                 <th className="px-2 py-2 text-right">{t("statementColOutstanding")}</th>
                                 <th className="px-2 py-2 text-left">{t("statementColDaysOverdue")}</th>
-                                <th
-                                    className="px-2 py-2 text-right"
-                                    data-cost-cell
-                                    data-print-omit-cost
-                                >
-                                    {t("statementColMargin")}
-                                </th>
+                                {/* Margin column: rendered only when
+                                    the URL param is on. Off-state
+                                    HTML never contains the margin
+                                    number. AR 2026-08-25 verify. */}
+                                {showCost ? (
+                                    <th className="px-2 py-2 text-right" data-print-omit-cost>
+                                        {t("statementColMargin")}
+                                    </th>
+                                ) : null}
                             </tr>
                         </thead>
                         <tbody>
@@ -231,13 +243,11 @@ export default async function CustomerStatementPage({
                                                 </span>
                                             )}
                                         </td>
-                                        <td
-                                            className="px-2 py-2 text-right tabular-nums"
-                                            data-cost-cell
-                                            data-print-omit-cost
-                                        >
-                                            {inv.margin != null ? money(inv.margin) : <span className="text-text-mute">—</span>}
-                                        </td>
+                                        {showCost ? (
+                                            <td className="px-2 py-2 text-right tabular-nums" data-print-omit-cost>
+                                                {inv.margin != null ? money(inv.margin) : <span className="text-text-mute">—</span>}
+                                            </td>
+                                        ) : null}
                                     </tr>
                                 );
                             })}

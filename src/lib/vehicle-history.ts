@@ -117,9 +117,19 @@ export interface VehicleHistory {
     };
 }
 
+/**
+ * Cost + margin gate — see identical contract on
+ * loadCustomerStatement in customer-statement.ts. `includeCost=false`
+ * (default) means every HistoryEntry returns cost=null, margin=null,
+ * AND the totals object returns lifetimeCost=0, lifetimeMargin=0.
+ * The numbers never cross the return boundary, so the client HTML
+ * has nothing to hide. AR 2026-08-25 verify: fixes the same class
+ * of CSS-hide-with-data-still-in-payload leak as the cashier fix.
+ */
 export async function loadVehicleHistory(
     vehicleId: string,
     garageId: string,
+    includeCost: boolean = false,
 ): Promise<VehicleHistory | null> {
     // Root query enforces garage scope by joining through
     // Vehicle.customer.garageId. A vehicle whose current owner is
@@ -315,17 +325,24 @@ export async function loadVehicleHistory(
             lines = estimate.lines;
         }
 
+        // Cost/margin ONLY when the caller opted in. When off, both
+        // fields are null and don't reach the returned shape (nor the
+        // HTML). Same server-side gate as loadCustomerStatement.
         // Cost = sum(qty * unitCost) across every line on the source.
         // Null when we have NO source (no invoice + no approved
         // estimate). Zero when the source exists but every line has
         // unitCost=0 — that's a real datum (a labour-only visit not
         // priced at cost), not "unknown".
-        const cost: number | null = lines.length > 0
-            ? lines.reduce((s, l) => s + Number(l.qty) * Number(l.unitCost ?? 0), 0)
-            : (source === "none" ? null : 0);
-        const margin: number | null = (revenue !== null && cost !== null)
-            ? Number((revenue - cost).toFixed(2))
-            : null;
+        let cost: number | null = null;
+        let margin: number | null = null;
+        if (includeCost) {
+            cost = lines.length > 0
+                ? lines.reduce((s, l) => s + Number(l.qty) * Number(l.unitCost ?? 0), 0)
+                : (source === "none" ? null : 0);
+            margin = (revenue !== null && cost !== null)
+                ? Number((revenue - cost).toFixed(2))
+                : null;
+        }
 
         // Partial-payment sum ONLY when invoiced; estimates have no
         // payments. Outstanding = invoice.total − Σ payments.
@@ -360,14 +377,23 @@ export async function loadVehicleHistory(
         };
     });
 
+    // Totals — lifetimeCost + lifetimeMargin also gated on includeCost.
+    // When off, both are 0 in the returned shape so the aggregate
+    // doesn't reveal per-row cost even by summation. The revenue and
+    // outstanding totals stay real regardless — those are already
+    // customer-facing on the invoice itself.
     const totals = {
         visits: entries.length,
         lifetimeRevenue: Number(entries.reduce((s, e) => s + (e.revenue ?? 0), 0).toFixed(2)),
-        lifetimeCost: Number(entries.reduce((s, e) => s + (e.cost ?? 0), 0).toFixed(2)),
+        lifetimeCost: includeCost
+            ? Number(entries.reduce((s, e) => s + (e.cost ?? 0), 0).toFixed(2))
+            : 0,
         lifetimeMargin: 0, // set below
         outstandingBalance: Number(entries.reduce((s, e) => s + (e.outstanding ?? 0), 0).toFixed(2)),
     };
-    totals.lifetimeMargin = Number((totals.lifetimeRevenue - totals.lifetimeCost).toFixed(2));
+    totals.lifetimeMargin = includeCost
+        ? Number((totals.lifetimeRevenue - totals.lifetimeCost).toFixed(2))
+        : 0;
 
     return {
         vehicle: {

@@ -4,7 +4,7 @@ import { requireAnyRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
 import { PrintButton } from "@/components/print-button";
 import { DocumentHeader } from "@/components/document-header";
-import { VehicleHistoryCostToggle } from "@/components/vehicle-history-cost-toggle";
+import { CostVisibilityToggle } from "@/components/cost-visibility-toggle";
 import { loadVehicleHistory } from "@/lib/vehicle-history";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
@@ -28,7 +28,7 @@ const money = (n: number) => `AED ${n.toFixed(2)}`;
  *
  * Cost + margin visibility (AR 2026-08-25):
  *   - Never rendered on print (data-print-omit-cost + the print
- *     media query in VehicleHistoryCostToggle).
+ *     media query in CostVisibilityToggle).
  *   - Off by default on screen — the toggle enables them. This
  *     document ends up in a customer's hand more than any other
  *     printable in the app, so the safe default is the safe view.
@@ -86,7 +86,7 @@ export default async function VehicleHistoryPrintablePage({
                     ← {t("vehicleHistoryBack")}
                 </Link>
                 <div className="flex items-center gap-2">
-                    <VehicleHistoryCostToggle />
+                    <CostVisibilityToggle />
                     <PrintButton className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-semibold text-text hover:bg-surface-2">
                         🖨 {t("printLabel")}
                     </PrintButton>

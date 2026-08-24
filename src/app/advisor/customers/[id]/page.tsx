@@ -127,9 +127,20 @@ export default async function CustomerDetailPage({
         <div className="text-xs uppercase tracking-widest text-text-mute">
           {t("customerDetailKicker")}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {customer.name}
-        </h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {customer.name}
+          </h1>
+          {/* AR 2026-08-25 Batch B — printable customer statement.
+              One added element; existing page logic + reads
+              unchanged below. */}
+          <Link
+            href={`/advisor/customers/${customer.id}/statement`}
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold hover:bg-surface-3"
+          >
+            📄 {t("statementShortLink")}
+          </Link>
+        </div>
         <p className="text-sm text-text-mute">
           {customer.phone}
           {customer.trn ? (

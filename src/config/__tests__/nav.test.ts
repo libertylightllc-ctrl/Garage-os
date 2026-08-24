@@ -45,6 +45,10 @@ describe("NAV config", () => {
             "/owner/branches",
             "/owner/bays",
             "/owner/staff",
+            // Customers list — added 2026-08-25 Batch B. Present in
+            // OWNER, ADVISOR, CASHIER, and MASTER arrays. Landing
+            // for the printable customer-statement lookup.
+            "/advisor/customers",
             "/owner/hours",
             "/owner/suppliers",
             "/owner/purchasing",
@@ -69,11 +73,12 @@ describe("NAV config", () => {
             "/advisor/parts",
             "/advisor/bookings",
             "/advisor/vehicles",
+            "/advisor/customers",
             "/advisor/reminders",
             "/advisor/whatsapp",
         ],
         TECH: ["/technician"],
-        CASHIER: ["/cashier", "/cashier/whatsapp"],
+        CASHIER: ["/cashier", "/advisor/customers", "/cashier/whatsapp"],
         MASTER: [
             "/advisor",
             "/advisor/jobs/new",
@@ -81,6 +86,7 @@ describe("NAV config", () => {
             "/advisor/estimates",
             "/cashier",
             "/advisor/vehicles",
+            "/advisor/customers",
             "/advisor/bookings",
             "/advisor/parts",
             "/advisor/reminders",

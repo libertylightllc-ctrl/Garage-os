@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 /**
- * Client-side toggle for the cost + margin columns/blocks on
- * /advisor/vehicles/[id]/history. Off by default (this document
- * ends up in a customer's hand more often than any other; the
- * default view must be safe to show).
+ * Client-side toggle for cost + margin blocks on any printable
+ * page that renders customer-facing on paper. Used on
+ * /advisor/vehicles/[id]/history (Batch A) and
+ * /advisor/customers/[id]/statement (Batch B). Off by default —
+ * these documents end up in a customer's hand and the default
+ * view must be safe to show.
  *
  * The toggle stamps a `<style>` tag with a state-driven rule that
  * hides every element carrying `data-cost-cell`. The @media print
@@ -16,8 +18,12 @@ import { useState } from "react";
  * carries `data-print-omit-cost`, whose global rule in globals.css
  * already hides it on print (added AR 2026-08-14 for the profit
  * panel). Two independent rules; either alone is sufficient.
+ *
+ * Renamed from VehicleHistoryCostToggle 2026-08-25 (Batch B) — the
+ * component is generic; the vehicle-history name was misleading
+ * once the statement page reused it.
  */
-export function VehicleHistoryCostToggle() {
+export function CostVisibilityToggle() {
     const [show, setShow] = useState(false);
     return (
         <>

@@ -36,6 +36,7 @@ import {
   BookOpen,
   BarChart3,
   FileSpreadsheet,
+  Contact,
 } from "lucide-react";
 import type { StaffRole } from "@/lib/roles";
 import type { MessageKey } from "@/i18n/config";
@@ -69,6 +70,7 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "branches", href: "/owner/branches", labelKey: "tabBranches", icon: Building2 },
       { key: "bays", href: "/owner/bays", labelKey: "tabBays", icon: Warehouse },
       { key: "team", href: "/owner/staff", labelKey: "tabTeam", icon: Users },
+      { key: "customers", href: "/advisor/customers", labelKey: "tabCustomers", icon: Contact },
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
       { key: "suppliers", href: "/owner/suppliers", labelKey: "tabSuppliers", icon: Truck },
       { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
@@ -94,6 +96,10 @@ export const NAV: Record<StaffRole, RoleNav> = {
     ],
     overflow: [
       { key: "vehicles", href: "/advisor/vehicles", labelKey: "tabVehicles", icon: Car },
+      // Customers list + printable statement lookup (Batch B, AR
+      // 2026-08-25). Sits next to Vehicles — the two customer-
+      // relationship lookups.
+      { key: "customers", href: "/advisor/customers", labelKey: "tabCustomers", icon: Contact },
       { key: "reminders", href: "/advisor/reminders", labelKey: "tabReminders", icon: Bell, badge: "dueReminders" },
       { key: "whatsapp", href: "/advisor/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],
@@ -107,6 +113,10 @@ export const NAV: Record<StaffRole, RoleNav> = {
   CASHIER: {
     primary: [
       { key: "accounts", href: "/cashier", labelKey: "tabAccounts", icon: CreditCard },
+      // Customers list + statement lookup — the cashier's job is to
+      // get money in; a fast "who owes what" is their most-useful
+      // surface after /cashier itself. AR 2026-08-25 Batch B.
+      { key: "customers", href: "/advisor/customers", labelKey: "tabCustomers", icon: Contact },
       { key: "whatsapp", href: "/cashier/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],
     overflow: [],
@@ -134,6 +144,7 @@ export const NAV: Record<StaffRole, RoleNav> = {
     ],
     overflow: [
       { key: "vehicles", href: "/advisor/vehicles", labelKey: "tabVehicles", icon: Car },
+      { key: "customers", href: "/advisor/customers", labelKey: "tabCustomers", icon: Contact },
       { key: "bookings", href: "/advisor/bookings", labelKey: "tabBookings", icon: Calendar },
       { key: "parts", href: "/advisor/parts", labelKey: "tabParts", icon: Package, badge: "openParts" },
       { key: "reminders", href: "/advisor/reminders", labelKey: "tabReminders", icon: Bell, badge: "dueReminders" },

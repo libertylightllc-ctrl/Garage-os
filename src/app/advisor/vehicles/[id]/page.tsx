@@ -206,12 +206,23 @@ export default async function VehicleHistory({
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <AppNav role="ADVISOR" active="vehicles" />
-      <Link
-        href="/advisor/vehicles"
-        className="inline-block py-2 text-sm text-text-mute hover:underline"
-      >
-        ← {t("vehiclesBackToSearch")}
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          href="/advisor/vehicles"
+          className="inline-block py-2 text-sm text-text-mute hover:underline"
+        >
+          ← {t("vehiclesBackToSearch")}
+        </Link>
+        {/* AR 2026-08-25 Batch A. Discoverability for the new
+            printable vehicle-history lookup. One-line addition;
+            existing screen render below is unchanged. */}
+        <Link
+          href={`/advisor/vehicles/${vehicle.id}/history`}
+          className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-xs font-semibold hover:bg-surface-3"
+        >
+          🖨 {t("vehicleHistoryPrintableLink")}
+        </Link>
+      </div>
 
       {/* Header — vehicle identity + owner. Big plate so the
           advisor can confirm at a glance they're on the right

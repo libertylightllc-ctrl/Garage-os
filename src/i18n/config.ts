@@ -1101,6 +1101,12 @@ const en = {
   vehicleHistoryTotalsLabel: "Lifetime",
   vehicleHistoryVisits: "visits",
   vehicleHistoryPrintableLink: "View printable history",
+  // Mileage-decrease marker on /advisor/vehicles/[id]/history.
+  // Visible on BOTH screen and print — buyer's tamper check is the
+  // doc's primary use case; hiding the discrepancy defeats it.
+  // AR 2026-08-25 (post-verify fix).
+  vehicleHistoryMileageDecreasedShort: "Mileage decreased",
+  vehicleHistoryMileageDecreasedTitle: "This visit's mileage is lower than a previous visit's. Could be a cluster replacement or a typo — check the visit notes.",
   vehiclesVisits: "Visits",
   vehiclesTotalSpend: "Total spend",
   vehiclesLastVisit: "Last visit",
@@ -2795,6 +2801,8 @@ const ar: typeof en = {
   vehicleHistoryTotalsLabel: "إجمالي مدى الحياة",
   vehicleHistoryVisits: "زيارة",
   vehicleHistoryPrintableLink: "عرض السجل القابل للطباعة",
+  vehicleHistoryMileageDecreasedShort: "انخفاض في العدّاد",
+  vehicleHistoryMileageDecreasedTitle: "قراءة العدّاد في هذه الزيارة أقل من زيارة سابقة. قد يكون سبب ذلك تبديل عدّاد المسافات أو خطأ إدخال — راجع ملاحظات الزيارة.",
   vehiclesVisits: "الزيارات",
   vehiclesTotalSpend: "إجمالي الإنفاق",
   vehiclesLastVisit: "آخر زيارة",

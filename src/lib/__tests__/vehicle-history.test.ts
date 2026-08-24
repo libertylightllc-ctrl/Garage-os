@@ -306,6 +306,72 @@ describe("loadVehicleHistory — owner-at-job-time across transfers", () => {
     });
 });
 
+// ── Mileage-decrease anomaly detection (AR 2026-08-25) ─────────────
+
+describe("loadVehicleHistory — mileage-decrease flag", () => {
+    it("no flag when every visit's mileage is monotonically non-decreasing", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [
+            job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: 10_000 }),
+            job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: 15_000 }),
+            job({ id: "j3", number: 3, createdAt: new Date("2026-12-01"), mileageIn: 20_000 }),
+        ];
+        const h = await loadVehicleHistory(VID, GID);
+        for (const e of h!.entries) {
+            expect(e.mileageDecreased).toBe(false);
+            expect(e.mileageDecreasedFrom).toBeNull();
+        }
+    });
+
+    it("flags a decrease against the PEAK-so-far, not just the immediate prior — one bad row doesn't cascade", async () => {
+        // AR's real test-data shape: 20,202 → 12,345 between two visits.
+        // Also pin peak-vs-sequential: a subsequent honest row is NOT
+        // flagged just because the row before it was low.
+        state.vehicle = baseVehicle();
+        state.jobs = [
+            job({ id: "j1", number: 1, createdAt: new Date("2026-08-15"), mileageIn: 20_202 }),
+            job({ id: "j2", number: 2, createdAt: new Date("2026-08-17"), mileageIn: 12_345 }), // ← flagged
+            job({ id: "j3", number: 3, createdAt: new Date("2026-09-01"), mileageIn: 20_500 }), // honest, > peak
+        ];
+        const h = await loadVehicleHistory(VID, GID);
+        // entries returned chronological ASC by the loader, page reverses
+        expect(h!.entries[0].mileageDecreased).toBe(false);
+        expect(h!.entries[1].mileageDecreased).toBe(true);
+        expect(h!.entries[1].mileageDecreasedFrom).toBe(20_202);
+        expect(h!.entries[2].mileageDecreased).toBe(false);
+    });
+
+    it("null mileage on the CURRENT row → no flag (a gap is a gap, not a rollback)", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [
+            job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: 20_000 }),
+            job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: null }),
+        ];
+        const h = await loadVehicleHistory(VID, GID);
+        expect(h!.entries[1].mileageDecreased).toBe(false);
+    });
+
+    it("null mileage on EVERY prior row → no baseline, no flag on the current row", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [
+            job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: null }),
+            job({ id: "j2", number: 2, createdAt: new Date("2026-06-01"), mileageIn: 15_000 }),
+        ];
+        const h = await loadVehicleHistory(VID, GID);
+        for (const e of h!.entries) expect(e.mileageDecreased).toBe(false);
+    });
+
+    it("equal mileage does NOT flag — a car serviced twice in a week may honestly read the same", async () => {
+        state.vehicle = baseVehicle();
+        state.jobs = [
+            job({ id: "j1", number: 1, createdAt: new Date("2026-01-01"), mileageIn: 20_000 }),
+            job({ id: "j2", number: 2, createdAt: new Date("2026-01-08"), mileageIn: 20_000 }),
+        ];
+        const h = await loadVehicleHistory(VID, GID);
+        for (const e of h!.entries) expect(e.mileageDecreased).toBe(false);
+    });
+});
+
 // ── Lifetime totals ──────────────────────────────────────────────
 
 describe("loadVehicleHistory — lifetime totals across every entry", () => {

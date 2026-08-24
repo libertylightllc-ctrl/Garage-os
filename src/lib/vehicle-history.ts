@@ -54,6 +54,18 @@ export interface HistoryEntry {
     /** Where `revenue` came from — makes the page label the row
      *  correctly ("invoiced" vs "estimated, not invoiced"). */
     source: "invoice" | "estimate" | "none";
+    /** True when this JC's mileageIn is LOWER than the highest
+     *  mileage on any earlier JC on this vehicle. Flag surfaces on
+     *  BOTH screen and print — this document is read by used-car
+     *  buyers as a mileage-tamper check, and hiding a discrepancy
+     *  from the printed copy defeats the doc's primary use case.
+     *  A missing mileageIn on the current entry doesn't count as
+     *  a decrease (a gap is a gap, not a rollback). AR 2026-08-25. */
+    mileageDecreased: boolean;
+    /** For a flagged entry: the highest mileage seen on any earlier
+     *  visit, so the marker can name what the current row decreased
+     *  FROM. Null when mileageDecreased is false. */
+    mileageDecreasedFrom: number | null;
     /** For invoiced visits: what's still outstanding on the invoice.
      *  Zero when fully paid; = revenue when unpaid. Null for non-
      *  invoiced sources. */
@@ -257,6 +269,25 @@ export async function loadVehicleHistory(
         };
     }
 
+    // Non-decreasing mileage check. Walk jobs in chronological order
+    // (which they already are — orderBy createdAt asc above); for
+    // each row, compare mileageIn against the highest mileage seen
+    // on any earlier row. NULL mileage on the current row → no
+    // flag (a gap is a gap, not a rollback). NULL on every earlier
+    // row → no flag either (no baseline). Peak-vs-current, not
+    // sequential, so a single mistyped entry doesn't cascade to
+    // flagging every honest row afterwards.
+    let peakMileageSoFar: number | null = null;
+    const mileageAnomaly = new Map<string, number>(); // jobCardId → peak it decreased FROM
+    for (const j of jobs) {
+        if (j.mileageIn != null && peakMileageSoFar != null && j.mileageIn < peakMileageSoFar) {
+            mileageAnomaly.set(j.id, peakMileageSoFar);
+        }
+        if (j.mileageIn != null && (peakMileageSoFar == null || j.mileageIn > peakMileageSoFar)) {
+            peakMileageSoFar = j.mileageIn;
+        }
+    }
+
     const entries: HistoryEntry[] = jobs.map((j) => {
         // Prefer the most recent non-VOID invoice; if every invoice on
         // the job is voided, fall through to the most recent voided one
@@ -324,6 +355,8 @@ export async function loadVehicleHistory(
             outstanding,
             invoiceNumber: invoice ? invoice.number : null,
             invoiceId: invoice ? invoice.id : null,
+            mileageDecreased: mileageAnomaly.has(j.id),
+            mileageDecreasedFrom: mileageAnomaly.get(j.id) ?? null,
         };
     });
 

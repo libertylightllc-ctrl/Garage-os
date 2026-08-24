@@ -185,6 +185,29 @@ export default async function VehicleHistoryPrintablePage({
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums">
                                         {e.mileageIn != null ? e.mileageIn.toLocaleString(locale) : "—"}
+                                        {/* Mileage-decrease marker. Visible on
+                                            BOTH screen AND print — this doc's
+                                            primary use case is buyers checking
+                                            a car hasn't been clocked, and
+                                            hiding a discrepancy from the
+                                            printed copy defeats that. Data
+                                            the customer SHOULD see (opposite
+                                            of the cost/margin cells). AR
+                                            2026-08-25. */}
+                                        {e.mileageDecreased ? (
+                                            <div
+                                                className="mt-1 inline-flex items-center gap-1 rounded border border-warning-500 bg-warning-50 px-1.5 py-0.5 text-[10px] font-semibold text-warning-700 print:border-black print:bg-white print:text-black dark:bg-warning-500/10 dark:text-warning-500"
+                                                title={t("vehicleHistoryMileageDecreasedTitle")}
+                                            >
+                                                ⚠ {t("vehicleHistoryMileageDecreasedShort")}
+                                                {e.mileageDecreasedFrom != null ? (
+                                                    <span className="font-mono">
+                                                        {" ↓ "}
+                                                        {e.mileageDecreasedFrom.toLocaleString(locale)}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        ) : null}
                                     </td>
                                     <td className="px-2 py-2">
                                         {e.complaint ? (

@@ -1101,12 +1101,16 @@ const en = {
   vehicleHistoryTotalsLabel: "Lifetime",
   vehicleHistoryVisits: "visits",
   vehicleHistoryPrintableLink: "View printable history",
-  // Mileage-decrease marker on /advisor/vehicles/[id]/history.
-  // Visible on BOTH screen and print — buyer's tamper check is the
-  // doc's primary use case; hiding the discrepancy defeats it.
-  // AR 2026-08-25 (post-verify fix).
-  vehicleHistoryMileageDecreasedShort: "Mileage decreased",
-  vehicleHistoryMileageDecreasedTitle: "This visit's mileage is lower than a previous visit's. Could be a cluster replacement or a typo — check the visit notes.",
+  // Mileage-decrease markers on /advisor/vehicles/[id]/history.
+  // Screen + print. Neutral wording per AR 2026-08-25 — plain-text
+  // dagger on flagged rows, top-of-page note when any row is
+  // flagged, footnote at the bottom explaining the dagger. No
+  // emoji, no colour dependency.
+  vehicleHistoryMileageNoteHeading: "Note:",
+  vehicleHistoryMileageNoteBody:
+    "One or more visits below record a mileage reading lower than a previous visit. Marked with † in the mileage column.",
+  vehicleHistoryMileageFootnote:
+    "Mileage lower than a previous visit. Possible reasons include odometer replacement or an entry mistake.",
   vehiclesVisits: "Visits",
   vehiclesTotalSpend: "Total spend",
   vehiclesLastVisit: "Last visit",
@@ -2801,8 +2805,11 @@ const ar: typeof en = {
   vehicleHistoryTotalsLabel: "إجمالي مدى الحياة",
   vehicleHistoryVisits: "زيارة",
   vehicleHistoryPrintableLink: "عرض السجل القابل للطباعة",
-  vehicleHistoryMileageDecreasedShort: "انخفاض في العدّاد",
-  vehicleHistoryMileageDecreasedTitle: "قراءة العدّاد في هذه الزيارة أقل من زيارة سابقة. قد يكون سبب ذلك تبديل عدّاد المسافات أو خطأ إدخال — راجع ملاحظات الزيارة.",
+  vehicleHistoryMileageNoteHeading: "ملاحظة:",
+  vehicleHistoryMileageNoteBody:
+    "زيارة أو أكثر أدناه تسجّل قراءة عدّاد أقل من زيارة سابقة. مُشار إليها بعلامة † في عمود قراءة العدّاد.",
+  vehicleHistoryMileageFootnote:
+    "قراءة عدّاد أقل من زيارة سابقة. من الأسباب المحتملة تبديل عدّاد المسافات أو خطأ في الإدخال.",
   vehiclesVisits: "الزيارات",
   vehiclesTotalSpend: "إجمالي الإنفاق",
   vehiclesLastVisit: "آخر زيارة",

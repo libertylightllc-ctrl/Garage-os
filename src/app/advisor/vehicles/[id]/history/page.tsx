@@ -65,6 +65,12 @@ export default async function VehicleHistoryPrintablePage({
     // storage in the loader kept the ownership walk simple.
     const entries = [...history.entries].reverse();
 
+    // Any mileage anomaly anywhere in the history triggers a top-of-
+    // page note (in addition to the per-row dagger), so someone
+    // scanning a long history doesn't have to spot a marker
+    // mid-table. Both are visible on screen and print. AR 2026-08-25.
+    const hasMileageAnomaly = history.entries.some((e) => e.mileageDecreased);
+
     return (
         <main
             data-print-document="vehicle-history"
@@ -133,6 +139,20 @@ export default async function VehicleHistoryPrintablePage({
                 ) : null}
             </div>
 
+            {/* Top-of-page mileage-anomaly summary. Rendered when ANY
+                row in the history is flagged, so a scanner of a long
+                history doesn't have to spot the dagger mid-table.
+                Neutral wording, plain text, no colour or emoji. On
+                paper this row prints in the natural document flow;
+                no border/background so a black-and-white printer
+                doesn't render a phantom box. AR 2026-08-25. */}
+            {hasMileageAnomaly ? (
+                <p className="rounded border border-border bg-surface-2 px-3 py-2 text-sm print:border-0 print:bg-transparent print:px-0">
+                    <strong>{t("vehicleHistoryMileageNoteHeading")}</strong>{" "}
+                    {t("vehicleHistoryMileageNoteBody")}
+                </p>
+            ) : null}
+
             {/* Body table. Cost + margin cells carry `data-cost-cell`
                 (toggle-hidden by default) AND `data-print-omit-cost`
                 (globally hidden on print). Either rule alone suffices;
@@ -184,30 +204,24 @@ export default async function VehicleHistoryPrintablePage({
                                         ) : null}
                                     </td>
                                     <td className="px-2 py-2 text-right tabular-nums">
-                                        {e.mileageIn != null ? e.mileageIn.toLocaleString(locale) : "—"}
-                                        {/* Mileage-decrease marker. Visible on
-                                            BOTH screen AND print — this doc's
-                                            primary use case is buyers checking
-                                            a car hasn't been clocked, and
-                                            hiding a discrepancy from the
-                                            printed copy defeats that. Data
-                                            the customer SHOULD see (opposite
-                                            of the cost/margin cells). AR
-                                            2026-08-25. */}
-                                        {e.mileageDecreased ? (
-                                            <div
-                                                className="mt-1 inline-flex items-center gap-1 rounded border border-warning-500 bg-warning-50 px-1.5 py-0.5 text-[10px] font-semibold text-warning-700 print:border-black print:bg-white print:text-black dark:bg-warning-500/10 dark:text-warning-500"
-                                                title={t("vehicleHistoryMileageDecreasedTitle")}
-                                            >
-                                                ⚠ {t("vehicleHistoryMileageDecreasedShort")}
-                                                {e.mileageDecreasedFrom != null ? (
-                                                    <span className="font-mono">
-                                                        {" ↓ "}
-                                                        {e.mileageDecreasedFrom.toLocaleString(locale)}
-                                                    </span>
+                                        {e.mileageIn != null ? (
+                                            <>
+                                                {e.mileageIn.toLocaleString(locale)}
+                                                {/* Mileage-decrease marker.
+                                                    Neutral wording per AR
+                                                    2026-08-25 — no accusatory
+                                                    "warning" chip, no emoji,
+                                                    no colour dependency (a
+                                                    printed page can be b&w).
+                                                    Dagger + footnote at the
+                                                    bottom of the page. */}
+                                                {e.mileageDecreased ? (
+                                                    <sup className="ml-1 font-semibold tabular-nums">†</sup>
                                                 ) : null}
-                                            </div>
-                                        ) : null}
+                                            </>
+                                        ) : (
+                                            "—"
+                                        )}
                                     </td>
                                     <td className="px-2 py-2">
                                         {e.complaint ? (
@@ -315,6 +329,16 @@ export default async function VehicleHistoryPrintablePage({
                     </table>
                 </div>
             )}
+
+            {/* Footnote for the dagger mark on flagged rows. Rendered
+                only when at least one row is flagged; visible on
+                screen and print. AR 2026-08-25. */}
+            {hasMileageAnomaly ? (
+                <p className="text-xs text-text-mute">
+                    <sup className="font-semibold">†</sup>{" "}
+                    {t("vehicleHistoryMileageFootnote")}
+                </p>
+            ) : null}
         </main>
     );
 }

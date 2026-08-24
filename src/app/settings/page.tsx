@@ -306,27 +306,53 @@ export default async function SettingsPage({
               </div>
             </form>
 
-            <form action={updateGarageDefaultLangAction} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-              <label htmlFor="garage-default-lang" className="text-xs text-text-mute">
+            {/* Default language — three per-button forms, one field
+                each. Clicking IS saving; the dropdown+Save shape
+                shipped four wipe incidents where users picked a
+                value and never clicked Save. Active button reads
+                directly from garage.defaultLang so what's stored
+                is visible on the page (the dropdown gave no
+                indication that "Not set" was persisted vs merely
+                the placeholder). Every prisma.garage.update writer
+                was audited before this change — only
+                updateGarageDefaultLangAction touches this column,
+                so the wipe class was purely UX, not a sibling
+                write. */}
+            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <span className="text-xs text-text-mute">
                 {t("settingsGarageDefaultLangLabel")}
-              </label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                <select
-                  id="garage-default-lang"
-                  name="defaultLang"
-                  defaultValue={garage?.defaultLang ?? ""}
-                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
-                >
-                  <option value="">{t("settingsGarageDefaultLangUnset")}</option>
-                  <option value="en">{t("settingsGarageDefaultLangEn")}</option>
-                  <option value="ar">{t("settingsGarageDefaultLangAr")}</option>
-                </select>
-                <Button type="submit">{t("settingsSave")}</Button>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {(["en", "ar", ""] as const).map((v) => {
+                  const active = (garage?.defaultLang ?? "") === v;
+                  const label =
+                    v === "en"
+                      ? t("settingsGarageDefaultLangEn")
+                      : v === "ar"
+                        ? t("settingsGarageDefaultLangAr")
+                        : t("settingsGarageDefaultLangUnset");
+                  return (
+                    <form
+                      key={v || "unset"}
+                      action={updateGarageDefaultLangAction}
+                    >
+                      <Button
+                        type="submit"
+                        name="defaultLang"
+                        value={v}
+                        variant={active ? "primary" : "ghost"}
+                        aria-pressed={active}
+                      >
+                        {label}
+                      </Button>
+                    </form>
+                  );
+                })}
               </div>
               <span className="text-[11px] text-text-mute">
                 {t("settingsGarageDefaultLangHint")}
               </span>
-            </form>
+            </div>
 
             {/* Read-only country + VAT rate. Rendered as plain
                 labelled text (not disabled inputs) so nothing

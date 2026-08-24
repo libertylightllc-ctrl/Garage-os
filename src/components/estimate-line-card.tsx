@@ -53,6 +53,7 @@ export interface CardProps {
         confirmDelete: string;
         kindLabor: string;
         kindPart: string;
+        kindSublet: string;
         kindFee: string;
         kindDiscount: string;
         // Cost-based inputs (PART lines)
@@ -119,10 +120,11 @@ export function EstimateLineCard({
     );
     const editDefault = stripVehicleLabel(line.description, vehicle.make, vehicle.model);
 
-    // isPart drives the cost/markup/margin tri-input branch. A PART
-    // line viewed by cashier / tech (canShowCost === false) routes to
-    // the plain qty + unit form instead, so no cost cell renders and
-    // no cost value reaches the DOM.
+    // Cost-aware kinds (PART + SUBLET) get the cost/markup/margin
+    // tri-input branch. AR 2026-08-25 Batch C.
+    const isCostAware = (line.kind === "PART" || line.kind === "SUBLET") && canShowCost;
+    // Kept as `isPart` for the catalogue-part specific rendering
+    // (make/model on the vehicle line).
     const isPart = line.kind === "PART" && canShowCost;
     const valueClass = line.declined ? "line-through text-text-mute" : "";
 
@@ -151,6 +153,7 @@ export function EstimateLineCard({
                         <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
                             <option value="LABOR">{labels.kindLabor}</option>
                             <option value="PART">{labels.kindPart}</option>
+                            <option value="SUBLET">{labels.kindSublet}</option>
                             <option value="FEE">{labels.kindFee}</option>
                             <option value="DISCOUNT">{labels.kindDiscount}</option>
                         </select>
@@ -161,7 +164,7 @@ export function EstimateLineCard({
                             className={`${FIELD} min-w-40 flex-1`}
                         />
                     </div>
-                    {isPart ? (
+                    {isCostAware ? (
                         <CostPricedInputs
                             initial={{
                                 qty: line.qty,
@@ -275,7 +278,7 @@ export function EstimateLineCard({
             {/* Row 3: part / description name (+ pre-flight chip). */}
             <p className={`text-base font-semibold ${valueClass}`}>
               {cleanDescription}
-              {line.kind === "PART" && !line.declined && Number(line.unitPrice) === 0 ? (
+              {(line.kind === "PART" || line.kind === "SUBLET") && !line.declined && Number(line.unitPrice) === 0 ? (
                 <span
                   className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
                   title={labels.noPriceChipTitle}

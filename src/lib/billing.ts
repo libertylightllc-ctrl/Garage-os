@@ -5,7 +5,18 @@ function round2(n: number): number {
 }
 
 // ---------- Line items ----------
-export type LineKind = "LABOR" | "PART" | "FEE";
+// AR 2026-08-25 Batch C — SUBLET added for outside work / consumables
+// / services. Cost-aware like PART; NEVER links to catalogue Part rows
+// and NEVER auto-creates POs.
+export type LineKind = "LABOR" | "PART" | "FEE" | "SUBLET";
+
+/** True when the line's kind carries a real cost + markup — PART or
+ *  SUBLET. The line editor shows cost inputs for these; LABOR + FEE
+ *  do not. Kept as a helper so future kinds don't need every gate
+ *  updated separately. */
+export function isCostAwareLineKind(kind: LineKind): boolean {
+    return kind === "PART" || kind === "SUBLET";
+}
 
 export interface DraftLine {
   kind: LineKind;
@@ -120,7 +131,11 @@ export function findZeroPricedPartLines<
   },
 >(lines: readonly T[]): T[] {
   return lines.filter((l) => {
-    if (l.kind !== "PART") return false;
+    // AR 2026-08-25 Batch C — SUBLET is cost-aware too, so a
+    // zero-priced SUBLET line is the same "advisor forgot to
+    // price" bug as a zero-priced PART. LABOR + FEE can
+    // legitimately be zero and stay out of this warning.
+    if (!isCostAwareLineKind(l.kind)) return false;
     if (l.declined === true) return false;
     // Number(Decimal) via toString handles the driver-adapter's string
     // shape without importing Prisma types here (keeps this file
@@ -243,12 +258,14 @@ export function parseLineEditInput(input: {
   const priceAbs = Math.abs(parsedPrice.value);
   const unitPrice = isDiscount ? -priceAbs : priceAbs;
 
-  // Cost + markup (PART lines only; ignored + nulled on other kinds).
+  // Cost + markup (cost-aware lines: PART + SUBLET; ignored + nulled
+  // on other kinds). AR 2026-08-25 Batch C — SUBLET added to the
+  // cost-aware set alongside PART.
   // Blank input → null (advisor deliberately cleared the field, which
   // means "no cost data" not "zero cost"). Non-numeric input → null.
   let unitCost: number | null = null;
   let markupPct: number | null = null;
-  if (kind === "PART") {
+  if (isCostAwareLineKind(kind)) {
     const rawCost = String(input.unitCost ?? "").trim();
     if (rawCost !== "") {
       const c = Number(rawCost);

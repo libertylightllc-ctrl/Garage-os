@@ -194,7 +194,15 @@ export function computeJobProfit(
     for (const l of lines) {
         const lt = new Prisma.Decimal(l.lineTotal);
         revenue = revenue.plus(lt);
-        if (l.kind === "PART") {
+        // AR 2026-08-25 Batch C — SUBLET is cost-aware like PART
+        // (has a supplier/vendor cost + markup), so it counts on
+        // the parts side of the profit calc. Grouped as "parts"
+        // here because the underlying question is "did we mark it
+        // up over what we paid the supplier"; SUBLET fits that
+        // pattern. LABOR still profiles separately (WorkSession
+        // minutes × labour cost). FEE and any future kind still
+        // contribute to revenue only.
+        if (l.kind === "PART" || l.kind === "SUBLET") {
             partsTotal += 1;
             partsRevenue = partsRevenue.plus(lt);
             if (l.unitCost !== null && l.unitCost !== undefined) {

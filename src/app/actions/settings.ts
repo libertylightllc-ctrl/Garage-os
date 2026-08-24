@@ -144,6 +144,32 @@ export async function updateDefaultPartsMarkupAction(formData: FormData) {
 }
 
 /**
+ * Operational: shop-wide default payment terms printed on every
+ * estimate (AR 2026-08-25 Batch C). Real UAE-shop example:
+ * "50% advance and 50% on delivery". Free text — most shops
+ * type the same string every time; a per-estimate override lives
+ * on Estimate.paymentTerms for the deviations (fleet net-30, cash
+ * on collection). Renderer reads paymentTerms ?? defaultPaymentTerms
+ * ?? null; both null → the block doesn't render.
+ *
+ * Role gate: OWNER + MASTER via requireOperational() — same as
+ * the other pricing/document defaults.
+ */
+export async function updateDefaultPaymentTermsAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("defaultPaymentTerms") ?? "").trim();
+  // Empty → null (clears the default; block simply doesn't render
+  // until a per-estimate value is set or the default is re-populated).
+  const value = raw === "" ? null : raw;
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { defaultPaymentTerms: value },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=payment-terms");
+}
+
+/**
  * Operational: shop-wide default hourly cost of labour (AR 2026-08-12,
  * profit reporting Phase 1, option B; widened to MASTER 2026-08-14
  * after AR — signed in as MASTER — hit the profit-card "set labour

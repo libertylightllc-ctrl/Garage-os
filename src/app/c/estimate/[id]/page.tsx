@@ -30,6 +30,14 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
       total: true,
       sentAt: true,
       approvedAt: true,
+      // AR 2026-08-25 Batch C — customer-facing surface renders the
+      // per-estimate remarks + payment terms + advisor snapshot.
+      // Snapshot fields (name/phone) are populated at send time;
+      // fallback to garage default for paymentTerms below.
+      remarks: true,
+      paymentTerms: true,
+      advisorNameSnapshot: true,
+      advisorPhoneSnapshot: true,
       lines: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -69,6 +77,9 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               country: true,
               trn: true,
               logoUrl: true,
+              // Batch C: shop-wide Payment Terms fallback when the
+              // per-estimate override isn't set.
+              defaultPaymentTerms: true,
             },
           },
         },
@@ -155,11 +166,52 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
           </tbody>
         </table>
       </div>
+      {est.remarks ? (
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+          <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+            {t("estimateRemarksHeading")}
+          </div>
+          <p className="mt-1 whitespace-pre-line">{est.remarks}</p>
+        </div>
+      ) : null}
       <div className="border-t border-border pt-2 text-right text-sm">
         <div>{t("subtotal")}: {money(Number(est.subtotal))}</div>
         <div>{t("vat5")}: {money(Number(est.vatAmount))}</div>
         <div className="text-lg font-semibold">{t("total")}: {money(Number(est.total))}</div>
       </div>
+
+      {/* AR 2026-08-25 Batch C — payment terms + service advisor.
+          Payment terms fall through to garage.defaultPaymentTerms
+          when the per-estimate override is null. Advisor block
+          reads the snapshot captured at send time; skipped entirely
+          when both are absent. */}
+      {(est.paymentTerms || est.jobCard.garage.defaultPaymentTerms || est.advisorNameSnapshot) ? (
+        <div className="grid grid-cols-1 gap-4 border-t border-border pt-3 text-sm sm:grid-cols-2">
+          {(est.paymentTerms || est.jobCard.garage.defaultPaymentTerms) ? (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                {t("estimatePaymentTermsHeading")}
+              </div>
+              <p className="mt-1 whitespace-pre-line">
+                {est.paymentTerms ?? est.jobCard.garage.defaultPaymentTerms}
+              </p>
+            </div>
+          ) : <div />}
+          {est.advisorNameSnapshot ? (
+            <div className="sm:text-end">
+              <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                {t("estimateAdvisorHeading")}
+              </div>
+              <div className="mt-1 font-medium">{est.advisorNameSnapshot}</div>
+              {est.advisorPhoneSnapshot ? (
+                <div className="text-xs text-text-mute tabular-nums">
+                  {est.advisorPhoneSnapshot}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {decided ? (
         <p className="rounded-xl border border-border bg-surface-2 p-4 text-center text-sm font-semibold">

@@ -86,6 +86,13 @@ enum LineKind {
   LABOR
   PART
   FEE
+  // SUBLET — outside work + shop consumables + services (brake oil
+  // flushing, wheel alignment, injector cleaning, etc.). AR
+  // 2026-08-25 Batch C. Additive enum value; existing PART/LABOR/FEE
+  // rows untouched. Cost-aware like PART (has unitCost + markupPct)
+  // but NEVER links to catalogue Part rows and NEVER auto-creates
+  // POs — it's outsourced or consumed, not inventoried.
+  SUBLET
 }
 
 enum WaConnStatus {
@@ -278,6 +285,14 @@ model Garage {
   // time — the per-line markupPct is what actually prices the line, so
   // an owner can change this later without disturbing existing estimates.
   defaultPartsMarkupPct Decimal? @db.Decimal(5, 2)
+  // Shop-wide default for the Payment Terms block printed on every
+  // estimate (AR 2026-08-25 Batch C). Free text — most shops set one
+  // boilerplate ("50% advance and 50% on delivery") and it applies
+  // to every estimate. A per-estimate override lives on
+  // Estimate.paymentTerms; renderer reads:
+  //   estimate.paymentTerms ?? garage.defaultPaymentTerms ?? null
+  // Both null → the block doesn't render. Set via Owner Settings.
+  defaultPaymentTerms String?
   // Shop-wide default hourly cost of labour (AR 2026-08-12, profit
   // reporting Phase 1, option B). Used to convert WorkSession minutes
   // into a labour-cost estimate for the profit calc on invoices +
@@ -797,6 +812,30 @@ model Estimate {
   // for the full doc. Dormant during Phase 1; Phase 2 flips /c/estimate
   // to use this column instead of the HMAC of estimate.id.
   publicToken String? @unique
+
+  // AR 2026-08-25 Batch C — three additive optional fields matching
+  // the real UAE-shop estimate format.
+  //
+  // paymentTerms: per-estimate override for the Payment Terms block.
+  //   Renderer reads paymentTerms ?? garage.defaultPaymentTerms ??
+  //   null; both null = block omitted. Advisor sets when the doc
+  //   deviates (fleet net-30, cash on collection).
+  paymentTerms String?
+  // remarks: free-text scope-limitation shown above the totals.
+  //   Real example: "This estimate is prepared only for the required
+  //   work to make the engine start and run. Further diagnosis will
+  //   be required..." Per-estimate BY NATURE — a garage default
+  //   would go stale and get ignored, which is worse than blank.
+  remarks String?
+  // advisorNameSnapshot + advisorPhoneSnapshot: captured at Send
+  //   time (sendEstimateToCustomerAction) so the printed document
+  //   still names the right person after a staff change. Same
+  //   discipline as InvoiceLine.unitCost — a customer's copy of
+  //   the document should say what it said when they got it.
+  //   Renderer prefers the snapshot; falls back to the live
+  //   advisor row when snapshot is null (drafts, un-sent estimates).
+  advisorNameSnapshot  String?
+  advisorPhoneSnapshot String?
 
   lines   EstimateLine[]
   invoice Invoice?

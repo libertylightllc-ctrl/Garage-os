@@ -14,6 +14,7 @@ import {
   setEstimateStatusAction,
   generateInvoiceAction,
   recordAdvancePaymentAction,
+  updateEstimateHeaderAction,
 } from "@/app/actions/billing";
 import { PriceThisPartRow } from "@/components/price-this-part-row";
 import {
@@ -143,6 +144,9 @@ export default async function EstimateEditor({
                   // (type cost + type markup). Null = no default,
                   // Markup opens blank.
                   defaultPartsMarkupPct: true,
+                  // Batch C: shop-wide fallback for the payment-
+                  // terms placeholder shown on the estimate editor.
+                  defaultPaymentTerms: true,
                 },
               },
               jobParts: { orderBy: { createdAt: "asc" } },
@@ -520,6 +524,7 @@ export default async function EstimateEditor({
                   confirmDelete: t("confirmDeleteLine"),
                   kindLabor: t("labor"),
                   kindPart: t("part"),
+                  kindSublet: t("sublet"),
                   kindFee: t("fee"),
                   kindDiscount: t("discount"),
                   qty: t("colQty"),
@@ -600,6 +605,7 @@ export default async function EstimateEditor({
                       confirmDelete: t("confirmDeleteLine"),
                       kindLabor: t("labor"),
                       kindPart: t("part"),
+                  kindSublet: t("sublet"),
                       kindFee: t("fee"),
                       kindDiscount: t("discount"),
                       qty: t("colQty"),
@@ -635,6 +641,56 @@ export default async function EstimateEditor({
         <div className="mt-1 text-lg font-semibold">{t("total")}: {money(Number(est.total))}</div>
       </div>
 
+      {/* AR 2026-08-25 Batch C — remarks + payment-terms editor.
+          Only rendered when the advisor can still edit (same gate
+          as Add Line). Save is idempotent; blank clears. Renderer
+          on the preview + customer surfaces reads est.remarks +
+          est.paymentTerms (falling through to garage.defaultPaymentTerms). */}
+      {editable ? (
+        <form
+          action={updateEstimateHeaderAction}
+          className="flex flex-col gap-3 rounded-xl border border-border p-4"
+        >
+          <input type="hidden" name="estimateId" value={est.id} />
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-text-mute">
+              {t("estimateRemarksLabel")}
+            </span>
+            <textarea
+              name="remarks"
+              defaultValue={est.remarks ?? ""}
+              rows={3}
+              placeholder={t("estimateRemarksPlaceholder")}
+              className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-text-mute">
+              {t("estimatePaymentTermsLabel")}
+            </span>
+            <input
+              name="paymentTerms"
+              defaultValue={est.paymentTerms ?? ""}
+              placeholder={est.jobCard.garage.defaultPaymentTerms ?? t("estimatePaymentTermsPlaceholder")}
+              className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            {!est.paymentTerms && est.jobCard.garage.defaultPaymentTerms ? (
+              <span className="text-[11px] text-text-mute">
+                {t("estimatePaymentTermsUsingDefaultHint")}
+              </span>
+            ) : null}
+          </label>
+          <div>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
+            >
+              {t("estimateHeaderSaveButton")}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {editable ? (
         <form action={addEstimateLineAction} className="flex flex-col gap-3 rounded-xl border border-border p-4">
           <input type="hidden" name="estimateId" value={est.id} />
@@ -650,6 +706,7 @@ export default async function EstimateEditor({
             <select name="kind" className="h-10 rounded-lg border border-border bg-transparent px-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
               <option value="LABOR">{t("labor")}</option>
               <option value="PART">{t("part")}</option>
+              <option value="SUBLET">{t("sublet")}</option>
               <option value="FEE">{t("fee")}</option>
               <option value="DISCOUNT">{t("discount")}</option>
             </select>

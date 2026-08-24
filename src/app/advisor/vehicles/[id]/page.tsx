@@ -181,7 +181,10 @@ export default async function VehicleHistory({
   for (const j of jobs) {
     for (const inv of j.invoices) {
       const oilLine = inv.lines.find(
-        (l) => l.kind === "PART" || l.kind === "LABOR",
+        // PART covers "engine oil bottle 5W-30", LABOR covers "oil
+        // service — engine oil replace", SUBLET covers "engine oil
+        // flush (outsourced)". Batch C 2026-08-25 — SUBLET added.
+        (l) => l.kind === "PART" || l.kind === "LABOR" || l.kind === "SUBLET",
       )
         ? inv.lines.find((l) => OIL_RE.test(l.description))
         : null;
@@ -327,8 +330,14 @@ export default async function VehicleHistory({
               const paid = inv
                 ? inv.payments.reduce((s, p) => s + Number(p.amount), 0)
                 : 0;
+              // PART + SUBLET both go under the "parts replaced"
+              // heading here — the on-screen summary doesn't need
+              // finer bucketing than that (the printable vehicle
+              // history at /advisor/vehicles/[id]/history is where
+              // the three-section layout lives). AR 2026-08-25
+              // Batch C.
               const partsLines = inv
-                ? inv.lines.filter((l) => l.kind === "PART")
+                ? inv.lines.filter((l) => l.kind === "PART" || l.kind === "SUBLET")
                 : [];
               const laborLines = inv
                 ? inv.lines.filter((l) => l.kind === "LABOR")

@@ -132,11 +132,14 @@ export interface FilteredLines<L extends EstimateLineForFilter> {
  * CHECK ("partId OR description") is satisfied by the description
  * alone.
  *
- * LABOR and FEE lines are still silently dropped — they can't be
- * ordered from a parts supplier. Declined PART lines go to
- * `skippedDeclined` so the UI can render "customer said no to N
- * items — not on the PO" (still a real signal to the reader; the
- * partId=null split is not).
+ * LABOR, FEE, and SUBLET lines are silently dropped — they can't be
+ * ordered from a parts supplier. SUBLET is deliberately excluded
+ * from PO auto-creation: it's outsourced work or consumables, not
+ * inventory, so ordering it from a parts supplier is semantically
+ * wrong. Declined PART lines go to `skippedDeclined` so the UI can
+ * render "customer said no to N items — not on the PO" (still a
+ * real signal to the reader; the partId=null split is not).
+ * AR 2026-08-25 Batch C — SUBLET behaviour pinned here.
  */
 export function filterConvertibleLines<L extends EstimateLineForFilter>(
     lines: L[],
@@ -145,8 +148,8 @@ export function filterConvertibleLines<L extends EstimateLineForFilter>(
     const skippedDeclined: L[] = [];
 
     for (const l of lines) {
-        // LABOR and FEE never go to a PO. Silently drop — not "skipped"
-        // from the owner's perspective, they just aren't parts.
+        // Only PART lines go to a supplier PO. SUBLET, LABOR, FEE are
+        // silently dropped — they aren't parts.
         if (l.kind !== "PART") continue;
 
         if (l.declined) {

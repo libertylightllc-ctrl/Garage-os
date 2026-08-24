@@ -664,6 +664,12 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
         select: {
           number: true,
           garage: { select: { name: true } },
+          // Advisor snapshot fields — AR 2026-08-25 Batch C. Captured
+          // onto Estimate.advisorNameSnapshot + advisorPhoneSnapshot
+          // at send time so the customer's copy of the doc still names
+          // the right person after a staff change. Same discipline as
+          // InvoiceLine.unitCost being snapshotted at invoice-generation.
+          advisor: { select: { name: true, phone: true } },
           vehicle: {
             select: {
               make: true,
@@ -796,11 +802,23 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
   // Stamp sentAt + (first-send only) flip status. Same pattern as
   // sendInvoiceToCustomerAction: sentAt is a per-hand-off timestamp,
   // updated on every send/resend.
+  //
+  // AR 2026-08-25 Batch C — also snapshot the advisor's name + phone
+  // onto the Estimate row. Same InvoiceLine.unitCost discipline: a
+  // customer's copy of the doc should still name the right person
+  // after the advisor leaves. Refresh on every send (a resend from
+  // a different advisor updates the snapshot — the doc the customer
+  // now holds names the current advisor). Phone snapshot is copied
+  // verbatim; may be null (User.phone is nullable) which the
+  // renderer handles.
+  const advisor = est.jobCard.advisor;
   await prisma.estimate.update({
     where: { id: est.id },
     data: {
       sentAt: new Date(),
       ...(isFirstSend ? { status: "SENT" as const } : {}),
+      advisorNameSnapshot: advisor?.name ?? null,
+      advisorPhoneSnapshot: advisor?.phone ?? null,
     },
   });
 
@@ -2080,4 +2098,43 @@ export async function reissueInvoiceAction(formData: FormData) {
   revalidatePath(`/invoices/${newInvoiceId}`);
   revalidatePath("/cashier");
   redirect(`/invoices/${newInvoiceId}`);
+}
+
+/**
+ * updateEstimateHeaderAction — sets Estimate.remarks and
+ * Estimate.paymentTerms (AR 2026-08-25 Batch C).
+ *
+ * Writes ONLY the two header fields. Does not touch lines / totals /
+ * status / ledger. Empty strings clear the field to null (matches how
+ * defaultPaymentTerms clears on the settings action). The advisor
+ * edits both fields on the estimate detail page; they surface on the
+ * customer-facing preview + printable copy.
+ *
+ * Guard: ESTIMATE_CREATE_ROLES (advisor + owner + master) — the same
+ * gate that admits the line-editing surface. Garage scope via
+ * Estimate.jobCard.garageId.
+ */
+export async function updateEstimateHeaderAction(formData: FormData) {
+  const user = await requireAnyRole(ESTIMATE_CREATE_ROLES);
+  const estimateId = String(formData.get("estimateId") ?? "");
+  const rawRemarks = String(formData.get("remarks") ?? "").trim();
+  const rawTerms = String(formData.get("paymentTerms") ?? "").trim();
+
+  // Garage-scope by joining through jobCard — Estimate has no
+  // garageId column. Same pattern as sendEstimateToCustomerAction.
+  const est = await prisma.estimate.findFirst({
+    where: { id: estimateId, jobCard: { garageId: user.garageId } },
+    select: { id: true },
+  });
+  if (!est) throw new Error("Estimate not found in this garage");
+
+  await prisma.estimate.update({
+    where: { id: est.id },
+    data: {
+      remarks: rawRemarks === "" ? null : rawRemarks,
+      paymentTerms: rawTerms === "" ? null : rawTerms,
+    },
+  });
+  revalidatePath(`/estimates/${estimateId}`);
+  revalidatePath(`/estimates/${estimateId}/preview`);
 }

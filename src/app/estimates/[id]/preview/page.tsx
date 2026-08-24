@@ -10,6 +10,7 @@ import { normalizeToE164 } from "@/lib/wa";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
+import { groupLinesBySection, type SectionedLine } from "@/lib/estimate-sections";
 import {
   LINE_FORM_ERROR_CODES,
   type LineFormErrorCode,
@@ -79,7 +80,12 @@ export default async function EstimatePreview({
       jobCard: {
         include: {
           vehicle: { include: { customer: true } },
-          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true } },
+          // Batch C: garage.defaultPaymentTerms as the shop-wide
+          // fallback for the Payment Terms block; advisor as the
+          // live-name fallback when the snapshot isn't populated
+          // (draft / never-sent estimates).
+          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true, defaultPaymentTerms: true } },
+          advisor: { select: { name: true, phone: true } },
         },
       },
     },
@@ -109,6 +115,33 @@ export default async function EstimatePreview({
   const subtotal = Number(est.subtotal);
   const vatAmount = Number(est.vatAmount);
   const total = Number(est.total);
+
+  // AR 2026-08-25 Batch C — group lines by section. The three-section
+  // shape (Parts, Sublet/Consumables/Services, Labour) matches how a
+  // real UAE-shop's estimate document reads. Discount lines (FEE with
+  // negative unitPrice) render separately after the section subtotals.
+  const sectioned = groupLinesBySection(
+    lines.map<SectionedLine & { id: string }>((l) => ({
+      id: l.id,
+      kind: l.kind,
+      description: l.description,
+      qty: Number(l.qty),
+      unitPrice: Number(l.unitPrice),
+      lineTotal: Number(l.lineTotal),
+      declined: l.declined,
+    })),
+  );
+
+  // Advisor block: prefer the snapshot (captured at send time) over
+  // the live advisor row so a staff change doesn't rewrite the
+  // customer's copy of the doc. Snapshot is null on drafts +
+  // never-sent estimates; falls back to the live advisor row then.
+  const advisorName = est.advisorNameSnapshot ?? est.jobCard.advisor?.name ?? null;
+  const advisorPhone = est.advisorPhoneSnapshot ?? est.jobCard.advisor?.phone ?? null;
+
+  // Payment terms: per-estimate override falls through to garage
+  // default. Both null → block doesn't render.
+  const paymentTerms = est.paymentTerms ?? est.jobCard.garage.defaultPaymentTerms ?? null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:min-h-0 print:bg-white print:p-0">
@@ -146,72 +179,86 @@ export default async function EstimatePreview({
           </div>
         </div>
 
-        {/* Line items table — read-only. Each row is one priced line.
-            Empty-state message in case the cashier hit Preview with
-            zero lines (the edit page gates the Preview button on
-            est.lines.length > 0, but defending here too). */}
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[20rem] text-sm">
-            <thead>
-              <tr className="border-b border-black/10 text-left text-zinc-500">
-                <th className="py-1">{t("colDescription")}</th>
-                <th className="py-1 text-right">{t("colQty")}</th>
-                <th className="py-1 text-right">{t("colUnit")}</th>
-                <th className="py-1 text-right">{t("colAmount")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((l) => {
-                // Pre-flight chip on any non-declined PART @ 0.00 —
-                // AR 2026-08-18. Preview renders the read-only table
-                // (not via EstimateLineRow) so the chip inlines here.
-                // Off-print so the customer's copy never carries the
-                // chip on paper.
-                const isUnpricedPart =
-                  l.kind === "PART" && !l.declined && Number(l.unitPrice) === 0;
-                return (
-                  <tr key={l.id} className="border-b border-black/5">
-                    <td className="py-1">
-                      {translateLineDescription(l.description, locale)}
-                      {isUnpricedPart ? (
-                        <span
-                          className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 print:hidden dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
-                          title={t("zeroPartsPreflightBody")}
-                        >
-                          {t("zeroPartsChip")}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="py-1 text-right">{Number(l.qty)}</td>
-                    <td className="py-1 text-right">
-                      {Number(l.unitPrice).toFixed(2)}
-                    </td>
-                    <td className="py-1 text-right">
-                      {Number(l.lineTotal).toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-              {lines.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-3 text-center text-zinc-500">
-                    {t("noLineItems")}
-                  </td>
-                </tr>
+        {/* AR 2026-08-25 Batch C — sectioned line-items table matching
+            the real UAE-shop estimate format:
+              1. Parts
+              2. Sublet / Consumables / Services
+              3. Labour
+            Each section has its own subtotal. Discount lines (FEE
+            with negative unitPrice) render separately after the
+            three section subtotals. Empty sections are omitted. */}
+        <div className="mt-6 flex flex-col gap-6">
+          {lines.length === 0 ? (
+            <p className="py-3 text-center text-zinc-500">{t("noLineItems")}</p>
+          ) : (
+            <>
+              {sectioned.parts.lines.length > 0 ? (
+                <SectionTable
+                  title={t("estimateSectionParts")}
+                  lines={sectioned.parts.lines}
+                  subtotal={sectioned.parts.subtotal}
+                  locale={locale}
+                  t={t}
+                />
               ) : null}
-            </tbody>
-          </table>
+              {sectioned.sublet.lines.length > 0 ? (
+                <SectionTable
+                  title={t("estimateSectionSublet")}
+                  lines={sectioned.sublet.lines}
+                  subtotal={sectioned.sublet.subtotal}
+                  locale={locale}
+                  t={t}
+                />
+              ) : null}
+              {sectioned.labour.lines.length > 0 ? (
+                <SectionTable
+                  title={t("estimateSectionLabour")}
+                  lines={sectioned.labour.lines}
+                  subtotal={sectioned.labour.subtotal}
+                  locale={locale}
+                  t={t}
+                />
+              ) : null}
+            </>
+          )}
         </div>
 
-        {/* Totals — three-row breakdown matching what the customer
-            will see in the WhatsApp link. Estimates don't get the
-            invoice-style discount control (cashier folds any discount
-            into a negative FEE line during pricing) so we keep the
-            unconditional subtotal / VAT / total triple. */}
-        <div className="mt-6 ml-auto text-right text-base tabular-nums">
-          <div className="text-zinc-600">
-            {t("subtotal")}: {money(subtotal)}
+        {/* Remarks block — per-estimate scope-limitation text. Only
+            renders when the advisor has set one. Prints as a real
+            content block on the customer's copy. */}
+        {est.remarks ? (
+          <div className="mt-6 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+              {t("estimateRemarksHeading")}
+            </div>
+            <p className="mt-1 whitespace-pre-line">{est.remarks}</p>
           </div>
+        ) : null}
+
+        {/* Totals — subtotal (sum of sections), discounts (if any),
+            then VAT + total. AR 2026-08-25 Batch C — the sum-of-
+            sections line uses sectioned.sumOfSections which matches
+            the DB-stored est.subtotal for the non-discount case. */}
+        <div className="mt-6 ml-auto text-right text-base tabular-nums">
+          {sectioned.discounts.lines.length > 0 ? (
+            <>
+              <div className="text-zinc-600">
+                {t("estimateTotalsSumOfSections")}: {money(sectioned.sumOfSections)}
+              </div>
+              {sectioned.discounts.lines.map((d) => (
+                <div key={(d as { id?: string }).id ?? d.description} className="text-zinc-600">
+                  {translateLineDescription(d.description, locale)}: {money(d.lineTotal)}
+                </div>
+              ))}
+              <div className="text-zinc-600">
+                {t("subtotal")}: {money(subtotal)}
+              </div>
+            </>
+          ) : (
+            <div className="text-zinc-600">
+              {t("subtotal")}: {money(subtotal)}
+            </div>
+          )}
           <div className="text-zinc-600">
             {t("vat5")}: {money(vatAmount)}
           </div>
@@ -219,6 +266,33 @@ export default async function EstimatePreview({
             {t("total")}: {money(total)}
           </div>
         </div>
+
+        {/* Payment terms + service advisor block — bottom of the doc,
+            matching the real UAE-shop format. Both are optional and
+            omit cleanly. AR 2026-08-25 Batch C. */}
+        {paymentTerms || advisorName ? (
+          <div className="mt-8 grid grid-cols-1 gap-4 border-t border-zinc-200 pt-4 text-sm sm:grid-cols-2">
+            {paymentTerms ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                  {t("estimatePaymentTermsHeading")}
+                </div>
+                <p className="mt-1 whitespace-pre-line">{paymentTerms}</p>
+              </div>
+            ) : <div />}
+            {advisorName ? (
+              <div className="sm:text-end">
+                <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                  {t("estimateAdvisorHeading")}
+                </div>
+                <div className="mt-1 font-medium">{advisorName}</div>
+                {advisorPhone ? (
+                  <div className="text-xs text-zinc-600 tabular-nums">{advisorPhone}</div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Pre-flight warning (AR 2026-08-18) — same condition as the
@@ -392,4 +466,70 @@ export default async function EstimatePreview({
       )}
     </main>
   );
+}
+
+// AR 2026-08-25 Batch C — one section of the three-section estimate
+// table. Rendered inline so declining a section becomes trivial (empty
+// section → the caller doesn't render this at all). Cost/margin never
+// on this doc — cashier-facing preview mirrors the customer's view.
+function SectionTable({
+    title,
+    lines,
+    subtotal,
+    locale,
+    t,
+}: {
+    title: string;
+    lines: Array<{ id?: string; description: string; qty: number; unitPrice: number; lineTotal: number; kind: string; declined?: boolean }>;
+    subtotal: number;
+    locale: string;
+    t: (k: MessageKey) => string;
+}) {
+    return (
+        <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">{title}</h3>
+            <table className="w-full min-w-[20rem] text-sm">
+                <thead>
+                    <tr className="border-b border-black/10 text-left text-zinc-500">
+                        <th className="py-1">{t("colDescription")}</th>
+                        <th className="py-1 text-right">{t("colQty")}</th>
+                        <th className="py-1 text-right">{t("colUnit")}</th>
+                        <th className="py-1 text-right">{t("colAmount")}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {lines.map((l, i) => {
+                        const isUnpricedCostAware =
+                            (l.kind === "PART" || l.kind === "SUBLET") && !l.declined && Number(l.unitPrice) === 0;
+                        return (
+                            <tr key={l.id ?? i} className="border-b border-black/5">
+                                <td className="py-1">
+                                    {(l.description)}
+                                    {isUnpricedCostAware ? (
+                                        <span
+                                            className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 print:hidden dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
+                                            title={t("zeroPartsPreflightBody")}
+                                        >
+                                            {t("zeroPartsChip")}
+                                        </span>
+                                    ) : null}
+                                </td>
+                                <td className="py-1 text-right">{l.qty.toLocaleString(locale)}</td>
+                                <td className="py-1 text-right tabular-nums">{l.unitPrice.toFixed(2)}</td>
+                                <td className="py-1 text-right tabular-nums">{l.lineTotal.toFixed(2)}</td>
+                            </tr>
+                        );
+                    })}
+                    <tr>
+                        <td colSpan={3} className="py-1 text-right text-xs font-semibold text-zinc-600">
+                            {t("estimateSectionSubtotal")}
+                        </td>
+                        <td className="py-1 text-right font-semibold tabular-nums">
+                            {subtotal.toFixed(2)}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    );
 }

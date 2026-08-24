@@ -8,6 +8,7 @@ import {
   updateProfileNameAction,
   updateProfileEmailAction,
   updateDefaultPartsMarkupAction,
+  updateDefaultPaymentTermsAction,
   updateDefaultLaborHourlyCostAction,
   updateGarageNameAction,
   updateGarageTrnAction,
@@ -119,6 +120,7 @@ export default async function SettingsPage({
           logoUrl: true,
           defaultPartsMarkupPct: true,
           defaultLaborHourlyCost: true,
+          defaultPaymentTerms: true,
         },
       })
     : null;
@@ -494,6 +496,37 @@ export default async function SettingsPage({
               </div>
               <p className="text-xs text-text-mute">
                 {t("settingsPricingLaborCostHint")}
+              </p>
+            </form>
+
+            {/* AR 2026-08-25 Batch C — shop-wide default payment terms
+                printed on every estimate. Per-estimate override lives
+                on the estimate editor. */}
+            <form
+              action={updateDefaultPaymentTermsAction}
+              className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
+            >
+              <label
+                htmlFor="defaultPaymentTerms"
+                className="text-sm font-medium"
+              >
+                {t("settingsPaymentTermsLabel")}
+              </label>
+              <input
+                id="defaultPaymentTerms"
+                name="defaultPaymentTerms"
+                type="text"
+                defaultValue={garage?.defaultPaymentTerms ?? ""}
+                placeholder={t("settingsPaymentTermsPlaceholder")}
+                className="h-10 w-full rounded-lg border border-border bg-transparent px-3 text-base focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+              />
+              <div>
+                <Button type="submit" variant="primary">
+                  {t("settingsSave")}
+                </Button>
+              </div>
+              <p className="text-xs text-text-mute">
+                {t("settingsPaymentTermsHint")}
               </p>
             </form>
           </section>

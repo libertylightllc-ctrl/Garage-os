@@ -63,6 +63,7 @@ export interface LineProps {
         confirmDelete: string;
         kindLabor: string;
         kindPart: string;
+        kindSublet: string;
         kindFee: string;
         kindDiscount: string;
         // Cost-based inputs (PART lines only)
@@ -128,10 +129,15 @@ export function EstimateLineRow({
     // exactly what's in the DB.
     const editDefault = stripVehicleLabel(line.description, vehicle.make, vehicle.model);
 
-    // isPart drives the cost/markup/margin tri-input branch. A PART
-    // line viewed by cashier / tech (canShowCost === false) routes to
-    // the plain qty + unit form instead, so no cost cell renders and
-    // no cost value reaches the DOM.
+    // Cost-aware kinds (PART + SUBLET) get the cost/markup/margin
+    // tri-input branch. A cost-aware line viewed by cashier / tech
+    // (canShowCost === false) routes to the plain qty + unit form
+    // instead, so no cost cell renders and no cost value reaches
+    // the DOM. AR 2026-08-25 Batch C — SUBLET added.
+    const isCostAware = (line.kind === "PART" || line.kind === "SUBLET") && canShowCost;
+    // Kept as `isPart` for the make/model column below — that's a
+    // catalogue-part concern (car-fit), not a cost concern, so
+    // SUBLET rows don't get make/model glued in.
     const isPart = line.kind === "PART" && canShowCost;
     const valueClass = line.declined
         ? "line-through text-text-mute"
@@ -161,6 +167,7 @@ export function EstimateLineRow({
                             <select name="kind" defaultValue={displayKind} className={`${FIELD} w-32`}>
                                 <option value="LABOR">{labels.kindLabor}</option>
                                 <option value="PART">{labels.kindPart}</option>
+                                <option value="SUBLET">{labels.kindSublet}</option>
                                 <option value="FEE">{labels.kindFee}</option>
                                 <option value="DISCOUNT">{labels.kindDiscount}</option>
                             </select>
@@ -171,13 +178,16 @@ export function EstimateLineRow({
                                 className={`${FIELD} min-w-40 flex-1`}
                             />
                         </div>
-                        {isPart ? (
-                            /* Cost-based tri-input for PART lines (AR 2026-08-12).
-                               Two-way binds cost ↔ markup ↔ price. Kind swap in
-                               the edit dropdown → server-side, the parseLineEditInput
-                               treats unitCost/markupPct as optional; if the advisor
-                               flipped the row from PART → LABOR mid-edit, cost + markup
-                               are ignored. */
+                        {isCostAware ? (
+                            /* Cost-based tri-input for cost-aware lines
+                               (PART and SUBLET). Two-way binds cost ↔
+                               markup ↔ price. Kind swap in the edit
+                               dropdown → server-side, parseLineEditInput
+                               treats unitCost/markupPct as optional;
+                               if the advisor flipped the row to a non-
+                               cost-aware kind (LABOR / FEE) mid-edit,
+                               cost + markup are ignored. AR 2026-08-25
+                               Batch C — SUBLET added to the branch. */
                             <CostPricedInputs
                                 initial={{
                                     qty: line.qty,
@@ -255,12 +265,16 @@ export function EstimateLineRow({
             <td className={`${td} font-medium ${valueClass}`}>
               {cleanDescription}
               {/* Pre-flight chip — AR 2026-08-18. Warning-yellow flag
-                  next to any non-declined PART line priced at 0.00, so
-                  the advisor sees the offending row while still on the
-                  edit surface (findZeroPricedPartLines predicate lives
-                  in lib/billing.ts; kept inline here to avoid a client-
-                  component boundary crossing). */}
-              {line.kind === "PART" && !line.declined && Number(line.unitPrice) === 0 ? (
+                  next to any non-declined cost-aware line (PART or
+                  SUBLET) priced at 0.00, so the advisor sees the
+                  offending row while still on the edit surface. Cost-
+                  aware = has real supplier cost; a 0.00 unit price
+                  means the advisor forgot to price, not a genuine
+                  free item. LABOR + FEE can legitimately be 0.
+                  Predicate lives in lib/billing.ts; kept inline here
+                  to avoid a client-component boundary crossing.
+                  AR 2026-08-25 Batch C — SUBLET added. */}
+              {(line.kind === "PART" || line.kind === "SUBLET") && !line.declined && Number(line.unitPrice) === 0 ? (
                 <span
                   className="ms-2 inline-flex items-center rounded-full border border-warning-500/40 bg-warning-50 px-2 py-0.5 text-[10px] font-semibold text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500"
                   title={labels.noPriceChipTitle}

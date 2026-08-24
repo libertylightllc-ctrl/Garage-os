@@ -35,7 +35,7 @@ const OPEN_TO_MASTER: readonly string[] = [
   "src/app/owner/bays/page.tsx",
 ];
 
-// The 7 owner-only routes MASTER must NOT be able to load. Every one
+// The 8 owner-only routes MASTER must NOT be able to load. Every one
 // must guard with strict requireRole("OWNER").
 const OWNER_ONLY: readonly string[] = [
   "src/app/owner/page.tsx",
@@ -45,6 +45,10 @@ const OWNER_ONLY: readonly string[] = [
   "src/app/owner/branches/page.tsx",
   "src/app/owner/whatsapp/page.tsx",
   "src/app/owner/staff/page.tsx",
+  // Accounting export (CSV downloads of COA/journal/invoices/payments/
+  // customers). Ships the entire financial position of the business —
+  // financial-reporting bucket per CLAUDE.md, MASTER stays barred.
+  "src/app/owner/accounting/page.tsx",
 ];
 
 // The 15 server actions behind the MASTER-opened pages. Opening a page

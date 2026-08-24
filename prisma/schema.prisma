@@ -1890,3 +1890,33 @@ model IntakeDraft {
     @@index([garageId, expiresAt])
     @@index([expiresAt])
 }
+
+// AR 2026-08-23. Standalone audit log for accounting-export downloads.
+// The endpoint returns files containing the entire financial position
+// of the business (general journal, invoices, payments, customers);
+// each download writes one row here so there's a durable record of
+// who took what data when.
+//
+// Deliberately has NO foreign key into any existing model. Owner-side
+// User/Garage rows can be renamed, re-scoped, or (in theory) deleted
+// without the audit trail cascading away — this row is the record of
+// what happened at the moment it happened. userId and userRole are
+// captured as flat strings so a later role change on the User row
+// doesn't rewrite history. Same reasoning for scopeGarageIds, stored
+// as a semicolon-separated list of cuids rather than a relation.
+//
+// Read via SQL editor / ad-hoc query; no in-app viewer today.
+model AccountingExportLog {
+    id             String   @id @default(cuid())
+    userId         String
+    userRole       String
+    ownerGarageId  String
+    scopeGarageIds String
+    rangeFromIso   String
+    rangeToIso     String
+    file           String
+    createdAt      DateTime @default(now())
+
+    @@index([createdAt])
+    @@index([ownerGarageId, createdAt])
+}

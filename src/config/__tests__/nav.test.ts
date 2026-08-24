@@ -54,6 +54,12 @@ describe("NAV config", () => {
             "/cashier",
             "/owner/billing",
             "/owner/ledger",
+            // Accounting export (COA/journal/invoices/payments/customers
+            // CSV downloads) — added 2026-08-23. OWNER-only surface,
+            // barred from MASTER because it contains the entire
+            // financial position of the business (financial-reporting
+            // bucket, per CLAUDE.md).
+            "/owner/accounting",
             "/owner/whatsapp",
         ],
         ADVISOR: [

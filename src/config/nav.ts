@@ -35,6 +35,7 @@ import {
   Receipt,
   BookOpen,
   BarChart3,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { StaffRole } from "@/lib/roles";
 import type { MessageKey } from "@/i18n/config";
@@ -79,6 +80,7 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "accounts", href: "/cashier", labelKey: "tabAccounts", icon: CreditCard },
       { key: "billing", href: "/owner/billing", labelKey: "tabBilling", icon: Receipt },
       { key: "ledger", href: "/owner/ledger", labelKey: "tabLedger", icon: BookOpen },
+      { key: "accounting", href: "/owner/accounting", labelKey: "tabAccounting", icon: FileSpreadsheet },
       { key: "whatsapp", href: "/owner/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],
   },

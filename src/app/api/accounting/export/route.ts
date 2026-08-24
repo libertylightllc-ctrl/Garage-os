@@ -51,18 +51,40 @@ const VALID_FILES = new Set(["chart-of-accounts", "journal", "invoices", "paymen
 // (current month) rather than 500'ing — an accountant with a
 // mistyped URL gets a sensible file, not an error page.
 
+// Dubai-calendar → UTC boundaries. `2026-08-01` typed into the URL
+// means "midnight Aug 1 in Dubai" = "20:00 Jul 31 UTC". Without this
+// the filter drifted by 4 hours: a Dubai invoice at 02:00 on Sep 1
+// (= 22:00 Aug 31 UTC) was included in August, which puts revenue
+// in the wrong period on an accountant's books. AR 2026-08-25
+// verify #2 — Dubai is +4 offset with no DST, so a fixed literal
+// offset is correct. If a future GCC branch ships, this becomes a
+// per-branch export split (not a mixed-timezone CSV).
+const ACCOUNTING_TZ_OFFSET_MS = 4 * 60 * 60 * 1000; // Dubai = UTC+4
+
 function parseIsoDate(raw: string | null): Date | null {
     if (!raw) return null;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-    const d = new Date(`${raw}T00:00:00Z`);
+    // Dubai midnight expressed as UTC = 20:00 the previous day. The
+    // constructor eats the ISO string with an offset and returns the
+    // correct UTC Date. Verified: "2026-08-01T00:00:00+04:00" →
+    // 2026-07-31T20:00:00Z.
+    const d = new Date(`${raw}T00:00:00+04:00`);
     if (Number.isNaN(d.getTime())) return null;
     return d;
 }
 
 function defaultRange(): { from: Date; to: Date } {
+    // "Today" as an accountant reads it — Dubai calendar date. Shift
+    // now by Dubai offset then read the UTC parts to get the Dubai
+    // Y/M/D, then convert back to the Dubai-midnight UTC boundaries
+    // via the same +04:00 trick.
     const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const dubaiNow = new Date(now.getTime() + ACCOUNTING_TZ_OFFSET_MS);
+    const y = dubaiNow.getUTCFullYear();
+    const m = dubaiNow.getUTCMonth();
+    const d = dubaiNow.getUTCDate();
+    const from = new Date(Date.UTC(y, m, 1) - ACCOUNTING_TZ_OFFSET_MS);
+    const to = new Date(Date.UTC(y, m, d) - ACCOUNTING_TZ_OFFSET_MS);
     return { from, to };
 }
 
@@ -191,25 +213,29 @@ async function buildJournalCsv(garageIds: string[], from: Date, toExcl: Date): P
         else if (e.sourceType === "ADVANCE" || e.sourceType === "ADVANCE_MIGRATION") advanceIds.add(e.sourceId);
     }
 
-    type InvoiceJoin = { number: number; customerName: string };
+    // invoiceIssuedAt threads through to formatInvoiceNo(seq, year)
+    // at CSV render — the invoice's year, not the ledger row's year,
+    // determines the INV-YYYY-#### shape. AR 2026-08-25 verify #2.
+    type InvoiceJoin = { number: number; issuedAt: Date; customerName: string };
     const invoiceMap = new Map<string, InvoiceJoin>();
     if (invoiceIds.size > 0) {
         const invRows = await prisma.invoice.findMany({
             where: { id: { in: Array.from(invoiceIds) } },
             select: {
-                id: true, number: true,
+                id: true, number: true, issuedAt: true,
                 jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
             },
         });
         for (const r of invRows) {
             invoiceMap.set(r.id, {
                 number: r.number,
+                issuedAt: r.issuedAt,
                 customerName: r.jobCard.vehicle.customer.name,
             });
         }
     }
 
-    type PaymentJoin = { invoiceNumber: number; customerName: string; method: "CASH" | "CARD" };
+    type PaymentJoin = { invoiceNumber: number; invoiceIssuedAt: Date; customerName: string; method: "CASH" | "CARD" };
     const paymentMap = new Map<string, PaymentJoin>();
     if (paymentIds.size > 0) {
         const payRows = await prisma.payment.findMany({
@@ -218,7 +244,7 @@ async function buildJournalCsv(garageIds: string[], from: Date, toExcl: Date): P
                 id: true, method: true,
                 invoice: {
                     select: {
-                        number: true,
+                        number: true, issuedAt: true,
                         jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
                     },
                 },
@@ -227,6 +253,7 @@ async function buildJournalCsv(garageIds: string[], from: Date, toExcl: Date): P
         for (const r of payRows) {
             paymentMap.set(r.id, {
                 invoiceNumber: r.invoice.number,
+                invoiceIssuedAt: r.invoice.issuedAt,
                 customerName: r.invoice.jobCard.vehicle.customer.name,
                 method: r.method as "CASH" | "CARD",
             });
@@ -253,14 +280,15 @@ async function buildJournalCsv(garageIds: string[], from: Date, toExcl: Date): P
 
     const rows: JournalRow[] = entries.map((e) => {
         let invoiceNumber: number | null | undefined;
+        let invoiceIssuedAt: Date | null | undefined;
         let customerName: string | null | undefined;
         let paymentMethod: "CASH" | "CARD" | null | undefined;
         if (e.sourceType === "INVOICE" || e.sourceType === "INVOICE_VOID") {
             const j = invoiceMap.get(e.sourceId);
-            if (j) { invoiceNumber = j.number; customerName = j.customerName; }
+            if (j) { invoiceNumber = j.number; invoiceIssuedAt = j.issuedAt; customerName = j.customerName; }
         } else if (e.sourceType === "PAYMENT") {
             const j = paymentMap.get(e.sourceId);
-            if (j) { invoiceNumber = j.invoiceNumber; customerName = j.customerName; paymentMethod = j.method; }
+            if (j) { invoiceNumber = j.invoiceNumber; invoiceIssuedAt = j.invoiceIssuedAt; customerName = j.customerName; paymentMethod = j.method; }
         } else if (e.sourceType === "ADVANCE" || e.sourceType === "ADVANCE_MIGRATION") {
             const j = advanceMap.get(e.sourceId);
             if (j) { customerName = j.customerName; paymentMethod = j.method; }
@@ -273,6 +301,7 @@ async function buildJournalCsv(garageIds: string[], from: Date, toExcl: Date): P
             sourceType: e.sourceType,
             sourceId: e.sourceId,
             invoiceNumber,
+            invoiceIssuedAt,
             customerName,
             paymentMethod,
         };
@@ -329,7 +358,7 @@ async function buildPaymentsCsv(garageIds: string[], from: Date, toExcl: Date): 
             paidAt: true, method: true, amount: true,
             invoice: {
                 select: {
-                    number: true,
+                    number: true, issuedAt: true,
                     jobCard: { select: { vehicle: { select: { customer: { select: { name: true } } } } } },
                 },
             },
@@ -362,14 +391,20 @@ async function buildPaymentsCsv(garageIds: string[], from: Date, toExcl: Date): 
     const migratedPaymentIds = advances
         .map((a) => a.paymentId)
         .filter((id): id is string => !!id);
-    const migratedInvoiceByPaymentId = new Map<string, number>();
+    // Migrated invoice number + issuedAt keyed by paymentId. Both
+    // are needed to render INV-YYYY-#### shape on the migration
+    // column via formatInvoiceNo(seq, year).
+    const migratedInvoiceByPaymentId = new Map<string, { number: number; issuedAt: Date }>();
     if (migratedPaymentIds.length > 0) {
         const migrated = await prisma.payment.findMany({
             where: { id: { in: migratedPaymentIds } },
-            select: { id: true, invoice: { select: { number: true } } },
+            select: { id: true, invoice: { select: { number: true, issuedAt: true } } },
         });
         for (const m of migrated) {
-            migratedInvoiceByPaymentId.set(m.id, m.invoice.number);
+            migratedInvoiceByPaymentId.set(m.id, {
+                number: m.invoice.number,
+                issuedAt: m.invoice.issuedAt,
+            });
         }
     }
 
@@ -380,19 +415,22 @@ async function buildPaymentsCsv(garageIds: string[], from: Date, toExcl: Date): 
             method: p.method as "CASH" | "CARD",
             amount: p.amount as unknown as number,
             invoiceNumber: p.invoice.number,
+            invoiceIssuedAt: p.invoice.issuedAt,
             customerName: p.invoice.jobCard.vehicle.customer.name,
         })),
-        ...advances.map((a): PaymentRow => ({
-            kind: "ADVANCE",
-            date: a.receivedAt,
-            method: a.method as "CASH" | "CARD",
-            amount: a.amount as unknown as number,
-            jobNumber: a.jobCard.number,
-            customerName: a.jobCard.vehicle.customer.name,
-            migratedToInvoiceNumber: a.paymentId
-                ? migratedInvoiceByPaymentId.get(a.paymentId) ?? null
-                : null,
-        })),
+        ...advances.map((a): PaymentRow => {
+            const migrated = a.paymentId ? migratedInvoiceByPaymentId.get(a.paymentId) : undefined;
+            return {
+                kind: "ADVANCE",
+                date: a.receivedAt,
+                method: a.method as "CASH" | "CARD",
+                amount: a.amount as unknown as number,
+                jobNumber: a.jobCard.number,
+                customerName: a.jobCard.vehicle.customer.name,
+                migratedToInvoiceNumber: migrated?.number ?? null,
+                migratedToInvoiceIssuedAt: migrated?.issuedAt ?? null,
+            };
+        }),
     ].sort((x, y) => x.date.getTime() - y.date.getTime());
 
     return paymentsCsv(rows);

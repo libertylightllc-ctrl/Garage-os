@@ -31,6 +31,20 @@
  */
 
 import type { Decimal } from "@/generated/prisma/internal/prismaNamespace";
+import { formatInvoiceNo } from "@/lib/billing";
+import { fmtIsoDate } from "@/lib/format-datetime";
+
+/**
+ * Timezone for every date rendered in the accounting export (AR
+ * 2026-08-25 verify #2). Hardcoded to Asia/Dubai — the phase-1
+ * launch is UAE-only; when a multi-country garage ships, the
+ * export should split per branch/country rather than mix
+ * timezones in one CSV. Every date cell + the range in the
+ * filename passes through fmtIsoDate(_, ACCOUNTING_TZ) so a Dubai
+ * invoice at 02:00 on Sep 1 (= 22:00 Aug 31 UTC) renders as
+ * 2026-09-01, matching the customer's copy of the invoice.
+ */
+export const ACCOUNTING_TZ = "Asia/Dubai";
 
 // ── Chart of accounts ────────────────────────────────────────────────
 // Mapping from the 5 in-DB account strings (defined in src/lib/billing.ts
@@ -101,8 +115,10 @@ function toMoney(d: Decimal | number | string): string {
     return n.toFixed(2);
 }
 
+// Dates in every export cell + filename go through fmtIsoDate with
+// ACCOUNTING_TZ. See ACCOUNTING_TZ doc for the timezone rationale.
 function toIsoDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
+    return fmtIsoDate(d, ACCOUNTING_TZ);
 }
 
 // ── 1. Chart of Accounts ─────────────────────────────────────────────
@@ -136,6 +152,12 @@ export interface JournalRow {
     // because not every sourceType resolves cleanly (a deleted invoice
     // that only has audit rows won't join).
     invoiceNumber?: number | null;   // formatted at output time
+    /** The invoice's issuedAt — used to derive the year for
+     *  formatInvoiceNo(seq, year). Required whenever invoiceNumber is
+     *  non-null; the year is the invoice's issuance year (which may
+     *  differ from the ledger row's createdAt year for cross-year
+     *  payments or migrations). */
+    invoiceIssuedAt?: Date | null;
     customerName?: string | null;
     /** Only meaningful when the ledger row's account is "Cash/Bank". */
     paymentMethod?: "CASH" | "CARD" | null;
@@ -164,8 +186,12 @@ export function journalCsv(rows: JournalRow[]): string {
     return csvOf(
         ["date", "journal_ref", "account_code", "account_name", "debit", "credit", "currency", "customer", "memo"],
         rows.map((r) => {
-            const ref = r.invoiceNumber != null
-                ? `INV-${r.invoiceNumber}`
+            // Invoice reference format matches the customer's copy of
+            // the invoice: INV-YYYY-####. AR 2026-08-25 verify — was
+            // rendering the raw "INV-53" which disagreed with the 11
+            // display surfaces that use formatInvoiceNo.
+            const ref = r.invoiceNumber != null && r.invoiceIssuedAt
+                ? formatInvoiceNo(r.invoiceNumber, r.invoiceIssuedAt.getFullYear())
                 : `${r.sourceType}:${r.sourceId}`;
             const memo = `${r.sourceType} ${r.sourceId}`;
             return [
@@ -203,7 +229,7 @@ export function invoicesCsv(rows: InvoiceRow[]): string {
     return csvOf(
         ["invoice_number", "issued_at", "due_date", "customer_name", "customer_trn", "subtotal", "vat", "total", "status", "paid", "balance", "currency"],
         rows.map((r) => [
-            `INV-${r.number}`,
+            formatInvoiceNo(r.number, r.issuedAt.getFullYear()),
             toIsoDate(r.issuedAt),
             r.dueDate ? toIsoDate(r.dueDate) : "",
             r.customerName,
@@ -232,11 +258,16 @@ export interface PaymentRow {
     // Only one of these is populated per row. Payment → invoiceNumber.
     // AdvancePayment → jobNumber (the job the advance was against).
     invoiceNumber?: number | null;
+    /** Required whenever invoiceNumber is non-null — used to derive
+     *  the invoice's issuance year for formatInvoiceNo(seq, year). */
+    invoiceIssuedAt?: Date | null;
     jobNumber?: number | null;
     customerName: string;
     /** For AdvancePayment: set to the invoice number the advance was
      *  later migrated onto, if any; null while still open. */
     migratedToInvoiceNumber?: number | null;
+    /** Required whenever migratedToInvoiceNumber is non-null. */
+    migratedToInvoiceIssuedAt?: Date | null;
 }
 
 export function paymentsCsv(rows: PaymentRow[]): string {
@@ -247,10 +278,14 @@ export function paymentsCsv(rows: PaymentRow[]): string {
             toIsoDate(r.date),
             r.method,
             toMoney(r.amount),
-            r.invoiceNumber != null ? `INV-${r.invoiceNumber}` : "",
+            r.invoiceNumber != null && r.invoiceIssuedAt
+                ? formatInvoiceNo(r.invoiceNumber, r.invoiceIssuedAt.getFullYear())
+                : "",
             r.jobNumber != null ? `JC-${r.jobNumber}` : "",
             r.customerName,
-            r.migratedToInvoiceNumber != null ? `INV-${r.migratedToInvoiceNumber}` : "",
+            r.migratedToInvoiceNumber != null && r.migratedToInvoiceIssuedAt
+                ? formatInvoiceNo(r.migratedToInvoiceNumber, r.migratedToInvoiceIssuedAt.getFullYear())
+                : "",
             "AED",
         ]),
     );

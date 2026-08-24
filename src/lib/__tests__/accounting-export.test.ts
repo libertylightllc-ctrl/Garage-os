@@ -61,6 +61,7 @@ describe("journalCsv — account code resolution", () => {
         credit: 0,
         sourceId: "ledger-1",
         invoiceNumber: 42,
+        invoiceIssuedAt: new Date("2026-08-15T10:00:00Z"),
         customerName: "Ahmed Al Mansoori",
     };
 
@@ -101,15 +102,39 @@ describe("journalCsv — account code resolution", () => {
         expect(csv).toContain(",1000,Cash/Bank,");
     });
 
-    it("formats journal_ref with the invoice number when available; falls back to sourceType:sourceId otherwise", () => {
+    it("formats journal_ref as INV-YYYY-#### (canonical) — matches every display surface, not the raw INV-N", () => {
+        // AR 2026-08-25 verify #2: was rendering "INV-42" which
+        // disagreed with the 11 UI surfaces that all use
+        // formatInvoiceNo → "INV-2026-0042". Year comes from the
+        // invoice's issuedAt, not the ledger row's createdAt (they
+        // may differ for cross-year payments/migrations).
         const withInvoice = journalCsv([
-            { ...baseRow, account: "Sales Revenue", sourceType: "INVOICE", invoiceNumber: 42 },
+            { ...baseRow, account: "Sales Revenue", sourceType: "INVOICE",
+              invoiceNumber: 42, invoiceIssuedAt: new Date("2026-08-15T10:00:00Z") },
         ]);
-        expect(withInvoice).toContain(",INV-42,");
+        expect(withInvoice).toContain(",INV-2026-0042,");
+        expect(withInvoice).not.toContain(",INV-42,");
         const withoutInvoice = journalCsv([
-            { ...baseRow, account: "Cash/Bank", sourceType: "PAYMENT", invoiceNumber: null, sourceId: "pay-99" },
+            { ...baseRow, account: "Cash/Bank", sourceType: "PAYMENT",
+              invoiceNumber: null, invoiceIssuedAt: null, sourceId: "pay-99" },
         ]);
         expect(withoutInvoice).toContain(",PAYMENT:pay-99,");
+    });
+
+    it("uses the INVOICE's year for the ref, not the ledger row's year — payment in 2027 for a 2026 invoice", () => {
+        // Cross-year payment: ledger createdAt = 2027 (when the
+        // payment was recorded); invoice issuedAt = 2026. The
+        // journal_ref must carry the invoice's year (2026), not
+        // the ledger's (2027), or the accountant can't reconcile.
+        const csv = journalCsv([{
+            ...baseRow,
+            account: "Cash/Bank", sourceType: "PAYMENT",
+            createdAt: new Date("2027-01-15T10:00:00Z"),
+            invoiceNumber: 53, invoiceIssuedAt: new Date("2026-12-22T10:00:00Z"),
+            paymentMethod: "CASH",
+        }]);
+        expect(csv).toContain(",INV-2026-0053,");
+        expect(csv).not.toContain(",INV-2027-0053,");
     });
 
     it("emits amounts with 2dp always — never 100 or 100.5", () => {
@@ -131,7 +156,7 @@ describe("invoicesCsv", () => {
         );
     });
 
-    it("emits INV-N formatted number + ISO date + 2dp amounts + empty due_date when null", () => {
+    it("emits INV-YYYY-#### canonical number + ISO date in Dubai time + 2dp amounts + empty due_date when null", () => {
         const rows: InvoiceRow[] = [{
             number: 17,
             issuedAt: new Date("2026-08-01T08:00:00Z"),
@@ -143,7 +168,31 @@ describe("invoicesCsv", () => {
         }];
         const csv = invoicesCsv(rows);
         // Comma + double-quote inside name → RFC 4180-quoted with doubled quotes.
-        expect(csv).toContain(`INV-17,2026-08-01,,"GULF, & ""CO"" LLC",100000000000003,300.00,15.00,315.00,PAID,315.00,0.00,AED`);
+        // Was `INV-17,…` pre-2026-08-25 fix (missing year). Now matches
+        // every display surface via formatInvoiceNo.
+        expect(csv).toContain(`INV-2026-0017,2026-08-01,,"GULF, & ""CO"" LLC",100000000000003,300.00,15.00,315.00,PAID,315.00,0.00,AED`);
+    });
+
+    it("renders the DATE in Dubai time — the month-boundary case where UTC and Dubai disagree", () => {
+        // AR 2026-08-25 verify #2: an invoice issued at 22:00 Dubai
+        // on Aug 31 (= 18:00 UTC same day) is Aug 31 in both zones.
+        // The failing shape is an invoice issued at 02:00 Dubai on
+        // Sep 1 (= 22:00 Aug 31 UTC). Previously rendered `2026-08-31`
+        // (UTC month) even though the customer's copy of the invoice
+        // reads Sep 1. Now: renders `2026-09-01`, matching Dubai.
+        const rows: InvoiceRow[] = [{
+            number: 54,
+            // 22:00 Aug 31 UTC = 02:00 Sep 1 Dubai
+            issuedAt: new Date("2026-08-31T22:00:00Z"),
+            dueDate: new Date("2026-09-30T00:00:00Z"),
+            customerName: "Acme",
+            customerTrn: null,
+            subtotal: 100, vatAmount: 5, total: 105,
+            status: "SENT", paid: 0, balance: 105,
+        }];
+        const csv = invoicesCsv(rows);
+        expect(csv).toContain("INV-2026-0054,2026-09-01,");
+        expect(csv).not.toContain(",2026-08-31,");
     });
 });
 
@@ -155,20 +204,21 @@ describe("paymentsCsv", () => {
         );
     });
 
-    it("Payment row: invoice_number filled, job_number empty, no migration link", () => {
+    it("Payment row: canonical INV-YYYY-#### number, job_number empty, no migration link", () => {
         const rows: PaymentRow[] = [{
             kind: "PAYMENT",
             date: new Date("2026-08-15T12:00:00Z"),
             method: "CASH",
             amount: 210,
             invoiceNumber: 42,
+            invoiceIssuedAt: new Date("2026-08-15T12:00:00Z"),
             customerName: "Ahmed",
         }];
         const csv = paymentsCsv(rows);
-        expect(csv).toContain("PAYMENT,2026-08-15,CASH,210.00,INV-42,,Ahmed,,AED");
+        expect(csv).toContain("PAYMENT,2026-08-15,CASH,210.00,INV-2026-0042,,Ahmed,,AED");
     });
 
-    it("AdvancePayment row: job_number filled, invoice_number empty, migrated_to_invoice populated once migrated", () => {
+    it("AdvancePayment row: migrated_to_invoice uses canonical INV-YYYY-#### shape too", () => {
         const rows: PaymentRow[] = [{
             kind: "ADVANCE",
             date: new Date("2026-08-10T09:00:00Z"),
@@ -176,10 +226,11 @@ describe("paymentsCsv", () => {
             amount: 100,
             jobNumber: 55,
             migratedToInvoiceNumber: 43,
+            migratedToInvoiceIssuedAt: new Date("2026-08-11T09:00:00Z"),
             customerName: "Fatima",
         }];
         const csv = paymentsCsv(rows);
-        expect(csv).toContain("ADVANCE,2026-08-10,CARD,100.00,,JC-55,Fatima,INV-43,AED");
+        expect(csv).toContain("ADVANCE,2026-08-10,CARD,100.00,,JC-55,Fatima,INV-2026-0043,AED");
     });
 });
 
@@ -200,8 +251,20 @@ describe("customersCsv", () => {
 });
 
 describe("filename", () => {
-    it("names the file with the exported range so it's self-describing", () => {
-        expect(filename("journal", new Date("2026-08-01T00:00:00Z"), new Date("2026-08-31T23:59:59Z")))
+    it("names the file with the exported range so it's self-describing, rendered in Dubai time", () => {
+        // AR 2026-08-25 verify #2: filename renders through the same
+        // Dubai timezone as every date cell. Both fixtures below are
+        // WITHIN Aug 2026 in Dubai (04:00 Aug 1 UTC = 08:00 Aug 1
+        // Dubai; 18:00 Aug 31 UTC = 22:00 Aug 31 Dubai) so the
+        // filename reads "…2026-08-01_2026-08-31.csv" as expected.
+        expect(filename("journal", new Date("2026-08-01T04:00:00Z"), new Date("2026-08-31T18:00:00Z")))
             .toBe("accounting-journal-2026-08-01_2026-08-31.csv");
+    });
+
+    it("filename also renders in Dubai — a 'to' date at 22:00 UTC on Aug 31 (= 02:00 Sep 1 Dubai) reads 2026-09-01, not 2026-08-31", () => {
+        // Same class of month-boundary drift as the invoice-row date
+        // rendering. Pins the filename side of that contract.
+        expect(filename("journal", new Date("2026-08-01T04:00:00Z"), new Date("2026-08-31T22:00:00Z")))
+            .toBe("accounting-journal-2026-08-01_2026-09-01.csv");
     });
 });

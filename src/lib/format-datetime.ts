@@ -83,6 +83,29 @@ export function fmtDate(d: Date, locale: string, timeZone: string): string {
 }
 
 /**
+ * ISO date (YYYY-MM-DD) in a specific timezone. Wraps
+ * `Intl.DateTimeFormat` with `year: numeric, month: 2-digit, day:
+ * 2-digit` and a hidden en-CA / sv-SE-shaped locale that renders
+ * YYYY-MM-DD natively (both are ISO by convention). Independent
+ * of the caller's locale so CSV output is stable regardless of
+ * request headers.
+ *
+ * Use for: any machine-consumed date output — CSV cells, filenames,
+ * URL params. Distinct from fmtDate (which renders "Aug 25, 2026"
+ * for humans). AR 2026-08-25 verify — replaces the pattern
+ * `d.toISOString().slice(0, 10)` which was UTC-hardcoded and drifted
+ * dates by one day for late-evening Dubai transactions.
+ */
+export function fmtIsoDate(d: Date, timeZone: string): string {
+    return new Intl.DateTimeFormat("en-CA", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        timeZone,
+    }).format(d);
+}
+
+/**
  * Time only — e.g. "7:29 AM" (en) or "7:29 ص" (ar). Wraps
  * `toLocaleTimeString(locale, { timeStyle: 'short', timeZone })`.
  *

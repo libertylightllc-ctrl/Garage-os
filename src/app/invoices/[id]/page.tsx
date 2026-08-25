@@ -703,6 +703,7 @@ export default async function InvoiceView({
             >
               <option value="LABOR">{t("kindLabor")}</option>
               <option value="PART">{t("kindPart")}</option>
+              <option value="SUBLET">{t("kindSublet")}</option>
               <option value="FEE">{t("kindFee")}</option>
               <option value="DISCOUNT">{t("kindDiscount")}</option>
             </select>

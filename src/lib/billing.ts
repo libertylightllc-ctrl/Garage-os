@@ -234,7 +234,14 @@ export function parseLineEditInput(input: {
   markupPct?: unknown;
 }): LineEditResult {
   const rawKind = String(input.kind ?? "").toUpperCase();
-  if (!["LABOR", "PART", "FEE", "DISCOUNT"].includes(rawKind)) {
+  // Allowlist mirrors the LineKind enum + the "DISCOUNT" UI-only
+  // alias (which maps to FEE-with-negative-price below). SUBLET was
+  // added to the enum in Batch C (2026-08-25) but this allowlist
+  // wasn't widened — every save of an existing SUBLET line, or a
+  // save after the advisor flipped the kind dropdown to SUBLET,
+  // failed silently with an "unknown-kind" redirect and the row
+  // looked unchanged. Fixed 2026-08-25.
+  if (!["LABOR", "PART", "FEE", "SUBLET", "DISCOUNT"].includes(rawKind)) {
     return { ok: false, error: "unknown-kind" };
   }
   const isDiscount = rawKind === "DISCOUNT";

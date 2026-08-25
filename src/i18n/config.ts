@@ -1517,6 +1517,14 @@ const en = {
   settingsTermsSuggestedHeading: "Suggested wording — not yet saved",
   settingsTermsSuggestedHint: "This is a starting point, not a saved value. To use it as-is, click below. Or type your own wording in the field and Save.",
   settingsTermsAdoptButton: "Use this as my terms",
+  // AR 2026-08-25 — print-notice on the editor pages. Editors were
+  // never meant to print; Ctrl+P out of habit produced a broken
+  // multi-page render with nav, add-line form, and per-row edit
+  // controls. On print, the whole editor is hidden and this notice
+  // shows instead, pointing the user at the Preview page which IS
+  // the sanctioned print surface.
+  printEditorNoticeHeading: "This is the editor view",
+  printEditorNoticeBody: "The customer's document lives on the Preview page. Return to the app, open the estimate or invoice, click Preview, and print from there.",
   settingsEstimateTermsDefaultText:
     "1. This estimate is valid for 7 days from the date shown above.\n2. Prices are subject to change without prior notice.\n3. No warranty is provided on parts supplied by the customer.\n4. Any additional work identified during the repair will be quoted and requires customer approval before proceeding.\n5. The final invoice amount may vary from this estimate if additional work is authorised.\n6. Parts are classified as OEM (Original Equipment Manufacturer), OES (Original Equipment Supplier), or Aftermarket, as marked on each line.\n7. The customer authorises the workshop to road-test the vehicle as required to verify the repair.",
   settingsOkEstimateTerms: "Estimate terms saved.",
@@ -3286,6 +3294,9 @@ const ar: typeof en = {
   settingsTermsSuggestedHeading: "نص مقترح — لم يُحفظ بعد",
   settingsTermsSuggestedHint: "هذه بداية مقترحة وليست قيمة محفوظة. لاعتمادها كما هي، اضغط الزر أدناه. أو اكتب نصك الخاص في الحقل واحفظ.",
   settingsTermsAdoptButton: "اعتمد هذا كشروطي",
+  // AR 2026-08-25 — print notice on editor pages.
+  printEditorNoticeHeading: "شاشة التحرير",
+  printEditorNoticeBody: "المستند المخصص للعميل موجود على صفحة المعاينة. عُد إلى التطبيق، افتح عرض السعر أو الفاتورة، اضغط \"معاينة\" ثم اطبع من هناك.",
   settingsEstimateTermsDefaultText:
     "١. عرض السعر هذا ساري لمدة ٧ أيام من التاريخ المذكور أعلاه.\n٢. الأسعار قابلة للتغيير دون إشعار مسبق.\n٣. لا يُقدَّم أي ضمان على القطع الموردة من قبل العميل.\n٤. أي أعمال إضافية تُكتشف أثناء الإصلاح سيتم تسعيرها وتتطلب موافقة العميل قبل التنفيذ.\n٥. المبلغ النهائي للفاتورة قد يختلف عن هذا العرض في حال تفويض أعمال إضافية.\n٦. القطع مُصنَّفة على أنها OEM (أصلية من الشركة الصانعة) أو OES (أصلية من مورد الشركة) أو Aftermarket (بديلة)، كما هو موضح لكل بند.\n٧. يُخوّل العميل الورشة لإجراء اختبار قيادة للمركبة حسب الحاجة للتأكد من الإصلاح.",
   settingsOkEstimateTerms: "تم حفظ شروط عرض السعر.",

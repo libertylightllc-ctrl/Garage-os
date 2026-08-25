@@ -285,7 +285,20 @@ export default async function EstimateEditor({
   const backHref = jobSide ? `/advisor/jobs/${est.jobCardId}` : "/cashier";
 
   return (
-    <main data-print-document="estimate-edit" className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
+    <>
+      {/* AR 2026-08-25 — the editor was never a print surface, but
+          Ctrl+P out of habit produced a broken multi-page render
+          (nav grid, add-line form, per-row edit controls, and the
+          Preview button all bled across two pages). Hide the whole
+          editor at print time; show a notice pointing the user at
+          the Preview page, which IS the sanctioned print surface.
+          The `hidden print:block` block is the ONLY thing that
+          reaches paper from this route. */}
+      <div className="hidden print:block p-8 text-center text-zinc-900">
+        <div className="text-lg font-semibold">{t("printEditorNoticeHeading")}</div>
+        <p className="mt-3 text-sm">{t("printEditorNoticeBody")}</p>
+      </div>
+      <main data-print-document="estimate-edit" className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:hidden">
       <AppNav role={role} active={jobSide ? "jobs" : "accounts"} />
       <div>
         <Link href={backHref} className="inline-block py-2 text-base text-text-mute hover:underline">
@@ -934,6 +947,7 @@ export default async function EstimateEditor({
       </aside>
       </div>
     </main>
+    </>
   );
 }
 

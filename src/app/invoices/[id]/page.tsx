@@ -273,7 +273,18 @@ export default async function InvoiceView({
     inv.garage.defaultLaborHourlyCost !== undefined;
 
   return (
-    <main data-print-document="invoice-edit" className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:max-w-full print:bg-white print:p-0 print:text-zinc-900">
+    <>
+      {/* AR 2026-08-25 — same treatment as /estimates/[id]. The
+          editor was never a print surface; Ctrl+P produced a broken
+          multi-page render with nav, add-line, discount form, per-
+          row edit controls all crossing pages. Hide the editor at
+          print time and show a notice pointing at the Preview,
+          which IS the sanctioned print surface. */}
+      <div className="hidden print:block p-8 text-center text-zinc-900">
+        <div className="text-lg font-semibold">{t("printEditorNoticeHeading")}</div>
+        <p className="mt-3 text-sm">{t("printEditorNoticeBody")}</p>
+      </div>
+    <main data-print-document="invoice-edit" className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl print:hidden">
       {/* Role-aware Back link — mirrors the /estimates/[id] pattern.
           Cashier (and owner) goes back to the Invoices tab of the
           dashboard; advisor goes back to the parent job. Tech doesn't
@@ -1121,5 +1132,6 @@ export default async function InvoiceView({
       </aside>
       </div>
     </main>
+    </>
   );
 }

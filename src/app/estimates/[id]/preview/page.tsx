@@ -84,7 +84,7 @@ export default async function EstimatePreview({
           // fallback for the Payment Terms block; advisor as the
           // live-name fallback when the snapshot isn't populated
           // (draft / never-sent estimates).
-          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true, defaultPaymentTerms: true, terms: true } },
+          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true, defaultPaymentTerms: true, estimateTerms: true } },
           advisor: { select: { name: true, phone: true } },
         },
       },
@@ -298,13 +298,13 @@ export default async function EstimatePreview({
             bottom of the document. Line breaks preserved so a
             numbered list (1. … 2. …) types straight through. Only
             renders when the shop has set them; blank = no block. */}
-        {est.jobCard.garage.terms ? (
+        {est.jobCard.garage.estimateTerms ? (
           <div className="mt-6 border-t border-zinc-200 pt-4 text-xs">
             <div className="font-semibold uppercase tracking-wide text-zinc-600">
               {t("documentTermsHeading")}
             </div>
             <p className="mt-1 whitespace-pre-line leading-relaxed">
-              {est.jobCard.garage.terms}
+              {est.jobCard.garage.estimateTerms}
             </p>
           </div>
         ) : null}

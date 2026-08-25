@@ -171,29 +171,48 @@ export async function updateDefaultPaymentTermsAction(formData: FormData) {
 
 /**
  * Operational: shop-wide Terms & Conditions printed at the bottom
- * of every estimate and every invoice (AR 2026-08-25 Batch D).
- * Free text with line breaks preserved on render — most shops
- * carry a fixed set of numbered clauses (validity period, prices
- * subject to change, no warranty on customer-supplied parts, extra
- * work needs approval, part quality categories, road-test
- * authorisation). Deliberately no default wording ships in code —
- * terms are legally the garage's own document.
+ * of every estimate (AR 2026-08-25, renamed at split time from
+ * updateGarageTermsAction). Estimate-specific clauses only —
+ * validity period, prices subject to change, additional work needs
+ * approval, etc. See updateGarageInvoiceTermsAction below for the
+ * post-billing set.
  *
- * Role gate: OWNER + MASTER via requireOperational() — same as
- * other pricing/document defaults. Sole writer of Garage.terms;
- * a single-column write. Empty string clears to null (block stops
- * rendering on both surfaces).
+ * Role gate: OWNER + MASTER via requireOperational(). Sole writer
+ * of Garage.estimateTerms; single-column write. Empty clears to
+ * null (block stops rendering on the estimate).
  */
-export async function updateGarageTermsAction(formData: FormData) {
+export async function updateGarageEstimateTermsAction(formData: FormData) {
   const session = await requireOperational();
-  const raw = String(formData.get("terms") ?? "").trim();
+  const raw = String(formData.get("estimateTerms") ?? "").trim();
   const value = raw === "" ? null : raw;
   await prisma.garage.update({
     where: { id: session.garageId },
-    data: { terms: value },
+    data: { estimateTerms: value },
   });
   revalidatePath("/settings");
-  redirect("/settings?ok=terms");
+  redirect("/settings?ok=estimate-terms");
+}
+
+/**
+ * Operational: shop-wide Terms & Conditions printed at the bottom
+ * of every invoice (AR 2026-08-25). Post-billing clauses only —
+ * workmanship warranty, parts warranty pass-through, customer-
+ * supplied parts excluded, payment terms as agreed. The Batch D
+ * single-field mixed estimate-only wording ("valid for 7 days",
+ * "may vary from estimate") onto invoices; splitting fixes it.
+ *
+ * Role gate + shape mirror updateGarageEstimateTermsAction.
+ */
+export async function updateGarageInvoiceTermsAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("invoiceTerms") ?? "").trim();
+  const value = raw === "" ? null : raw;
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { invoiceTerms: value },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=invoice-terms");
 }
 
 /**

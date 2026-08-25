@@ -328,13 +328,13 @@ export default async function InvoicePreview({
         {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
             bottom of the printable doc so it prints with the
             invoice. Renders only when set; blank = no block. */}
-        {inv.garage.terms ? (
+        {inv.garage.invoiceTerms ? (
           <div className="mt-6 border-t border-zinc-200 pt-4 text-xs">
             <div className="font-semibold uppercase tracking-wide text-zinc-600">
               {t("documentTermsHeading")}
             </div>
             <p className="mt-1 whitespace-pre-line leading-relaxed">
-              {inv.garage.terms}
+              {inv.garage.invoiceTerms}
             </p>
           </div>
         ) : null}

@@ -14,7 +14,8 @@ import {
   updateGarageTrnAction,
   updateGarageAddressAction,
   updateGarageDefaultLangAction,
-  updateGarageTermsAction,
+  updateGarageEstimateTermsAction,
+  updateGarageInvoiceTermsAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -77,7 +78,8 @@ const OK_KEY: Record<string, MessageKey> = {
   "garage-trn": "settingsOkGarageTrn",
   "garage-address": "settingsOkGarageAddress",
   "garage-default-lang": "settingsOkGarageDefaultLang",
-  "terms": "settingsOkTerms",
+  "estimate-terms": "settingsOkEstimateTerms",
+  "invoice-terms": "settingsOkInvoiceTerms",
 };
 
 export default async function SettingsPage({
@@ -123,7 +125,8 @@ export default async function SettingsPage({
           defaultPartsMarkupPct: true,
           defaultLaborHourlyCost: true,
           defaultPaymentTerms: true,
-          terms: true,
+          estimateTerms: true,
+          invoiceTerms: true,
         },
       })
     : null;
@@ -572,46 +575,41 @@ export default async function SettingsPage({
           requireOperational() on the action; page-side gate is
           isOperational — matches the other document-facing
           setting (payment terms) above. */}
+      {/* AR 2026-08-25 — two separate terms sections, one per document.
+          Split from a single Garage.terms after the seven-clause sample
+          proved a bad fit for invoices ("This estimate is valid for 7
+          days" on a paid invoice reads as a mistake). Each section
+          prefills its own sample the first time a garage opens it; the
+          DB stays null until the shop actively saves. Renderers on the
+          respective documents read the matching column only. */}
       {isOperational ? (
         <>
           <section className="rounded-xl border border-border p-4">
             <h2 className="text-base font-semibold">
-              {t("settingsSecDocumentTerms")}
+              {t("settingsSecEstimateTerms")}
             </h2>
             <p className="mt-0.5 text-xs text-text-mute">
-              {t("settingsSecDocumentTermsHint")}
+              {t("settingsSecEstimateTermsHint")}
             </p>
-            {/* Responsibility banner — sits above the textarea so
-                the operator sees WHOSE document these are before
-                editing the sample. AR 2026-08-25 Batch D. */}
+            {/* Responsibility banner — same wording on both terms
+                sections; the operator sees WHOSE document these are
+                before editing the sample. */}
             <p className="mt-3 rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
               {t("settingsTermsResponsibility")}
             </p>
             <form
-              action={updateGarageTermsAction}
+              action={updateGarageEstimateTermsAction}
               className="mt-3 flex flex-col gap-2"
             >
-              <label
-                htmlFor="terms"
-                className="text-sm font-medium"
-              >
-                {t("settingsTermsLabel")}
+              <label htmlFor="estimateTerms" className="text-sm font-medium">
+                {t("settingsEstimateTermsLabel")}
               </label>
-              {/* Prefill with a seven-clause sample when the garage
-                  has never saved terms (garage.terms === null). Once
-                  saved the field reads back whatever the shop wrote.
-                  A blank box on first open leaves 100% of shops with
-                  no terms; a sample-then-edit shape gets them
-                  started with something they can adopt or replace.
-                  The default text ships from i18n so both locales
-                  land on the operator side; nothing hits the
-                  customer document until the shop actively saves. */}
               <textarea
-                id="terms"
-                name="terms"
+                id="estimateTerms"
+                name="estimateTerms"
                 rows={10}
-                defaultValue={garage?.terms ?? t("settingsTermsDefaultText")}
-                placeholder={t("settingsTermsPlaceholder")}
+                defaultValue={garage?.estimateTerms ?? t("settingsEstimateTermsDefaultText")}
+                placeholder={t("settingsEstimateTermsPlaceholder")}
                 className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/60"
               />
               <div>
@@ -620,7 +618,47 @@ export default async function SettingsPage({
                 </Button>
               </div>
               <p className="text-xs text-text-mute">
-                {t("settingsTermsHint")}
+                {t("settingsEstimateTermsHint")}
+              </p>
+            </form>
+          </section>
+
+          <section className="rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold">
+              {t("settingsSecInvoiceTerms")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-mute">
+              {t("settingsSecInvoiceTermsHint")}
+            </p>
+            <p className="mt-3 rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+              {t("settingsTermsResponsibility")}
+            </p>
+            <form
+              action={updateGarageInvoiceTermsAction}
+              className="mt-3 flex flex-col gap-2"
+            >
+              <label htmlFor="invoiceTerms" className="text-sm font-medium">
+                {t("settingsInvoiceTermsLabel")}
+              </label>
+              {/* Four clauses by design — anything invented on the
+                  shop's behalf (specific warranty periods,
+                  retention-of-title clauses) is deliberately left
+                  out. A shop's terms are the shop's own document. */}
+              <textarea
+                id="invoiceTerms"
+                name="invoiceTerms"
+                rows={8}
+                defaultValue={garage?.invoiceTerms ?? t("settingsInvoiceTermsDefaultText")}
+                placeholder={t("settingsInvoiceTermsPlaceholder")}
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+              />
+              <div>
+                <Button type="submit" variant="primary">
+                  {t("settingsSave")}
+                </Button>
+              </div>
+              <p className="text-xs text-text-mute">
+                {t("settingsInvoiceTermsHint")}
               </p>
             </form>
           </section>

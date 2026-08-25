@@ -174,9 +174,10 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           trn: true,
           address: true,
           logoUrl: true,
-          // Batch D: shop-wide Terms & Conditions printed at the
-          // bottom of the customer-facing invoice.
-          terms: true,
+          // Batch D + split (2026-08-25): invoice-side terms only.
+          // Estimate has its own column (estimateTerms) never read
+          // by the customer invoice.
+          invoiceTerms: true,
           // AR 2026-08-25 — fallback for the invoice's Payment
           // Terms block when the per-invoice override is null.
           defaultPaymentTerms: true,
@@ -411,13 +412,13 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
       {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
           bottom of the customer-facing invoice. Renders only when
           set; blank = no block. */}
-      {inv.garage.terms ? (
+      {inv.garage.invoiceTerms ? (
         <div className="border-t border-border pt-3 text-xs">
           <div className="font-semibold uppercase tracking-wide text-text-mute">
             {t("documentTermsHeading")}
           </div>
           <p className="mt-1 whitespace-pre-line leading-relaxed">
-            {inv.garage.terms}
+            {inv.garage.invoiceTerms}
           </p>
         </div>
       ) : null}

@@ -1471,16 +1471,30 @@ const en = {
   settingsPaymentTermsLabel: "Default payment terms",
   settingsPaymentTermsPlaceholder: "e.g. 50% advance and 50% on delivery",
   settingsPaymentTermsHint: "Printed on every estimate. Advisors can override per estimate.",
-  // Settings — Batch D shop-wide Terms & Conditions.
-  settingsSecDocumentTerms: "Estimate & invoice terms",
-  settingsSecDocumentTermsHint: "Prints at the bottom of every estimate and invoice. Free text — write your own numbered clauses.",
-  settingsTermsLabel: "Terms & conditions",
-  settingsTermsPlaceholder: "1. This estimate is valid for 7 days.\n2. Prices subject to change.\n3. …",
-  settingsTermsHint: "Line breaks are preserved. Leave empty to hide the block on both documents.",
+  // Settings — split-terms (AR 2026-08-25). Two sections, one per
+  // document type. Wording tuned so each set only carries clauses
+  // that apply to its document. Both keep the same responsibility
+  // banner (settingsTermsResponsibility) — the message is generic.
+  settingsSecEstimateTerms: "Estimate terms",
+  settingsSecEstimateTermsHint: "Prints at the bottom of every estimate. Free text — write your own numbered clauses.",
+  settingsEstimateTermsLabel: "Estimate terms & conditions",
+  settingsEstimateTermsPlaceholder: "1. This estimate is valid for 7 days.\n2. Prices subject to change.\n3. …",
+  settingsEstimateTermsHint: "Line breaks are preserved. Leave empty to hide the block on the estimate.",
   settingsTermsResponsibility: "These are your garage's own terms and your responsibility to review before saving. The wording below is a starting sample — edit or replace it to match your shop's policy.",
-  settingsTermsDefaultText:
+  settingsEstimateTermsDefaultText:
     "1. This estimate is valid for 7 days from the date shown above.\n2. Prices are subject to change without prior notice.\n3. No warranty is provided on parts supplied by the customer.\n4. Any additional work identified during the repair will be quoted and requires customer approval before proceeding.\n5. The final invoice amount may vary from this estimate if additional work is authorised.\n6. Parts are classified as OEM (Original Equipment Manufacturer), OES (Original Equipment Supplier), or Aftermarket, as marked on each line.\n7. The customer authorises the workshop to road-test the vehicle as required to verify the repair.",
-  settingsOkTerms: "Terms & conditions saved.",
+  settingsOkEstimateTerms: "Estimate terms saved.",
+  settingsSecInvoiceTerms: "Invoice terms",
+  settingsSecInvoiceTermsHint: "Prints at the bottom of every invoice. Free text — write your own numbered clauses.",
+  settingsInvoiceTermsLabel: "Invoice terms & conditions",
+  settingsInvoiceTermsPlaceholder: "1. Workshop labour warranty as agreed.\n2. Parts warranty per supplier policy.\n3. …",
+  settingsInvoiceTermsHint: "Line breaks are preserved. Leave empty to hide the block on the invoice.",
+  // Short by design. Anything invented on the shop's behalf (specific
+  // warranty periods, retention-of-title clauses) is deliberately left
+  // out — a shop's terms are the shop's own document, not ours.
+  settingsInvoiceTermsDefaultText:
+    "1. Workshop labour warranty as agreed at the time of repair.\n2. Parts warranty is per the manufacturer's or supplier's own policy — the workshop passes through what the supplier provides, no more.\n3. No warranty applies to parts supplied by the customer.\n4. Payment terms as agreed.",
+  settingsOkInvoiceTerms: "Invoice terms saved.",
   documentTermsHeading: "Terms & conditions",
   // Batch E — deploy-freshness banner (ship-hidden until the Vercel
   // env flag flips; keys still need to exist so a mid-deploy flag
@@ -3210,16 +3224,24 @@ const ar: typeof en = {
   settingsPaymentTermsLabel: "شروط الدفع الافتراضية",
   settingsPaymentTermsPlaceholder: "مثال: 50٪ مقدّم و50٪ عند التسليم",
   settingsPaymentTermsHint: "تُطبع على كل تقدير. يمكن للمستشارين تعديلها لكل تقدير على حدة.",
-  // Settings — Batch D shop-wide Terms & Conditions.
-  settingsSecDocumentTerms: "شروط عرض السعر والفاتورة",
-  settingsSecDocumentTermsHint: "تُطبع في أسفل كل عرض سعر وفاتورة. نص حر — اكتب بنودك المرقمة الخاصة.",
-  settingsTermsLabel: "الشروط والأحكام",
-  settingsTermsPlaceholder: "١. هذا العرض ساري لمدة ٧ أيام.\n٢. الأسعار قابلة للتغيير.\n٣. …",
-  settingsTermsHint: "يتم الحفاظ على فواصل الأسطر. اترك الحقل فارغاً لإخفاء البنود من المستندين.",
+  // Settings — split-terms (AR 2026-08-25).
+  settingsSecEstimateTerms: "شروط عرض السعر",
+  settingsSecEstimateTermsHint: "تُطبع في أسفل كل عرض سعر. نص حر — اكتب بنودك المرقمة الخاصة.",
+  settingsEstimateTermsLabel: "شروط وأحكام عرض السعر",
+  settingsEstimateTermsPlaceholder: "١. هذا العرض ساري لمدة ٧ أيام.\n٢. الأسعار قابلة للتغيير.\n٣. …",
+  settingsEstimateTermsHint: "يتم الحفاظ على فواصل الأسطر. اترك الحقل فارغاً لإخفاء البنود من عرض السعر.",
   settingsTermsResponsibility: "هذه هي شروط ورشتك الخاصة، ومن مسؤوليتك مراجعتها قبل الحفظ. النص أدناه نموذج للبدء — عدّله أو استبدله بما يناسب سياسة ورشتك.",
-  settingsTermsDefaultText:
+  settingsEstimateTermsDefaultText:
     "١. عرض السعر هذا ساري لمدة ٧ أيام من التاريخ المذكور أعلاه.\n٢. الأسعار قابلة للتغيير دون إشعار مسبق.\n٣. لا يُقدَّم أي ضمان على القطع الموردة من قبل العميل.\n٤. أي أعمال إضافية تُكتشف أثناء الإصلاح سيتم تسعيرها وتتطلب موافقة العميل قبل التنفيذ.\n٥. المبلغ النهائي للفاتورة قد يختلف عن هذا العرض في حال تفويض أعمال إضافية.\n٦. القطع مُصنَّفة على أنها OEM (أصلية من الشركة الصانعة) أو OES (أصلية من مورد الشركة) أو Aftermarket (بديلة)، كما هو موضح لكل بند.\n٧. يُخوّل العميل الورشة لإجراء اختبار قيادة للمركبة حسب الحاجة للتأكد من الإصلاح.",
-  settingsOkTerms: "تم حفظ الشروط والأحكام.",
+  settingsOkEstimateTerms: "تم حفظ شروط عرض السعر.",
+  settingsSecInvoiceTerms: "شروط الفاتورة",
+  settingsSecInvoiceTermsHint: "تُطبع في أسفل كل فاتورة. نص حر — اكتب بنودك المرقمة الخاصة.",
+  settingsInvoiceTermsLabel: "شروط وأحكام الفاتورة",
+  settingsInvoiceTermsPlaceholder: "١. ضمان أعمال الورشة على النحو المتفق عليه.\n٢. ضمان القطع وفقاً لسياسة المورد.\n٣. …",
+  settingsInvoiceTermsHint: "يتم الحفاظ على فواصل الأسطر. اترك الحقل فارغاً لإخفاء البنود من الفاتورة.",
+  settingsInvoiceTermsDefaultText:
+    "١. ضمان العمل على النحو المتفق عليه وقت الإصلاح.\n٢. ضمان القطع وفقاً لسياسة الشركة الصانعة أو المورد — تنقل الورشة ما يقدمه المورد فقط، لا أكثر.\n٣. لا يُطبَّق الضمان على القطع التي يوفرها العميل.\n٤. شروط الدفع على النحو المتفق عليه.",
+  settingsOkInvoiceTerms: "تم حفظ شروط الفاتورة.",
   documentTermsHeading: "الشروط والأحكام",
   // Batch E — deploy-freshness banner.
   versionCheckMessage: "يتوفر إصدار أحدث. أعد التحميل للحصول على آخر تحديث — قد يُفقد ما لم تحفظه.",

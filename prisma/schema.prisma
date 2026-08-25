@@ -310,16 +310,27 @@ model Garage {
   // doesn't rewrite historical labour cost — same "frozen at emit"
   // discipline as Invoice.customerTrn.
   defaultLaborHourlyCost Decimal? @db.Decimal(12, 2)
-  // Shop-wide Terms & Conditions printed at the bottom of every
-  // estimate and every invoice (AR 2026-08-25 Batch D). Free text
-  // with line breaks preserved on render — most shops carry a
-  // fixed set of numbered clauses (validity, no warranty on
-  // customer-supplied parts, extra work needs approval, etc.).
-  // Deliberately no default wording — terms are legally the
-  // garage's own; we don't ship boilerplate that could mislead.
-  // Null = block doesn't render on either surface. Set via
-  // Settings → Estimate & invoice terms.
-  terms String?
+  // Shop-wide Terms & Conditions — split by document type
+  // (AR 2026-08-25). Same clauses rarely fit both:
+  //   estimateTerms — printed at the bottom of every estimate.
+  //     Typically forward-looking clauses (validity period, prices
+  //     subject to change, additional-work approval).
+  //   invoiceTerms — printed at the bottom of every invoice.
+  //     Typically post-billing clauses (workmanship warranty, parts
+  //     warranty pass-through, customer-supplied parts excluded,
+  //     payment terms as agreed).
+  //
+  // Both free text, both nullable, both without ship-wording — the
+  // block simply doesn't render when a shop has not saved terms.
+  // A seven-clause sample prefills the Settings textarea on first
+  // open (see settings page) so a shop is nudged to adopt or edit
+  // rather than leave blank; the DB stays null until saved.
+  //
+  // Renamed from `terms` (Batch D) at split time — a shop shipping
+  // an "estimate is valid for 7 days" clause at the bottom of a
+  // paid invoice would embarrass them in front of the customer.
+  estimateTerms String?
+  invoiceTerms  String?
   // Shop-wide fallback for cold-start outbound customer messages
   // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
   // falls through to "en" as last resort. UAE default was Arabic

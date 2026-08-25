@@ -8,6 +8,7 @@ import { PART_REQUEST_OPEN_STATUSES } from "@/lib/part-request-open";
 import { MobileTopStrip } from "./MobileTopStrip";
 import { DesktopSideNav } from "./DesktopSideNav";
 import { MobileNavClient } from "./MobileNavClient";
+import { VersionCheck } from "@/components/version-check";
 import type { BottomTab } from "./BottomTabBar";
 import type { MoreSheetItem } from "./MoreSheet";
 import type { SideNavItem } from "./DesktopSideNav";
@@ -171,6 +172,23 @@ export async function AppShell({
                  child of <main>), not the bottom, and did nothing to
                  clear the last row's actions on the cashier
                  Receivables list. */}
+            {/* AR 2026-08-25 Batch E — deploy-freshness check for
+                staff tabs left open across a deploy. Fetches
+                /api/version on focus / visibility change / 5-min
+                interval and logs every mismatch to
+                /api/version/log. Banner renders only when
+                NEXT_PUBLIC_VERSION_BANNER_ENABLED === "1" (ship
+                hidden, enable via Vercel env after a week of clean
+                logs). Deliberately mounted inside AppShell — every
+                authenticated staff route renders through here, and
+                no customer-facing surface does. */}
+            <VersionCheck
+                labels={{
+                    message: t("versionCheckMessage"),
+                    reload: t("versionCheckReload"),
+                    dismiss: t("versionCheckDismiss"),
+                }}
+            />
         </>
     );
 }

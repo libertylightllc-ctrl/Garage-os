@@ -1478,6 +1478,12 @@ const en = {
     "1. This estimate is valid for 7 days from the date shown above.\n2. Prices are subject to change without prior notice.\n3. No warranty is provided on parts supplied by the customer.\n4. Any additional work identified during the repair will be quoted and requires customer approval before proceeding.\n5. The final invoice amount may vary from this estimate if additional work is authorised.\n6. Parts are classified as OEM (Original Equipment Manufacturer), OES (Original Equipment Supplier), or Aftermarket, as marked on each line.\n7. The customer authorises the workshop to road-test the vehicle as required to verify the repair.",
   settingsOkTerms: "Terms & conditions saved.",
   documentTermsHeading: "Terms & conditions",
+  // Batch E — deploy-freshness banner (ship-hidden until the Vercel
+  // env flag flips; keys still need to exist so a mid-deploy flag
+  // flip doesn't render `[MISSING]` fallback labels).
+  versionCheckMessage: "A newer version is available. Reload to get the latest — your unsaved input will be lost.",
+  versionCheckReload: "Reload",
+  versionCheckDismiss: "Later",
   discount: "Discount",
   skip: "Skip",
   restore: "Restore",
@@ -3210,6 +3216,10 @@ const ar: typeof en = {
     "١. عرض السعر هذا ساري لمدة ٧ أيام من التاريخ المذكور أعلاه.\n٢. الأسعار قابلة للتغيير دون إشعار مسبق.\n٣. لا يُقدَّم أي ضمان على القطع الموردة من قبل العميل.\n٤. أي أعمال إضافية تُكتشف أثناء الإصلاح سيتم تسعيرها وتتطلب موافقة العميل قبل التنفيذ.\n٥. المبلغ النهائي للفاتورة قد يختلف عن هذا العرض في حال تفويض أعمال إضافية.\n٦. القطع مُصنَّفة على أنها OEM (أصلية من الشركة الصانعة) أو OES (أصلية من مورد الشركة) أو Aftermarket (بديلة)، كما هو موضح لكل بند.\n٧. يُخوّل العميل الورشة لإجراء اختبار قيادة للمركبة حسب الحاجة للتأكد من الإصلاح.",
   settingsOkTerms: "تم حفظ الشروط والأحكام.",
   documentTermsHeading: "الشروط والأحكام",
+  // Batch E — deploy-freshness banner.
+  versionCheckMessage: "يتوفر إصدار أحدث. أعد التحميل للحصول على آخر تحديث — قد يُفقد ما لم تحفظه.",
+  versionCheckReload: "أعد التحميل",
+  versionCheckDismiss: "لاحقاً",
   discount: "خصم",
   skip: "تخطّي",
   restore: "استعادة",

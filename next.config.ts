@@ -79,7 +79,38 @@ const nextConfig: NextConfig = {
       "./node_modules/@sparticuz/chromium/bin/**",
     ],
   },
+  // AR 2026-08-25 Batch E — expose the git SHA to the client bundle so
+  // <VersionCheck> can compare its snapshot-at-load against the current
+  // deploy. Vercel injects VERCEL_GIT_COMMIT_SHA on every build; local
+  // dev falls to "dev" (which never triggers a mismatch because both
+  // client and server report the same value). NEXT_PUBLIC_* is inlined
+  // at build time — the client sees whichever value was baked in.
+  //
+  // NEXT_PUBLIC_VERSION_BANNER_ENABLED is the ship-hidden gate: the
+  // client keeps fetching /api/version and logging mismatches to
+  // /api/version/log for observability, but the reload banner only
+  // renders when this flag is "1". Set the Vercel env var to "1"
+  // after a week of clean-log observation.
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? "dev",
+    NEXT_PUBLIC_VERSION_BANNER_ENABLED:
+      process.env.VERSION_BANNER_ENABLED ?? "",
+  },
   experimental: {
+    // AR 2026-08-25 Batch E — kill App-Router client-cache staleness.
+    // Next 16's default (dynamic: 30s) means a soft navigation between
+    // routes can serve up to 30s of stale RSC. For a shop that leaves
+    // the app open all day and navigates constantly, that's the
+    // straight-line path to "advisor used last week's form because
+    // Ctrl+F5 got the current page but not the router cache". 0 = every
+    // soft navigation re-fetches from origin; static: 0 for the same
+    // reason on public/static prefetches. Pin explicitly so a future
+    // Next.js version raising the default can't silently reintroduce
+    // the stale-navigation class.
+    staleTimes: {
+      dynamic: 0,
+      static: 0,
+    },
     serverActions: {
       // Photo uploads (Moulkia, check-in, tech, customer booking) flow through
       // Server Actions. Default is 1 MB — iPhone photos are 2–5 MB so every real

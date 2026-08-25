@@ -14,6 +14,7 @@ import {
   updateGarageTrnAction,
   updateGarageAddressAction,
   updateGarageDefaultLangAction,
+  updateGarageTermsAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -76,6 +77,7 @@ const OK_KEY: Record<string, MessageKey> = {
   "garage-trn": "settingsOkGarageTrn",
   "garage-address": "settingsOkGarageAddress",
   "garage-default-lang": "settingsOkGarageDefaultLang",
+  "terms": "settingsOkTerms",
 };
 
 export default async function SettingsPage({
@@ -121,6 +123,7 @@ export default async function SettingsPage({
           defaultPartsMarkupPct: true,
           defaultLaborHourlyCost: true,
           defaultPaymentTerms: true,
+          terms: true,
         },
       })
     : null;
@@ -553,6 +556,71 @@ export default async function SettingsPage({
               </div>
               <p className="text-xs text-text-mute">
                 {t("settingsPaymentTermsHint")}
+              </p>
+            </form>
+          </section>
+        </>
+      ) : null}
+
+      {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions printed
+          at the bottom of every estimate and every invoice. Free
+          text; line breaks preserved. Deliberately no default text
+          — terms are legally the shop's own document, so we don't
+          ship boilerplate wording that could mislead. Sits in its
+          own section (not folded into Pricing defaults) so the
+          textarea has room and the concern reads clearly. Guard:
+          requireOperational() on the action; page-side gate is
+          isOperational — matches the other document-facing
+          setting (payment terms) above. */}
+      {isOperational ? (
+        <>
+          <section className="rounded-xl border border-border p-4">
+            <h2 className="text-base font-semibold">
+              {t("settingsSecDocumentTerms")}
+            </h2>
+            <p className="mt-0.5 text-xs text-text-mute">
+              {t("settingsSecDocumentTermsHint")}
+            </p>
+            {/* Responsibility banner — sits above the textarea so
+                the operator sees WHOSE document these are before
+                editing the sample. AR 2026-08-25 Batch D. */}
+            <p className="mt-3 rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+              {t("settingsTermsResponsibility")}
+            </p>
+            <form
+              action={updateGarageTermsAction}
+              className="mt-3 flex flex-col gap-2"
+            >
+              <label
+                htmlFor="terms"
+                className="text-sm font-medium"
+              >
+                {t("settingsTermsLabel")}
+              </label>
+              {/* Prefill with a seven-clause sample when the garage
+                  has never saved terms (garage.terms === null). Once
+                  saved the field reads back whatever the shop wrote.
+                  A blank box on first open leaves 100% of shops with
+                  no terms; a sample-then-edit shape gets them
+                  started with something they can adopt or replace.
+                  The default text ships from i18n so both locales
+                  land on the operator side; nothing hits the
+                  customer document until the shop actively saves. */}
+              <textarea
+                id="terms"
+                name="terms"
+                rows={10}
+                defaultValue={garage?.terms ?? t("settingsTermsDefaultText")}
+                placeholder={t("settingsTermsPlaceholder")}
+                className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/60"
+              />
+              <div>
+                <Button type="submit" variant="primary">
+                  {t("settingsSave")}
+                </Button>
+              </div>
+              <p className="text-xs text-text-mute">
+                {t("settingsTermsHint")}
               </p>
             </form>
           </section>

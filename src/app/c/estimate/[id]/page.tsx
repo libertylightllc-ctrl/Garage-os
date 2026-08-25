@@ -80,6 +80,8 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               // Batch C: shop-wide Payment Terms fallback when the
               // per-estimate override isn't set.
               defaultPaymentTerms: true,
+              // Batch D: shop-wide Terms & Conditions.
+              terms: true,
             },
           },
         },
@@ -210,6 +212,19 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               ) : null}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
+          bottom of the document. Renders only when set. */}
+      {est.jobCard.garage.terms ? (
+        <div className="border-t border-border pt-3 text-xs">
+          <div className="font-semibold uppercase tracking-wide text-text-mute">
+            {t("documentTermsHeading")}
+          </div>
+          <p className="mt-1 whitespace-pre-line leading-relaxed">
+            {est.jobCard.garage.terms}
+          </p>
         </div>
       ) : null}
 

@@ -9,10 +9,11 @@ import { normalizeToE164 } from "@/lib/wa";
 import { getT, getLocale } from "@/i18n/server";
 import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { DISCOUNT_DESCRIPTION_MARKER } from "@/lib/invoice-discount";
-import { translateLineDescription } from "@/lib/line-item-translations";
 import { canEditInvoice } from "@/lib/permissions";
 import { JobNumberBadge } from "@/components/job-number-badge";
 import { DocumentHeader } from "@/components/document-header";
+import { InvoiceLineSection } from "@/components/invoice-line-section";
+import { groupLinesBySection } from "@/lib/estimate-sections";
 
 export const dynamic ="force-dynamic";
 
@@ -70,6 +71,23 @@ export default async function InvoicePreview({
     (l) => !DISCOUNT_DESCRIPTION_MARKER.test(l.description),
   );
   const grossSubtotal = workLines.reduce((s, l) => s + Number(l.lineTotal), 0);
+  // AR 2026-08-25 Batch D — same three-section restructure as Batch C
+  // gave the estimate. Discount lines are already pulled out by the
+  // DISCOUNT_DESCRIPTION_MARKER regex above, so this only buckets the
+  // real work lines; any stray FEE-negative row that slipped past the
+  // marker would still land in the section helper's discount bucket
+  // and be omitted from the section tables (we render them into the
+  // totals block instead, unchanged).
+  const invoiceSections = groupLinesBySection(
+    workLines.map((l) => ({
+      id: l.id,
+      kind: l.kind,
+      description: l.description,
+      qty: Number(l.qty),
+      unitPrice: Number(l.unitPrice),
+      lineTotal: Number(l.lineTotal),
+    })),
+  );
   const discountAmount = discountLine
     ? Math.abs(Number(discountLine.lineTotal))
     : 0;
@@ -157,64 +175,44 @@ export default async function InvoicePreview({
 
         {/* Line items — work-only (parts/labour/fees). Discount lives
             in the totals area, not as a row, per spec. */}
-        {/* Same column-alignment fix as /invoices/[id]: colgroup for
-            fixed numeric column widths, px-2 padding so numbers never
-            touch, tabular-nums for decimal alignment. Preview is what
-            the cashier reviews before sending — and it's printable
-            too (Ctrl+P works anywhere) so it must hold up on paper. */}
-        <div className="mt-6 overflow-x-auto print:overflow-visible">
-          <table className="w-full text-sm tabular-nums">
-            <colgroup>
-              <col />
-              <col className="w-16"/>
-              <col className="w-24"/>
-              <col className="w-24"/>
-              <col className="w-20"/>
-              <col className="w-24"/>
-            </colgroup>
-            <thead>
-              <tr className="border-b border-black/10 text-zinc-500">
-                <th className="px-2 py-1 text-start font-medium">{t("colDescription")}</th>
-                <th className="px-2 py-1 text-end font-medium">{t("colQty")}</th>
-                <th className="px-2 py-1 text-end font-medium">{t("colUnit")}</th>
-                <th className="px-2 py-1 text-end font-medium">{t("colAmount")}</th>
-                <th className="px-2 py-1 text-end font-medium">{t("colVat")}</th>
-                <th className="px-2 py-1 text-end font-medium">{t("colLineTotal")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workLines.map((l) => {
-                const amt = Number(l.lineTotal);
-                const vat = amt * 0.05;
-                return (
-                  <tr key={l.id} className="border-b border-black/5">
-                    <td className="px-2 py-1">{translateLineDescription(l.description, locale)}</td>
-                    <td className="px-2 py-1 text-end">{Number(l.qty)}</td>
-                    <td className="px-2 py-1 text-end">
-                      {Number(l.unitPrice).toFixed(2)}
-                    </td>
-                    <td className="px-2 py-1 text-end">
-                      {amt.toFixed(2)}
-                    </td>
-                    {/* Per-line VAT — 5 % of the VAT-exclusive line
-                        total. Sums to inv.vatAmount. */}
-                    <td className="px-2 py-1 text-end">
-                      {vat.toFixed(2)}
-                    </td>
-                    {/* Per-line total = Amount + VAT. Matches how the
-                        customer reads the invoice: the rightmost number
-                        on each row is what that item cost inclusive.
-                        Sum still equals invoice total after
-                        discount + VAT because discounts live in the
-                        totals block, not as a row. */}
-                    <td className="px-2 py-1 text-end font-medium">
-                      {(amt + vat).toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* AR 2026-08-25 Batch D — sectioned line-items, same three-
+            section shape as the estimate: Parts, Sublet/Consumables/
+            Services, Labour. Each section has its own subtotal row.
+            Empty sections are omitted (the caller gates on
+            lines.length > 0 inside InvoiceLineSection). Discount
+            lines stay pulled out via DISCOUNT_DESCRIPTION_MARKER and
+            render in the totals block below. */}
+        <div className="mt-6 flex flex-col gap-6 print:overflow-visible">
+          {workLines.length === 0 ? (
+            <p className="py-3 text-center text-zinc-500">{t("noLineItems")}</p>
+          ) : (
+            <>
+              <InvoiceLineSection
+                title={t("estimateSectionParts")}
+                lines={invoiceSections.parts.lines}
+                subtotal={invoiceSections.parts.subtotal}
+                locale={locale}
+                t={t}
+                vatRate={0.05}
+              />
+              <InvoiceLineSection
+                title={t("estimateSectionSublet")}
+                lines={invoiceSections.sublet.lines}
+                subtotal={invoiceSections.sublet.subtotal}
+                locale={locale}
+                t={t}
+                vatRate={0.05}
+              />
+              <InvoiceLineSection
+                title={t("estimateSectionLabour")}
+                lines={invoiceSections.labour.lines}
+                subtotal={invoiceSections.labour.subtotal}
+                locale={locale}
+                t={t}
+                vatRate={0.05}
+              />
+            </>
+          )}
         </div>
 
         {/* Totals — same breakdown as the edit page, mirroring the
@@ -283,6 +281,20 @@ export default async function InvoicePreview({
             ) : null}
           </dl>
         </div>
+
+        {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
+            bottom of the printable doc so it prints with the
+            invoice. Renders only when set; blank = no block. */}
+        {inv.garage.terms ? (
+          <div className="mt-6 border-t border-zinc-200 pt-4 text-xs">
+            <div className="font-semibold uppercase tracking-wide text-zinc-600">
+              {t("documentTermsHeading")}
+            </div>
+            <p className="mt-1 whitespace-pre-line leading-relaxed">
+              {inv.garage.terms}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {/* Bottom action bar — three states after the 2026-08-10

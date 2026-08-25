@@ -2,8 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { formatInvoiceNo } from "@/lib/billing";
 import { resolveDocumentToken } from "@/lib/document-tokens";
 import { getT, getLocale } from "@/i18n/server";
-import { translateLineDescription } from "@/lib/line-item-translations";
 import { DocumentHeader } from "@/components/document-header";
+import { InvoiceLineSection } from "@/components/invoice-line-section";
+import { groupLinesBySection } from "@/lib/estimate-sections";
 import { UAE_VAT_RATE } from "@/lib/vat";
 import Link from "next/link";
 
@@ -166,6 +167,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           trn: true,
           address: true,
           logoUrl: true,
+          // Batch D: shop-wide Terms & Conditions printed at the
+          // bottom of the customer-facing invoice.
+          terms: true,
         },
       },
       // Pull customer for Bill-to block + FTA-required customer TRN when
@@ -213,12 +217,20 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
   const balance = Math.max(0, total - paid);
   const isPaid = inv.status ==="PAID"|| balance <= 0;
 
-  // Per-line VAT — UAE VAT is a flat 5 % on VAT-exclusive line totals.
-  // Rendered inline as an audit-friendly column rather than only the
-  // aggregate at the bottom (FTA prefers per-line even at a single
-  // rate; the aggregate stays as the total row for the customer).
-  const lineVat = (lineTotal: number) =>
-    Math.round((lineTotal * UAE_VAT_RATE + Number.EPSILON) * 100) / 100;
+  // AR 2026-08-25 Batch D — sectioned line-items on the customer's
+  // copy too, so the customer's estimate + invoice pair reads as one
+  // document family instead of "sectioned quote / flat invoice". Same
+  // helper the estimate + staff invoice preview use.
+  const invoiceSections = groupLinesBySection(
+    inv.lines.map((l) => ({
+      id: l.id,
+      kind: l.kind,
+      description: l.description,
+      qty: Number(l.qty),
+      unitPrice: Number(l.unitPrice),
+      lineTotal: Number(l.lineTotal),
+    })),
+  );
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-6">
@@ -285,47 +297,74 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           clarity. On a single-rate document the aggregate at the
           bottom is technically enough, but per-line matches FTA best
           practice and future-proofs for multi-rate lines. */}
-      {/* Full 5-column layout matches the internal cashier + print
-          surfaces (Qty · Unit · Amount · VAT · Total). Total = Amount
-          + VAT per line — reads naturally right-to-left so a
-          customer scanning "what did I actually pay for this?" lands
-          on the rightmost number. Column widths minimised on mobile
-          via overflow-x-auto. */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-xs uppercase tracking-wide text-text-mute">
-            <tr>
-              <th className="py-1 text-start font-medium">{t("colDescription")}</th>
-              <th className="py-1 text-end font-medium tabular-nums">{t("colQty")}</th>
-              <th className="py-1 text-end font-medium tabular-nums">{t("colUnit")}</th>
-              <th className="py-1 text-end font-medium tabular-nums">{t("colAmount")}</th>
-              <th className="py-1 text-end font-medium tabular-nums">{t("colVat")}</th>
-              <th className="py-1 text-end font-medium tabular-nums">{t("colLineTotal")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inv.lines.map((l) => {
-              const amt = Number(l.lineTotal);
-              const vat = lineVat(amt);
-              return (
-                <tr key={l.id} className="border-t border-border">
-                  <td className="py-1 pe-2">{translateLineDescription(l.description, locale)}</td>
-                  <td className="py-1 text-end tabular-nums">{Number(l.qty)}</td>
-                  <td className="py-1 text-end tabular-nums">{Number(l.unitPrice).toFixed(2)}</td>
-                  <td className="py-1 text-end tabular-nums">{amt.toFixed(2)}</td>
-                  <td className="py-1 text-end tabular-nums">{vat.toFixed(2)}</td>
-                  <td className="py-1 text-end tabular-nums font-medium">{(amt + vat).toFixed(2)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* AR 2026-08-25 Batch D — three-section render matching the
+          estimate. Empty sections are omitted. The theming defaults
+          on InvoiceLineSection use zinc/black; override to the
+          themed palette so this reads correctly under dark mode
+          (customer may be viewing on their phone at any time). */}
+      <div className="flex flex-col gap-6 overflow-x-auto">
+        {inv.lines.length === 0 ? (
+          <p className="py-3 text-center text-text-mute">{t("noLineItems")}</p>
+        ) : (
+          <>
+            <InvoiceLineSection
+              title={t("estimateSectionParts")}
+              lines={invoiceSections.parts.lines}
+              subtotal={invoiceSections.parts.subtotal}
+              locale={locale}
+              t={t}
+              vatRate={UAE_VAT_RATE}
+              borderClass="border-b border-border"
+              subtleTextClass="text-text-mute"
+              subtotalRowClass="border-t border-border"
+              headingClass="text-text-mute"
+            />
+            <InvoiceLineSection
+              title={t("estimateSectionSublet")}
+              lines={invoiceSections.sublet.lines}
+              subtotal={invoiceSections.sublet.subtotal}
+              locale={locale}
+              t={t}
+              vatRate={UAE_VAT_RATE}
+              borderClass="border-b border-border"
+              subtleTextClass="text-text-mute"
+              subtotalRowClass="border-t border-border"
+              headingClass="text-text-mute"
+            />
+            <InvoiceLineSection
+              title={t("estimateSectionLabour")}
+              lines={invoiceSections.labour.lines}
+              subtotal={invoiceSections.labour.subtotal}
+              locale={locale}
+              t={t}
+              vatRate={UAE_VAT_RATE}
+              borderClass="border-b border-border"
+              subtleTextClass="text-text-mute"
+              subtotalRowClass="border-t border-border"
+              headingClass="text-text-mute"
+            />
+          </>
+        )}
       </div>
       <div className="border-t border-border pt-2 text-right text-sm">
         <div>{t("subtotal")}: {money(Number(inv.subtotal))}</div>
         <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
         <div className="text-lg font-semibold">{t("total")}: {money(total)}</div>
       </div>
+
+      {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
+          bottom of the customer-facing invoice. Renders only when
+          set; blank = no block. */}
+      {inv.garage.terms ? (
+        <div className="border-t border-border pt-3 text-xs">
+          <div className="font-semibold uppercase tracking-wide text-text-mute">
+            {t("documentTermsHeading")}
+          </div>
+          <p className="mt-1 whitespace-pre-line leading-relaxed">
+            {inv.garage.terms}
+          </p>
+        </div>
+      ) : null}
 
       {isPaid ? (
         <p className="rounded-xl border border-success-500/40 bg-success-50 p-4 text-center text-sm font-semibold text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">

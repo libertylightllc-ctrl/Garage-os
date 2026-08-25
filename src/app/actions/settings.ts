@@ -170,6 +170,33 @@ export async function updateDefaultPaymentTermsAction(formData: FormData) {
 }
 
 /**
+ * Operational: shop-wide Terms & Conditions printed at the bottom
+ * of every estimate and every invoice (AR 2026-08-25 Batch D).
+ * Free text with line breaks preserved on render — most shops
+ * carry a fixed set of numbered clauses (validity period, prices
+ * subject to change, no warranty on customer-supplied parts, extra
+ * work needs approval, part quality categories, road-test
+ * authorisation). Deliberately no default wording ships in code —
+ * terms are legally the garage's own document.
+ *
+ * Role gate: OWNER + MASTER via requireOperational() — same as
+ * other pricing/document defaults. Sole writer of Garage.terms;
+ * a single-column write. Empty string clears to null (block stops
+ * rendering on both surfaces).
+ */
+export async function updateGarageTermsAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("terms") ?? "").trim();
+  const value = raw === "" ? null : raw;
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { terms: value },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=terms");
+}
+
+/**
  * Operational: shop-wide default hourly cost of labour (AR 2026-08-12,
  * profit reporting Phase 1, option B; widened to MASTER 2026-08-14
  * after AR — signed in as MASTER — hit the profit-card "set labour

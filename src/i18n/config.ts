@@ -1505,7 +1505,18 @@ const en = {
   settingsEstimateTermsLabel: "Estimate terms & conditions",
   settingsEstimateTermsPlaceholder: "1. This estimate is valid for 7 days.\n2. Prices subject to change.\n3. …",
   settingsEstimateTermsHint: "Line breaks are preserved. Leave empty to hide the block on the estimate.",
-  settingsTermsResponsibility: "These are your garage's own terms and your responsibility to review before saving. The wording below is a starting sample — edit or replace it to match your shop's policy.",
+  // AR 2026-08-25 — rewrite after the "prefill masks unsaved" trap
+  // (the seeded sample rendered as the textarea's defaultValue so it
+  // was visually indistinguishable from a saved value; three shops
+  // saw "populated" fields in Settings but nothing printed on the
+  // doc). The current UX shows the sample in a separate "Suggested
+  // wording (not yet saved)" block with an explicit Adopt button;
+  // the textarea itself only carries the shop's saved wording (empty
+  // by default). This copy reflects that split.
+  settingsTermsResponsibility: "These are your garage's own terms and your responsibility. Nothing prints on the customer's document until you save wording in the field below.",
+  settingsTermsSuggestedHeading: "Suggested wording — not yet saved",
+  settingsTermsSuggestedHint: "This is a starting point, not a saved value. To use it as-is, click below. Or type your own wording in the field and Save.",
+  settingsTermsAdoptButton: "Use this as my terms",
   settingsEstimateTermsDefaultText:
     "1. This estimate is valid for 7 days from the date shown above.\n2. Prices are subject to change without prior notice.\n3. No warranty is provided on parts supplied by the customer.\n4. Any additional work identified during the repair will be quoted and requires customer approval before proceeding.\n5. The final invoice amount may vary from this estimate if additional work is authorised.\n6. Parts are classified as OEM (Original Equipment Manufacturer), OES (Original Equipment Supplier), or Aftermarket, as marked on each line.\n7. The customer authorises the workshop to road-test the vehicle as required to verify the repair.",
   settingsOkEstimateTerms: "Estimate terms saved.",
@@ -3271,7 +3282,10 @@ const ar: typeof en = {
   settingsEstimateTermsLabel: "شروط وأحكام عرض السعر",
   settingsEstimateTermsPlaceholder: "١. هذا العرض ساري لمدة ٧ أيام.\n٢. الأسعار قابلة للتغيير.\n٣. …",
   settingsEstimateTermsHint: "يتم الحفاظ على فواصل الأسطر. اترك الحقل فارغاً لإخفاء البنود من عرض السعر.",
-  settingsTermsResponsibility: "هذه هي شروط ورشتك الخاصة، ومن مسؤوليتك مراجعتها قبل الحفظ. النص أدناه نموذج للبدء — عدّله أو استبدله بما يناسب سياسة ورشتك.",
+  settingsTermsResponsibility: "هذه هي شروط ورشتك الخاصة، ومن مسؤوليتك مراجعتها. لا يُطبع أي شيء على مستند العميل إلا بعد أن تحفظ النص في الحقل أدناه.",
+  settingsTermsSuggestedHeading: "نص مقترح — لم يُحفظ بعد",
+  settingsTermsSuggestedHint: "هذه بداية مقترحة وليست قيمة محفوظة. لاعتمادها كما هي، اضغط الزر أدناه. أو اكتب نصك الخاص في الحقل واحفظ.",
+  settingsTermsAdoptButton: "اعتمد هذا كشروطي",
   settingsEstimateTermsDefaultText:
     "١. عرض السعر هذا ساري لمدة ٧ أيام من التاريخ المذكور أعلاه.\n٢. الأسعار قابلة للتغيير دون إشعار مسبق.\n٣. لا يُقدَّم أي ضمان على القطع الموردة من قبل العميل.\n٤. أي أعمال إضافية تُكتشف أثناء الإصلاح سيتم تسعيرها وتتطلب موافقة العميل قبل التنفيذ.\n٥. المبلغ النهائي للفاتورة قد يختلف عن هذا العرض في حال تفويض أعمال إضافية.\n٦. القطع مُصنَّفة على أنها OEM (أصلية من الشركة الصانعة) أو OES (أصلية من مورد الشركة) أو Aftermarket (بديلة)، كما هو موضح لكل بند.\n٧. يُخوّل العميل الورشة لإجراء اختبار قيادة للمركبة حسب الحاجة للتأكد من الإصلاح.",
   settingsOkEstimateTerms: "تم حفظ شروط عرض السعر.",

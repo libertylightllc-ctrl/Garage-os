@@ -612,6 +612,15 @@ export default async function SettingsPage({
           prefills its own sample the first time a garage opens it; the
           DB stays null until the shop actively saves. Renderers on the
           respective documents read the matching column only. */}
+      {/* AR 2026-08-25 — split terms sections, one per document.
+          Textareas hold ONLY the shop's saved wording (empty when
+          the column is null); the seeded sample lives in a
+          separately-labelled "Suggested wording (not yet saved)"
+          card with an explicit Adopt button. Written after three
+          batches of "terms don't print" reports traced back to the
+          old defaultValue={garage?.terms ?? sample} shape, which
+          made the sample visually indistinguishable from a saved
+          value. See docs/business-rules.md §8 for the class. */}
       {isOperational ? (
         <>
           <section className="rounded-xl border border-border p-4">
@@ -621,12 +630,34 @@ export default async function SettingsPage({
             <p className="mt-0.5 text-xs text-text-mute">
               {t("settingsSecEstimateTermsHint")}
             </p>
-            {/* Responsibility banner — same wording on both terms
-                sections; the operator sees WHOSE document these are
-                before editing the sample. */}
             <p className="mt-3 rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
               {t("settingsTermsResponsibility")}
             </p>
+
+            {/* Adopt block — only when the column is null. Explicit
+                "not yet saved" heading + Adopt button posting to the
+                same server action with the sample as its value.
+                Distinct card styling (yellow border, greyed body
+                text) so a reader can never mistake this for saved
+                content. Hides entirely once a real value exists. */}
+            {!garage?.estimateTerms ? (
+              <div className="mt-3 rounded-lg border border-yellow-400 bg-yellow-50 px-3 py-3 text-sm text-zinc-700 dark:bg-yellow-500/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-yellow-800 dark:text-yellow-500">
+                  {t("settingsTermsSuggestedHeading")}
+                </div>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-text-mute">
+                  {t("settingsTermsSuggestedHint")}
+                </p>
+                <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs text-zinc-700 dark:text-zinc-300">{t("settingsEstimateTermsDefaultText")}</pre>
+                <form action={updateGarageEstimateTermsAction} className="mt-2">
+                  <input type="hidden" name="estimateTerms" value={t("settingsEstimateTermsDefaultText")} />
+                  <Button type="submit" variant="primary" size="sm">
+                    {t("settingsTermsAdoptButton")}
+                  </Button>
+                </form>
+              </div>
+            ) : null}
+
             <form
               action={updateGarageEstimateTermsAction}
               className="mt-3 flex flex-col gap-2"
@@ -638,7 +669,7 @@ export default async function SettingsPage({
                 id="estimateTerms"
                 name="estimateTerms"
                 rows={10}
-                defaultValue={garage?.estimateTerms ?? t("settingsEstimateTermsDefaultText")}
+                defaultValue={garage?.estimateTerms ?? ""}
                 placeholder={t("settingsEstimateTermsPlaceholder")}
                 className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/60"
               />
@@ -663,6 +694,25 @@ export default async function SettingsPage({
             <p className="mt-3 rounded-md border border-warning-500/40 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
               {t("settingsTermsResponsibility")}
             </p>
+
+            {!garage?.invoiceTerms ? (
+              <div className="mt-3 rounded-lg border border-yellow-400 bg-yellow-50 px-3 py-3 text-sm text-zinc-700 dark:bg-yellow-500/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-yellow-800 dark:text-yellow-500">
+                  {t("settingsTermsSuggestedHeading")}
+                </div>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-text-mute">
+                  {t("settingsTermsSuggestedHint")}
+                </p>
+                <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs text-zinc-700 dark:text-zinc-300">{t("settingsInvoiceTermsDefaultText")}</pre>
+                <form action={updateGarageInvoiceTermsAction} className="mt-2">
+                  <input type="hidden" name="invoiceTerms" value={t("settingsInvoiceTermsDefaultText")} />
+                  <Button type="submit" variant="primary" size="sm">
+                    {t("settingsTermsAdoptButton")}
+                  </Button>
+                </form>
+              </div>
+            ) : null}
+
             <form
               action={updateGarageInvoiceTermsAction}
               className="mt-3 flex flex-col gap-2"
@@ -670,15 +720,11 @@ export default async function SettingsPage({
               <label htmlFor="invoiceTerms" className="text-sm font-medium">
                 {t("settingsInvoiceTermsLabel")}
               </label>
-              {/* Four clauses by design — anything invented on the
-                  shop's behalf (specific warranty periods,
-                  retention-of-title clauses) is deliberately left
-                  out. A shop's terms are the shop's own document. */}
               <textarea
                 id="invoiceTerms"
                 name="invoiceTerms"
                 rows={8}
-                defaultValue={garage?.invoiceTerms ?? t("settingsInvoiceTermsDefaultText")}
+                defaultValue={garage?.invoiceTerms ?? ""}
                 placeholder={t("settingsInvoiceTermsPlaceholder")}
                 className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500/60"
               />

@@ -264,6 +264,32 @@ at `src/app/actions/settings.ts` writes the column; no Prisma
 middleware, no DB triggers, additive-only migration. Do not
 re-audit. If the report resurfaces, read the row first.
 
+**Closed instance — `Garage.estimateTerms` + `invoiceTerms`
+"nothing prints on the doc"** (2026-08-25). Reported three times.
+Root cause was a variant of the same class in the UI, not the DB:
+the Settings textarea rendered
+`defaultValue={garage?.estimateTerms ?? seededSampleClauses}` so a
+shop opening Settings for the first time saw a fully-populated
+textarea that looked saved. The prefill was visually
+indistinguishable from a real saved value. Users saw "populated
+fields" and assumed the terms were live — but the DB column
+stayed null and the print surface (`{garage.estimateTerms ? ... :
+null}`) correctly rendered nothing. The direct read via
+`scripts/probe-prod-terms.mts` returned `NULL` on every prod
+garage across both columns; that's what closed it.
+
+**Rule for suggested/sample defaults in a form**: never render an
+unsaved suggestion as the field's value. Either use the HTML
+`placeholder` attribute (which greys out and never submits) or
+put the sample in a distinct "not yet saved" affordance with an
+explicit Adopt button that writes it. If a field's default is
+whatever the last operator saved, no fallback text belongs in
+`defaultValue`. The fix pattern is in `src/app/settings/page.tsx`
+around the two terms sections — a yellow-outlined "Suggested
+wording (not yet saved)" card holds the sample plus a
+one-click Adopt form; the textarea itself only ever renders the
+shop's actually-saved wording.
+
 ---
 
 ## How to use this doc

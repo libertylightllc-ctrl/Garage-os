@@ -16,6 +16,7 @@ import {
   updateGarageDefaultLangAction,
   updateGarageEstimateTermsAction,
   updateGarageInvoiceTermsAction,
+  updateGaragePhoneAction,
 } from "@/app/actions/settings";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
@@ -61,6 +62,7 @@ const ERR_KEY: Record<string, MessageKey> = {
   "trn-too-long": "settingsErrTrnTooLong",
   "address-too-long": "settingsErrAddressTooLong",
   "garage-lang-invalid": "settingsErrGarageLangInvalid",
+  "phone-too-long": "settingsErrPhoneTooLong",
 };
 const OK_KEY: Record<string, MessageKey> = {
   name: "settingsOkName",
@@ -78,6 +80,7 @@ const OK_KEY: Record<string, MessageKey> = {
   "garage-trn": "settingsOkGarageTrn",
   "garage-address": "settingsOkGarageAddress",
   "garage-default-lang": "settingsOkGarageDefaultLang",
+  "garage-phone": "settingsOkGaragePhone",
   "estimate-terms": "settingsOkEstimateTerms",
   "invoice-terms": "settingsOkInvoiceTerms",
 };
@@ -127,6 +130,7 @@ export default async function SettingsPage({
           defaultPaymentTerms: true,
           estimateTerms: true,
           invoiceTerms: true,
+          phone: true,
         },
       })
     : null;
@@ -310,6 +314,32 @@ export default async function SettingsPage({
               <div>
                 <Button type="submit">{t("settingsSave")}</Button>
               </div>
+            </form>
+
+            {/* AR 2026-08-25 Batch F1 — shop main phone. Falls
+                through as the advisor-phone snapshot on estimates +
+                invoices when the individual advisor has no
+                personal number set. Print surface uses it so a
+                customer always has a callback number. */}
+            <form action={updateGaragePhoneAction} className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+              <label htmlFor="garage-phone" className="text-xs text-text-mute">
+                {t("settingsGaragePhoneLabel")}
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <input
+                  id="garage-phone"
+                  name="phone"
+                  type="tel"
+                  defaultValue={garage?.phone ?? ""}
+                  maxLength={40}
+                  placeholder={t("settingsGaragePhonePlaceholder")}
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm tabular-nums"
+                />
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+              <span className="text-[11px] text-text-mute">
+                {t("settingsGaragePhoneHint")}
+              </span>
             </form>
 
             {/* Default language — three per-button forms, one field

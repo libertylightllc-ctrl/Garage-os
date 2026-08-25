@@ -39,6 +39,8 @@ export function DocumentHeader({
     supplier,
     garage,
     logoUrl,
+    vinLabel,
+    centredTitle,
 }: {
     /** Localized document type — "Job card", "Estimate", "Invoice", etc. */
     title: string;
@@ -52,7 +54,16 @@ export function DocumentHeader({
         model: string;
         year: number | null;
         plate: string;
+        /** AR 2026-08-25 Batch F1 — VIN prints on estimate + invoice
+         *  when the vehicle record holds one. Optional at the type
+         *  level so surfaces that don't need to expose VIN (job card
+         *  header, PO stack) stay unchanged. */
+        vin?: string | null;
     } | null;
+    /** VIN column label — pass the localized "VIN" so this
+     *  component stays i18n-agnostic. Ignored when the vehicle has
+     *  no VIN or is null. */
+    vinLabel?: string;
     /** Supplier context — PO only. `refLabel` is the localized "Supplier ref" string. */
     supplier?: {
         name: string;
@@ -79,11 +90,26 @@ export function DocumentHeader({
      * can fire before a lazy-loaded image resolves, printing blank.
      */
     logoUrl?: string | null;
+    /** AR 2026-08-25 Batch F2 — when true, renders the title as a
+     *  centred h1 above the identity/garage flex row instead of on
+     *  the left. Estimate preview uses this so the printed doc
+     *  reads "Repair Estimate" at the top like a shop's own
+     *  template. Existing surfaces default to the left-aligned
+     *  layout. */
+    centredTitle?: boolean;
 }) {
     return (
-        <header className="flex items-start justify-between gap-4">
+        <header>
+            {centredTitle ? (
+                <h1 className="mb-4 text-center text-3xl font-semibold tracking-tight">
+                    {title}
+                </h1>
+            ) : null}
+            <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-                <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+                {centredTitle ? null : (
+                    <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+                )}
                 {documentNumber ? (
                     <div className="text-sm tabular-nums text-zinc-600">
                         {documentNumber}
@@ -111,6 +137,11 @@ export function DocumentHeader({
                         <div className="text-sm text-zinc-600">
                             {vehicle.plate}
                         </div>
+                        {vehicle.vin && vinLabel ? (
+                            <div className="text-sm text-zinc-600 tabular-nums">
+                                {vinLabel}: {vehicle.vin}
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
                 {supplier && supplier.reference ? (
@@ -142,6 +173,7 @@ export function DocumentHeader({
                         </div>
                     ) : null}
                 </div>
+            </div>
             </div>
         </header>
     );

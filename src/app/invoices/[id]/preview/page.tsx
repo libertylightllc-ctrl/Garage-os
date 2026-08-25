@@ -133,6 +133,7 @@ export default async function InvoicePreview({
           documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           jobCard={inv.jobCard}
           vehicle={inv.jobCard.vehicle}
+          vinLabel={t("documentVinLabel")}
           garage={inv.garage}
           logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
@@ -248,19 +249,19 @@ export default async function InvoicePreview({
                   −{money(discountAmount)}
                 </dd>
                 <dt className="text-start text-zinc-600">
-                  {t("subtotalAfterDiscount")}
+                  {t("totalGrossLabel")}
                 </dt>
                 <dd className="text-end">{money(Number(inv.subtotal))}</dd>
               </>
             ) : (
               <>
-                <dt className="text-start text-zinc-600">{t("subtotal")}</dt>
+                <dt className="text-start text-zinc-600">{t("totalGrossLabel")}</dt>
                 <dd className="text-end">{money(grossSubtotal)}</dd>
               </>
             )}
-            <dt className="text-start text-zinc-600">{t("vat5")}</dt>
+            <dt className="text-start text-zinc-600">{t("totalVatLabel")}</dt>
             <dd className="text-end">{money(Number(inv.vatAmount))}</dd>
-            <dt className="text-start text-base font-semibold">{t("total")}</dt>
+            <dt className="text-start text-base font-semibold">{t("totalNetLabel")}</dt>
             <dd className="text-end text-base font-semibold">{money(total)}</dd>
             {/* Advance/Paid + Balance Due — slice 6. Only render when
                 payments have already been recorded; an unsent invoice
@@ -286,9 +287,10 @@ export default async function InvoicePreview({
             (full-width), then payment terms + advisor grid, matching
             the estimate preview layout exactly. All optional; each
             block omits cleanly when its data is null. */}
-        {inv.remarks ? (
-          <div className="mt-6 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+        {inv.remarks?.trim() ? (
+          // AR 2026-08-25 Batch F2.7 — yellow fill (print-safe).
+          <div className="mt-6 rounded border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-zinc-900 [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700">
               {t("estimateRemarksHeading")}
             </div>
             <p className="mt-1 whitespace-pre-line">{inv.remarks}</p>
@@ -296,9 +298,13 @@ export default async function InvoicePreview({
         ) : null}
 
         {(() => {
-          const paymentTerms = inv.paymentTerms ?? inv.garage.defaultPaymentTerms ?? null;
-          const advisorName = inv.advisorNameSnapshot;
-          const advisorPhone = inv.advisorPhoneSnapshot;
+          // Batch F1/F2 — trim-guard all three so a whitespace-only
+          // field can never render a heading with nothing meaningful
+          // under it (AR: "a heading rendering with nothing under it
+          // is worse than omitting the block").
+          const paymentTerms = (inv.paymentTerms?.trim() || inv.garage.defaultPaymentTerms?.trim()) || null;
+          const advisorName = inv.advisorNameSnapshot?.trim() || null;
+          const advisorPhone = inv.advisorPhoneSnapshot?.trim() || null;
           if (!paymentTerms && !advisorName) return null;
           return (
             <div className="mt-8 grid grid-cols-1 gap-4 border-t border-zinc-200 pt-4 text-sm sm:grid-cols-2">
@@ -317,7 +323,7 @@ export default async function InvoicePreview({
                   </div>
                   <div className="mt-1 font-medium">{advisorName}</div>
                   {advisorPhone ? (
-                    <div className="text-xs text-zinc-600 tabular-nums">{advisorPhone}</div>
+                    <div className="text-sm text-zinc-700 tabular-nums">{advisorPhone}</div>
                   ) : null}
                 </div>
               ) : null}

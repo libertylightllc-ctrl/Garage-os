@@ -663,7 +663,10 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
       jobCard: {
         select: {
           number: true,
-          garage: { select: { name: true } },
+          // Batch F1 (2026-08-25): garage.phone is the fallback when
+          // the advisor's User.phone is null — the shop's main line
+          // is better than no callback number on the customer's copy.
+          garage: { select: { name: true, phone: true } },
           // Advisor snapshot fields — AR 2026-08-25 Batch C. Captured
           // onto Estimate.advisorNameSnapshot + advisorPhoneSnapshot
           // at send time so the customer's copy of the doc still names
@@ -818,7 +821,10 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
       sentAt: new Date(),
       ...(isFirstSend ? { status: "SENT" as const } : {}),
       advisorNameSnapshot: advisor?.name ?? null,
-      advisorPhoneSnapshot: advisor?.phone ?? null,
+      // Batch F1: fall back to shop main phone when the individual
+      // advisor has no personal number set. Snapshot captures whichever
+      // was present at send time.
+      advisorPhoneSnapshot: advisor?.phone ?? est.jobCard.garage.phone ?? null,
     },
   });
 
@@ -1031,7 +1037,7 @@ export async function generateInvoiceAction(formData: FormData) {
     const g = await tx.garage.update({
       where: { id: user.garageId },
       data: { invoiceSeq: { increment: 1 } },
-      select: { invoiceSeq: true, name: true, trn: true },
+      select: { invoiceSeq: true, name: true, trn: true, phone: true },
     });
     const seq = g.invoiceSeq;
 
@@ -1061,7 +1067,10 @@ export async function generateInvoiceAction(formData: FormData) {
 
     // Parity blocks (AR 2026-08-25) — read from the primary (oldest
     // approved) estimate. Fall back to jobCard.advisor for the
-    // advisor snapshot when the estimate wasn't sent.
+    // advisor snapshot when the estimate wasn't sent. Phone falls
+    // through advisor → garage.phone (Batch F1) so a customer meant
+    // to call back always has a number on the doc when the shop
+    // shares one line.
     const primaryEstimate = approvedEstimates[0];
     const invoiceRemarks = primaryEstimate.remarks;
     const invoicePaymentTerms = primaryEstimate.paymentTerms;
@@ -1072,6 +1081,7 @@ export async function generateInvoiceAction(formData: FormData) {
     const invoiceAdvisorPhone =
       primaryEstimate.advisorPhoneSnapshot ??
       jobForCustomer?.advisor?.phone ??
+      g.phone ??
       null;
 
     const inv = await tx.invoice.create({
@@ -2051,7 +2061,7 @@ export async function reissueInvoiceAction(formData: FormData) {
     const g = await tx.garage.update({
       where: { id: user.garageId },
       data: { invoiceSeq: { increment: 1 } },
-      select: { invoiceSeq: true, name: true, trn: true },
+      select: { invoiceSeq: true, name: true, trn: true, phone: true },
     });
 
     // Re-snapshot the customer TRN — it may have been corrected on

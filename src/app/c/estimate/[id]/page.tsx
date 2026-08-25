@@ -82,6 +82,9 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
               defaultPaymentTerms: true,
               // Batch D + split (2026-08-25): estimate-side terms only.
               estimateTerms: true,
+              // Batch F1: fallback for advisor phone when the
+              // individual advisor has no personal number set.
+              phone: true,
             },
           },
         },
@@ -117,6 +120,7 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
           title={t("yourEstimate")}
           jobCard={est.jobCard}
           vehicle={v}
+          vinLabel={t("documentVinLabel")}
           garage={est.jobCard.garage}
           logoUrl={est.jobCard.garage.logoUrl}
         />
@@ -168,52 +172,59 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
           </tbody>
         </table>
       </div>
-      {est.remarks ? (
-        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+      {est.remarks?.trim() ? (
+        <div className="rounded-lg border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-zinc-900 [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700">
             {t("estimateRemarksHeading")}
           </div>
           <p className="mt-1 whitespace-pre-line">{est.remarks}</p>
         </div>
       ) : null}
       <div className="border-t border-border pt-2 text-right text-sm">
-        <div>{t("subtotal")}: {money(Number(est.subtotal))}</div>
-        <div>{t("vat5")}: {money(Number(est.vatAmount))}</div>
-        <div className="text-lg font-semibold">{t("total")}: {money(Number(est.total))}</div>
+        <div>{t("totalGrossLabel")}: {money(Number(est.subtotal))}</div>
+        <div>{t("totalVatLabel")}: {money(Number(est.vatAmount))}</div>
+        <div className="text-lg font-semibold">{t("totalNetLabel")}: {money(Number(est.total))}</div>
       </div>
 
-      {/* AR 2026-08-25 Batch C — payment terms + service advisor.
-          Payment terms fall through to garage.defaultPaymentTerms
-          when the per-estimate override is null. Advisor block
-          reads the snapshot captured at send time; skipped entirely
-          when both are absent. */}
-      {(est.paymentTerms || est.jobCard.garage.defaultPaymentTerms || est.advisorNameSnapshot) ? (
-        <div className="grid grid-cols-1 gap-4 border-t border-border pt-3 text-sm sm:grid-cols-2">
-          {(est.paymentTerms || est.jobCard.garage.defaultPaymentTerms) ? (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
-                {t("estimatePaymentTermsHeading")}
-              </div>
-              <p className="mt-1 whitespace-pre-line">
-                {est.paymentTerms ?? est.jobCard.garage.defaultPaymentTerms}
-              </p>
-            </div>
-          ) : <div />}
-          {est.advisorNameSnapshot ? (
-            <div className="sm:text-end">
-              <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
-                {t("estimateAdvisorHeading")}
-              </div>
-              <div className="mt-1 font-medium">{est.advisorNameSnapshot}</div>
-              {est.advisorPhoneSnapshot ? (
-                <div className="text-xs text-text-mute tabular-nums">
-                  {est.advisorPhoneSnapshot}
+      {(() => {
+        // Batch F1/F2 — trim-guarded so a whitespace-only field never
+        // renders a heading with nothing under it.
+        const paymentTerms =
+          est.paymentTerms?.trim() ||
+          est.jobCard.garage.defaultPaymentTerms?.trim() ||
+          null;
+        const advisorName = est.advisorNameSnapshot?.trim() || null;
+        const advisorPhone =
+          est.advisorPhoneSnapshot?.trim() ||
+          est.jobCard.garage.phone?.trim() ||
+          null;
+        if (!paymentTerms && !advisorName) return null;
+        return (
+          <div className="grid grid-cols-1 gap-4 border-t border-border pt-3 text-sm sm:grid-cols-2">
+            {paymentTerms ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                  {t("estimatePaymentTermsHeading")}
                 </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+                <p className="mt-1 whitespace-pre-line">{paymentTerms}</p>
+              </div>
+            ) : <div />}
+            {advisorName ? (
+              <div className="sm:text-end">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                  {t("estimateAdvisorHeading")}
+                </div>
+                <div className="mt-1 font-medium">{advisorName}</div>
+                {advisorPhone ? (
+                  <div className="text-sm text-text-mute tabular-nums">
+                    {advisorPhone}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
 
       {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
           bottom of the document. Renders only when set. */}

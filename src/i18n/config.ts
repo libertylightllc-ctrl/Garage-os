@@ -51,6 +51,12 @@ const en = {
   settingsOkGarageTrn: "TRN saved.",
   settingsOkGarageAddress: "Address saved.",
   settingsOkGarageDefaultLang: "Default customer language saved.",
+  // Batch F1 (2026-08-25) — shop main phone.
+  settingsGaragePhoneLabel: "Shop contact number",
+  settingsGaragePhonePlaceholder: "+971 50 000 0000",
+  settingsGaragePhoneHint: "Prints on estimates and invoices as the callback number for the assigned advisor. If an advisor has no personal number set, the shop number is used.",
+  settingsOkGaragePhone: "Shop contact number saved.",
+  settingsErrPhoneTooLong: "Contact number is too long (max 40 characters).",
   settingsErrGarageNameRequired: "Shop name can't be empty.",
   settingsErrGarageNameTooLong: "Shop name is too long (max 80 characters).",
   settingsErrTrnTooLong: "TRN is too long (max 40 characters).",
@@ -1412,6 +1418,25 @@ const en = {
   marginLabel: "Margin",
   colAmount: "Amount",
   colDescription: "Description",
+  // Batch F2 — printed-doc header wording (F2.4). "Particulars"
+  // reads more like a shop's own document than the generic
+  // "Description"; S/N adds a per-row line index that shops rely
+  // on when reading the doc aloud to a customer. Deliberately
+  // separate keys from colDescription so unrelated on-screen
+  // tables keep their existing labels.
+  colParticulars: "Particulars",
+  colSerialNumber: "S/N",
+  // Batch F1 (2026-08-25) — VIN on printed estimate + invoice.
+  documentVinLabel: "VIN",
+  // Batch F2 (2026-08-25) — totals wording on the printed doc.
+  // Deliberately separate from the terse "Subtotal / VAT / Total"
+  // strings used on the busy edit surfaces, so the printed doc reads
+  // like the shop's own template.
+  totalGrossLabel: "Gross total",
+  totalVatLabel: "5% VAT",
+  totalNetLabel: "Net total",
+  // Batch F2 (2026-08-25) — centred main title on the printed estimate.
+  docTitleRepairEstimate: "Repair Estimate",
   colKind: "Type",
   colMake: "Make",
   colModel: "Model",
@@ -2024,6 +2049,12 @@ const ar: typeof en = {
   settingsOkGarageTrn: "تم حفظ الرقم الضريبي.",
   settingsOkGarageAddress: "تم حفظ العنوان.",
   settingsOkGarageDefaultLang: "تم حفظ اللغة الافتراضية للعميل.",
+  // Batch F1 (2026-08-25).
+  settingsGaragePhoneLabel: "رقم هاتف الورشة",
+  settingsGaragePhonePlaceholder: "+971 50 000 0000",
+  settingsGaragePhoneHint: "يُطبع على عروض الأسعار والفواتير كرقم للاتصال بالمستشار المسؤول. إذا لم يكن للمستشار رقم شخصي مسجّل، يُستخدم رقم الورشة.",
+  settingsOkGaragePhone: "تم حفظ رقم الورشة.",
+  settingsErrPhoneTooLong: "رقم الاتصال طويل جداً (بحد أقصى ٤٠ حرفاً).",
   settingsErrGarageNameRequired: "اسم الورشة لا يمكن أن يكون فارغًا.",
   settingsErrGarageNameTooLong: "اسم الورشة طويل جدًا (80 حرفًا كحد أقصى).",
   settingsErrTrnTooLong: "الرقم الضريبي طويل جدًا (40 حرفًا كحد أقصى).",
@@ -3167,6 +3198,16 @@ const ar: typeof en = {
   colItem: "البند",
   colQty: "الكمية",
   colUnit: "السعر",
+  colParticulars: "التفاصيل",
+  colSerialNumber: "الرقم التسلسلي",
+  // Batch F1 (2026-08-25) — VIN on printed estimate + invoice.
+  documentVinLabel: "رقم الهيكل",
+  // Batch F2 (2026-08-25) — totals wording on the printed doc.
+  totalGrossLabel: "الإجمالي قبل الضريبة",
+  totalVatLabel: "ضريبة القيمة المضافة ٥٪",
+  totalNetLabel: "الإجمالي الصافي",
+  // Batch F2 (2026-08-25) — centred main title on the printed estimate.
+  docTitleRepairEstimate: "عرض سعر إصلاح",
   colTotal: "الإجمالي",
   colAmount: "المبلغ",
   colDescription: "الوصف",

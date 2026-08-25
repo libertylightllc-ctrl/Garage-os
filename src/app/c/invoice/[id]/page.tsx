@@ -181,6 +181,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           // AR 2026-08-25 — fallback for the invoice's Payment
           // Terms block when the per-invoice override is null.
           defaultPaymentTerms: true,
+          // Batch F1: fallback for advisor phone when the
+          // individual advisor has no personal number set.
+          phone: true,
         },
       },
       // Pull customer for Bill-to block + FTA-required customer TRN when
@@ -257,6 +260,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           documentNumber={formatInvoiceNo(inv.number, inv.issuedAt.getFullYear())}
           jobCard={inv.jobCard}
           vehicle={inv.jobCard.vehicle}
+          vinLabel={t("documentVinLabel")}
           garage={inv.garage}
           logoUrl={inv.garage.logoUrl}
         />
@@ -358,18 +362,15 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
         )}
       </div>
       <div className="border-t border-border pt-2 text-right text-sm">
-        <div>{t("subtotal")}: {money(Number(inv.subtotal))}</div>
-        <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
-        <div className="text-lg font-semibold">{t("total")}: {money(total)}</div>
+        <div>{t("totalGrossLabel")}: {money(Number(inv.subtotal))}</div>
+        <div>{t("totalVatLabel")}: {money(Number(inv.vatAmount))}</div>
+        <div className="text-lg font-semibold">{t("totalNetLabel")}: {money(total)}</div>
       </div>
 
-      {/* AR 2026-08-25 — parity blocks: remarks + payment terms +
-          service advisor. Same layout as the customer estimate so
-          the two documents read as a matching pair. Each block is
-          optional and renders only when its data is present. */}
-      {inv.remarks ? (
-        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
-          <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+      {inv.remarks?.trim() ? (
+        // AR 2026-08-25 Batch F2.7 — yellow fill (print-safe).
+        <div className="rounded-lg border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-zinc-900 [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700">
             {t("estimateRemarksHeading")}
           </div>
           <p className="mt-1 whitespace-pre-line">{inv.remarks}</p>
@@ -378,9 +379,12 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
 
       {(() => {
         const paymentTerms =
-          inv.paymentTerms ?? inv.garage.defaultPaymentTerms ?? null;
-        const advisorName = inv.advisorNameSnapshot;
-        const advisorPhone = inv.advisorPhoneSnapshot;
+          (inv.paymentTerms?.trim() || inv.garage.defaultPaymentTerms?.trim()) || null;
+        const advisorName = inv.advisorNameSnapshot?.trim() || null;
+        const advisorPhone =
+          inv.advisorPhoneSnapshot?.trim() ||
+          inv.garage.phone?.trim() ||
+          null;
         if (!paymentTerms && !advisorName) return null;
         return (
           <div className="grid grid-cols-1 gap-4 border-t border-border pt-3 text-sm sm:grid-cols-2">
@@ -399,7 +403,7 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
                 </div>
                 <div className="mt-1 font-medium">{advisorName}</div>
                 {advisorPhone ? (
-                  <div className="text-xs text-text-mute tabular-nums">
+                  <div className="text-sm text-text-mute tabular-nums">
                     {advisorPhone}
                   </div>
                 ) : null}

@@ -84,7 +84,7 @@ export default async function EstimatePreview({
           // fallback for the Payment Terms block; advisor as the
           // live-name fallback when the snapshot isn't populated
           // (draft / never-sent estimates).
-          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true, defaultPaymentTerms: true, estimateTerms: true } },
+          garage: { select: { name: true, trn: true, address: true, country: true, logoUrl: true, defaultPaymentTerms: true, estimateTerms: true, phone: true } },
           advisor: { select: { name: true, phone: true } },
         },
       },
@@ -136,12 +136,21 @@ export default async function EstimatePreview({
   // the live advisor row so a staff change doesn't rewrite the
   // customer's copy of the doc. Snapshot is null on drafts +
   // never-sent estimates; falls back to the live advisor row then.
-  const advisorName = est.advisorNameSnapshot ?? est.jobCard.advisor?.name ?? null;
-  const advisorPhone = est.advisorPhoneSnapshot ?? est.jobCard.advisor?.phone ?? null;
+  // Batch F1/F2 — trim-guarded so a whitespace-only field never
+  // renders a heading with nothing meaningful under it. Also
+  // widened fallback for advisorPhone: estimate-snapshot →
+  // live advisor.phone → garage.phone. See sendEstimateToCustomerAction
+  // for the same walk at snapshot-write time.
+  const advisorName =
+    est.advisorNameSnapshot?.trim() || est.jobCard.advisor?.name?.trim() || null;
+  const advisorPhone =
+    est.advisorPhoneSnapshot?.trim() ||
+    est.jobCard.advisor?.phone?.trim() ||
+    est.jobCard.garage.phone?.trim() ||
+    null;
 
-  // Payment terms: per-estimate override falls through to garage
-  // default. Both null → block doesn't render.
-  const paymentTerms = est.paymentTerms ?? est.jobCard.garage.defaultPaymentTerms ?? null;
+  const paymentTerms =
+    est.paymentTerms?.trim() || est.jobCard.garage.defaultPaymentTerms?.trim() || null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 print:max-w-full print:min-h-0 print:bg-white print:p-0">
@@ -157,9 +166,11 @@ export default async function EstimatePreview({
         {/* Internal preview of the customer-facing estimate — fall
             back to the GarageOS mark when the shop hasn't uploaded. */}
         <DocumentHeader
-          title={t("estimate")}
+          title={t("docTitleRepairEstimate")}
+          centredTitle
           jobCard={est.jobCard}
           vehicle={est.jobCard.vehicle}
+          vinLabel={t("documentVinLabel")}
           garage={garage}
           logoUrl={garage.logoUrl ?? "/brand/garageos-logo.png"}
         />
@@ -226,9 +237,13 @@ export default async function EstimatePreview({
         {/* Remarks block — per-estimate scope-limitation text. Only
             renders when the advisor has set one. Prints as a real
             content block on the customer's copy. */}
-        {est.remarks ? (
-          <div className="mt-6 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+        {est.remarks?.trim() ? (
+          // AR 2026-08-25 Batch F2.7 — yellow fill so the eye lands
+          // on the remarks. print-color-adjust: exact keeps the
+          // yellow on paper (Chrome, Firefox, Safari default to
+          // stripping backgrounds on print unless told otherwise).
+          <div className="mt-6 rounded border border-yellow-400 bg-yellow-100 px-3 py-2 text-sm text-zinc-900 [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-700">
               {t("estimateRemarksHeading")}
             </div>
             <p className="mt-1 whitespace-pre-line">{est.remarks}</p>
@@ -251,19 +266,19 @@ export default async function EstimatePreview({
                 </div>
               ))}
               <div className="text-zinc-600">
-                {t("subtotal")}: {money(subtotal)}
+                {t("totalGrossLabel")}: {money(subtotal)}
               </div>
             </>
           ) : (
             <div className="text-zinc-600">
-              {t("subtotal")}: {money(subtotal)}
+              {t("totalGrossLabel")}: {money(subtotal)}
             </div>
           )}
           <div className="text-zinc-600">
-            {t("vat5")}: {money(vatAmount)}
+            {t("totalVatLabel")}: {money(vatAmount)}
           </div>
           <div className="mt-1 text-lg font-semibold">
-            {t("total")}: {money(total)}
+            {t("totalNetLabel")}: {money(total)}
           </div>
         </div>
 
@@ -287,7 +302,7 @@ export default async function EstimatePreview({
                 </div>
                 <div className="mt-1 font-medium">{advisorName}</div>
                 {advisorPhone ? (
-                  <div className="text-xs text-zinc-600 tabular-nums">{advisorPhone}</div>
+                  <div className="text-sm text-zinc-700 tabular-nums">{advisorPhone}</div>
                 ) : null}
               </div>
             ) : null}
@@ -506,7 +521,8 @@ function SectionTable({
             <table className="w-full min-w-[20rem] text-sm">
                 <thead>
                     <tr className="border-b border-black/10 text-left text-zinc-500">
-                        <th className="py-1">{t("colDescription")}</th>
+                        <th className="py-1 w-8">{t("colSerialNumber")}</th>
+                        <th className="py-1">{t("colParticulars")}</th>
                         <th className="py-1 text-right">{t("colQty")}</th>
                         <th className="py-1 text-right">{t("colUnit")}</th>
                         <th className="py-1 text-right">{t("colAmount")}</th>
@@ -518,6 +534,7 @@ function SectionTable({
                             (l.kind === "PART" || l.kind === "SUBLET") && !l.declined && Number(l.unitPrice) === 0;
                         return (
                             <tr key={l.id ?? i} className="border-b border-black/5">
+                                <td className="py-1 text-left tabular-nums">{i + 1}</td>
                                 <td className="py-1">
                                     {(l.description)}
                                     {isUnpricedCostAware ? (
@@ -536,7 +553,7 @@ function SectionTable({
                         );
                     })}
                     <tr>
-                        <td colSpan={3} className="py-1 text-right text-xs font-semibold text-zinc-600">
+                        <td colSpan={4} className="py-1 text-right text-xs font-semibold text-zinc-600">
                             {t("estimateSectionSubtotal")}
                         </td>
                         <td className="py-1 text-right font-semibold tabular-nums">

@@ -331,6 +331,14 @@ model Garage {
   // paid invoice would embarrass them in front of the customer.
   estimateTerms String?
   invoiceTerms  String?
+  // Shop main contact number (AR 2026-08-25 Batch F1) — fallback for
+  // the advisor phone snapshot on estimates + invoices when the
+  // individual advisor's User.phone is null. A customer meant to
+  // call back needs a working number; if the shop shares one line
+  // that's still better than no number on the doc. Nullable; if
+  // both this and User.phone are null, the advisor block prints
+  // just the name.
+  phone         String?
   // Shop-wide fallback for cold-start outbound customer messages
   // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
   // falls through to "en" as last resort. UAE default was Arabic

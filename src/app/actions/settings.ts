@@ -317,6 +317,25 @@ export async function updateGarageAddressAction(formData: FormData) {
   redirect("/settings?ok=garage-address");
 }
 
+/**
+ * Shop main contact number (AR 2026-08-25 Batch F1). Falls in the same
+ * per-field-form pattern as the other identity editors. Written into
+ * Garage.phone; read as the advisor-phone fallback at estimate +
+ * invoice generation time so a customer meant to call back always has
+ * a number to reach when the individual advisor's User.phone is null.
+ */
+export async function updateGaragePhoneAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("phone") ?? "").trim();
+  if (raw.length > 40) back("phone-too-long");
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { phone: raw === "" ? null : raw },
+  });
+  revalidatePath("/settings");
+  redirect("/settings?ok=garage-phone");
+}
+
 // Sole writer of Garage.defaultLang. No other Prisma call, raw SQL,
 // trigger, or migration touches this column. Reports of "the language
 // got wiped after I saved something unrelated" (five occurrences up

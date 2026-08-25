@@ -61,7 +61,8 @@ export function InvoiceLineSection({
             <table className="w-full text-sm tabular-nums">
                 <thead>
                     <tr className={`border-b border-black/10 ${subtleTextClass}`}>
-                        <th className="py-1 pe-2 text-start font-medium">{t("colDescription")}</th>
+                        <th className="py-1 pe-2 text-start font-medium w-8">{t("colSerialNumber")}</th>
+                        <th className="py-1 pe-2 text-start font-medium">{t("colParticulars")}</th>
                         <th className="py-1 text-end font-medium">{t("colQty")}</th>
                         <th className="py-1 text-end font-medium">{t("colUnit")}</th>
                         <th className="py-1 text-end font-medium">{t("colAmount")}</th>
@@ -70,11 +71,12 @@ export function InvoiceLineSection({
                     </tr>
                 </thead>
                 <tbody>
-                    {lines.map((l) => {
+                    {lines.map((l, i) => {
                         const amt = l.lineTotal;
                         const vat = amt * vatRate;
                         return (
                             <tr key={l.id} className={borderClass}>
+                                <td className="py-1 pe-2 text-start">{i + 1}</td>
                                 <td className="py-1 pe-2">
                                     {translateLineDescription(l.description, locale)}
                                 </td>
@@ -90,7 +92,7 @@ export function InvoiceLineSection({
                     })}
                     <tr className={subtotalRowClass}>
                         <td
-                            colSpan={5}
+                            colSpan={6}
                             className={`py-1 text-end text-xs font-semibold ${headingClass}`}
                         >
                             {t("estimateSectionSubtotal")}

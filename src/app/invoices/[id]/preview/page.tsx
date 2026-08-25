@@ -282,6 +282,49 @@ export default async function InvoicePreview({
           </dl>
         </div>
 
+        {/* AR 2026-08-25 — parity with Estimate. Remarks block first
+            (full-width), then payment terms + advisor grid, matching
+            the estimate preview layout exactly. All optional; each
+            block omits cleanly when its data is null. */}
+        {inv.remarks ? (
+          <div className="mt-6 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+              {t("estimateRemarksHeading")}
+            </div>
+            <p className="mt-1 whitespace-pre-line">{inv.remarks}</p>
+          </div>
+        ) : null}
+
+        {(() => {
+          const paymentTerms = inv.paymentTerms ?? inv.garage.defaultPaymentTerms ?? null;
+          const advisorName = inv.advisorNameSnapshot;
+          const advisorPhone = inv.advisorPhoneSnapshot;
+          if (!paymentTerms && !advisorName) return null;
+          return (
+            <div className="mt-8 grid grid-cols-1 gap-4 border-t border-zinc-200 pt-4 text-sm sm:grid-cols-2">
+              {paymentTerms ? (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                    {t("estimatePaymentTermsHeading")}
+                  </div>
+                  <p className="mt-1 whitespace-pre-line">{paymentTerms}</p>
+                </div>
+              ) : <div />}
+              {advisorName ? (
+                <div className="sm:text-end">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                    {t("estimateAdvisorHeading")}
+                  </div>
+                  <div className="mt-1 font-medium">{advisorName}</div>
+                  {advisorPhone ? (
+                    <div className="text-xs text-zinc-600 tabular-nums">{advisorPhone}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })()}
+
         {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
             bottom of the printable doc so it prints with the
             invoice. Renders only when set; blank = no block. */}

@@ -145,6 +145,13 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
       qrPayload: true,
       voidedAt: true,
       customerTrn: true,
+      // AR 2026-08-25 — parity blocks. Same fields the customer
+      // estimate reads; snapshotted onto Invoice at generation time
+      // so the two documents match.
+      remarks: true,
+      paymentTerms: true,
+      advisorNameSnapshot: true,
+      advisorPhoneSnapshot: true,
       lines: {
         orderBy: { createdAt: "asc" },
         select: {
@@ -170,6 +177,9 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
           // Batch D: shop-wide Terms & Conditions printed at the
           // bottom of the customer-facing invoice.
           terms: true,
+          // AR 2026-08-25 — fallback for the invoice's Payment
+          // Terms block when the per-invoice override is null.
+          defaultPaymentTerms: true,
         },
       },
       // Pull customer for Bill-to block + FTA-required customer TRN when
@@ -351,6 +361,52 @@ export default async function CustomerInvoice({ params }: { params: Promise<{ id
         <div>{t("vat5")}: {money(Number(inv.vatAmount))}</div>
         <div className="text-lg font-semibold">{t("total")}: {money(total)}</div>
       </div>
+
+      {/* AR 2026-08-25 — parity blocks: remarks + payment terms +
+          service advisor. Same layout as the customer estimate so
+          the two documents read as a matching pair. Each block is
+          optional and renders only when its data is present. */}
+      {inv.remarks ? (
+        <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+          <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+            {t("estimateRemarksHeading")}
+          </div>
+          <p className="mt-1 whitespace-pre-line">{inv.remarks}</p>
+        </div>
+      ) : null}
+
+      {(() => {
+        const paymentTerms =
+          inv.paymentTerms ?? inv.garage.defaultPaymentTerms ?? null;
+        const advisorName = inv.advisorNameSnapshot;
+        const advisorPhone = inv.advisorPhoneSnapshot;
+        if (!paymentTerms && !advisorName) return null;
+        return (
+          <div className="grid grid-cols-1 gap-4 border-t border-border pt-3 text-sm sm:grid-cols-2">
+            {paymentTerms ? (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                  {t("estimatePaymentTermsHeading")}
+                </div>
+                <p className="mt-1 whitespace-pre-line">{paymentTerms}</p>
+              </div>
+            ) : <div />}
+            {advisorName ? (
+              <div className="sm:text-end">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
+                  {t("estimateAdvisorHeading")}
+                </div>
+                <div className="mt-1 font-medium">{advisorName}</div>
+                {advisorPhone ? (
+                  <div className="text-xs text-text-mute tabular-nums">
+                    {advisorPhone}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
 
       {/* AR 2026-08-25 Batch D — shop-wide Terms & Conditions,
           bottom of the customer-facing invoice. Renders only when

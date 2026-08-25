@@ -933,6 +933,38 @@ model Invoice {
   status          InvoiceStatus   @default(DRAFT)
   clearanceStatus ClearanceStatus @default(NA) // KSA hook
 
+  // AR 2026-08-25 parity with Estimate — same four blocks the
+  // customer already sees on the estimate now also on the invoice.
+  //
+  //   remarks               — per-invoice scope-limitation text.
+  //                           Copied from source estimate at
+  //                           generation; cashier can edit on the
+  //                           invoice editor.
+  //   paymentTerms          — per-invoice override for the shop's
+  //                           default terms. Renderer reads
+  //                             invoice.paymentTerms
+  //                               ?? garage.defaultPaymentTerms
+  //                               ?? null
+  //                           Copied from source estimate at
+  //                           generation; cashier can edit at
+  //                           billing time (deposit was taken, or
+  //                           the customer agreed something
+  //                           different).
+  //   advisorNameSnapshot   — advisor identity at invoice generation
+  //   advisorPhoneSnapshot   time. Copied from the estimate's
+  //                           snapshot; falls back to the JobCard's
+  //                           current advisor if the estimate wasn't
+  //                           sent (advisor snapshot null). Never
+  //                           re-written after generation — the
+  //                           document says who quoted the work at
+  //                           the moment the bill was cut, matching
+  //                           the estimate's "advisor at first
+  //                           customer contact wins" discipline.
+  remarks             String?
+  paymentTerms        String?
+  advisorNameSnapshot  String?
+  advisorPhoneSnapshot String?
+
   // Void + reissue (2026-08-10). A delivered invoice can't be edited
   // — corrections happen by voiding the original and issuing a fresh
   // one that takes the next sequential number. Both documents point

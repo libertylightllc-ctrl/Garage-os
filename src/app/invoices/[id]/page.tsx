@@ -21,6 +21,7 @@ import {
   // so the whole IIFE that computed phone/msg/href here went with it.
   // recordPaymentAction still lives only on /cashier Receivables.
   sendInvoiceToCustomerAction,
+  updateInvoiceHeaderAction,
 } from "@/app/actions/billing";
 import { MessageCircle } from "lucide-react";
 import { PrintButton } from "@/components/print-button";
@@ -825,6 +826,59 @@ export default async function InvoiceView({
             </form>
           ) : null}
         </div>
+      ) : null}
+
+      {/* AR 2026-08-25 — invoice header editor. Cashier tweaks
+          remarks + payment terms at billing time (deposit taken,
+          customer negotiated a different split, remarks need
+          adjusting for final scope). Mirrors the estimate editor's
+          Batch C block. Blank clears to null. Gated on canEditLines
+          — same rule as line editing (cannot re-edit once delivered).
+          Renderer on both preview surfaces reads inv.paymentTerms
+          falling through to garage.defaultPaymentTerms. */}
+      {canEditLines ? (
+        <form
+          action={updateInvoiceHeaderAction}
+          className="flex flex-col gap-3 rounded-xl border border-border p-4 print:hidden"
+        >
+          <input type="hidden" name="invoiceId" value={inv.id} />
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-text-mute">
+              {t("estimateRemarksLabel")}
+            </span>
+            <textarea
+              name="remarks"
+              defaultValue={inv.remarks ?? ""}
+              rows={3}
+              placeholder={t("estimateRemarksPlaceholder")}
+              className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-text-mute">
+              {t("estimatePaymentTermsLabel")}
+            </span>
+            <input
+              name="paymentTerms"
+              defaultValue={inv.paymentTerms ?? ""}
+              placeholder={inv.garage.defaultPaymentTerms ?? t("estimatePaymentTermsPlaceholder")}
+              className="rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+            />
+            {!inv.paymentTerms && inv.garage.defaultPaymentTerms ? (
+              <span className="text-[11px] text-text-mute">
+                {t("estimatePaymentTermsUsingDefaultHint")}
+              </span>
+            ) : null}
+          </label>
+          <div>
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
+            >
+              {t("estimateHeaderSaveButton")}
+            </button>
+          </div>
+        </form>
       ) : null}
 
       </section>

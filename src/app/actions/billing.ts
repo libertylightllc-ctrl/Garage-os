@@ -1042,11 +1042,37 @@ export async function generateInvoiceAction(formData: FormData) {
     // rewrite. Invoice.customerTrn is that snapshot; renders prefer it
     // over the live customer.trn. Column has existed on Invoice since
     // 0_init — this is the first writer.
+    //
+    // Also snapshot the JobCard's current advisor (name + phone) at
+    // this same moment as fallback for the invoice's advisor block.
+    // The primary source is the source estimate's own advisor
+    // snapshot (captured when the estimate was sent to the customer);
+    // if the estimate wasn't sent, we fall through to whoever the
+    // job currently belongs to. Snapshot at generation, never
+    // rewritten — same discipline as customerTrn and unitCost.
     const jobForCustomer = await tx.jobCard.findUnique({
       where: { id: clicked.jobCardId },
-      select: { vehicle: { select: { customer: { select: { trn: true } } } } },
+      select: {
+        vehicle: { select: { customer: { select: { trn: true } } } },
+        advisor: { select: { name: true, phone: true } },
+      },
     });
     const customerTrnSnapshot = jobForCustomer?.vehicle.customer.trn ?? null;
+
+    // Parity blocks (AR 2026-08-25) — read from the primary (oldest
+    // approved) estimate. Fall back to jobCard.advisor for the
+    // advisor snapshot when the estimate wasn't sent.
+    const primaryEstimate = approvedEstimates[0];
+    const invoiceRemarks = primaryEstimate.remarks;
+    const invoicePaymentTerms = primaryEstimate.paymentTerms;
+    const invoiceAdvisorName =
+      primaryEstimate.advisorNameSnapshot ??
+      jobForCustomer?.advisor?.name ??
+      null;
+    const invoiceAdvisorPhone =
+      primaryEstimate.advisorPhoneSnapshot ??
+      jobForCustomer?.advisor?.phone ??
+      null;
 
     const inv = await tx.invoice.create({
       data: {
@@ -1068,6 +1094,11 @@ export async function generateInvoiceAction(formData: FormData) {
         status: "SENT",
         clearanceStatus: strategy.clearanceStatus,
         publicToken: newPublicToken(),
+        // AR 2026-08-25 — parity with Estimate.
+        remarks: invoiceRemarks,
+        paymentTerms: invoicePaymentTerms,
+        advisorNameSnapshot: invoiceAdvisorName,
+        advisorPhoneSnapshot: invoiceAdvisorPhone,
         qrPayload: qrPlaceholder({
           seller: g.name,
           trn: g.trn,
@@ -2052,6 +2083,15 @@ export async function reissueInvoiceAction(formData: FormData) {
         // point of reissue is that the void was wrong.
         status: "DRAFT",
         clearanceStatus: strategy.clearanceStatus,
+        // AR 2026-08-25 — carry parity blocks forward. The reissue is
+        // conceptually the same document; the customer read the void
+        // with these remarks + terms + advisor, and the correction
+        // shouldn't lose that context. Cashier can edit remarks +
+        // paymentTerms on the DRAFT if the wording needs changing.
+        remarks: voided.remarks,
+        paymentTerms: voided.paymentTerms,
+        advisorNameSnapshot: voided.advisorNameSnapshot,
+        advisorPhoneSnapshot: voided.advisorPhoneSnapshot,
         qrPayload: qrPlaceholder({
           seller: g.name,
           trn: g.trn,
@@ -2137,4 +2177,47 @@ export async function updateEstimateHeaderAction(formData: FormData) {
   });
   revalidatePath(`/estimates/${estimateId}`);
   revalidatePath(`/estimates/${estimateId}/preview`);
+}
+
+/**
+ * updateInvoiceHeaderAction — mirror of updateEstimateHeaderAction
+ * for the invoice's parity blocks (AR 2026-08-25). Sets
+ * Invoice.remarks and Invoice.paymentTerms only.
+ *
+ * The cashier occasionally needs to change wording at billing time
+ * — a deposit was taken, a customer negotiated a different payment
+ * split at collection, remarks need adjusting for the final scope.
+ * Same principle as the estimate editor: two-field, single-purpose,
+ * never touches lines / totals / status / ledger.
+ *
+ * Guard: canEditInvoice (cashier + owner + master). Garage scope
+ * via Invoice.garageId directly. Does NOT gate on
+ * invoiceDeliveredAt — remarks + payment terms are display metadata,
+ * not accounting facts; the customer already has their copy but
+ * fixing wording on the shop's record of the invoice is
+ * uncontentious. If we later find shops using this to re-print a
+ * changed invoice for the customer after delivery, we tighten the
+ * gate then.
+ */
+export async function updateInvoiceHeaderAction(formData: FormData) {
+  const user = await requireAnyRole(INVOICE_ROLES);
+  const invoiceId = String(formData.get("invoiceId") ?? "");
+  const rawRemarks = String(formData.get("remarks") ?? "").trim();
+  const rawTerms = String(formData.get("paymentTerms") ?? "").trim();
+
+  const inv = await prisma.invoice.findFirst({
+    where: { id: invoiceId, garageId: user.garageId },
+    select: { id: true },
+  });
+  if (!inv) throw new Error("Invoice not found in this garage");
+
+  await prisma.invoice.update({
+    where: { id: inv.id },
+    data: {
+      remarks: rawRemarks === "" ? null : rawRemarks,
+      paymentTerms: rawTerms === "" ? null : rawTerms,
+    },
+  });
+  revalidatePath(`/invoices/${invoiceId}`);
+  revalidatePath(`/invoices/${invoiceId}/preview`);
 }

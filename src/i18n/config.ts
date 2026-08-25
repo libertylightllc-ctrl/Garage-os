@@ -959,6 +959,10 @@ const en = {
     "Record payment here once the customer pays. If they say they never got the invoice, resend from WhatsApp — the message is still in the chat draft.",
   invoicePreviewNote: "Review the customer-facing invoice before sending.",
   invoicePreviewButton: "Preview →",
+  // AR 2026-08-25 — post-send route back to /invoices/[id]/preview
+  // on the sent invoice, matching the estimate editor's
+  // "View / print estimate" that persists after send.
+  invoiceViewPrint: "View / print invoice",
   invoicePreviewGoBack: "← Go Back",
   invoiceDownloadPdf: "Download PDF",
   invoiceDownloadPdfHint:
@@ -2757,6 +2761,7 @@ const ar: typeof en = {
   sendInvoiceToCustomer: "إرسال عبر واتساب ←",
   invoicePreviewNote: "راجع الفاتورة كما يراها العميل قبل الإرسال.",
   invoicePreviewButton: "معاينة ←",
+  invoiceViewPrint: "عرض / طباعة الفاتورة",
   invoicePreviewGoBack: "← العودة للتعديل",
   invoiceDownloadPdf: "تحميل PDF",
   invoiceDownloadPdfHint:

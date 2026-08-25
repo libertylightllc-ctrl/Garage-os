@@ -979,6 +979,23 @@ export default async function InvoiceView({
         </p>
       ) : null}
 
+      {/* AR 2026-08-25 — post-send "View invoice" link. The
+          pre-send preview card above disappears once
+          invoiceSentAt / invoiceDeliveredAt is set, leaving a
+          sent/delivered invoice with no visible route to the
+          customer-facing render (sections, terms, VAT layout all
+          live on /preview). Mirrors the estimate editor's
+          "View / Print" link that persists after send. */}
+      {(inv.jobCard.invoiceSentAt || inv.jobCard.invoiceDeliveredAt) &&
+      inv.lines.length > 0 ? (
+        <Link
+          href={`/invoices/${inv.id}/preview`}
+          className="inline-flex h-12 w-fit items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 print:hidden"
+        >
+          {t("invoiceViewPrint")}
+        </Link>
+      ) : null}
+
       {/* Void & correct (2026-08-10). Two shapes:
           - Delivered non-void, non-paid → offer to void it.
           - VOID with no correction yet → offer to reissue.

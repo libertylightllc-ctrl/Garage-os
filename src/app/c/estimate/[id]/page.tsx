@@ -10,6 +10,14 @@ import { DocumentHeader } from "@/components/document-header";
 
 export const dynamic ="force-dynamic";
 
+// AR 2026-08-26 — customer document, signed opaque URL. Never
+// crawlable: exposes TRN + invoice total + vehicle plate. Paired
+// with X-Robots-Tag noindex header in next.config.ts so an edge
+// proxy stripping either single defence still leaves the other.
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 export default async function CustomerEstimate({ params }: { params: Promise<{ id: string }> }) {
@@ -153,7 +161,7 @@ export default async function CustomerEstimate({ params }: { params: Promise<{ i
                     {Number(l.qty)}
                   </td>
                   <td className={`px-2 py-2 text-right tabular-nums ${strike}`}>
-                    {Number(l.lineTotal).toFixed(2)}
+                    {(Math.round((Number(l.qty) * Number(l.unitPrice) + Number.EPSILON) * 100) / 100).toFixed(2)}
                   </td>
                   {est.status === "SENT" ? (
                     <td className="px-2 py-2 text-right">

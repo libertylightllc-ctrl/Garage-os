@@ -10,6 +10,13 @@ import Link from "next/link";
 
 export const dynamic ="force-dynamic";
 
+// AR 2026-08-26 — same treatment as /c/estimate/[id]. Never
+// crawlable. X-Robots-Tag noindex on the response header lives
+// alongside this per-page meta in next.config.ts.
+export const metadata = {
+  robots: { index: false, follow: false },
+};
+
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 
 // Friendly "link isn't working" page — replaces the bare Next.js 404

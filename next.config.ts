@@ -96,6 +96,27 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_VERSION_BANNER_ENABLED:
       process.env.VERSION_BANNER_ENABLED ?? "",
   },
+  // AR 2026-08-26 — noindex on the customer document routes.
+  // Signed opaque tokens make discovery cryptographically hard, but
+  // one WhatsApp forward → screenshot → indexed URL = a customer's
+  // TRN + invoice total + vehicle plate in Google. `noindex, nofollow`
+  // on the response header is a belt-and-braces companion to the
+  // per-page `<meta robots>` tag: either alone would suffice, both
+  // together survive an edge proxy stripping one. Applied at the
+  // whole /c/estimate/* and /c/invoice/* subtrees (which cover the
+  // signed public estimate + invoice + PDF surfaces alike).
+  async headers() {
+    return [
+      {
+        source: "/c/estimate/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      {
+        source: "/c/invoice/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
+  },
   experimental: {
     // AR 2026-08-25 Batch E — kill App-Router client-cache staleness.
     // Next 16's default (dynamic: 30s) means a soft navigation between

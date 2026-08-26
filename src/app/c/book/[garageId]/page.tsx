@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createBookingPublic } from "@/app/actions/intake";
@@ -5,6 +6,46 @@ import { PhotoCapture } from "@/components/photo-capture";
 import { getT } from "@/i18n/server";
 
 export const dynamic ="force-dynamic";
+
+// AR 2026-08-26 — public booking page. Garage name in the title
+// so a customer searching for their shop can actually find this
+// URL through Google. The garage row is a single indexed lookup
+// against Garage.id (cuid); the page render below does the same
+// query, but generateMetadata runs before the render so the two
+// requests can't share the fetch here — kept small and separate.
+// A missing garage returns a generic title; the render then
+// notFound()s on the same missing id.
+export async function generateMetadata(
+    { params }: { params: Promise<{ garageId: string }> },
+): Promise<Metadata> {
+    const { garageId } = await params;
+    const garage = await prisma.garage.findUnique({
+        where: { id: garageId },
+        select: { name: true },
+    });
+    if (!garage) {
+        return {
+            title: "Book a service",
+            robots: { index: false, follow: false },
+        };
+    }
+    return {
+        title: `Book a service with ${garage.name}`,
+        description: `Book your car in for service, repair or diagnosis at ${garage.name}. Send photos, register the vehicle, and get a WhatsApp reply from the workshop.`,
+        alternates: {
+            canonical: `/c/book/${garageId}`,
+        },
+        openGraph: {
+            title: `Book a service with ${garage.name}`,
+            description: `Book your car in for service at ${garage.name}. Powered by GarageOS.`,
+            url: `https://www.garageos.shop/c/book/${garageId}`,
+            type: "website",
+        },
+        // Public by design — index this page. Explicit so a future
+        // sitewide noindex default doesn't accidentally silence it.
+        robots: { index: true, follow: true },
+    };
+}
 
 const field =
 "w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20";

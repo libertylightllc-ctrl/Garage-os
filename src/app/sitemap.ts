@@ -1,21 +1,31 @@
 import type { MetadataRoute } from "next";
+import { prisma } from "@/lib/prisma";
 
-// AR 2026-08-26 — SEO foundation, Batch A. One entry for the
-// marketing home. Deliberately short: the only page we currently
-// publish and want crawled. Additional public routes (blog, feature
-// pages) added here as they land.
+// AR 2026-08-26 — SEO foundation, Batch A. Marketing home + every
+// live garage's public booking page. AR's call: cuid IDs make
+// enumeration a non-risk, the booking page shows only the shop
+// name and a form, and a customer finding their shop through search
+// is a genuine benefit. The sitemap is the discovery path — Google
+// won't crawl a URL it can't reach.
 //
-// Per-garage booking URLs (/c/book/[garageId]) are NOT sitemap'd
-// unless AR explicitly enables indexing on them (Q2 in the SEO
-// batch). Garage IDs are cuid — cryptographically unguessable — so
-// enumeration isn't a risk, but a sitemap containing them would be
-// a deliberate disclosure of which shops use us. The public
-// marketing home would be the right place to link to shop bookings
-// individually if / when we want that.
+// Disclosure trade-off (worth naming): this reveals to anyone
+// reading the sitemap which shops are on GarageOS. Each shop's
+// garage.name is already public on its own booking page and every
+// invoice it sends, so the added leak is a shop-count and a
+// per-shop URL. If a specific shop ever wants to opt out of
+// discoverability, add a `Garage.publicBookingEnabled` flag and
+// filter here.
 
 const BASE = "https://www.garageos.shop";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export const revalidate = 3600; // rebuild sitemap hourly
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+    const garages = await prisma.garage.findMany({
+        select: { id: true, updatedAt: true },
+        orderBy: { createdAt: "asc" },
+    });
+
     return [
         {
             url: `${BASE}/`,
@@ -23,5 +33,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: "monthly",
             priority: 1,
         },
+        ...garages.map((g) => ({
+            url: `${BASE}/c/book/${g.id}`,
+            lastModified: g.updatedAt,
+            changeFrequency: "weekly" as const,
+            priority: 0.8,
+        })),
     ];
 }

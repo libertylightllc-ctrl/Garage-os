@@ -15,9 +15,20 @@ export default function robots(): MetadataRoute.Robots {
         rules: [
             {
                 userAgent: "*",
-                allow: ["/", "/login"],
+                // AR 2026-08-26 — /c/book/[garageId] is public by
+                // design (a customer finding their shop's booking
+                // page in search is a genuine benefit; cuid IDs are
+                // unguessable). /c/estimate/ and /c/invoice/ stay
+                // disallowed as signed-token private documents. So
+                // we drop the broad `/c/` disallow and list the two
+                // customer-doc subtrees specifically instead.
+                allow: ["/", "/login", "/c/book/"],
                 disallow: [
-                    "/c/",
+                    "/c/estimate/",
+                    "/c/invoice/",
+                    "/c/booking/",
+                    "/c/delivery/",
+                    "/c/po/",
                     "/api/",
                     "/admin/",
                     "/owner/",

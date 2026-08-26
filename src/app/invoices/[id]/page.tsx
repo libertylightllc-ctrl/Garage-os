@@ -579,7 +579,17 @@ export default async function InvoiceView({
             <span />
           </div>
 
-          {workLines.map((l) =>
+          {workLines.map((l) => {
+            // AR 2026-08-25 — compute Amount at render time from
+            // qty × unitPrice rather than reading the cached
+            // `lineTotal` column. The cache is written by every
+            // server-side write path via lineTotal(qty, unitPrice),
+            // but a drifted row (see probe-invoiceline-cache-drift
+            // for the audit shape) would otherwise display wrong on
+            // the printed doc AND the customer's copy. Computing
+            // fresh means the display never trusts a stale cache.
+            const amountFresh = Math.round((Number(l.qty) * Number(l.unitPrice) + Number.EPSILON) * 100) / 100;
+            return (
             canEditLines ? (
               // Inline edit row. The <form> uses `contents` so its
               // children (inputs + Save button) become DIRECT children
@@ -621,19 +631,19 @@ export default async function InvoiceView({
                     className="h-10 rounded-lg border border-border bg-transparent px-2 text-end text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
                   />
                   <span className="px-2 text-end tabular-nums">
-                    {Number(l.lineTotal).toFixed(2)}
+                    {amountFresh.toFixed(2)}
                   </span>
-                  {/* Per-line VAT — read-only, computed from
-                      lineTotal × 5 %. On a discount line (negative
-                      lineTotal) the VAT renders negative too, which
-                      is the correct FTA representation: total per-line
-                      VAT sums back to inv.vatAmount. */}
+                  {/* Per-line VAT — display-only, computed from the
+                      SAME qty × unitPrice as Amount so the two never
+                      diverge even if the cached lineTotal column has
+                      drifted from truth. On a discount line
+                      (negative unitPrice) VAT renders negative too. */}
                   <span className="px-2 text-end tabular-nums">
-                    {(Number(l.lineTotal) * 0.05).toFixed(2)}
+                    {(amountFresh * 0.05).toFixed(2)}
                   </span>
-                  {/* Per-line total = Amount + VAT (2026-08-10). */}
+                  {/* Per-line total = Amount + VAT — same discipline. */}
                   <span className="px-2 text-end tabular-nums font-medium">
-                    {(Number(l.lineTotal) * 1.05).toFixed(2)}
+                    {(amountFresh * 1.05).toFixed(2)}
                   </span>
                   <button
                     type="submit"
@@ -669,17 +679,18 @@ export default async function InvoiceView({
                 <span className="px-2">{translateLineDescription(l.description, locale)}</span>
                 <span className="px-2 text-end">{Number(l.qty)}</span>
                 <span className="px-2 text-end">{Number(l.unitPrice).toFixed(2)}</span>
-                <span className="px-2 text-end">{Number(l.lineTotal).toFixed(2)}</span>
+                <span className="px-2 text-end">{amountFresh.toFixed(2)}</span>
                 <span className="px-2 text-end">
-                  {(Number(l.lineTotal) * 0.05).toFixed(2)}
+                  {(amountFresh * 0.05).toFixed(2)}
                 </span>
                 <span className="px-2 text-end font-medium">
-                  {(Number(l.lineTotal) * 1.05).toFixed(2)}
+                  {(amountFresh * 1.05).toFixed(2)}
                 </span>
                 <span />
               </div>
-            ),
-          )}
+            )
+          );
+          })}
         </div>
       </div>
 

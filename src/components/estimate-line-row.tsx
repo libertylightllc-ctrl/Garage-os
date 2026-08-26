@@ -288,7 +288,7 @@ export function EstimateLineRow({
                 {Number(line.unitPrice).toFixed(2)}
             </td>
             <td className={`${td} text-right font-semibold tabular-nums ${valueClass}`}>
-                {Number(line.lineTotal).toFixed(2)}
+                {(Math.round((Number(line.qty) * Number(line.unitPrice) + Number.EPSILON) * 100) / 100).toFixed(2)}
             </td>
             {editable || canDecline ? (
                 <td className={`${td} whitespace-nowrap`}>

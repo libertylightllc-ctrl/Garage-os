@@ -306,7 +306,7 @@ export function EstimateLineCard({
                 <div className="flex flex-col items-end">
                     <dt className="text-text-mute">Total</dt>
                     <dd className={`text-base font-semibold tabular-nums ${valueClass}`}>
-                        AED {Number(line.lineTotal).toFixed(2)}
+                        AED {(Math.round((Number(line.qty) * Number(line.unitPrice) + Number.EPSILON) * 100) / 100).toFixed(2)}
                     </dd>
                 </div>
             </dl>

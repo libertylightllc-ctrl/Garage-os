@@ -121,15 +121,26 @@ export default async function EstimatePreview({
   // real UAE-shop's estimate document reads. Discount lines (FEE with
   // negative unitPrice) render separately after the section subtotals.
   const sectioned = groupLinesBySection(
-    lines.map<SectionedLine & { id: string }>((l) => ({
-      id: l.id,
-      kind: l.kind,
-      description: l.description,
-      qty: Number(l.qty),
-      unitPrice: Number(l.unitPrice),
-      lineTotal: Number(l.lineTotal),
-      declined: l.declined,
-    })),
+    lines.map<SectionedLine & { id: string }>((l) => {
+      const qty = Number(l.qty);
+      const unitPrice = Number(l.unitPrice);
+      return {
+        id: l.id,
+        kind: l.kind,
+        description: l.description,
+        qty,
+        unitPrice,
+        // AR 2026-08-25 — compute at render time from qty ×
+        // unitPrice. Server-side writes always keep the cached
+        // lineTotal column coherent, but a drifted row (see
+        // scripts/probe-invoiceline-cache-drift.mts + the sibling
+        // estimate audit) would otherwise reach the printed doc
+        // and the customer's copy wrong. Cache is for aggregates;
+        // display is for truth.
+        lineTotal: Math.round((qty * unitPrice + Number.EPSILON) * 100) / 100,
+        declined: l.declined,
+      };
+    }),
   );
 
   // Advisor block: prefer the snapshot (captured at send time) over

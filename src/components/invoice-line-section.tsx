@@ -72,7 +72,16 @@ export function InvoiceLineSection({
                 </thead>
                 <tbody>
                     {lines.map((l, i) => {
-                        const amt = l.lineTotal;
+                        // AR 2026-08-25 — compute Amount at render time
+                        // from qty × unitPrice rather than trusting the
+                        // caller's `lineTotal`. Every server-side write
+                        // path writes lineTotal = qty × unitPrice, but a
+                        // drifted row (audit via
+                        // scripts/probe-invoiceline-cache-drift.mts)
+                        // would otherwise reach the printed doc + the
+                        // customer's copy with the wrong figure. Compute
+                        // fresh so the display never trusts the cache.
+                        const amt = Math.round((l.qty * l.unitPrice + Number.EPSILON) * 100) / 100;
                         const vat = amt * vatRate;
                         return (
                             <tr key={l.id} className={borderClass}>

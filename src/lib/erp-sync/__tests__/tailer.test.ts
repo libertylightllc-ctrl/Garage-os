@@ -164,7 +164,7 @@ afterAll(cleanup);
 describe("runTailer — Phase 2 shape", () => {
     it("enqueues one job per source doc, not one per ledger row", async () => {
         const { customer, job } = await seedGarageWithJob(gid);
-        await seedApprovedEstimate(job.id);
+        const est = await seedApprovedEstimate(job.id);
 
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
@@ -178,7 +178,7 @@ describe("runTailer — Phase 2 shape", () => {
         // $transaction — the tailer must collapse those into ONE
         // PUSH_INVOICE job.
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
 
         // Enable AFTER the invoice write, with a past startAt so the
@@ -209,7 +209,7 @@ describe("runTailer — Phase 2 shape", () => {
 
     it("INVOICE_VOID → PUSH_VOID job, depends on PUSH_INVOICE", async () => {
         const { job } = await seedGarageWithJob(gid);
-        await seedApprovedEstimate(job.id);
+        const est = await seedApprovedEstimate(job.id);
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
                 id: P + "cashier",
@@ -219,7 +219,7 @@ describe("runTailer — Phase 2 shape", () => {
         );
 
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
 
         // Simulate deliveredAt so the void gate passes.
@@ -256,6 +256,10 @@ describe("runTailer — Phase 2 shape", () => {
 
     it("ADVANCE_MIGRATION is explicitly skipped (regression guard)", async () => {
         const { customer, job } = await seedGarageWithJob(gid);
+        // recordAdvancePaymentAction requires an APPROVED estimate
+        // to exist (that's the ceiling for the advance amount). So
+        // the ordering is: estimate → advance → invoice.
+        const est = await seedApprovedEstimate(job.id);
 
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
@@ -280,9 +284,8 @@ describe("runTailer — Phase 2 shape", () => {
         // Now invoice — generateInvoiceAction MIGRATES the
         // AdvancePayment onto the new Invoice and writes
         // sourceType='ADVANCE_MIGRATION' ledger rows.
-        await seedApprovedEstimate(job.id);
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
 
         await enableErpSyncForGarage({
@@ -312,7 +315,7 @@ describe("runTailer — Phase 2 shape", () => {
 
     it("cursor advances to (max createdAt, max id) — second pass is idempotent", async () => {
         const { job } = await seedGarageWithJob(gid);
-        await seedApprovedEstimate(job.id);
+        const est = await seedApprovedEstimate(job.id);
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
                 id: P + "cashier",
@@ -321,7 +324,7 @@ describe("runTailer — Phase 2 shape", () => {
             }),
         );
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
 
         await enableErpSyncForGarage({
@@ -375,7 +378,7 @@ describe("runTailer — Phase 2 shape", () => {
 
     it("enableErpSyncForGarage defaults startAt=now — no historical backfill", async () => {
         const { job } = await seedGarageWithJob(gid);
-        await seedApprovedEstimate(job.id);
+        const est = await seedApprovedEstimate(job.id);
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
                 id: P + "cashier",
@@ -385,7 +388,7 @@ describe("runTailer — Phase 2 shape", () => {
         );
         // Historical invoice write BEFORE enable.
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
 
         // Enable with default startAt (now). The just-written ledger
@@ -402,7 +405,7 @@ describe("runTailer — Phase 2 shape", () => {
 
     it("payment enqueues PUSH_PAYMENT with PUSH_INVOICE as dep", async () => {
         const { job } = await seedGarageWithJob(gid);
-        await seedApprovedEstimate(job.id);
+        const est = await seedApprovedEstimate(job.id);
         mockAuth.mockResolvedValue(
             await mockSessionAndSeed({
                 id: P + "cashier",
@@ -411,7 +414,7 @@ describe("runTailer — Phase 2 shape", () => {
             }),
         );
         await expect(
-            generateInvoiceAction(await form({ jobCardId: job.id })),
+            generateInvoiceAction(await form({ estimateId: est.id })),
         ).rejects.toThrow(/REDIRECT:/);
         const inv = await prisma.invoice.findFirstOrThrow({
             where: { jobCardId: job.id },

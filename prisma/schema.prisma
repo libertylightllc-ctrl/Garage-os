@@ -54,8 +54,8 @@ enum JobStatus {
   ESTIMATE
   APPROVED
   REPAIR
-  EXTRA_WORK_AWAITING_APPROVAL  // tech tapped 'Send for Re-estimate'; awaiting cashier+customer to bless the extra
-  TECH_COMPLETE                 // tech tapped 'Mark complete'; awaiting cashier to finalise invoice
+  EXTRA_WORK_AWAITING_APPROVAL // tech tapped 'Send for Re-estimate'; awaiting cashier+customer to bless the extra
+  TECH_COMPLETE // tech tapped 'Mark complete'; awaiting cashier to finalise invoice
   INVOICED
   DELIVERED
   ON_HOLD
@@ -262,29 +262,29 @@ enum FuelLevel {
 enum JobPartKind {
   REQUIRED
   USED
-  EXTRA   // tech added mid-job after the original estimate was already approved; rolled into a new estimate when 'Send for Approval' is tapped
+  EXTRA // tech added mid-job after the original estimate was already approved; rolled into a new estimate when 'Send for Approval' is tapped
 }
 
 // ---------- Tenancy ----------
 model Garage {
-  id           String  @id @default(cuid())
-  name         String
-  country      String  @default("UAE")
-  trn          String? // tax registration number (was vatNumber)
-  branchOfId   String? // Phase-2 hook; Phase 1 is single-garage
-  branchOf     Garage? @relation("GarageBranches", fields: [branchOfId], references: [id])
-  branches     Garage[] @relation("GarageBranches")
-  settingsJson Json?
-  invoiceSeq   Int     @default(0) // per-garage gapless invoice counter
-  jobSeq       Int     @default(0) // per-garage gapless Job Card No counter
-  isPilot      Boolean @default(true) // pilots are NEVER charged (subscription billing)
-  logoUrl      String? // garage-uploaded brand logo (Supabase public URL); null = use default GarageOS brand. Set via uploadGarageLogoAction; appears on dashboard nav + invoice + estimate + customer-facing links.
+  id                     String   @id @default(cuid())
+  name                   String
+  country                String   @default("UAE")
+  trn                    String? // tax registration number (was vatNumber)
+  branchOfId             String? // Phase-2 hook; Phase 1 is single-garage
+  branchOf               Garage?  @relation("GarageBranches", fields: [branchOfId], references: [id])
+  branches               Garage[] @relation("GarageBranches")
+  settingsJson           Json?
+  invoiceSeq             Int      @default(0) // per-garage gapless invoice counter
+  jobSeq                 Int      @default(0) // per-garage gapless Job Card No counter
+  isPilot                Boolean  @default(true) // pilots are NEVER charged (subscription billing)
+  logoUrl                String? // garage-uploaded brand logo (Supabase public URL); null = use default GarageOS brand. Set via uploadGarageLogoAction; appears on dashboard nav + invoice + estimate + customer-facing links.
   // Shop-wide default markup applied to catalogue + cost-based estimate
   // lines (AR 2026-08-12). Null → advisor enters markup per line. Set
   // via Owner Settings → Pricing defaults. Only a hint at line-create
   // time — the per-line markupPct is what actually prices the line, so
   // an owner can change this later without disturbing existing estimates.
-  defaultPartsMarkupPct Decimal? @db.Decimal(5, 2)
+  defaultPartsMarkupPct  Decimal? @db.Decimal(5, 2)
   // Shop-wide default for the Payment Terms block printed on every
   // estimate (AR 2026-08-25 Batch C). Free text — most shops set one
   // boilerplate ("50% advance and 50% on delivery") and it applies
@@ -292,7 +292,7 @@ model Garage {
   // Estimate.paymentTerms; renderer reads:
   //   estimate.paymentTerms ?? garage.defaultPaymentTerms ?? null
   // Both null → the block doesn't render. Set via Owner Settings.
-  defaultPaymentTerms String?
+  defaultPaymentTerms    String?
   // Shop-wide default hourly cost of labour (AR 2026-08-12, profit
   // reporting Phase 1, option B). Used to convert WorkSession minutes
   // into a labour-cost estimate for the profit calc on invoices +
@@ -329,8 +329,8 @@ model Garage {
   // Renamed from `terms` (Batch D) at split time — a shop shipping
   // an "estimate is valid for 7 days" clause at the bottom of a
   // paid invoice would embarrass them in front of the customer.
-  estimateTerms String?
-  invoiceTerms  String?
+  estimateTerms          String?
+  invoiceTerms           String?
   // Shop main contact number (AR 2026-08-25 Batch F1) — fallback for
   // the advisor phone snapshot on estimates + invoices when the
   // individual advisor's User.phone is null. A customer meant to
@@ -338,7 +338,13 @@ model Garage {
   // that's still better than no number on the doc. Nullable; if
   // both this and User.phone are null, the advisor block prints
   // just the name.
-  phone         String?
+  phone                  String?
+  // ERPNext one-way push. Off by default; the tailer + client are inert
+  // until this flag flips per garage. See ERPNEXT_SYNC_BRIEF.md §1
+  // constraint 5 ("behind a per-garage flag, off by default") and
+  // Phase 1 of §8. Nothing reads this yet — Phase 2 wires it into the
+  // tailer's WHERE clause.
+  erpSyncEnabled         Boolean  @default(false)
   // Shop-wide fallback for cold-start outbound customer messages
   // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
   // falls through to "en" as last resort. UAE default was Arabic
@@ -359,28 +365,32 @@ model Garage {
   // constant today; the field switches on when multi-country lands.
   vatRate                Decimal? @default(0.05) @db.Decimal(5, 4)
 
-  users        User[]
-  customers    Customer[]
-  bookings     Booking[]
-  jobCards     JobCard[]
-  invoices     Invoice[]
-  parts          Part[]
-  suppliers      Supplier[]
-  purchaseOrders PurchaseOrder[]
+  users              User[]
+  customers          Customer[]
+  bookings           Booking[]
+  jobCards           JobCard[]
+  invoices           Invoice[]
+  parts              Part[]
+  suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
   purchaseOrderSends PurchaseOrderSend[]
   invoiceSends       InvoiceSend[]
-  partMovements  PartMovement[]
-  partsImports   PartsImport[]
-  partRequests   PartRequest[]
-  reminders      Reminder[]
-  bays         Bay[]
-  ledgerEntries LedgerEntry[]
-  advancePayments AdvancePayment[]
-  aiEvents     AiEvent[]
-  subscription Subscription?
-  whatsAppAccount WhatsAppAccount?
-  waThreads    WhatsAppThread[]
-  intakeDrafts IntakeDraft[]
+  partMovements      PartMovement[]
+  partsImports       PartsImport[]
+  partRequests       PartRequest[]
+  reminders          Reminder[]
+  bays               Bay[]
+  ledgerEntries      LedgerEntry[]
+  advancePayments    AdvancePayment[]
+  aiEvents           AiEvent[]
+  subscription       Subscription?
+  whatsAppAccount    WhatsAppAccount?
+  waThreads          WhatsAppThread[]
+  intakeDrafts       IntakeDraft[]
+  // ERPNext one-way push back-relations. Inert until Garage.erpSyncEnabled flips.
+  erpEntityMaps      ErpEntityMap[]
+  erpSyncJobs        ErpSyncJob[]
+  erpSyncCursor      ErpSyncCursor?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -396,11 +406,11 @@ enum SubStatus {
 }
 
 model Plan {
-  id           String   @id @default(cuid())
-  code         String   @unique // STARTER | GROWTH | PRO
-  name         String
-  priceMonthly Decimal  @db.Decimal(12, 2) // plan prices live in the DB
-  currency     String   @default("AED")
+  id            String  @id @default(cuid())
+  code          String  @unique // STARTER | GROWTH | PRO
+  name          String
+  priceMonthly  Decimal @db.Decimal(12, 2) // plan prices live in the DB
+  currency      String  @default("AED")
   stripePriceId String?
   active        Boolean @default(true)
 
@@ -437,9 +447,9 @@ model BillingEvent {
 
 // Staff only — has login. Customers are NOT here.
 model User {
-  id       String @id @default(cuid())
-  garageId String
-  garage   Garage @relation(fields: [garageId], references: [id])
+  id           String  @id @default(cuid())
+  garageId     String
+  garage       Garage  @relation(fields: [garageId], references: [id])
   role         Role
   name         String
   phone        String?
@@ -447,35 +457,35 @@ model User {
   passwordHash String? // bcrypt; null = not yet set (e.g. OAuth later)
   lang         Lang    @default(en)
 
-  advisorJobCards JobCard[] @relation("AdvisorJobCards")
-  techSteps       JobStep[] @relation("TechSteps")
-  partRequests    PartRequest[] @relation("PartRequestedBy")
-  helperOf        JobHelper[] @relation("TechHelp")
-  findings        JobFinding[] @relation("TechFindings")
-  jobPartsCreated JobPart[] @relation("CreatedJobParts")
-  partsImports    PartsImport[] @relation("PartsImportedBy")
-  qcJobs          JobCard[] @relation("QcJobs")
-  deliveredJobs   JobCard[] @relation("DeliveredJobs")
-  aiEvents        AiEvent[]
-  workSessions    WorkSession[] @relation("TechWorkSessions")
-  purchaseOrderSends PurchaseOrderSend[] @relation("PurchaseOrderSentBy")
-  invoiceSends       InvoiceSend[]       @relation("InvoiceSentBy")
-  voidedInvoices     Invoice[]           @relation("InvoiceVoidedBy")
+  advisorJobCards      JobCard[]                  @relation("AdvisorJobCards")
+  techSteps            JobStep[]                  @relation("TechSteps")
+  partRequests         PartRequest[]              @relation("PartRequestedBy")
+  helperOf             JobHelper[]                @relation("TechHelp")
+  findings             JobFinding[]               @relation("TechFindings")
+  jobPartsCreated      JobPart[]                  @relation("CreatedJobParts")
+  partsImports         PartsImport[]              @relation("PartsImportedBy")
+  qcJobs               JobCard[]                  @relation("QcJobs")
+  deliveredJobs        JobCard[]                  @relation("DeliveredJobs")
+  aiEvents             AiEvent[]
+  workSessions         WorkSession[]              @relation("TechWorkSessions")
+  purchaseOrderSends   PurchaseOrderSend[]        @relation("PurchaseOrderSentBy")
+  invoiceSends         InvoiceSend[]              @relation("InvoiceSentBy")
+  voidedInvoices       Invoice[]                  @relation("InvoiceVoidedBy")
   // Slice 3 audits — separate named relations so the User row can be
   // referenced from any of the three roles on an intake collision:
   // attached / released a plate history row, or performed an
   // ownership transfer. Nullable on the plate side because the
   // backfill runs without a user context.
-  plateHistoryAttached  VehiclePlateHistory[]      @relation("PlateHistoryAttachedBy")
-  plateHistoryReleased  VehiclePlateHistory[]      @relation("PlateHistoryReleasedBy")
-  ownershipTransfers    VehicleOwnershipTransfer[] @relation("OwnershipTransferBy")
-  intakeDraftsCreated   IntakeDraft[]              @relation("IntakeDraftCreatedBy")
+  plateHistoryAttached VehiclePlateHistory[]      @relation("PlateHistoryAttachedBy")
+  plateHistoryReleased VehiclePlateHistory[]      @relation("PlateHistoryReleasedBy")
+  ownershipTransfers   VehicleOwnershipTransfer[] @relation("OwnershipTransferBy")
+  intakeDraftsCreated  IntakeDraft[]              @relation("IntakeDraftCreatedBy")
 
   // Last successful sign-in for this staff user. Written by the
   // baseProvider in src/auth.ts on every authorize() pass — best-effort,
   // never blocks sign-in if it fails. Used by the admin per-shop detail
   // page (Phase 3) to flag accounts that have gone quiet.
-  lastLoginAt  DateTime?
+  lastLoginAt DateTime?
 
   // Brute-force lockout, mirroring AdminUser. failedLogins counts
   // consecutive wrong-password attempts; once it crosses the threshold
@@ -493,21 +503,21 @@ model User {
 
 // Passwordless, phone-keyed. Created on first WhatsApp contact. Never logs in.
 model Customer {
-  id       String @id @default(cuid())
-  garageId String
-  garage   Garage @relation(fields: [garageId], references: [id])
-  name     String
-  phone    String
-  email    String? // optional, captured at reception
+  id               String  @id @default(cuid())
+  garageId         String
+  garage           Garage  @relation(fields: [garageId], references: [id])
+  name             String
+  phone            String
+  email            String? // optional, captured at reception
   // Nullable + no default (AR 2026-08-19). Previous @default(ar)
   // populated every prod row with "ar" regardless of whether the
   // customer had ever indicated Arabic — a fabricated value that
   // then drove wrong-language outbound sends. Null = "unknown, no
   // signal yet"; resolveCustomerLangForOutbound falls back to
   // Garage.defaultLang, then "en".
-  lang     Lang?
-  trn      String? // for B2B invoices
-  waId     String? // WhatsApp id
+  lang             Lang?
+  trn              String? // for B2B invoices
+  waId             String? // WhatsApp id
   // AR 2026-08-23. Set on write when the input phone couldn't be
   // resolved to an E.164 shape wa.me would accept — a real-looking
   // but unusable number ("call at 5pm", a landline typed as a
@@ -519,9 +529,9 @@ model Customer {
   // four write paths that set it.
   phoneNeedsReview Boolean @default(false)
 
-  vehicles  Vehicle[]
-  bookings  Booking[]
-  waThreads WhatsAppThread[]
+  vehicles               Vehicle[]
+  bookings               Booking[]
+  waThreads              WhatsAppThread[]
   // Slice 3 — ownership-transfer audit rows reference the customer on
   // both sides of the transfer (previous / new owner) so both need
   // named relations. Neither side is authoritative; the Vehicle's
@@ -538,25 +548,25 @@ model Customer {
 }
 
 model Vehicle {
-  id           String  @id @default(cuid())
-  customerId   String
-  customer     Customer @relation(fields: [customerId], references: [id])
-  make         String
-  model        String
-  year         Int?
-  plate        String
-  vin          String?
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  make       String
+  model      String
+  year       Int?
+  plate      String
+  vin        String?
   // Intrinsic vehicle spec — used to render "Toyota Prado 2014 · 2.7 · Petrol"
   // on the technician job screen and next to each part request so the parts
   // supplier knows exactly which part fits. engineSize is free-text (NHTSA
   // returns decimal liters but advisors may type "2.0T" / "5.7L HEMI" / etc.)
-  engineSize   String?
-  fuelType     String?    // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER
+  engineSize String?
+  fuelType   String? // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER
 
-  jobCards JobCard[]
-  bookings Booking[]
-  reminders Reminder[]
-  poLines  PurchaseOrderLine[]
+  jobCards           JobCard[]
+  bookings           Booking[]
+  reminders          Reminder[]
+  poLines            PurchaseOrderLine[]
   // Slice 3 additions — see VehiclePlateHistory / VehicleOwnershipTransfer
   // at the bottom of this file for why these are separate tables and not
   // JSON columns on Vehicle.
@@ -594,47 +604,47 @@ model Booking {
 
 // ---------- The spine ----------
 model JobCard {
-  id        String    @id @default(cuid())
-  garageId  String
-  garage    Garage    @relation(fields: [garageId], references: [id])
-  vehicleId String
-  vehicle   Vehicle   @relation(fields: [vehicleId], references: [id])
-  advisorId String?
-  advisor   User?     @relation("AdvisorJobCards", fields: [advisorId], references: [id])
-  bookingId String?   @unique
-  booking   Booking?  @relation("BookingJobCard", fields: [bookingId], references: [id])
-  status    JobStatus @default(ARRIVED)
-  heldFrom  JobStatus?   // stage to resume to after ON_HOLD
-  holdReason HoldReason? // why it's on hold
-  holdNote   String?
-  assignedToId String?   // advisor pre-assignment to a specific tech (optional)
-  claimedById  String?   // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
-  claimedAt    DateTime? // start of the diagnosis-duration window
-  sentForEstimateAt DateTime? // when the tech tapped 'Send for Estimate' — end of diagnosis window, start of pricing window
+  id                  String      @id @default(cuid())
+  garageId            String
+  garage              Garage      @relation(fields: [garageId], references: [id])
+  vehicleId           String
+  vehicle             Vehicle     @relation(fields: [vehicleId], references: [id])
+  advisorId           String?
+  advisor             User?       @relation("AdvisorJobCards", fields: [advisorId], references: [id])
+  bookingId           String?     @unique
+  booking             Booking?    @relation("BookingJobCard", fields: [bookingId], references: [id])
+  status              JobStatus   @default(ARRIVED)
+  heldFrom            JobStatus? // stage to resume to after ON_HOLD
+  holdReason          HoldReason? // why it's on hold
+  holdNote            String?
+  assignedToId        String? // advisor pre-assignment to a specific tech (optional)
+  claimedById         String? // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
+  claimedAt           DateTime? // start of the diagnosis-duration window
+  sentForEstimateAt   DateTime? // when the tech tapped 'Send for Estimate' — end of diagnosis window, start of pricing window
   sentForReestimateAt DateTime? // when the tech tapped 'Send for Re-estimate' (extra work found mid-job)
-  priority     Int       @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
-  bayId        String?   // physical bay/ramp this car occupies (Tier 2 #7)
-  bay          Bay?      @relation(fields: [bayId], references: [id])
+  priority            Int         @default(0) // queue urgency: 0 normal, 1 urgent, 2 emergency
+  bayId               String? // physical bay/ramp this car occupies (Tier 2 #7)
+  bay                 Bay?        @relation(fields: [bayId], references: [id])
 
   // ----- Reception (Job-Card-Data-Model.md) — captured at intake by the advisor -----
-  number            Int?       // gapless per-garage Job Card No, rendered JC-2026-0001
-  mileageIn         Int?       // odometer at arrival
-  oilType           OilType    @default(NONE) // kept for future maintenance-reminder spec; UI temporarily hidden
-  fuelType          String?    // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER — also auto-filled from NHTSA VIN decode
-  fuelLevel         FuelLevel? // Empty/¼/½/¾/Full
-  complaint         String?    // customer complaint(s)
-  exteriorCondition String[]   // checkbox values (NO_DAMAGE, SCRATCHES, ...)
-  exteriorRemarks   String?
-  interiorCondition String[]   // checkbox values (CLEAN, DIRTY, WARNING_LIGHT, OTHER)
-  interiorRemarks   String?
-  valuables         String[]   // checkbox values (NONE, DOCUMENTS, CASH, ...)
-  valuablesNote     String?
-  moulkiaConsentAt  DateTime?  // compliance: consent recorded at intake
+  number              Int? // gapless per-garage Job Card No, rendered JC-2026-0001
+  mileageIn           Int? // odometer at arrival
+  oilType             OilType    @default(NONE) // kept for future maintenance-reminder spec; UI temporarily hidden
+  fuelType            String? // PETROL | DIESEL | HYBRID | ELECTRIC | OTHER — also auto-filled from NHTSA VIN decode
+  fuelLevel           FuelLevel? // Empty/¼/½/¾/Full
+  complaint           String? // customer complaint(s)
+  exteriorCondition   String[] // checkbox values (NO_DAMAGE, SCRATCHES, ...)
+  exteriorRemarks     String?
+  interiorCondition   String[] // checkbox values (CLEAN, DIRTY, WARNING_LIGHT, OTHER)
+  interiorRemarks     String?
+  valuables           String[] // checkbox values (NONE, DOCUMENTS, CASH, ...)
+  valuablesNote       String?
+  moulkiaConsentAt    DateTime? // compliance: consent recorded at intake
   // ----- Repair stage (technician records actual work) -----
-  workNotes         String?    // work-completed notes
-  workCompletedAt   DateTime?  // alias for spec's `completedAt` — set when the tech taps 'Mark complete' (Stage 7→8)
+  workNotes           String? // work-completed notes
+  workCompletedAt     DateTime? // alias for spec's `completedAt` — set when the tech taps 'Mark complete' (Stage 7→8)
   // ----- Invoice send (Stage 8) -----
-  invoiceSentAt     DateTime?  // set when the cashier taps 'Send via WhatsApp' — HANDED OFF to the operator's WhatsApp, NOT confirmed delivery
+  invoiceSentAt       DateTime? // set when the cashier taps 'Send via WhatsApp' — HANDED OFF to the operator's WhatsApp, NOT confirmed delivery
   // Set only when we KNOW the invoice reached the customer. In the
   // wa.me era (2026-08-09 → …) this stays null forever — the
   // operator's local WhatsApp doesn't report delivery back to us.
@@ -643,30 +653,30 @@ model JobCard {
   // lock keys off THIS column, not invoiceSentAt — an operator who
   // handed off a wa.me draft but hasn't pressed Send in WhatsApp
   // yet can still fix a missed line without a void+reissue dance.
-  invoiceDeliveredAt DateTime?
+  invoiceDeliveredAt  DateTime?
   // ----- Quality Control -----
-  qcChecks          String[]   // checkbox values (REPAIR_COMPLETED, ROAD_TEST, ...)
-  qcById            String?    // QC inspector
-  qcBy              User?      @relation("QcJobs", fields: [qcById], references: [id])
-  qcAt              DateTime?  // sign-off time
+  qcChecks            String[] // checkbox values (REPAIR_COMPLETED, ROAD_TEST, ...)
+  qcById              String? // QC inspector
+  qcBy                User?      @relation("QcJobs", fields: [qcById], references: [id])
+  qcAt                DateTime? // sign-off time
   // ----- Delivery (Job-Card-Data-Model.md) -----
   mileageOut          Int?
   deliveredById       String?
-  deliveredBy         User?     @relation("DeliveredJobs", fields: [deliveredById], references: [id])
+  deliveredBy         User?      @relation("DeliveredJobs", fields: [deliveredById], references: [id])
   deliveredAt         DateTime?
   deliveryConfirmedAt DateTime? // customer collection record (WhatsApp confirm = signature equivalent)
 
-  steps         JobStep[]
-  estimates     Estimate[]
-  invoices      Invoice[]
-  partMovements PartMovement[]
-  partRequests  PartRequest[]
-  reminders     Reminder[]
-  helpers       JobHelper[]
-  finding       JobFinding?
-  jobParts      JobPart[]
+  steps           JobStep[]
+  estimates       Estimate[]
+  invoices        Invoice[]
+  partMovements   PartMovement[]
+  partRequests    PartRequest[]
+  reminders       Reminder[]
+  helpers         JobHelper[]
+  finding         JobFinding?
+  jobParts        JobPart[]
   advancePayments AdvancePayment[]
-  workSessions  WorkSession[]
+  workSessions    WorkSession[]
   // Direct-fit receive ledger (AR 2026-08-16). One row per direct-fit
   // arrival on a PO line whose source estimate belongs to this job.
   // See JobPartReceipt + docs/direct-fit-receive-spec.md.
@@ -708,11 +718,11 @@ model JobStep {
 // Technician Findings (Job-Card-Data-Model.md) — one per job; submittedAt marks the
 // hand-off to the cashier (job advances to ESTIMATE).
 model JobFinding {
-  id          String   @id @default(cuid())
-  jobCardId   String   @unique
-  jobCard     JobCard  @relation(fields: [jobCardId], references: [id])
+  id          String    @id @default(cuid())
+  jobCardId   String    @unique
+  jobCard     JobCard   @relation(fields: [jobCardId], references: [id])
   techId      String?
-  tech        User?    @relation("TechFindings", fields: [techId], references: [id])
+  tech        User?     @relation("TechFindings", fields: [techId], references: [id])
   findings    String?
   diagnosis   String?
   submittedAt DateTime? // set when submitted to the cashier
@@ -728,7 +738,7 @@ model JobPart {
   jobCardId   String
   jobCard     JobCard     @relation(fields: [jobCardId], references: [id])
   kind        JobPartKind @default(REQUIRED)
-  partId      String?     // optional catalog link
+  partId      String? // optional catalog link
   part        Part?       @relation(fields: [partId], references: [id])
   partNo      String?
   description String
@@ -754,9 +764,9 @@ model JobPart {
   // priced-from target of more than one JobPart — each priced tech
   // request has exactly one line). A future "re-link this JobPart to
   // a different line" flow just moves the FK; the uniqueness holds.
-  createdAt DateTime @default(now())
-  estimateLineId String?        @unique
-  estimateLine   EstimateLine?  @relation("EstimateLinePricedFromJobPart", fields: [estimateLineId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  estimateLineId String?       @unique
+  estimateLine   EstimateLine? @relation("EstimateLinePricedFromJobPart", fields: [estimateLineId], references: [id], onDelete: SetNull)
 
   @@index([jobCardId, kind])
 }
@@ -776,52 +786,52 @@ model JobPart {
 /// write here; the two paths are mutually exclusive per PO-line
 /// receive event.
 model JobPartReceipt {
-    id                  String            @id @default(cuid())
-    // The job this part physically landed on. Resolved from the PO
-    // line's sourceEstimateLine.jobCardId at write time; if that
-    // chain isn't present the receive action refuses the direct-fit
-    // path (there's no stock alternative for a partId=null line
-    // without a job link).
-    jobCardId           String
-    jobCard             JobCard           @relation(fields: [jobCardId], references: [id])
-    // The PO line this receipt closes. Cascades on PO delete
-    // because the PO document IS the source of truth for what was
-    // ordered — losing the PO means losing every downstream
-    // receipt-against-PO record along with it.
-    purchaseOrderLineId String
-    purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
-    // Description snapshot at receive time — the PO line's own
-    // description (or Part.name if it was somehow linked). Frozen
-    // here so a later PO-line edit doesn't rewrite receipt history.
-    description         String
-    qty                 Int
-    // The supplier's ACTUAL per-unit price at delivery — the number
-    // the shop should use when reporting profit on this job. May
-    // differ from the estimate line's unitCost (which is what the
-    // advisor expected); the receive action reconciles by updating
-    // the estimate line's unitCost when the estimate hasn't yet
-    // been invoiced (post-invoice snapshots stay frozen — see the
-    // ordering rule in the spec).
-    receivedUnitCost    Decimal           @db.Decimal(12, 2)
-    // Supplier / manufacturer part number captured at receive time.
-    // Optional — many shops don't type the SKU on a walk-in-and-fit
-    // part. Used only for record-keeping / warranty lookups.
-    receivedPartNo      String?
-    createdAt           DateTime          @default(now())
+  id                  String            @id @default(cuid())
+  // The job this part physically landed on. Resolved from the PO
+  // line's sourceEstimateLine.jobCardId at write time; if that
+  // chain isn't present the receive action refuses the direct-fit
+  // path (there's no stock alternative for a partId=null line
+  // without a job link).
+  jobCardId           String
+  jobCard             JobCard           @relation(fields: [jobCardId], references: [id])
+  // The PO line this receipt closes. Cascades on PO delete
+  // because the PO document IS the source of truth for what was
+  // ordered — losing the PO means losing every downstream
+  // receipt-against-PO record along with it.
+  purchaseOrderLineId String
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Cascade)
+  // Description snapshot at receive time — the PO line's own
+  // description (or Part.name if it was somehow linked). Frozen
+  // here so a later PO-line edit doesn't rewrite receipt history.
+  description         String
+  qty                 Int
+  // The supplier's ACTUAL per-unit price at delivery — the number
+  // the shop should use when reporting profit on this job. May
+  // differ from the estimate line's unitCost (which is what the
+  // advisor expected); the receive action reconciles by updating
+  // the estimate line's unitCost when the estimate hasn't yet
+  // been invoiced (post-invoice snapshots stay frozen — see the
+  // ordering rule in the spec).
+  receivedUnitCost    Decimal           @db.Decimal(12, 2)
+  // Supplier / manufacturer part number captured at receive time.
+  // Optional — many shops don't type the SKU on a walk-in-and-fit
+  // part. Used only for record-keeping / warranty lookups.
+  receivedPartNo      String?
+  createdAt           DateTime          @default(now())
 
-    @@index([jobCardId])
-    @@index([purchaseOrderLineId])
+  @@index([jobCardId])
+  @@index([purchaseOrderLineId])
 }
 
 // ---------- Estimate / Invoice / Payment ----------
 model Estimate {
-  id        String         @id @default(cuid())
-  jobCardId String
-  jobCard   JobCard        @relation(fields: [jobCardId], references: [id])
-  subtotal  Decimal        @db.Decimal(12, 2)
-  vatAmount Decimal        @db.Decimal(12, 2)
-  total     Decimal        @db.Decimal(12, 2)
-  status    EstimateStatus @default(DRAFT)
+  id             String         @id @default(cuid())
+  jobCardId      String
+  jobCard        JobCard        @relation(fields: [jobCardId], references: [id])
+  subtotal       Decimal        @db.Decimal(12, 2)
+  vatAmount      Decimal        @db.Decimal(12, 2)
+  total          Decimal        @db.Decimal(12, 2)
+  status         EstimateStatus @default(DRAFT)
   // set when the operator taps 'Send via WhatsApp' — HANDED OFF to the
   // operator's WhatsApp, NOT confirmed delivery. Mirrors
   // JobCard.invoiceSentAt (AR 2026-08-15 estimate-honesty pass). Also
@@ -835,7 +845,7 @@ model Estimate {
   // Mirror of JobCard.invoiceDeliveredAt.
   deliveredAt    DateTime?
   approvedAt     DateTime? // audit: when the customer approved (dispute shield)
-  approvedAmount Decimal?  @db.Decimal(12, 2)
+  approvedAmount Decimal?       @db.Decimal(12, 2)
 
   // Per-document customer link token (Phase 1) — see Invoice.publicToken
   // for the full doc. Dormant during Phase 1; Phase 2 flips /c/estimate
@@ -849,13 +859,13 @@ model Estimate {
   //   Renderer reads paymentTerms ?? garage.defaultPaymentTerms ??
   //   null; both null = block omitted. Advisor sets when the doc
   //   deviates (fleet net-30, cash on collection).
-  paymentTerms String?
+  paymentTerms         String?
   // remarks: free-text scope-limitation shown above the totals.
   //   Real example: "This estimate is prepared only for the required
   //   work to make the engine start and run. Further diagnosis will
   //   be required..." Per-estimate BY NATURE — a garage default
   //   would go stale and get ignored, which is worse than blank.
-  remarks String?
+  remarks              String?
   // advisorNameSnapshot + advisorPhoneSnapshot: captured at Send
   //   time (sendEstimateToCustomerAction) so the printed document
   //   still names the right person after a staff change. Same
@@ -979,8 +989,8 @@ model Invoice {
   //                           the moment the bill was cut, matching
   //                           the estimate's "advisor at first
   //                           customer contact wins" discipline.
-  remarks             String?
-  paymentTerms        String?
+  remarks              String?
+  paymentTerms         String?
   advisorNameSnapshot  String?
   advisorPhoneSnapshot String?
 
@@ -993,12 +1003,12 @@ model Invoice {
   // `replacedBy` on the voided row (one row can only be replaced
   // once, hence @unique). Sequence stays gapless: the VOID row
   // keeps its number, the correction takes the next number.
-  previousInvoiceId String?  @unique
-  previousInvoice   Invoice? @relation("InvoiceCorrection", fields: [previousInvoiceId], references: [id])
-  replacedBy        Invoice? @relation("InvoiceCorrection")
+  previousInvoiceId String?   @unique
+  previousInvoice   Invoice?  @relation("InvoiceCorrection", fields: [previousInvoiceId], references: [id])
+  replacedBy        Invoice?  @relation("InvoiceCorrection")
   voidedAt          DateTime?
   voidedByUserId    String?
-  voidedBy          User?    @relation("InvoiceVoidedBy", fields: [voidedByUserId], references: [id])
+  voidedBy          User?     @relation("InvoiceVoidedBy", fields: [voidedByUserId], references: [id])
 
   // Per-document customer link token (Phase 1, 2026-08-10). Random
   // opaque string stored server-side, used as the URL segment for
@@ -1007,7 +1017,7 @@ model Invoice {
   // column is dormant, populated only by backfill so it's ready when
   // Phase 2 lands. Nullable during rollout; Phase 2's write path fills
   // it at create time; Phase 3 removes HMAC entirely.
-  publicToken       String? @unique
+  publicToken String? @unique
 
   lines    InvoiceLine[]
   payments Payment[]
@@ -1075,17 +1085,17 @@ model Payment {
 // Cash is recognized ONCE (at advance time); migration is a balance-sheet
 // reclassification, not a second cash event.
 model AdvancePayment {
-  id        String   @id @default(cuid())
-  garageId  String
-  garage    Garage   @relation(fields: [garageId], references: [id])
-  jobCardId String
-  jobCard   JobCard  @relation(fields: [jobCardId], references: [id])
-  amount    Decimal  @db.Decimal(12, 2)
-  method    String   // "CASH" | "CARD_POS"
+  id         String   @id @default(cuid())
+  garageId   String
+  garage     Garage   @relation(fields: [garageId], references: [id])
+  jobCardId  String
+  jobCard    JobCard  @relation(fields: [jobCardId], references: [id])
+  amount     Decimal  @db.Decimal(12, 2)
+  method     String // "CASH" | "CARD_POS"
   receivedAt DateTime @default(now())
 
   migratedAt DateTime? // null = still on job, set = transferred to an Invoice
-  paymentId  String?   // id of the Payment row created at migration (audit)
+  paymentId  String? // id of the Payment row created at migration (audit)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1099,12 +1109,12 @@ model AdvancePayment {
 
 // ---------- Inventory ----------
 model Part {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   garageId  String
-  garage    Garage @relation(fields: [garageId], references: [id])
+  garage    Garage  @relation(fields: [garageId], references: [id])
   sku       String
   name      String
-  qtyOnHand Int    @default(0)
+  qtyOnHand Int     @default(0)
   cost      Decimal @db.Decimal(12, 2)
   price     Decimal @db.Decimal(12, 2)
 
@@ -1398,7 +1408,7 @@ model PurchaseOrderSend {
   garageId          String
   garage            Garage                    @relation(fields: [garageId], references: [id])
   channel           PurchaseOrderSendChannel
-  recipient         String                    // snapshot at send time — email address or phone, per channel
+  recipient         String // snapshot at send time — email address or phone, per channel
   documentKind      PurchaseOrderDocumentKind // snapshot of PO vs RFQ classification at send time
   sentByUserId      String
   sentBy            User                      @relation("PurchaseOrderSentBy", fields: [sentByUserId], references: [id])
@@ -1412,8 +1422,8 @@ model PurchaseOrderSend {
   // the reader honest about the ordering).
   sentByName        String?
   status            PurchaseOrderSendStatus
-  providerMessageId String?                   // email only (Resend id); null for WHATSAPP
-  errorCode         String?                   // our enum only, never provider text (see src/lib/mail.ts MailErrorCode)
+  providerMessageId String? // email only (Resend id); null for WHATSAPP
+  errorCode         String? // our enum only, never provider text (see src/lib/mail.ts MailErrorCode)
 
   createdAt DateTime @default(now())
 
@@ -1434,21 +1444,21 @@ model PurchaseOrderSend {
 // trail on WhatsApp — that's the correct signal to the operator that
 // something went sideways at send time, not a claim we made up.
 model InvoiceSend {
-  id                String              @id @default(cuid())
+  id                String             @id @default(cuid())
   invoiceId         String
-  invoice           Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice           Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   garageId          String
-  garage            Garage              @relation(fields: [garageId], references: [id])
+  garage            Garage             @relation(fields: [garageId], references: [id])
   channel           InvoiceSendChannel
-  recipient         String              // snapshot at send time — email address or phone, per channel
+  recipient         String // snapshot at send time — email address or phone, per channel
   sentByUserId      String
-  sentBy            User                @relation("InvoiceSentBy", fields: [sentByUserId], references: [id])
+  sentBy            User               @relation("InvoiceSentBy", fields: [sentByUserId], references: [id])
   // Sender's display name AT SEND TIME. Same snapshot rule as
   // PurchaseOrderSend.sentByName.
   sentByName        String?
   status            InvoiceSendStatus
-  providerMessageId String?             // reserved for the Meta Cloud API commit; null on wa.me hand-off
-  errorCode         String?             // our own enum only, never provider text
+  providerMessageId String? // reserved for the Meta Cloud API commit; null on wa.me hand-off
+  errorCode         String? // our own enum only, never provider text
 
   createdAt DateTime @default(now())
 
@@ -1510,16 +1520,16 @@ model PartsImportLine {
 //   - kind (enum) — replaces `reason` as the join key for reporting.
 //     `reason` stays as a human note.
 model PartMovement {
-  id              String              @id @default(cuid())
+  id              String           @id @default(cuid())
   partId          String
-  part            Part                @relation(fields: [partId], references: [id])
+  part            Part             @relation(fields: [partId], references: [id])
   garageId        String
-  garage          Garage              @relation(fields: [garageId], references: [id])
+  garage          Garage           @relation(fields: [garageId], references: [id])
   jobCardId       String?
-  jobCard         JobCard?            @relation(fields: [jobCardId], references: [id])
+  jobCard         JobCard?         @relation(fields: [jobCardId], references: [id])
   purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
-  kind            PartMovementKind    @default(MANUAL_ADJUSTMENT)
+  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  kind            PartMovementKind @default(MANUAL_ADJUSTMENT)
   delta           Int
   reason          String
 
@@ -1555,14 +1565,14 @@ model PartRequest {
   garage        Garage            @relation(fields: [garageId], references: [id])
   jobCardId     String
   jobCard       JobCard           @relation(fields: [jobCardId], references: [id])
-  partId        String?           // catalog part, if known
+  partId        String? // catalog part, if known
   part          Part?             @relation(fields: [partId], references: [id])
-  description   String            // free-text (used when no catalog part)
+  description   String // free-text (used when no catalog part)
   qty           Int               @default(1)
   status        PartRequestStatus @default(REQUESTED)
-  requestedById String?           // the technician who asked
+  requestedById String? // the technician who asked
   requestedBy   User?             @relation("PartRequestedBy", fields: [requestedById], references: [id])
-  note          String?           // advisor note (e.g. supplier, ETA)
+  note          String? // advisor note (e.g. supplier, ETA)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1590,7 +1600,7 @@ model WorkSession {
   tech      User      @relation("TechWorkSessions", fields: [techId], references: [id])
   startedAt DateTime  @default(now())
   endedAt   DateTime? // null = live segment
-  endReason String?   // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED | AUTO_CLOSED (2026-08-20, nightly cron)
+  endReason String? // SWITCHED | SENT_FOR_ESTIMATE | COMPLETED | JOB_CLOSED | AUTO_CLOSED (2026-08-20, nightly cron)
 
   // AR 2026-08-12 profit reporting Step 4 — labour cost frozen at
   // session close. Value = hours(session) × Garage.defaultLaborHourlyCost
@@ -1642,11 +1652,11 @@ model Reminder {
   garage      Garage         @relation(fields: [garageId], references: [id])
   vehicleId   String
   vehicle     Vehicle        @relation(fields: [vehicleId], references: [id])
-  jobCardId   String?        // the service that triggered it
+  jobCardId   String? // the service that triggered it
   jobCard     JobCard?       @relation(fields: [jobCardId], references: [id])
   type        ReminderType
-  serviceDate DateTime       // when the service was performed
-  dueAt       DateTime       // when to remind (serviceDate + interval)
+  serviceDate DateTime // when the service was performed
+  dueAt       DateTime // when to remind (serviceDate + interval)
   status      ReminderStatus @default(SCHEDULED)
   sentAt      DateTime?
 
@@ -1744,11 +1754,11 @@ model AdvancePaymentDeleteAudit {
 // ---------- WhatsApp ----------
 // Per-garage WhatsApp Business connection (Embedded Signup). Token stored ENCRYPTED.
 model WhatsAppAccount {
-  id             String   @id @default(cuid())
-  garageId       String   @unique
-  garage         Garage   @relation(fields: [garageId], references: [id])
+  id             String       @id @default(cuid())
+  garageId       String       @unique
+  garage         Garage       @relation(fields: [garageId], references: [id])
   wabaId         String?
-  phoneNumberId  String?  @unique
+  phoneNumberId  String?      @unique
   phoneNumber    String?
   accessTokenEnc String? // AES-GCM ciphertext — never plaintext, never a raw token
   status         WaConnStatus @default(DISCONNECTED)
@@ -1759,22 +1769,22 @@ model WhatsAppAccount {
 }
 
 model WhatsAppThread {
-  id               String          @id @default(cuid())
-  garageId         String
-  garage           Garage          @relation(fields: [garageId], references: [id])
-  customerId       String
-  customer         Customer        @relation(fields: [customerId], references: [id])
-  waId             String
-  mode             WaMode          @default(BOT) // BOT = AI handles; HUMAN = advisor took over
-  threadStatus     WaThreadStatus  @default(OPEN)
+  id                String         @id @default(cuid())
+  garageId          String
+  garage            Garage         @relation(fields: [garageId], references: [id])
+  customerId        String
+  customer          Customer       @relation(fields: [customerId], references: [id])
+  waId              String
+  mode              WaMode         @default(BOT) // BOT = AI handles; HUMAN = advisor took over
+  threadStatus      WaThreadStatus @default(OPEN)
   assignedAdvisorId String?
-  lastMessageAt    DateTime?
+  lastMessageAt     DateTime?
   // Advisor's last-viewed timestamp — the inbox counts inbound
   // messages with createdAt > lastReadAt as unread and renders a
   // pill count. Stamped on every /advisor/chats/[id] page load.
   // Null = never opened; every inbound reads as unread. AR
   // 2026-08-21 — Chats had no unread signal at all.
-  lastReadAt       DateTime?
+  lastReadAt        DateTime?
 
   messages WhatsAppMessage[]
 
@@ -1861,7 +1871,7 @@ model AdminUser {
   lockedUntil  DateTime?
   createdAt    DateTime  @default(now())
 
-  auditLogs    AdminAuditLog[]
+  auditLogs AdminAuditLog[]
 }
 
 // Append-only audit trail of every admin interaction. Written by:
@@ -1873,17 +1883,17 @@ model AdminUser {
 // targetGarageId / targetType / targetId are convenience denormalisations
 // for the per-garage detail view (Phase 3 cross-garage filters).
 model AdminAuditLog {
-  id             String   @id @default(cuid())
+  id             String     @id @default(cuid())
   actorAdminId   String?
   actor          AdminUser? @relation(fields: [actorAdminId], references: [id])
-  action         String   // page_view | access_denied | login_success | login_failed | ...
-  targetType     String?  // Garage | User | AdminUser | ...
+  action         String // page_view | access_denied | login_success | login_failed | ...
+  targetType     String? // Garage | User | AdminUser | ...
   targetId       String?
   targetGarageId String?
   ip             String?
   userAgent      String?
   meta           Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime   @default(now())
 
   @@index([actorAdminId, createdAt])
   @@index([targetGarageId, createdAt])
@@ -1904,20 +1914,20 @@ model AdminAuditLog {
 // skipping any Vehicle whose plate is blank so we never insert an
 // empty-plate history entry.
 model VehiclePlateHistory {
-    id               String    @id @default(cuid())
-    vehicleId        String
-    vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-    plate            String
-    normalizedPlate  String
-    attachedAt       DateTime  @default(now())
-    releasedAt       DateTime? // null → this is the current plate on the Vehicle
-    attachedByUserId String?
-    attachedByUser   User?     @relation("PlateHistoryAttachedBy", fields: [attachedByUserId], references: [id])
-    releasedByUserId String?
-    releasedByUser   User?     @relation("PlateHistoryReleasedBy", fields: [releasedByUserId], references: [id])
+  id               String    @id @default(cuid())
+  vehicleId        String
+  vehicle          Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  plate            String
+  normalizedPlate  String
+  attachedAt       DateTime  @default(now())
+  releasedAt       DateTime? // null → this is the current plate on the Vehicle
+  attachedByUserId String?
+  attachedByUser   User?     @relation("PlateHistoryAttachedBy", fields: [attachedByUserId], references: [id])
+  releasedByUserId String?
+  releasedByUser   User?     @relation("PlateHistoryReleasedBy", fields: [releasedByUserId], references: [id])
 
-    @@index([vehicleId, releasedAt])
-    @@index([normalizedPlate, releasedAt])
+  @@index([vehicleId, releasedAt])
+  @@index([normalizedPlate, releasedAt])
 }
 
 // Ownership transfer audit. Append-only. Written in the confirm
@@ -1929,23 +1939,23 @@ model VehiclePlateHistory {
 // owner. Snapshot fields freeze what the previous owner looked like at
 // transfer time so the audit doesn't lie later.
 model VehicleOwnershipTransfer {
-    id                 String   @id @default(cuid())
-    vehicleId          String
-    vehicle            Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-    fromCustomerId     String
-    fromCustomer       Customer @relation("OwnershipTransferFrom", fields: [fromCustomerId], references: [id])
-    toCustomerId       String
-    toCustomer         Customer @relation("OwnershipTransferTo", fields: [toCustomerId], references: [id])
-    transferredAt      DateTime @default(now())
-    transferredByUserId String
-    transferredByUser  User     @relation("OwnershipTransferBy", fields: [transferredByUserId], references: [id])
-    // Snapshot of the previous owner at transfer time — never joined
-    // for read; kept for audit even if the previous Customer row is
-    // later edited or deleted.
-    previousOwnerName  String
-    previousOwnerPhone String
+  id                  String   @id @default(cuid())
+  vehicleId           String
+  vehicle             Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  fromCustomerId      String
+  fromCustomer        Customer @relation("OwnershipTransferFrom", fields: [fromCustomerId], references: [id])
+  toCustomerId        String
+  toCustomer          Customer @relation("OwnershipTransferTo", fields: [toCustomerId], references: [id])
+  transferredAt       DateTime @default(now())
+  transferredByUserId String
+  transferredByUser   User     @relation("OwnershipTransferBy", fields: [transferredByUserId], references: [id])
+  // Snapshot of the previous owner at transfer time — never joined
+  // for read; kept for audit even if the previous Customer row is
+  // later edited or deleted.
+  previousOwnerName   String
+  previousOwnerPhone  String
 
-    @@index([vehicleId, transferredAt])
+  @@index([vehicleId, transferredAt])
 }
 
 /// Short-lived scratch record for the Moulkia OCR pipeline. The advisor
@@ -1968,27 +1978,27 @@ model VehicleOwnershipTransfer {
 /// correct via the confirm form — the draft is a defaults source, not
 /// the final write.
 model IntakeDraft {
-    id              String   @id @default(cuid())
-    garageId        String
-    garage          Garage   @relation(fields: [garageId], references: [id], onDelete: Cascade)
-    createdByUserId String
-    createdByUser   User     @relation("IntakeDraftCreatedBy", fields: [createdByUserId], references: [id])
+  id              String @id @default(cuid())
+  garageId        String
+  garage          Garage @relation(fields: [garageId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdByUser   User   @relation("IntakeDraftCreatedBy", fields: [createdByUserId], references: [id])
 
-    ownerName    String?
-    plate        String?
-    vin          String?
-    make         String?
-    model        String?
-    year         Int?
-    engineSize   String?
-    fuelType     String?
-    assignedToId String?
+  ownerName    String?
+  plate        String?
+  vin          String?
+  make         String?
+  model        String?
+  year         Int?
+  engineSize   String?
+  fuelType     String?
+  assignedToId String?
 
-    createdAt DateTime @default(now())
-    expiresAt DateTime
+  createdAt DateTime @default(now())
+  expiresAt DateTime
 
-    @@index([garageId, expiresAt])
-    @@index([expiresAt])
+  @@index([garageId, expiresAt])
+  @@index([expiresAt])
 }
 
 // AR 2026-08-23. Standalone audit log for accounting-export downloads.
@@ -2007,16 +2017,170 @@ model IntakeDraft {
 //
 // Read via SQL editor / ad-hoc query; no in-app viewer today.
 model AccountingExportLog {
-    id             String   @id @default(cuid())
-    userId         String
-    userRole       String
-    ownerGarageId  String
-    scopeGarageIds String
-    rangeFromIso   String
-    rangeToIso     String
-    file           String
-    createdAt      DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  userRole       String
+  ownerGarageId  String
+  scopeGarageIds String
+  rangeFromIso   String
+  rangeToIso     String
+  file           String
+  createdAt      DateTime @default(now())
 
-    @@index([createdAt])
-    @@index([ownerGarageId, createdAt])
+  @@index([createdAt])
+  @@index([ownerGarageId, createdAt])
+}
+
+// ---------- ERPNext one-way push (Phase 1: state tables only) ----------
+// See ERPNEXT_SYNC_BRIEF.md — the operative document. §7 architecture:
+// no outbox, tail the LedgerEntry table from a cursor. These three
+// models are Phase 1 of §8: state tables + cursor. Nothing writes to
+// them yet; Phase 2 wires the tailer, Phase 3 the ERPNext client.
+//
+// Constraint 3 of the brief (§1): additive only. New tables and new
+// columns; do not modify existing actions, writers, or queries. This
+// block adds three tables + Garage.erpSyncEnabled. That is the whole
+// footprint on existing schema.
+
+enum ErpSyncOp {
+  // Master data — created before any invoice referencing them can push.
+  PUSH_CUSTOMER
+  PUSH_ITEM
+  // Ledger events.
+  PUSH_INVOICE
+  PUSH_PAYMENT
+  PUSH_ADVANCE
+  PUSH_VOID
+  // Deposit application against a Sales Invoice happens automatically
+  // via allocate_advances_automatically = 1 (§5b of the brief) — no
+  // separate ERPNext document. This op exists only to record the
+  // GarageOS-side observation that a deposit was consumed by a specific
+  // invoice, for reconciliation tie-out. It does NOT push a new record
+  // to ERPNext; it POSTs a re-save on the invoice to trigger the
+  // allocation, then reads back to assert outstanding_amount.
+  APPLY_DEPOSIT
+}
+
+enum ErpSyncJobStatus {
+  PENDING
+  RUNNING
+  SYNCED
+  FAILED
+  // Exhausted retries; the operator surface (Phase 6) lists these for
+  // manual replay or resolution.
+  DEAD_LETTER
+}
+
+// Idempotency spine (§7 of the brief). Maps a GarageOS-side entity
+// (Customer / Item / Invoice / Payment / AdvancePayment) to its
+// ERPNext-side name. The map row is written in the SAME transaction
+// as marking the ErpSyncJob complete — a push that succeeds in ERPNext
+// but fails to record its map row would duplicate the record on retry,
+// and ERPNext assigns names by naming series so there is no natural
+// key to recover from. See §7 "Idempotency — the one that corrupts
+// ledgers".
+model ErpEntityMap {
+  id              String   @id @default(cuid())
+  garageId        String
+  garage          Garage   @relation(fields: [garageId], references: [id])
+  // What GarageOS calls it. `garageosDoctype` mirrors the brief's
+  // vocabulary; kept as a String rather than an enum so a new entity
+  // kind added later doesn't require a schema migration.
+  garageosDoctype String
+  garageosId      String
+  // What ERPNext calls it. Naming-series-generated names come back
+  // opaque strings ("ACC-SINV-2026-00011"); we store them verbatim.
+  erpnextDoctype  String
+  erpnextName     String
+  // Version bump on every subsequent push of the same entity (e.g.
+  // Customer.name edited on the GarageOS side, re-pushed as an update).
+  // Starts at 1.
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // The load-bearing uniqueness constraints (§3 of the brief calls out
+  // the ERPNext-side unique index on Customer.garageos_customer_id /
+  // Item.garageos_item_id as load-bearing; these are the GarageOS-side
+  // mirror). A duplicate push fails at the database rather than
+  // silently creating a second record.
+  @@unique([garageId, garageosDoctype, garageosId])
+  @@unique([garageId, erpnextDoctype, erpnextName])
+  @@index([garageId, garageosDoctype])
+}
+
+// Per-op job row created by the tailer. `sourceType` + `sourceId`
+// reference the originating GarageOS-side entity (typically a
+// LedgerEntry.id for ledger-driven ops, or a Customer.id / Part.id
+// for master-data ops). `dependsOnJobIds` lists other ErpSyncJob rows
+// that must complete SYNCED before this one runs (§7 "Ordering": an
+// invoice cannot post until its customer and every one of its items
+// already exist in ERPNext).
+model ErpSyncJob {
+  id              String           @id @default(cuid())
+  garageId        String
+  garage          Garage           @relation(fields: [garageId], references: [id])
+  op              ErpSyncOp
+  // For ledger-driven ops (PUSH_INVOICE, PUSH_PAYMENT, PUSH_ADVANCE,
+  // PUSH_VOID, APPLY_DEPOSIT), sourceType = "LedgerEntry" and sourceId
+  // is a LedgerEntry.id. For master-data ops (PUSH_CUSTOMER, PUSH_ITEM),
+  // sourceType = "Customer" | "Part" and sourceId is that row's id.
+  sourceType      String
+  sourceId        String
+  // Barrier list: the tailer sets this at enqueue; the runner refuses
+  // to pick the job up until every listed id has status = SYNCED.
+  // Postgres array column so the runner can filter with a single
+  // ANY/ALL query rather than a join table.
+  dependsOnJobIds String[]         @default([])
+  status          ErpSyncJobStatus @default(PENDING)
+  attempts        Int              @default(0)
+  // On FAILED / DEAD_LETTER: the assertion or HTTP error that broke
+  // the push. `lastErrorField` names the specific §5 read-back field
+  // that mismatched, when applicable — the operator surface renders it
+  // so the shop's dispute is "outstanding_amount was 500 not 0", not
+  // "ERPNext acted weird".
+  lastError       String?
+  lastErrorField  String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  syncedAt        DateTime?
+
+  // Idempotency for the tailer itself: enqueuing the same (garage, op,
+  // sourceId) twice is a no-op at the DB level. The tailer runs
+  // repeatedly and re-scans overlapping cursor windows on retry; this
+  // constraint means a re-scan cannot double-enqueue.
+  @@unique([garageId, op, sourceId])
+  @@index([garageId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+// One row per garage. The tailer cursor advances monotonically over
+// LedgerEntry rows in (createdAt, id) order. Compound cursor because
+// LedgerEntry.id is a cuid — lexicographically sortable but not
+// strictly monotonic across concurrent inserts within the same
+// millisecond. Query shape:
+//   WHERE (createdAt > lastLedgerCreatedAt)
+//      OR (createdAt = lastLedgerCreatedAt AND id > lastLedgerId)
+//   ORDER BY createdAt, id
+//   LIMIT N
+// Advancing the cursor is guarded by the ErpSyncJob unique constraint
+// above — a repeated scan of the same window cannot double-enqueue,
+// so the cursor can safely overlap by one row on each pass.
+//
+// Null defaults for a brand-new garage: cursor starts at the epoch;
+// the first tail pass will pick up every ledger row from garage
+// inception. Realistic first-pass sizes match §9 of the brief
+// (17 customers, 45 invoices at trial).
+model ErpSyncCursor {
+  garageId            String   @id
+  garage              Garage   @relation(fields: [garageId], references: [id])
+  // No DB defaults on cursor position — the tailer's first pass per
+  // garage upserts the row with lastLedgerCreatedAt = new Date(0),
+  // lastLedgerId = "". Explicit app-side initialization avoids the
+  // Prisma introspection round-trip that would normalize
+  // 'epoch'::timestamp to its ISO form and leave permanent
+  // schema-vs-migration drift on this table forever.
+  lastLedgerCreatedAt DateTime
+  lastLedgerId        String
+  updatedAt           DateTime @updatedAt
 }

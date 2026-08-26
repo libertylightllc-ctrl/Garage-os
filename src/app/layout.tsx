@@ -15,9 +15,61 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// AR 2026-08-26 — SEO foundation, Batch A. Discoverable for
+// "garage software UAE"-shaped queries. metadataBase resolves the
+// relative asset paths below (opengraph-image, twitter-image) at
+// build time so the tags carry absolute URLs.
 export const metadata: Metadata = {
-  title:"Garage Os",
-  description:"The garage operating system where AI does the thinking and the human decides.",
+  metadataBase: new URL("https://www.garageos.shop"),
+  title: {
+    default: "GarageOS — AI-first garage operating system for the GCC",
+    template: "%s · GarageOS",
+  },
+  description:
+    "GarageOS runs your workshop from WhatsApp intake to signed invoice. AI proposes, humans confirm. Built for UAE and GCC garages — Arabic + English, VAT-ready, no training needed.",
+  applicationName: "GarageOS",
+  keywords: [
+    "garage software",
+    "garage management",
+    "auto workshop software",
+    "UAE garage software",
+    "GCC garage software",
+    "workshop management",
+    "WhatsApp garage",
+    "car repair software",
+    "vehicle service software",
+    "auto repair app",
+    "garage app UAE",
+    "workshop app",
+  ],
+  authors: [{ name: "GarageOS" }],
+  category: "productivity",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://www.garageos.shop/",
+    siteName: "GarageOS",
+    title: "GarageOS — AI-first garage operating system for the GCC",
+    description:
+      "Run your workshop from WhatsApp intake to signed invoice. AI proposes, humans confirm. Arabic + English, UAE VAT built in.",
+    locale: "en_AE",
+    // The opengraph-image at src/app/opengraph-image.tsx is generated
+    // dynamically at request time and picked up automatically — no
+    // need to list it here.
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "GarageOS — AI-first garage operating system for the GCC",
+    description:
+      "Run your workshop from WhatsApp intake to signed invoice. Built for UAE + GCC garages.",
+  },
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
 };
 
 export default async function RootLayout({

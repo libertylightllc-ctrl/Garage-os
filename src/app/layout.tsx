@@ -4,6 +4,7 @@ import"./globals.css";
 import { getLocale } from "@/i18n/server";
 import { isRtl } from "@/i18n/config";
 import { LangSwitcher } from "@/components/lang-switcher";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable:"--font-geist-sans",
@@ -94,6 +95,13 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <LangSwitcher locale={locale} />
         {children}
+        {/* AR 2026-08-26 — Vercel Web Analytics. Zero cost within the
+            plan's included allowance (50k events/mo Hobby, 25k on Pro
+            base). The <Analytics /> component is inert until the
+            project-level Web Analytics toggle is enabled in the
+            Vercel dashboard, so shipping the code alone doesn't
+            collect anything until you flip it on. */}
+        <Analytics />
       </body>
     </html>
   );

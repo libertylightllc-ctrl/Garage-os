@@ -692,6 +692,7 @@ const en = {
   fs_EXTRA_WORK_AWAITING_APPROVAL: "Extra work — awaiting approval",
   fs_COMPLETE_AWAITING_INVOICE: "Complete — awaiting invoice",
   fs_AWAITING_PAYMENT: "Awaiting payment",
+  fs_WAITING_TECH_COMPLETE: "Waiting for technician to mark complete with a photo or findings",
   fs_READY_FOR_PICKUP: "Ready for pickup",
   fs_COMPLETE: "Collected",
   fs_ON_HOLD: "On hold",
@@ -1633,7 +1634,7 @@ const en = {
   // estimate-send fix). Mirrors invoiceResendViaWhatsApp so
   // estimate + invoice read the same on hand-off retries.
   estimateResendViaWhatsApp: "Resend via WhatsApp →",
-  estimatePreviewMockNote: "WhatsApp delivery is mocked in this build — Send Estimate logs the message that would have gone out.",
+  estimatePreviewMockNote: "Send Estimate opens WhatsApp on your device with the message ready — tap Send in WhatsApp to actually deliver.",
   markApproved: "Mark approved",
   markRejected: "Mark rejected",
   generateInvoice: "Generate invoice",
@@ -2599,6 +2600,7 @@ const ar: typeof en = {
   fs_EXTRA_WORK_AWAITING_APPROVAL: "أعمال إضافية — بانتظار الموافقة",
   fs_COMPLETE_AWAITING_INVOICE: "اكتمل العمل — بانتظار الفاتورة",
   fs_AWAITING_PAYMENT: "بانتظار الدفع",
+  fs_WAITING_TECH_COMPLETE: "بانتظار الفني: يجب تعليم العمل مكتملاً بصورة أو ملاحظات",
   fs_READY_FOR_PICKUP: "جاهزة للاستلام",
   fs_COMPLETE: "تم الاستلام",
   fs_ON_HOLD: "معلّقة",
@@ -3391,7 +3393,7 @@ const ar: typeof en = {
     "يؤكد هذا الإيصال حالة المركبة والأغراض الثمينة عند التسليم. يجب الإبلاغ عن أي مطالبات تلف إضافية قبل استلام المركبة.",
   estimateSendToCustomer: "إرسال التقدير للعميل ←",
   estimateResendViaWhatsApp: "إعادة الإرسال عبر واتساب ←",
-  estimatePreviewMockNote: "إرسال واتساب وضعٌ تجريبي — زر «إرسال التقدير» يسجِّل الرسالة التي كانت ستُرسل.",
+  estimatePreviewMockNote: "زر «إرسال التقدير» يفتح واتساب على جهازك مع نص الرسالة جاهزًا — اضغط «إرسال» داخل واتساب لإتمام التسليم.",
   markApproved: "تعيين: موافَق",
   markRejected: "تعيين: مرفوض",
   generateInvoice: "إنشاء فاتورة",

@@ -1,9 +1,13 @@
 /**
  * ERPNext sync runner — HTTP endpoint.
  *
- * NOT wired to a Vercel cron (plan cron-slot cap — same reason as
- * /api/cron/erp-tailer). Exposed for operator triggering during
- * pilot cutover. Phase 6 decides the cadence.
+ * SCHEDULER: .github/workflows/erp-tailer.yml pings this route
+ * every 5 minutes as the second step after the tailer ping. The
+ * workflow's name is legacy from when it only pinged the tailer;
+ * it now handles both routes. If you rename or delete this file,
+ * also remove the runner ping step in the workflow — otherwise
+ * the ping fires against nothing. NOT wired to Vercel crons
+ * (plan cron-slot cap — see vercel.json.NOTES.md).
  *
  * For each garage with erpSyncEnabled = true, invokes runOnePass().
  * Aggregates results into a summary line + JSON response.

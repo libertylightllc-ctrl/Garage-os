@@ -36,6 +36,7 @@ import { invoiceMessage, estimateMessage } from "@/lib/po-message";
 import { logInvoiceSend } from "@/lib/invoice-send-log";
 import { ESTIMATE_CREATE_ROLES, INVOICE_ROLES, SEND_ROLES } from "@/lib/permissions";
 import { requireAnyRole } from "@/lib/action-guards";
+import { revalidateEstimateStaffSurfaces } from "@/lib/revalidate-estimate-surfaces";
 import { resolveInvoiceLineCost } from "@/lib/invoice-cost-snapshot";
 
 // Defense-in-depth: even though every caller passes a jobCardId that's
@@ -602,8 +603,13 @@ export async function setEstimateStatusAction(formData: FormData) {
       }
     }
   }
-  revalidatePath(`/estimates/${estimateId}`);
-  revalidatePath(`/advisor/jobs/${est.jobCardId}`);
+  // AR 2026-08-28 — was two revalidatePath calls, which left the
+  // /advisor/estimates bucket list + /cashier dashboard serving
+  // cached RSC saying SENT after the DB flipped to APPROVED. The
+  // customer-facing path in public.ts had the full set; the
+  // advisor path here silently didn't. Central helper closes the
+  // gap and stops it drifting again.
+  revalidateEstimateStaffSurfaces(est.jobCardId, estimateId);
 }
 
 /**

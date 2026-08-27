@@ -12,6 +12,7 @@ adding a third entry to `vercel.json` broke the deploy on 2026-08-27 (commit
 | ------------------------------- | --------------------------------------- | --------- |
 | `/api/keepwarm`                 | `.github/workflows/keep-warm.yml`       | */5 min (business hrs) |
 | `/api/cron/erp-tailer`          | `.github/workflows/erp-tailer.yml`      | */5 min (all day) |
+| `/api/cron/erp-runner`          | `.github/workflows/erp-tailer.yml`      | */5 min (all day, sequential after tailer) |
 
 **If you remove an entry from `vercel.json` because you're switching a cron to
 GitHub Actions**, add the row here first so the next person doesn't remove one

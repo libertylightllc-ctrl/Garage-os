@@ -182,6 +182,41 @@ describe("friendlyStatus — internal → customer-facing label", () => {
     ).toBe("READY_FOR_PICKUP");
   });
 
+  it("INVOICED without tech mark-complete → 'Waiting for technician…' (AR 2026-08-28 finding #2)", () => {
+    // JC-2026-0114 shape: advisor generated the invoice without
+    // the technician's Mark-Complete step. workCompletedAt is
+    // null, so workCompleted=false. Pill must NOT read 'Awaiting
+    // payment' — payment isn't the blocker, work-proof is. And
+    // the cashier's Ready-for-Invoice bucket agrees (also gated
+    // on TECH_COMPLETE), so both surfaces now say the same thing.
+    expect(
+      friendlyStatus({
+        status: "INVOICED",
+        claimedById: null,
+        invoicePaidInFull: false,
+        workCompleted: false,
+      }),
+    ).toBe("WAITING_TECH_COMPLETE");
+    // workCompleted omitted → falls back to old label so pages
+    // that haven't wired the field don't silently shift copy.
+    expect(
+      friendlyStatus({
+        status: "INVOICED",
+        claimedById: null,
+        invoicePaidInFull: false,
+      }),
+    ).toBe("AWAITING_PAYMENT");
+    // workCompleted=true → pre-2026-08-28 behaviour preserved.
+    expect(
+      friendlyStatus({
+        status: "INVOICED",
+        claimedById: null,
+        invoicePaidInFull: false,
+        workCompleted: true,
+      }),
+    ).toBe("AWAITING_PAYMENT");
+  });
+
   it("DELIVERED → 'Collected' (Stage 11)", () => {
     expect(friendlyStatus({ status: "DELIVERED", claimedById: "tech-1" })).toBe("COMPLETE");
   });
@@ -201,6 +236,7 @@ describe("friendlyStatus — internal → customer-facing label", () => {
       "EXTRA_WORK_AWAITING_APPROVAL",
       "COMPLETE_AWAITING_INVOICE",
       "AWAITING_PAYMENT",
+      "WAITING_TECH_COMPLETE",
       "READY_FOR_PICKUP",
       "COMPLETE",
       "ON_HOLD",

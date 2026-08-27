@@ -59,6 +59,14 @@ export type FriendlyStatus =
   | "APPROVED_IN_PROGRESS"
   | "EXTRA_WORK_AWAITING_APPROVAL" // tech found extra problems mid-job; new estimate cycle is running
   | "COMPLETE_AWAITING_INVOICE"
+  // AR 2026-08-28 (finding #2): the invoice exists but the
+  // technician's Mark-Complete step was skipped, so no
+  // WorkSession, no workCompletedAt. The old copy read
+  // "Awaiting payment" which lied — payment isn't the blocker,
+  // work-proof is. The cashier's Ready-for-Invoice bucket also
+  // stays empty because it requires TECH_COMPLETE. This label
+  // makes both surfaces agree on what's actually needed.
+  | "WAITING_TECH_COMPLETE"
   | "AWAITING_PAYMENT"
   | "READY_FOR_PICKUP"
   | "COMPLETE"
@@ -77,6 +85,15 @@ export interface FriendlyStatusInput {
    * INVOICED-status jobs.
    */
   invoicePaidInFull?: boolean;
+  /**
+   * Whether the technician has marked work complete on this job
+   * (workCompletedAt is not null). Drives INVOICED → WAITING_TECH_COMPLETE
+   * for jobs invoiced without the tech-proof step (AR 2026-08-28
+   * finding #2). Undefined is treated as "unknown" and falls back
+   * to the pre-2026-08-28 AWAITING_PAYMENT label so old callers
+   * don't shift meaning silently.
+   */
+  workCompleted?: boolean;
 }
 
 /**
@@ -118,7 +135,15 @@ export function friendlyStatus(input: FriendlyStatusInput): FriendlyStatus {
     case "TECH_COMPLETE":
       return "COMPLETE_AWAITING_INVOICE";
     case "INVOICED":
-      return input.invoicePaidInFull ? "READY_FOR_PICKUP" : "AWAITING_PAYMENT";
+      if (input.invoicePaidInFull) return "READY_FOR_PICKUP";
+      // AR 2026-08-28 (finding #2): an invoice generated without
+      // the technician's Mark-Complete step (workCompleted=false)
+      // is stuck upstream of the cashier — the cashier's Ready-
+      // for-Invoice bucket requires TECH_COMPLETE, which this
+      // job never reached. Say what's actually needed instead of
+      // lying with "Awaiting payment".
+      if (input.workCompleted === false) return "WAITING_TECH_COMPLETE";
+      return "AWAITING_PAYMENT";
     case "DELIVERED":
       return "COMPLETE";
     case "ON_HOLD":
@@ -156,6 +181,13 @@ export const FRIENDLY_STATUS_TONE: Record<FriendlyStatus, string> = {
     "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   AWAITING_PAYMENT:
     "bg-warning-50 text-warning-600 dark:bg-warning-500/10 dark:text-warning-500",
+  // Waiting on the technician's Mark-Complete step. Danger tone
+  // rather than warning — this is a workflow break (invoice
+  // exists without work-proof), not the normal payment-in-progress
+  // amber state. Reader should look at it and understand
+  // something needs the tech, not the customer.
+  WAITING_TECH_COMPLETE:
+    "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-500",
   READY_FOR_PICKUP:
     "bg-info-50 text-info-600 dark:bg-info-500/10 dark:text-info-500",
   COMPLETE:

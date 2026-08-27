@@ -125,6 +125,21 @@ export async function resetErpSyncCursorAction() {
                 lastLedgerId: "",
             },
         });
+        // AR 2026-08-28 (finding #3): reset must also clear
+        // already-queued PENDING jobs. Otherwise "reset to now"
+        // leaves the pre-reset backlog draining and the two
+        // states disagree — the cursor says "start from now" but
+        // the runner keeps pushing week-old rows.
+        //
+        // SYNCED / FAILED / DEAD_LETTER / RUNNING rows are kept
+        // deliberately: SYNCED is history and load-bearing on the
+        // entity-map join, FAILED / DEAD_LETTER are operator
+        // decisions the reset should not undo, and RUNNING is
+        // literally in flight — deleting it mid-push corrupts the
+        // pusher's atomic commit.
+        await tx.erpSyncJob.deleteMany({
+            where: { garageId: user.garageId, status: "PENDING" },
+        });
     });
     revalidatePath("/owner/erp");
     redirect("/owner/erp");

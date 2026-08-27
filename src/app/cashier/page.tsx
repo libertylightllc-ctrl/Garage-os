@@ -765,7 +765,11 @@ export default async function CashierHome({
                         // definition, an invoice that exists but hasn't
                         // been sent yet, so payment can't have happened.
                         // AWAITING_PAYMENT is the right pill to surface
-                        // the urgency ('this is the last step').
+                        // the urgency ('this is the last step') UNLESS
+                        // the technician never marked complete —
+                        // then WAITING_TECH_COMPLETE surfaces the real
+                        // blocker (AR 2026-08-28 finding #2).
+                        workCompleted: j.workCompletedAt !== null,
                       })}
                       t={t}
                       size="sm"
@@ -912,6 +916,7 @@ export default async function CashierHome({
                 status: j.status as JobStatus,
                 claimedById: j.claimedById,
                 latestEstimateStatus:"APPROVED",
+                workCompleted: j.workCompletedAt !== null,
               });
               return (
                 <li
@@ -1098,6 +1103,7 @@ export default async function CashierHome({
                     status={friendlyStatus({
                       status: j.status as JobStatus,
                       claimedById: j.claimedById,
+                      workCompleted: j.workCompletedAt !== null,
                     })}
                     t={t}
                     size="sm"

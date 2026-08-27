@@ -1,11 +1,30 @@
-name: ERPNext tailer
+name: ERPNext tailer + runner
 
-# Purpose: invokes /api/cron/erp-tailer every 5 minutes so the
-# ledger-to-ERPNext push queue actually gets drained. Same shape as
-# keep-warm.yml — cron in GitHub Actions rather than Vercel because
-# the Vercel plan cron-slot cap is already at 2 (ai-credit-check +
-# auto-close-stale-sessions), and adding a third erp-tailer entry
-# to vercel.json broke the deploy in dc72683.
+# Purpose: two-step tick that keeps ERPNext sync moving. Runs
+# every 5 minutes:
+#
+#   1. Ping /api/cron/erp-tailer — reads LedgerEntry rows for
+#      every enabled garage and enqueues ErpSyncJob rows.
+#   2. Ping /api/cron/erp-runner — reads PENDING jobs and pushes
+#      to ERPNext.
+#
+# BOTH routes are scheduled from this workflow (added 2026-08-28
+# after AR flagged the runner had no scheduler for 24h — the
+# tailer was enqueuing rows and nothing ran them). If you remove
+# one step, you unwire that half of the sync silently. Removing
+# this file entirely unwires both. See vercel.json.NOTES.md for
+# the plan-cap rule that forced GitHub Actions in the first
+# place.
+#
+# Steps are SEQUENTIAL: the tailer's transaction has to commit
+# before the runner can see the newly-enqueued rows. Running them
+# in the same job in order gives that ordering for free. If you
+# split them into parallel jobs, add a `needs:` chain.
+#
+# Same shape as keep-warm.yml — cron in GitHub Actions rather
+# than Vercel because the Vercel plan cron-slot cap is already
+# at 2 (ai-credit-check + auto-close-stale-sessions), and adding
+# a third entry to vercel.json broke the deploy in dc72683.
 #
 # The tailer:
 #   - Reads LedgerEntry rows for every garage with erpSyncEnabled=1
@@ -52,21 +71,21 @@ concurrency:
 
 jobs:
   tick:
-    name: Ping /api/cron/erp-tailer
+    name: Ping tailer then runner
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
+    env:
+      PROD_URL: https://garage-os-puce.vercel.app
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
       - name: GET /api/cron/erp-tailer
-        env:
-          PROD_URL: https://garage-os-puce.vercel.app
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
           # -H "Authorization: Bearer $CRON_SECRET" so the route's
-          # auth check passes; the header is only meaningful when the
-          # secret is set on both sides. --max-time 60 caps a slow
-          # tailer pass (large batches on a busy shop) but still
-          # lets 500 rows land.
+          # auth check passes; the header is only meaningful when
+          # the secret is set on both sides. --max-time 60 caps a
+          # slow tailer pass (large batches on a busy shop) but
+          # still lets 500 rows land.
           resp=$(curl -fsS --max-time 60 \
                  -H "Authorization: Bearer ${CRON_SECRET}" \
                  -w "\n%{http_code}|%{time_total}" \
@@ -76,4 +95,24 @@ jobs:
           http=${meta%%|*}
           time=${meta#*|}
           echo "::notice title=erp-tailer::status=$http time=${time}s"
+          echo "body: $body"
+      - name: GET /api/cron/erp-runner
+        # Sequential — the tailer's rows are only visible to the
+        # runner after the tailer's transaction commits. If the
+        # tailer step failed above, `set -e` in the previous step
+        # aborted the job; we don't get here. That's the desired
+        # ordering. --max-time 120 caps a slow runner pass
+        # (Frappe under load, per-job pre-flight + POST +
+        # read-back adds up on a big batch).
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS --max-time 120 \
+                 -H "Authorization: Bearer ${CRON_SECRET}" \
+                 -w "\n%{http_code}|%{time_total}" \
+                 "$PROD_URL/api/cron/erp-runner")
+          body=$(echo "$resp" | head -n -1)
+          meta=$(echo "$resp" | tail -n 1)
+          http=${meta%%|*}
+          time=${meta#*|}
+          echo "::notice title=erp-runner::status=$http time=${time}s"
           echo "body: $body"

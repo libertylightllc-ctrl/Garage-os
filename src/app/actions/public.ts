@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { totalsFor, type LineKind } from "@/lib/billing";
 import { recordInbound } from "@/lib/whatsapp";
 import { resolveDocumentToken } from "@/lib/document-tokens";
+import { revalidateEstimateStaffSurfaces } from "@/lib/revalidate-estimate-surfaces";
 
 // These are the customer's surface (reached via a WhatsApp link). No staff auth;
 // authorization is the unguessable record id acting as a capability token.
@@ -13,23 +14,6 @@ import { resolveDocumentToken } from "@/lib/document-tokens";
 
 async function logInbound(garageId: string, customerId: string, waId: string, body: string) {
   await recordInbound({ garageId, customerId, waId, waMessageId: `web-${randomUUID()}`, body });
-}
-
-// Shared revalidation helper. AR 2026-08-18 — every customer-facing
-// action must ping every staff route that reads the state it changed;
-// otherwise Next serves cached staff pages that lie about the current
-// customer decision (Flow B smoke tripped this on 2026-08-17 —
-// customer approve stuck at SENT on the advisor's job view). Central
-// helpers keep the set consistent across approve/reject/decline paths.
-function revalidateEstimateStaffSurfaces(jobCardId: string, estimateId: string) {
-  // Job detail — estimate status pill + workflow step marker read here.
-  revalidatePath(`/advisor/jobs/${jobCardId}`);
-  // Staff estimate edit page — line state + totals + status.
-  revalidatePath(`/estimates/${estimateId}`);
-  // Advisor home / jobs board — status counts on the dashboard.
-  revalidatePath("/advisor");
-  // Advisor estimates board — DRAFT/SENT/APPROVED/REJECTED buckets.
-  revalidatePath("/advisor/estimates");
 }
 
 export async function approveEstimatePublic(formData: FormData) {
@@ -56,12 +40,9 @@ export async function approveEstimatePublic(formData: FormData) {
   const c = est.jobCard.vehicle.customer;
   await logInbound(c.garageId, c.id, c.waId ?? c.phone, "APPROVE");
   revalidatePath(`/c/estimate/${id}`);
+  // /cashier is now part of the central set — see
+  // src/lib/revalidate-estimate-surfaces.ts.
   revalidateEstimateStaffSurfaces(est.jobCardId, id);
-  // APPROVED estimates land in the cashier's "pending_estimates"
-  // bucket — surface must reflect it immediately so a shop that
-  // approves + invoices back-to-back doesn't lose the row for a
-  // cache-timeout window.
-  revalidatePath("/cashier");
 }
 
 export async function rejectEstimatePublic(formData: FormData) {

@@ -54,6 +54,21 @@ Neither is visible in the chart of accounts. Both were found the hard way.
   `default_advance_received_account = Customer Deposits - GOS`.
 - **Company defaults:** receivable `Trade Receivable - GOS`, income `Sales Account - GOS`,
   bank and cash **both** `Cash/Bank - GOS`.
+- **Company:** `disable_rounded_total = 1` (added 27 August 2026 after
+  ACC-SINV-2026-00012 showed `grand_total 999.99` posting to receivables as
+  `rounded_total 1000.00`, leaving a 0.01 residue after payment). The per-invoice
+  `disable_rounded_total = 1` we send is defense-in-depth; the Company-level flag covers
+  any invoice created outside the sync too.
+- **System Settings:** timezone = Asia/Dubai. Otherwise a payment recorded on the 27th UAE
+  time gets stamped as the 28th on ERPNext, and every ledger period boundary is off by a day.
+- **Naming:** every Customer POST must send `naming_series: "CUST-.YYYY.-"` explicitly.
+  Selling Settings `cust_master_name = "Naming Series"` tells ERPNext to name BY series;
+  the series name itself still comes from each doc.
+- **Payment Entry when `paid_to` is a Bank-typed account:** `reference_no` and
+  `reference_date` are both mandatory. Cash/Bank - GOS is typed Bank, so every Payment
+  Entry (both invoice payments and naked advances) must carry them. We send our
+  GarageOS payment id + posting date; if a shop later starts capturing cheque numbers
+  or txn ids, that becomes a Payment-row field to preserve.
 
 ### Verified state of the trial instance, 26 August 2026
 

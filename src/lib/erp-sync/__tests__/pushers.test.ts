@@ -55,6 +55,33 @@ function makeStub(handlers: Array<{
     return { fetchImpl, calls };
 }
 
+describe("pushCustomer — mandatory naming_series (finding #1)", () => {
+    it("sends naming_series so Frappe doesn't reject with 'Series is mandatory'", async () => {
+        const { fetchImpl, calls } = makeStub([
+            { match: (url) => url.includes("filters="), respond: () => jsonResponse(200, { data: [] }) },
+            {
+                match: (url, init) => url.endsWith("/api/resource/Customer") && init.method === "POST",
+                respond: () => jsonResponse(200, { data: { name: "CUST-2026-00001" } }),
+            },
+            {
+                match: (url) => url.includes("/api/resource/Customer/CUST-2026-00001"),
+                respond: () => jsonResponse(200, {
+                    data: { name: "CUST-2026-00001", garageos_customer_id: "cust-x" },
+                }),
+            },
+        ]);
+        const { pushCustomer } = await import("@/lib/erp-sync/pushers");
+        await pushCustomer(
+            creds,
+            { id: "cust-x", name: "Test", phone: null, trn: null },
+            { fetchImpl },
+        );
+        const post = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
+        // The exact series shape from AR's manual test.
+        expect(post.naming_series).toBe("CUST-.YYYY.-");
+    });
+});
+
 describe("pushInvoice — request shape (§4)", () => {
     it("sends items[] with income_account, taxes[] with Actual VAT, disable_rounded_total + allocate_advances_automatically", async () => {
         const { fetchImpl, calls } = makeStub([
@@ -268,6 +295,11 @@ describe("pushPayment — request shape (§4)", () => {
         expect(post.paid_from).toBe("Trade Receivable - GOS");
         expect(post.paid_to).toBe("Cash/Bank - GOS");
         expect(post.garageos_payment_id).toBe("pay-x");
+        // Finding #3: Cash/Bank - GOS is typed Bank so
+        // reference_no + reference_date are mandatory. Use our
+        // payment id + date.
+        expect(post.reference_no).toBe("pay-x");
+        expect(post.reference_date).toBe("2026-08-27");
         const refs = post.references as Array<Record<string, unknown>>;
         expect(refs).toHaveLength(1);
         expect(refs[0].reference_doctype).toBe("Sales Invoice");
@@ -342,6 +374,9 @@ describe("pushAdvance — request shape + §5a read-back", () => {
         const post = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
         expect(post.references).toBeUndefined(); // naked advance
         expect(post.garageos_payment_id).toBe("adv-x");
+        // Finding #3: same Bank-account requirement as pushPayment.
+        expect(post.reference_no).toBe("adv-x");
+        expect(post.reference_date).toBe("2026-08-25");
     });
 
     it("§5a decisive check — FAILS with tagged field when Payment Ledger Entry row is missing", async () => {

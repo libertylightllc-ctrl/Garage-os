@@ -99,6 +99,14 @@ export async function pushCustomer(
             customer_type: "Individual",
             customer_group: "All Customer Groups",
             territory: "All Territories",
+            // AR 2026-08-27 (manual test finding #1): naming_series is
+            // mandatory on Customer with no default and Selling
+            // Settings.cust_master_name = "Naming Series" (§3). Without
+            // it the POST returns "Series is mandatory". Sending it
+            // explicitly per POST is the shape Frappe wants — the
+            // Settings option only tells ERPNext to name BY series;
+            // WHICH series still comes from the doc.
+            naming_series: "CUST-.YYYY.-",
             // The load-bearing custom field. A duplicate push would
             // fail at the ERPNext-side unique index on this column
             // (§3 of the brief).
@@ -410,6 +418,14 @@ export async function pushPayment(
             company: creds.companyName,
             paid_from: acct(ACCOUNT_TEMPLATES.RECEIVABLE, creds.companyAbbr),
             paid_to: acct(ACCOUNT_TEMPLATES.CASH_BANK, creds.companyAbbr),
+            // AR 2026-08-27 (manual test finding #3): Cash/Bank - GOS is
+            // typed Bank, so Payment Entry requires reference_no +
+            // reference_date. Use our payment id + date — we don't
+            // capture a bank ref (cheque no. / txn id) on the GarageOS
+            // Payment row, so falling back to what we know is the
+            // honest shape.
+            reference_no: pay.id,
+            reference_date: ymd(pay.paidAt),
             references: [
                 {
                     reference_doctype: "Sales Invoice",
@@ -515,6 +531,11 @@ export async function pushAdvance(
             // Deposits. §5a check 1 asserts the rewrite.
             paid_from: acct(ACCOUNT_TEMPLATES.RECEIVABLE, creds.companyAbbr),
             paid_to: acct(ACCOUNT_TEMPLATES.CASH_BANK, creds.companyAbbr),
+            // Same Bank-account requirement as pushPayment (finding
+            // #3): reference_no + reference_date are mandatory when
+            // paid_to is typed Bank.
+            reference_no: adv.id,
+            reference_date: ymd(adv.receivedAt),
             // NO references — this is a naked advance.
             garageos_payment_id: adv.id,
             docstatus: 1,

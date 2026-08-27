@@ -1,16 +1,17 @@
 /**
  * ERPNext sync tailer — HTTP endpoint.
  *
- * NOT wired to a Vercel cron in Phase 2 — the plan's cron-slot
- * budget was already at cap (ai-credit-check + auto-close-stale-
- * sessions), and adding a third entry failed the Vercel build
- * with a redirect to vercel.com/docs/cron-jobs/usage-and-pricing.
- * Phase 6 (operator surface) will decide the cadence properly
- * — likely one of: an external scheduler (GitHub Actions, cron-
- * job.org) hitting this endpoint, folding the tailer into an
- * existing daily cron, or a plan upgrade. Until then this route
- * is exposed for manual operator triggering during pilot
- * cutover.
+ * SCHEDULER: .github/workflows/erp-tailer.yml pings this route
+ * every 5 minutes. NOT wired to Vercel crons because the plan
+ * cron-slot cap is at 2 (ai-credit-check + auto-close-stale-
+ * sessions in vercel.json). When 2026-08-27 dc72683 removed the
+ * would-be third entry from vercel.json to unbreak the deploy,
+ * the route was unwired for one day before AR noticed no rows
+ * were syncing. If you're editing this file to remove the cron
+ * dependency, ALSO remove the workflow file — otherwise the ping
+ * fires against nothing. If you're changing the schedule cadence,
+ * edit the workflow's `cron:` line instead of adding to
+ * vercel.json (see vercel.json.NOTES.md for the plan-cap rule).
  *
  * For each garage with erpSyncEnabled = true, invokes runTailer().
  * Aggregates the results into a summary line + JSON response.

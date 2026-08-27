@@ -15,6 +15,7 @@ import {
     enableErpSyncAction,
     disableErpSyncAction,
     replayErpSyncJobAction,
+    resetErpSyncCursorAction,
 } from "@/app/actions/erp-sync";
 
 export const dynamic = "force-dynamic";
@@ -93,43 +94,45 @@ export default async function OwnerErpPage({
                             </button>
                         </form>
                     ) : (
-                        <form action={enableErpSyncAction} className="flex items-center gap-2">
-                            <input
-                                type="datetime-local"
-                                name="startAt"
-                                title="Start syncing from this moment forward. Leave blank for now."
-                                className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
-                            />
-                            <button
-                                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black"
-                                type="submit"
-                            >
-                                Turn on
-                            </button>
-                        </form>
+                        <EnableForm />
                     )}
                 </div>
                 {garage.erpSyncEnabled ? (
-                    <div className="mt-3 text-xs text-text-mute">
-                        {cursor ? (
-                            <>
-                                Cursor last advanced{" "}
-                                <span className="tabular-nums">
-                                    {cursor.updatedAt.toISOString()}
-                                </span>{" "}
-                                to ledger row created{" "}
-                                <span className="tabular-nums">
-                                    {cursor.lastLedgerCreatedAt.toISOString()}
-                                </span>
-                                .
-                            </>
-                        ) : (
-                            <>Cursor missing — the tailer will skip this garage. Turn sync off and back on to reseed.</>
-                        )}
+                    <div className="mt-3 flex items-start justify-between gap-3 text-xs text-text-mute">
+                        <div>
+                            {cursor ? (
+                                <>
+                                    Cursor last advanced{" "}
+                                    <span className="tabular-nums">
+                                        {cursor.updatedAt.toISOString()}
+                                    </span>{" "}
+                                    to ledger row created{" "}
+                                    <span className="tabular-nums">
+                                        {cursor.lastLedgerCreatedAt.toISOString()}
+                                    </span>
+                                    .
+                                </>
+                            ) : (
+                                <>Cursor missing — the tailer will skip this garage. Turn sync off and back on to reseed.</>
+                            )}
+                        </div>
+                        {/* Reset cursor to now — the recovery path for
+                            a cursor seeded to a past date by accident
+                            (2026-08-27 incident). Wipes and recreates
+                            the row at now(); sync stays on. */}
+                        <form action={resetErpSyncCursorAction}>
+                            <button
+                                className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-2"
+                                type="submit"
+                                title="Delete the current cursor and seed a fresh one at now. Skips every ledger row created before this moment. Use when the cursor was accidentally seeded to a past date."
+                            >
+                                Reset cursor to now
+                            </button>
+                        </form>
                     </div>
                 ) : (
                     <div className="mt-3 text-xs text-text-mute">
-                        Turning on will queue new ledger events for push, starting from the moment you flip the switch (or the moment you pick). It will not backfill history.
+                        Turning on will queue new ledger events for push, starting from the moment you flip the switch. Historical events are NOT backfilled unless you tick "Backfill from a past date" below.
                     </div>
                 )}
             </section>
@@ -168,9 +171,60 @@ export default async function OwnerErpPage({
     );
 }
 
+/**
+ * Enable-form with checkbox-gated backfill picker. Server-only, no
+ * client JS — the datetime-local input stays in the DOM but is
+ * visually hidden until the checkbox is ticked (Tailwind `peer` +
+ * `peer-checked:` on a sibling wrapper). The server-side gate in
+ * enableErpSyncAction (`backfill === "1"`) is the load-bearing
+ * safety: the input's value is IGNORED unless the checkbox is
+ * ticked, so a browser-autofilled picker value cannot silently
+ * become the cursor's start position.
+ */
+function EnableForm() {
+    // `group` on the form + `group-has-[input[name=backfill]:checked]`
+    // on the picker div: pure CSS reveal, no client JS. The picker
+    // stays in the DOM (so its value CAN be sent), but the server
+    // gate (backfill=1) means the value is only READ when the
+    // checkbox is ticked — the important safety.
+    return (
+        <form action={enableErpSyncAction} className="group flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-text-mute">
+                    <input
+                        type="checkbox"
+                        name="backfill"
+                        value="1"
+                        className="h-3 w-3"
+                    />
+                    Backfill from a past date
+                </label>
+                <button
+                    className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-black"
+                    type="submit"
+                >
+                    Turn on
+                </button>
+            </div>
+            <div className="hidden flex-col items-end gap-1 group-has-[input[name=backfill]:checked]:flex">
+                <input
+                    type="datetime-local"
+                    name="startAt"
+                    autoComplete="off"
+                    title="Interpreted as UTC. Sync will pick up ledger rows created strictly after this moment."
+                    className="rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                />
+                <span className="text-xs text-text-mute">
+                    Interpreted as UTC. Backfill will queue every ledger event after this moment for push to ERPNext.
+                </span>
+            </div>
+        </form>
+    );
+}
+
 function ErrorBanner({ err, status }: { err: string; status?: string }) {
     const messages: Record<string, string> = {
-        "bad-startat": "That start time couldn't be parsed. Use the date/time picker or leave it blank for now.",
+        "bad-startat": "Tick 'Backfill from a past date' and pick a time, or turn on without ticking to start from now.",
         "no-job": "No job id was supplied to Replay.",
         "not-found": "That job isn't in this garage — someone else's dashboard or a deleted job.",
         "not-replayable": `Only Failed or Dead-lettered jobs can be replayed. That job is ${status ?? "in some other state"}.`,

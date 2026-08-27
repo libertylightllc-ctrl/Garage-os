@@ -121,6 +121,7 @@ const OWNER_ONLY_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/erp-sync.ts", action: "enableErpSyncAction" },
   { file: "src/app/actions/erp-sync.ts", action: "disableErpSyncAction" },
   { file: "src/app/actions/erp-sync.ts", action: "replayErpSyncJobAction" },
+  { file: "src/app/actions/erp-sync.ts", action: "resetErpSyncCursorAction" },
 ];
 
 // Extract the source of a single top-level exported action function.

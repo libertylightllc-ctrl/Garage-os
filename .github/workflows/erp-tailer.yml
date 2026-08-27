@@ -1,0 +1,79 @@
+name: ERPNext tailer
+
+# Purpose: invokes /api/cron/erp-tailer every 5 minutes so the
+# ledger-to-ERPNext push queue actually gets drained. Same shape as
+# keep-warm.yml — cron in GitHub Actions rather than Vercel because
+# the Vercel plan cron-slot cap is already at 2 (ai-credit-check +
+# auto-close-stale-sessions), and adding a third erp-tailer entry
+# to vercel.json broke the deploy in dc72683.
+#
+# The tailer:
+#   - Reads LedgerEntry rows for every garage with erpSyncEnabled=1
+#     that have not yet been enqueued (compound (createdAt, id)
+#     cursor per garage).
+#   - Groups by (sourceType, sourceId) and inserts ErpSyncJob rows
+#     idempotent on (garageId, op, sourceId).
+#   - Advances the cursor in the SAME $transaction as the inserts.
+#
+# The route is safe to call on garages that don't need any work — it
+# no-ops in O(one indexed query) when no enabled garage has new
+# ledger rows.
+#
+# Cadence: */5 * * * * — every 5 minutes, all day. The tailer is
+# cheap and the shop expects the sync-status chip on /invoices/[id]
+# to move quickly. Not scoped to business hours like keep-warm; the
+# pilots may enter WhatsApp intake overnight and the shop opens to
+# already-synced invoices.
+#
+# Cost: free — GitHub Actions cron is free on public repos and well
+# within the private-repo minute allowance (12 pings/hour × 24h =
+# ~288 runs/day × ~5s = ~24 min/day, cap is ~2000 min/month).
+#
+# Caveat: GitHub Actions cron is best-effort. During GitHub-wide
+# high load the scheduler can drift by 15-30 minutes. That's fine
+# here — the sync chip goes amber a bit longer, not red. The queue
+# is drained on the next fire.
+#
+# Auth: CRON_SECRET must be set as a repository secret with the
+# same value as the CRON_SECRET env on Vercel. The route accepts
+# unauthenticated GETs when CRON_SECRET is unset (setup mode) so a
+# missing secret here fails soft rather than blocking sync during
+# initial rollout — but the endpoint would be publicly hittable.
+# Set the secret before enabling sync on any real pilot.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: erp-tailer
+  cancel-in-progress: true
+
+jobs:
+  tick:
+    name: Ping /api/cron/erp-tailer
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: GET /api/cron/erp-tailer
+        env:
+          PROD_URL: https://garage-os-puce.vercel.app
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          # -H "Authorization: Bearer $CRON_SECRET" so the route's
+          # auth check passes; the header is only meaningful when the
+          # secret is set on both sides. --max-time 60 caps a slow
+          # tailer pass (large batches on a busy shop) but still
+          # lets 500 rows land.
+          resp=$(curl -fsS --max-time 60 \
+                 -H "Authorization: Bearer ${CRON_SECRET}" \
+                 -w "\n%{http_code}|%{time_total}" \
+                 "$PROD_URL/api/cron/erp-tailer")
+          body=$(echo "$resp" | head -n -1)
+          meta=$(echo "$resp" | tail -n 1)
+          http=${meta%%|*}
+          time=${meta#*|}
+          echo "::notice title=erp-tailer::status=$http time=${time}s"
+          echo "body: $body"

@@ -28,7 +28,15 @@ import {
     tryResolveCredentials,
     type ErpNextCredentials,
 } from "@/lib/erp-sync/credentials";
-import { pushCustomer, type PushResult } from "@/lib/erp-sync/pushers";
+import {
+    pushCustomer,
+    pushInvoice,
+    pushPayment,
+    pushAdvance,
+    pushVoid,
+    type PushResult,
+    type InvoicePushInput,
+} from "@/lib/erp-sync/pushers";
 
 const MAX_ATTEMPTS_BEFORE_DEAD_LETTER = 5;
 const MAX_JOBS_PER_PASS = 100;
@@ -211,11 +219,14 @@ export async function runOneJob(
         }
     }
 
-    // Dispatch. Phase 3 handles PUSH_CUSTOMER; every other op is
-    // left PENDING with a distinct log line — Phase 5 wires the
-    // invoice / payment / advance / void pushers.
+    // Dispatch. Phase 3 handled PUSH_CUSTOMER; Phase 4 (this
+    // commit) adds PUSH_INVOICE / PUSH_PAYMENT / PUSH_ADVANCE /
+    // PUSH_VOID. PUSH_ITEM and APPLY_DEPOSIT stay SKIPPED_NOT_
+    // IMPLEMENTED — Items are read-only (§6, four pre-seeded on
+    // the instance) and APPLY_DEPOSIT is handled implicitly by
+    // allocate_advances_automatically=1 on the pushed invoice.
     try {
-        const result = await dispatch(job, ctx);
+        const result = await dispatchJob(job, ctx);
         if (!result) {
             // SKIPPED_NOT_IMPLEMENTED — do not touch the job row.
             // It sits PENDING until Phase 5 lands.
@@ -278,6 +289,14 @@ export async function runOneJob(
         };
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        // Pushers tag specific assertion failures (§5b outstanding
+        // mismatch, §5a PLE-row missing) with an err.field property
+        // so the operator surface can render "the failing field was
+        // outstanding_amount" instead of the full stack.
+        const field =
+            err instanceof Error && "field" in err
+                ? String((err as Error & { field?: unknown }).field ?? "")
+                : "";
         const nextAttempts = job.attempts + 1;
         const nextStatus =
             nextAttempts >= MAX_ATTEMPTS_BEFORE_DEAD_LETTER ? "DEAD_LETTER" : "FAILED";
@@ -287,6 +306,7 @@ export async function runOneJob(
                 status: nextStatus,
                 attempts: nextAttempts,
                 lastError: msg.slice(0, 4000),
+                lastErrorField: field || null,
             },
         });
         console.error(
@@ -303,10 +323,14 @@ export async function runOneJob(
 }
 
 /**
- * Dispatch to the pusher for this op. Returns null for ops Phase 3
- * doesn't yet implement (Phase 5 territory).
+ * Dispatch to the pusher for this op. Returns null for ops we
+ * deliberately don't implement (PUSH_ITEM read-only, APPLY_DEPOSIT
+ * handled implicitly by allocate_advances_automatically=1).
+ *
+ * Renamed from `dispatch` (AR 2026-08-27 Q2) — clearer name, and
+ * the parallel with `runTailer` is worth keeping.
  */
-async function dispatch(
+async function dispatchJob(
     job: {
         id: string;
         garageId: string;
@@ -327,20 +351,275 @@ async function dispatch(
             }
             return pushCustomer(ctx.creds, cust, { fetchImpl: ctx.fetchImpl });
         }
+        case "PUSH_INVOICE": {
+            const input = await buildInvoiceInput(job.garageId, job.sourceId);
+            return pushInvoice(ctx.creds, input, { fetchImpl: ctx.fetchImpl });
+        }
+        case "PUSH_PAYMENT": {
+            const pay = await defaultPrisma.payment.findUnique({
+                where: { id: job.sourceId },
+                select: {
+                    id: true,
+                    amount: true,
+                    paidAt: true,
+                    invoiceId: true,
+                    invoice: {
+                        select: {
+                            jobCard: {
+                                select: {
+                                    vehicle: { select: { customerId: true } },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            if (!pay) throw new Error(`[erp-runner] Payment ${job.sourceId} not found`);
+            const invoiceErpnextName = await resolveMap(
+                job.garageId,
+                "Invoice",
+                pay.invoiceId,
+            );
+            const customerErpnextName = await resolveMap(
+                job.garageId,
+                "Customer",
+                pay.invoice.jobCard.vehicle.customerId,
+            );
+            return pushPayment(
+                ctx.creds,
+                {
+                    id: pay.id,
+                    amount: Number(pay.amount),
+                    paidAt: pay.paidAt,
+                    invoiceErpnextName,
+                    customerErpnextName,
+                },
+                { fetchImpl: ctx.fetchImpl },
+            );
+        }
+        case "PUSH_ADVANCE": {
+            const adv = await defaultPrisma.advancePayment.findUnique({
+                where: { id: job.sourceId },
+                select: {
+                    id: true,
+                    amount: true,
+                    receivedAt: true,
+                    jobCard: {
+                        select: { vehicle: { select: { customerId: true } } },
+                    },
+                },
+            });
+            if (!adv) throw new Error(`[erp-runner] AdvancePayment ${job.sourceId} not found`);
+            const customerErpnextName = await resolveMap(
+                job.garageId,
+                "Customer",
+                adv.jobCard.vehicle.customerId,
+            );
+            return pushAdvance(
+                ctx.creds,
+                {
+                    id: adv.id,
+                    amount: Number(adv.amount),
+                    receivedAt: adv.receivedAt,
+                    customerErpnextName,
+                },
+                { fetchImpl: ctx.fetchImpl },
+            );
+        }
+        case "PUSH_VOID": {
+            const inv = await defaultPrisma.invoice.findUnique({
+                where: { id: job.sourceId },
+                select: {
+                    id: true,
+                    subtotal: true,
+                    vatAmount: true,
+                    total: true,
+                    voidedAt: true,
+                    lines: {
+                        select: {
+                            kind: true,
+                            description: true,
+                            qty: true,
+                            unitPrice: true,
+                        },
+                        orderBy: { createdAt: "asc" },
+                    },
+                    jobCard: {
+                        select: {
+                            vehicle: { select: { customerId: true } },
+                        },
+                    },
+                },
+            });
+            if (!inv) throw new Error(`[erp-runner] Invoice ${job.sourceId} not found`);
+            if (!inv.voidedAt) {
+                throw new Error(
+                    `[erp-runner] PUSH_VOID for ${job.sourceId} but invoice.voidedAt is null`,
+                );
+            }
+            const originalErpnextName = await resolveMap(
+                job.garageId,
+                "Invoice",
+                inv.id,
+            );
+            const customerErpnextName = await resolveMap(
+                job.garageId,
+                "Customer",
+                inv.jobCard.vehicle.customerId,
+            );
+            return pushVoid(
+                ctx.creds,
+                {
+                    originalInvoiceId: inv.id,
+                    originalErpnextName,
+                    total: Number(inv.total),
+                    subtotal: Number(inv.subtotal),
+                    vatAmount: Number(inv.vatAmount),
+                    voidedAt: inv.voidedAt,
+                    customerErpnextName,
+                    lines: inv.lines.map((l) => ({
+                        kind: l.kind,
+                        description: l.description,
+                        qty: Number(l.qty),
+                        unitPrice: Number(l.unitPrice),
+                    })),
+                },
+                { fetchImpl: ctx.fetchImpl },
+            );
+        }
         case "PUSH_ITEM":
-        case "PUSH_INVOICE":
-        case "PUSH_PAYMENT":
-        case "PUSH_ADVANCE":
-        case "PUSH_VOID":
-        case "APPLY_DEPOSIT":
-            // Phase 5 territory. Distinct log so ops can see the
-            // build-up of not-yet-implemented ops before Phase 5
-            // lands.
+            // Items are pre-seeded on the instance (§6). Nothing
+            // enqueues PUSH_ITEM in Phase 2 today, but the enum
+            // value is reserved. Log distinctly if one ever appears.
             console.log(
-                `[erp-runner] SKIPPED_NOT_IMPLEMENTED garage=${job.garageId} op=${job.op} sourceId=${job.sourceId} — Phase 5 territory`,
+                `[erp-runner] SKIPPED_NOT_IMPLEMENTED garage=${job.garageId} op=PUSH_ITEM sourceId=${job.sourceId} — Items are read-only, pre-seeded on the instance (§6)`,
+            );
+            return null;
+        case "APPLY_DEPOSIT":
+            // Handled implicitly by allocate_advances_automatically=1
+            // on PUSH_INVOICE (§4 "Deposit applied: no separate
+            // document"). Nothing enqueues APPLY_DEPOSIT in Phase 2
+            // today. Log if one appears — indicates the tailer or
+            // an operator produced a job that has no producer.
+            console.log(
+                `[erp-runner] SKIPPED_NOT_IMPLEMENTED garage=${job.garageId} op=APPLY_DEPOSIT sourceId=${job.sourceId} — handled implicitly by allocate_advances_automatically on PUSH_INVOICE`,
             );
             return null;
     }
+}
+
+/**
+ * Look up an ErpEntityMap row and return the ERPNext name. Throws
+ * if the map row is missing — the runner's dep gate should have
+ * kept us from getting here, so a missing map row means either a
+ * corrupt DB state or a code bug.
+ */
+async function resolveMap(
+    garageId: string,
+    garageosDoctype: string,
+    garageosId: string,
+): Promise<string> {
+    const row = await defaultPrisma.erpEntityMap.findUnique({
+        where: {
+            garageId_garageosDoctype_garageosId: {
+                garageId,
+                garageosDoctype,
+                garageosId,
+            },
+        },
+        select: { erpnextName: true },
+    });
+    if (!row) {
+        throw new Error(
+            `[erp-runner] ErpEntityMap miss garage=${garageId} doctype=${garageosDoctype} garageosId=${garageosId} — dep should have blocked us`,
+        );
+    }
+    return row.erpnextName;
+}
+
+/**
+ * Assemble the InvoicePushInput from GarageOS-side state.
+ *
+ * expectedAllocation = sum of amounts on Payment rows whose row
+ * originated as an ADVANCE_MIGRATION (i.e. an AdvancePayment was
+ * merged onto this invoice at generation time). Those advances were
+ * already pushed to ERPNext as Payment Entries; when we push the
+ * invoice with allocate_advances_automatically=1, ERPNext should
+ * apply them and outstanding_amount should drop by exactly that sum.
+ *
+ * We detect the migration by walking AdvancePayment rows where
+ * migratedAt is not null and paymentId points to a Payment row on
+ * this invoice.
+ */
+async function buildInvoiceInput(
+    garageId: string,
+    invoiceId: string,
+): Promise<InvoicePushInput> {
+    const inv = await defaultPrisma.invoice.findUnique({
+        where: { id: invoiceId },
+        select: {
+            id: true,
+            subtotal: true,
+            vatAmount: true,
+            total: true,
+            issuedAt: true,
+            dueDate: true,
+            lines: {
+                select: {
+                    kind: true,
+                    description: true,
+                    qty: true,
+                    unitPrice: true,
+                },
+                orderBy: { createdAt: "asc" },
+            },
+            payments: { select: { id: true, amount: true } },
+            jobCard: {
+                select: {
+                    vehicle: { select: { customerId: true } },
+                },
+            },
+        },
+    });
+    if (!inv) throw new Error(`[erp-runner] Invoice ${invoiceId} not found`);
+
+    const customerErpnextName = await resolveMap(
+        garageId,
+        "Customer",
+        inv.jobCard.vehicle.customerId,
+    );
+
+    // Advances that were migrated into Payment rows on this invoice.
+    const migratedAdvances = inv.payments.length
+        ? await defaultPrisma.advancePayment.findMany({
+              where: {
+                  paymentId: { in: inv.payments.map((p) => p.id) },
+                  migratedAt: { not: null },
+              },
+              select: { amount: true },
+          })
+        : [];
+    const expectedAllocation = migratedAdvances.reduce(
+        (n, a) => n + Number(a.amount),
+        0,
+    );
+
+    return {
+        id: inv.id,
+        total: Number(inv.total),
+        subtotal: Number(inv.subtotal),
+        vatAmount: Number(inv.vatAmount),
+        issuedAt: inv.issuedAt,
+        dueDate: inv.dueDate,
+        customerErpnextName,
+        expectedAllocation: Math.round((expectedAllocation + Number.EPSILON) * 100) / 100,
+        lines: inv.lines.map((l) => ({
+            kind: l.kind,
+            description: l.description,
+            qty: Number(l.qty),
+            unitPrice: Number(l.unitPrice),
+        })),
+    };
 }
 
 function erpnextDoctypeFor(op: ErpSyncOp): string {

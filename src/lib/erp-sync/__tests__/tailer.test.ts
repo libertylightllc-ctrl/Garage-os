@@ -116,6 +116,13 @@ async function seedApprovedEstimate(jobCardId: string) {
 
 async function cleanup() {
     const garageIds = [gid, gidDisabled, gidNoCursor];
+    // InvoiceLine has no delete-guard trigger — clear it OUTSIDE the
+    // guard bypass, before the parent Invoice delete inside the
+    // bypass. Without this, Invoice.deleteMany fails with
+    // ForeignKeyConstraintViolation on InvoiceLine_invoiceId_fkey.
+    await prisma.invoiceLine.deleteMany({
+        where: { invoice: { garageId: { in: garageIds } } },
+    });
     await withDeleteGuardBypass(prisma, async (tx) => {
         await tx.payment.deleteMany({
             where: { invoice: { garageId: { in: garageIds } } },

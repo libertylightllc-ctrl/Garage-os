@@ -49,6 +49,10 @@ const OWNER_ONLY: readonly string[] = [
   // customers). Ships the entire financial position of the business —
   // financial-reporting bucket per CLAUDE.md, MASTER stays barred.
   "src/app/owner/accounting/page.tsx",
+  // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
+  // toggle + dead-letter replay — same finance/admin bucket as
+  // billing and ledger, MASTER stays barred.
+  "src/app/owner/erp/page.tsx",
 ];
 
 // The 15 server actions behind the MASTER-opened pages. Opening a page
@@ -112,6 +116,11 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
 const OWNER_ONLY_ACTIONS: readonly ActionSite[] = [
   { file: "src/app/actions/onboarding.ts", action: "addBranchAction" },
   { file: "src/app/actions/whatsapp-connect.ts", action: "connectWhatsAppAction" },
+  // ERPNext sync operator actions (Phase 5, AR 2026-08-27) —
+  // finance surface, OWNER-only.
+  { file: "src/app/actions/erp-sync.ts", action: "enableErpSyncAction" },
+  { file: "src/app/actions/erp-sync.ts", action: "disableErpSyncAction" },
+  { file: "src/app/actions/erp-sync.ts", action: "replayErpSyncJobAction" },
 ];
 
 // Extract the source of a single top-level exported action function.

@@ -65,6 +65,9 @@ describe("NAV config", () => {
             // bucket, per CLAUDE.md).
             "/owner/accounting",
             "/owner/whatsapp",
+            // ERPNext sync (Phase 5, AR 2026-08-27) — finance surface,
+            // OWNER-only.
+            "/owner/erp",
         ],
         ADVISOR: [
             "/advisor",

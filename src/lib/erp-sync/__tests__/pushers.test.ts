@@ -83,7 +83,6 @@ describe("pushInvoice — request shape (§4)", () => {
             {
                 id: "inv-xyz",
                 total: 105,
-                subtotal: 100,
                 vatAmount: 5,
                 issuedAt: new Date("2026-08-27"),
                 dueDate: new Date("2026-09-26"),
@@ -146,7 +145,7 @@ describe("pushInvoice — request shape (§4)", () => {
             pushInvoice(
                 creds,
                 {
-                    id: "inv-x", total: 100, subtotal: 100, vatAmount: 0,
+                    id: "inv-x", total: 100, vatAmount: 0,
                     issuedAt: new Date("2026-08-27"), dueDate: new Date("2026-09-26"),
                     customerErpnextName: "CUST-A", expectedAllocation: 0,
                     lines: [{ kind: "LABOR", description: "d", qty: 1, unitPrice: 100 }],
@@ -186,7 +185,7 @@ describe("pushInvoice — request shape (§4)", () => {
             await pushInvoice(
                 creds,
                 {
-                    id: "inv-y", total: 500, subtotal: 500, vatAmount: 0,
+                    id: "inv-y", total: 500, vatAmount: 0,
                     issuedAt: new Date("2026-08-27"), dueDate: new Date("2026-09-26"),
                     customerErpnextName: "CUST-A", expectedAllocation: 100,
                     lines: [{ kind: "LABOR", description: "d", qty: 1, unitPrice: 500 }],
@@ -218,7 +217,7 @@ describe("pushInvoice — request shape (§4)", () => {
         const res = await pushInvoice(
             creds,
             {
-                id: "inv-z", total: 100, subtotal: 100, vatAmount: 0,
+                id: "inv-z", total: 100, vatAmount: 0,
                 issuedAt: new Date("2026-08-27"), dueDate: new Date("2026-09-26"),
                 customerErpnextName: "C", expectedAllocation: 0,
                 lines: [{ kind: "LABOR", description: "d", qty: 1, unitPrice: 100 }],
@@ -409,7 +408,6 @@ describe("pushVoid — is_return + return_against", () => {
                 originalInvoiceId: "inv-orig",
                 originalErpnextName: "ACC-SINV-ORIG",
                 total: 105,
-                subtotal: 100,
                 vatAmount: 5,
                 voidedAt: new Date("2026-08-27"),
                 customerErpnextName: "CUST-A",

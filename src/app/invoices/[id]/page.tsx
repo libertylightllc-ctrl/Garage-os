@@ -44,6 +44,8 @@ import { fmtDate, fmtDateTime, countryToTimeZone } from "@/lib/format-datetime";
 import { translateLineDescription } from "@/lib/line-item-translations";
 import { WorkflowStepper } from "@/components/workflow-stepper";
 import { workflowStage } from "@/lib/workflow-stage";
+import { SyncStatusChip } from "@/components/sync-status-chip";
+import { getInvoiceSyncStatus } from "@/lib/erp-sync/status";
 import { buildStepperLabels } from "@/lib/workflow-stepper-labels";
 import { JobTimeline } from "@/components/job-timeline";
 import { loadJobTimeline } from "@/lib/job-timeline-server";
@@ -409,6 +411,19 @@ export default async function InvoiceView({
         garage={inv.garage}
         logoUrl={inv.garage.logoUrl ?? "/brand/garageos-logo.png"}
       />
+
+      {/* ERPNext sync-status chip. Grey when sync is off for the
+          shop, so it stays visually quiet until an operator flips
+          the flag. `print:hidden` on the chip itself keeps it off
+          paper documents. See src/lib/erp-sync/status.ts. */}
+      {await (async () => {
+        const s = await getInvoiceSyncStatus(inv.garageId, inv.id);
+        return (
+          <div className="print:hidden">
+            <SyncStatusChip badge={s.badge} hint={s.hint} />
+          </div>
+        );
+      })()}
 
       {/* Inline validation banner — server action refused the last
           submit and redirected here with ?formError=<code>. Off-print

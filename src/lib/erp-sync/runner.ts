@@ -431,7 +431,6 @@ async function dispatchJob(
                 where: { id: job.sourceId },
                 select: {
                     id: true,
-                    subtotal: true,
                     vatAmount: true,
                     total: true,
                     voidedAt: true,
@@ -473,7 +472,6 @@ async function dispatchJob(
                     originalInvoiceId: inv.id,
                     originalErpnextName,
                     total: Number(inv.total),
-                    subtotal: Number(inv.subtotal),
                     vatAmount: Number(inv.vatAmount),
                     voidedAt: inv.voidedAt,
                     customerErpnextName,
@@ -559,7 +557,6 @@ async function buildInvoiceInput(
         where: { id: invoiceId },
         select: {
             id: true,
-            subtotal: true,
             vatAmount: true,
             total: true,
             issuedAt: true,
@@ -607,7 +604,6 @@ async function buildInvoiceInput(
     return {
         id: inv.id,
         total: Number(inv.total),
-        subtotal: Number(inv.subtotal),
         vatAmount: Number(inv.vatAmount),
         issuedAt: inv.issuedAt,
         dueDate: inv.dueDate,

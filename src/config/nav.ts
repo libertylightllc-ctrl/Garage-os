@@ -84,6 +84,7 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "ledger", href: "/owner/ledger", labelKey: "tabLedger", icon: BookOpen },
       { key: "accounting", href: "/owner/accounting", labelKey: "tabAccounting", icon: FileSpreadsheet },
       { key: "whatsapp", href: "/owner/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
+      { key: "erpSync", href: "/owner/erp", labelKey: "tabErpSync", icon: Boxes },
     ],
   },
   ADVISOR: {

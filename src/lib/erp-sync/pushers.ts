@@ -193,13 +193,16 @@ function readBackField(body: unknown, field: string): unknown {
 export type InvoicePushInput = {
     id: string;
     total: number;
-    subtotal: number;
     vatAmount: number;
     issuedAt: Date;
     dueDate: Date;
     customerErpnextName: string; // resolved from ErpEntityMap by runner
     /** Sum of already-taken deposits GarageOS knows about, in currency units. */
     expectedAllocation: number;
+    // Lines carry qty + unitPrice; ERPNext computes subtotal from
+    // qty × rate. We deliberately do NOT carry a subtotal on the
+    // input (AR 2026-08-27 Q1) — sending amounts that ERPNext
+    // ignores is misleading to anyone reading the payload later.
     lines: Array<{
         kind: string; // LineKind → also the item_code on ERPNext side (§6)
         description: string;
@@ -582,10 +585,10 @@ export type VoidPushInput = {
     /** ERPNext-side name of the original Sales Invoice (via ErpEntityMap). */
     originalErpnextName: string;
     total: number;
-    subtotal: number;
     vatAmount: number;
     voidedAt: Date;
     customerErpnextName: string;
+    // As in InvoicePushInput — no subtotal; ERPNext computes.
     lines: Array<{
         kind: string;
         description: string;

@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     resolveCredentials,
     tryResolveCredentials,
+    envSuffixFor,
     MissingErpCredentialsError,
 } from "@/lib/erp-sync/credentials";
 
@@ -103,6 +104,36 @@ describe("resolveCredentials", () => {
         // Callers pass the raw (lowercase) garageId; resolver
         // internally uppercases before matching.
         const c = resolveCredentials(GID.toLowerCase());
+        expect(c.apiKey).toBe("k");
+    });
+});
+
+describe("envSuffixFor — the two real-world shapes", () => {
+    it("cuid → uppercased verbatim (no hyphens to convert)", () => {
+        expect(envSuffixFor("cmqwg2ekw00003guwz34j9o56")).toBe(
+            "CMQWG2EKW00003GUWZ34J9O56",
+        );
+    });
+    it("legacy hyphenated id → hyphen becomes underscore", () => {
+        // Vercel env var names must match /^[A-Za-z_][A-Za-z0-9_]*$/
+        // — the hyphen in "demo-garage" would be rejected as-is.
+        expect(envSuffixFor("demo-garage")).toBe("DEMO_GARAGE");
+    });
+    it("any non-alphanumeric collapses to underscore (fuzz)", () => {
+        expect(envSuffixFor("a.b-c/d e")).toBe("A_B_C_D_E");
+    });
+});
+
+describe("resolveCredentials — hyphenated garageId reads DEMO_GARAGE-suffixed envs", () => {
+    it("looks up ERPNEXT_*__DEMO_GARAGE for garageId 'demo-garage'", () => {
+        setEnv("ERPNEXT_BASE_URL__DEMO_GARAGE", "https://erp.test");
+        setEnv("ERPNEXT_COMPANY_NAME__DEMO_GARAGE", "garageos");
+        setEnv("ERPNEXT_COMPANY_ABBR__DEMO_GARAGE", "GOS");
+        setEnv("ERPNEXT_API_KEY__DEMO_GARAGE", "k");
+        setEnv("ERPNEXT_API_SECRET__DEMO_GARAGE", "s");
+
+        const c = resolveCredentials("demo-garage");
+        expect(c.baseUrl).toBe("https://erp.test");
         expect(c.apiKey).toBe("k");
     });
 });

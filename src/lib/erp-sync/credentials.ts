@@ -10,9 +10,15 @@
 //   ERPNEXT_API_KEY__<GARAGE_ID>
 //   ERPNEXT_API_SECRET__<GARAGE_ID>
 //
-// GARAGE_ID is the garage's cuid, UPPERCASED. Vercel env vars are
-// case-sensitive; we normalize the suffix here so operators set them
-// in the conventional uppercase form and the code always finds them.
+// GARAGE_ID is the garage's cuid, UPPERCASED, with any characters
+// outside [A-Z0-9_] replaced by underscore. Vercel env var names
+// must match /^[A-Za-z_][A-Za-z0-9_]*$/ — so a legacy garageId like
+// "demo-garage" would produce an unsettable variable if we only
+// uppercased. Hyphens (and any other non-alphanumeric) become
+// underscore before the suffix is applied.
+//
+//   cuid  cmqwg2ekw00003guwz34j9o56  → suffix CMQWG2EKW00003GUWZ34J9O56
+//   legacy demo-garage               → suffix DEMO_GARAGE
 //
 // NO FALLBACK to unsuffixed variants. A shared credential that later
 // needs splitting is a migration nobody wants; a fallback path makes
@@ -50,8 +56,18 @@ export class MissingErpCredentialsError extends Error {
     }
 }
 
+/**
+ * Env-var-safe suffix for a garageId. Uppercased, with any non-
+ * [A-Z0-9] character replaced by underscore. Exported for the
+ * operator surface / docs / a future rename tool — the naming is
+ * load-bearing.
+ */
+export function envSuffixFor(garageId: string): string {
+    return garageId.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+}
+
 export function resolveCredentials(garageId: string): ErpNextCredentials {
-    const suffix = garageId.toUpperCase();
+    const suffix = envSuffixFor(garageId);
     const values: Record<string, string | undefined> = {};
     const missing: string[] = [];
     for (const key of KEYS) {

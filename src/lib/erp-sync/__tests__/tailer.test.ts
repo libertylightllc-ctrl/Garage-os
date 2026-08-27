@@ -278,15 +278,17 @@ describe("runTailer — Phase 2 shape", () => {
 
         // Advance payment against the job BEFORE invoicing — creates
         // an AdvancePayment row + sourceType='ADVANCE' ledger rows.
-        await expect(
-            recordAdvancePaymentAction(
-                await form({
-                    jobCardId: job.id,
-                    amount: "50",
-                    method: "CASH",
-                }),
-            ),
-        ).rejects.toThrow(/REDIRECT:/);
+        // recordAdvancePaymentAction does NOT redirect (unlike
+        // generateInvoiceAction / voidInvoiceAction) — it just
+        // revalidatePaths and returns; matches the pattern in
+        // record-payment-ledger-source.test.ts.
+        await recordAdvancePaymentAction(
+            await form({
+                jobCardId: job.id,
+                amount: "50",
+                method: "CASH",
+            }),
+        );
 
         // Now invoice — generateInvoiceAction MIGRATES the
         // AdvancePayment onto the new Invoice and writes
@@ -426,15 +428,15 @@ describe("runTailer — Phase 2 shape", () => {
         const inv = await prisma.invoice.findFirstOrThrow({
             where: { jobCardId: job.id },
         });
-        await expect(
-            recordPaymentAction(
-                await form({
-                    invoiceId: inv.id,
-                    amount: "105",
-                    method: "CASH",
-                }),
-            ),
-        ).rejects.toThrow(/REDIRECT:/);
+        // recordPaymentAction does NOT redirect (matches
+        // record-payment-ledger-source.test.ts pattern).
+        await recordPaymentAction(
+            await form({
+                invoiceId: inv.id,
+                amount: "105",
+                method: "CASH",
+            }),
+        );
 
         await enableErpSyncForGarage({
             garageId: gid,

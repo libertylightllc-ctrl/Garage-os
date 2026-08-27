@@ -1,9 +1,19 @@
 /**
- * ERPNext sync tailer — cron endpoint.
+ * ERPNext sync tailer — HTTP endpoint.
  *
- * Runs every 5 minutes (see vercel.json). For each garage with
- * erpSyncEnabled = true, invokes runTailer(). Aggregates the results
- * into a summary line + JSON response.
+ * NOT wired to a Vercel cron in Phase 2 — the plan's cron-slot
+ * budget was already at cap (ai-credit-check + auto-close-stale-
+ * sessions), and adding a third entry failed the Vercel build
+ * with a redirect to vercel.com/docs/cron-jobs/usage-and-pricing.
+ * Phase 6 (operator surface) will decide the cadence properly
+ * — likely one of: an external scheduler (GitHub Actions, cron-
+ * job.org) hitting this endpoint, folding the tailer into an
+ * existing daily cron, or a plan upgrade. Until then this route
+ * is exposed for manual operator triggering during pilot
+ * cutover.
+ *
+ * For each garage with erpSyncEnabled = true, invokes runTailer().
+ * Aggregates the results into a summary line + JSON response.
  *
  * Auth: mirrors the two existing cron routes (ai-credit-check,
  * auto-close-stale-sessions). If CRON_SECRET is set (Vercel

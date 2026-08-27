@@ -281,14 +281,18 @@ describe("runOnePass — dep gate", () => {
                 dependsOnJobIds: [],
             },
         });
-        // Blocked job depends on the still-PENDING dep. Give it a
-        // distinct sourceId so the unique constraint doesn't hit.
+        // Blocked job depends on the still-PENDING dep. Use
+        // PUSH_ITEM as the blocked op because it's the only op that
+        // stays SKIPPED_NOT_IMPLEMENTED post-Phase-4 — a wired op
+        // (PUSH_INVOICE) would try to look up a real Invoice row.
+        // We only care that the runner processes both in the same
+        // pass and the invoice-shaped one falls through cleanly.
         const blocked = await prisma.erpSyncJob.create({
             data: {
                 garageId: gid,
-                op: "PUSH_INVOICE",
-                sourceType: "Invoice",
-                sourceId: cust.id + "-inv",
+                op: "PUSH_ITEM",
+                sourceType: "Part",
+                sourceId: cust.id + "-part",
                 status: "PENDING",
                 dependsOnJobIds: [dep.id],
             },
@@ -501,39 +505,33 @@ describe("runOneJob — failure escalation", () => {
     });
 });
 
-describe("runOnePass — not implemented ops (Phase 5 territory)", () => {
-    it("PUSH_INVOICE / PUSH_PAYMENT / PUSH_ADVANCE / PUSH_VOID all leave PENDING, no state change", async () => {
+describe("runOnePass — still-not-implemented ops", () => {
+    // Phase 4 wired PUSH_INVOICE / PUSH_PAYMENT / PUSH_ADVANCE /
+    // PUSH_VOID. Two ops remain SKIPPED_NOT_IMPLEMENTED on purpose:
+    //   - PUSH_ITEM: Items are pre-seeded on the instance (§6); the
+    //     tailer never enqueues one, but the enum value is reserved.
+    //   - APPLY_DEPOSIT: handled implicitly by
+    //     allocate_advances_automatically=1 on PUSH_INVOICE; nothing
+    //     enqueues one today.
+    it("PUSH_ITEM + APPLY_DEPOSIT leave PENDING, no state change", async () => {
         setCreds();
         const cust = await seedGarageWithCustomer(gid);
-        // A stub cursor so runner sees an enabled garage.
-        for (const op of [
-            "PUSH_INVOICE",
-            "PUSH_PAYMENT",
-            "PUSH_ADVANCE",
-            "PUSH_VOID",
-        ] as const) {
+        for (const op of ["PUSH_ITEM", "APPLY_DEPOSIT"] as const) {
             await prisma.erpSyncJob.create({
                 data: {
                     garageId: gid,
                     op,
-                    sourceType:
-                        op === "PUSH_PAYMENT"
-                            ? "Payment"
-                            : op === "PUSH_ADVANCE"
-                                ? "AdvancePayment"
-                                : "Invoice",
+                    sourceType: op === "PUSH_ITEM" ? "Part" : "Invoice",
                     sourceId: cust.id + ":" + op,
                     status: "PENDING",
                     dependsOnJobIds: [],
                 },
             });
         }
-
         const result = await runOnePass(gid, prisma);
-        expect(result.processed).toBe(4);
+        expect(result.processed).toBe(2);
         expect(result.synced).toBe(0);
-        expect(result.skippedNotImplemented).toBe(4);
-
+        expect(result.skippedNotImplemented).toBe(2);
         const rows = await prisma.erpSyncJob.findMany({
             where: { garageId: gid },
         });

@@ -25,15 +25,18 @@ import "dotenv/config";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { runOnePass, runOneJob } from "@/lib/erp-sync/runner";
-import type { ErpNextCredentials } from "@/lib/erp-sync/credentials";
+import { envSuffixFor, type ErpNextCredentials } from "@/lib/erp-sync/credentials";
 
 const P = "erp-runner-test-";
 const gid = P + "g1";
 const gidDisabled = P + "g2";
 const gidNoCreds = P + "g3";
 
-const SUFFIX = gid.toUpperCase();
-const SUFFIX_NOCREDS = gidNoCreds.toUpperCase();
+// Use the SAME suffix builder the runner uses — otherwise a
+// hyphenated test garageId (erp-runner-test-g1) sets envs under
+// ERP-RUNNER-TEST-G1 while the runner reads ERP_RUNNER_TEST_G1.
+const SUFFIX = envSuffixFor(gid);
+const SUFFIX_NOCREDS = envSuffixFor(gidNoCreds);
 
 const CRED_ENVS = [
     `ERPNEXT_BASE_URL__${SUFFIX}`,
@@ -546,7 +549,7 @@ describe("runOnePass — still-not-implemented ops", () => {
 // Local helper: resolve for runOneJob callers.
 function creds_for(garageId: string): ErpNextCredentials {
     // Read from the same env we set in setCreds().
-    const suffix = garageId.toUpperCase();
+    const suffix = envSuffixFor(garageId);
     return {
         garageId,
         baseUrl: process.env[`ERPNEXT_BASE_URL__${suffix}`]!,

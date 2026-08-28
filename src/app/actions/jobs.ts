@@ -84,9 +84,32 @@ export async function jobActionAction(formData: FormData) {
     holdNote = String(formData.get("holdNote") ?? "").trim() || null;
   }
 
+  // Cancellation audit (AR 2026-08-29). Second call site into
+  // status=CANCELLED — matches cancelJobAction's write shape so
+  // the timeline builder finds an entry regardless of which path
+  // was used. Advisor role is the actor here (cancelJobAction is
+  // OWNER/MASTER). Reason is optional.
+  const isCancelling = action === "CANCEL" && next.status === "CANCELLED";
+  const reasonRaw = isCancelling
+    ? String(formData.get("cancelReason") ?? "").trim()
+    : "";
+  const cancelReason = reasonRaw === "" ? null : reasonRaw;
+
   await prisma.jobCard.update({
     where: { id: job.id },
-    data: { status: next.status, heldFrom: next.heldFrom, holdReason, holdNote },
+    data: {
+      status: next.status,
+      heldFrom: next.heldFrom,
+      holdReason,
+      holdNote,
+      ...(isCancelling
+        ? {
+            cancelledAt: new Date(),
+            cancelledByUserId: user.id,
+            cancelReason,
+          }
+        : {}),
+    },
   });
 
   // Tech-tracking: a held or cancelled car is not being worked — stop
@@ -426,6 +449,11 @@ export async function markCompleteAction(formData: FormData) {
 export async function cancelJobAction(formData: FormData) {
   const user = await requireAnyRole(["OWNER", "MASTER"]);
   const jobId = String(formData.get("jobId") ?? "");
+  // AR 2026-08-29 — reason is optional (nullable in the schema) but
+  // captured when present so an auditor asking "why was this cancelled"
+  // has an answer without having to reconstruct from context.
+  const reasonRaw = String(formData.get("cancelReason") ?? "").trim();
+  const cancelReason = reasonRaw === "" ? null : reasonRaw;
   const job = await prisma.jobCard.findFirst({
     where: { id: jobId, garageId: user.garageId },
     select: { id: true, status: true },
@@ -441,6 +469,13 @@ export async function cancelJobAction(formData: FormData) {
       heldFrom: null,
       holdReason: null,
       holdNote: null,
+      // Audit fields (AR 2026-08-29). Before this commit,
+      // cancellations left no trace beyond updatedAt flipping —
+      // any cancellation dated before this deploy is
+      // unattributable. See docs/business-rules.md.
+      cancelledAt: new Date(),
+      cancelledByUserId: user.id,
+      cancelReason,
     },
   });
   await closeJobSessions(jobId, "JOB_CLOSED");

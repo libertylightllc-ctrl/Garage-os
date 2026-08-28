@@ -471,6 +471,7 @@ model User {
   purchaseOrderSends   PurchaseOrderSend[]        @relation("PurchaseOrderSentBy")
   invoiceSends         InvoiceSend[]              @relation("InvoiceSentBy")
   voidedInvoices       Invoice[]                  @relation("InvoiceVoidedBy")
+  cancelledJobs        JobCard[]                  @relation("JobCancelledBy")
   // Slice 3 audits — separate named relations so the User row can be
   // referenced from any of the three roles on an intake collision:
   // attached / released a plate history row, or performed an
@@ -690,6 +691,22 @@ model JobCard {
   // (satisfaction survey, warranty ref) is fine. See Invoice.publicToken
   // for the full Phase 1/2/3 plan.
   publicToken String? @unique
+
+  // ----- Cancellation audit (AR 2026-08-29) -----
+  // Every OTHER lifecycle transition on this model has some form of
+  // timestamp + actor pair (arrivedAt via createdAt/advisorId,
+  // claimedAt/claimedById, workCompletedAt via claimedById, qcAt/qcById,
+  // deliveredAt/deliveredById). Cancellation had neither — the only
+  // trace was updatedAt changing and status flipping to CANCELLED, so
+  // "who cancelled this job, when, and why" was unanswerable.
+  //
+  // NB: cancellations recorded BEFORE this migration are unattributable
+  // — the columns are nullable and back-populated only by future
+  // cancel actions. See docs/business-rules.md for the note.
+  cancelledAt        DateTime?
+  cancelledByUserId  String?
+  cancelledBy        User?     @relation("JobCancelledBy", fields: [cancelledByUserId], references: [id])
+  cancelReason       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -26,6 +26,9 @@ function emptyInput(): BuildTimelineInput {
             invoiceSentAt: null,
             invoiceDeliveredAt: null,
             moulkiaConsentAt: null,
+            cancelledAt: null,
+            cancelledByUserId: null,
+            cancelReason: null,
         },
         steps: [],
         finding: null,
@@ -178,5 +181,38 @@ describe("buildJobTimeline", () => {
         i.job.advisorId = "u-deleted";
         const tl = buildJobTimeline(i);
         expect(tl[0].actor).toBeNull();
+    });
+
+    it("cancellation with actor + reason renders tlJobCancelled with both preserved (AR 2026-08-29)", () => {
+        const i = emptyInput();
+        i.job.cancelledAt = t("2026-08-29T10:00:00Z");
+        i.job.cancelledByUserId = "u-aisha";
+        i.job.cancelReason = "Customer changed their mind";
+        const tl = buildJobTimeline(i);
+        const c = tl.find((e) => e.kindKey === "tlJobCancelled");
+        expect(c).toBeDefined();
+        expect(c?.actor).toEqual({ name: "Aisha", role: "ADVISOR" });
+        expect(c?.detail).toBe("Customer changed their mind");
+    });
+
+    it("cancellation with no reason still renders (detail omitted, actor preserved)", () => {
+        const i = emptyInput();
+        i.job.cancelledAt = t("2026-08-29T10:00:00Z");
+        i.job.cancelledByUserId = "u-sara";
+        i.job.cancelReason = null;
+        const tl = buildJobTimeline(i);
+        const c = tl.find((e) => e.kindKey === "tlJobCancelled");
+        expect(c).toBeDefined();
+        expect(c?.actor).toEqual({ name: "Sara", role: "CASHIER" });
+        expect(c?.detail).toBeUndefined();
+    });
+
+    it("historical cancellation (pre-migration): cancelledAt null → NO event, unattributable per docs/business-rules.md", () => {
+        const i = emptyInput();
+        i.job.cancelledAt = null;
+        i.job.cancelledByUserId = null;
+        i.job.cancelReason = null;
+        const tl = buildJobTimeline(i);
+        expect(tl.find((e) => e.kindKey === "tlJobCancelled")).toBeUndefined();
     });
 });

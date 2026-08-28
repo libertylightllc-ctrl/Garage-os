@@ -41,6 +41,12 @@ export async function loadJobTimeline(
                     invoiceSentAt: true,
                     invoiceDeliveredAt: true,
                     moulkiaConsentAt: true,
+                    // Cancellation audit — see prisma/migrations/
+                    // 20260829000000_jobcard_cancelled_audit and
+                    // job-timeline.ts kindKey "tlJobCancelled".
+                    cancelledAt: true,
+                    cancelledByUserId: true,
+                    cancelReason: true,
                 },
             }),
             client.jobStep.findMany({

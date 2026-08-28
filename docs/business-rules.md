@@ -292,6 +292,26 @@ shop's actually-saved wording.
 
 ---
 
+---
+
+## Historical audit gaps
+
+Where a fix adds a new audit column to a table, prior rows can't
+be back-populated — the actor/timestamp for the pre-migration
+event is simply gone. Named here so nobody spends time investigating
+one.
+
+**JobCard cancellations before 2026-08-29** — `JobCard.cancelledAt`,
+`cancelledByUserId`, and `cancelReason` were added in migration
+`20260829000000_jobcard_cancelled_audit`. Cancellations recorded
+before that migration ran on Prod have all three fields NULL, and
+the timeline surface renders no `tlJobCancelled` entry for them.
+There is no way to tell who cancelled the job, when specifically,
+or why — only that the status flip happened on or before the row's
+`updatedAt`. If an auditor asks about a cancelled job whose
+`updatedAt` predates 2026-08-29, the answer is "unattributable —
+see business-rules.md."
+
 ## How to use this doc
 
 Before shipping a change that touches money, parts, POs, or customer

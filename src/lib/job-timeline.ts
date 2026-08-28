@@ -49,6 +49,13 @@ export interface BuildTimelineInput {
         invoiceSentAt: Date | null;
         invoiceDeliveredAt: Date | null;
         moulkiaConsentAt: Date | null;
+        // AR 2026-08-29 — cancellation audit fields (nullable
+        // migration). Cancellations recorded BEFORE the migration
+        // stay null and produce no timeline event; that gap is
+        // documented in docs/business-rules.md as unattributable.
+        cancelledAt: Date | null;
+        cancelledByUserId: string | null;
+        cancelReason: string | null;
     };
     steps: {
         type: string;
@@ -245,6 +252,21 @@ export function buildJobTimeline(input: BuildTimelineInput): TimelineEvent[] {
             at: job.deliveryConfirmedAt,
             kindKey: "tlCollectionConfirmed",
             actor: null,
+        });
+    }
+
+    // ── 12. Cancellation (AR 2026-08-29) ─────────────────────────
+    // Cancellations before the 20260829000000_jobcard_cancelled_audit
+    // migration have null cancelledAt and produce NO event here —
+    // they're unattributable. See docs/business-rules.md for the
+    // note.
+    if (job.cancelledAt) {
+        ev.push({
+            at: job.cancelledAt,
+            kindKey: "tlJobCancelled",
+            actor: actorFor(job.cancelledByUserId, users),
+            // Reason is optional; renderer appends when present.
+            ...(job.cancelReason ? { detail: job.cancelReason } : {}),
         });
     }
 

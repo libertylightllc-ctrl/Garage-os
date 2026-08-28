@@ -265,7 +265,19 @@ export default async function CashierHome({
           // (visible on /invoices/[id] directly) but doesn't count as
           // money owed. Correction invoices land here under the new
           // number they took at reissue time.
-          where: { garageId, status: { not: "VOID" } },
+          // AR 2026-08-29 (bug #1): the jobCard.status filter was
+          // missing here, so a CANCELLED job with an attached
+          // non-VOID invoice surfaced in the Receivables section
+          // as "Unpaid" and the Unpaid / Partially Paid / Overdue
+          // counters over-counted for the same reason. The sibling
+          // jobs query below already excludes CANCELLED via
+          // `notIn: ["DELIVERED","CANCELLED"]`; matching that
+          // discipline here keeps the two queries consistent.
+          where: {
+            garageId,
+            status: { not: "VOID" },
+            jobCard: { status: { notIn: ["CANCELLED"] } },
+          },
           include: { payments: true, jobCard: { include: { vehicle: { include: { customer: true } } } } },
           orderBy: { issuedAt:"desc"},
         }),

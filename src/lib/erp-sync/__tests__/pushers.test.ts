@@ -326,7 +326,13 @@ describe("pushPayment — request shape (§4)", () => {
 
         const post = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
         expect(post.payment_type).toBe("Receive");
-        expect(post.paid_from).toBe("Trade Receivable - GOS");
+        // AR 2026-08-28 (post-Replay finding): paid_from is
+        // DELIBERATELY OMITTED for invoice-allocated payments —
+        // sending it alongside references[] made ERPNext double-
+        // book, producing a phantom DR AR / CR AR pair. Let
+        // ERPNext auto-derive from the customer's default
+        // receivable. Only pushAdvance keeps sending paid_from.
+        expect(post.paid_from).toBeUndefined();
         expect(post.paid_to).toBe("Cash/Bank - GOS");
         expect(post.garageos_payment_id).toBe("pay-x");
         // Finding #3: Cash/Bank - GOS is typed Bank so

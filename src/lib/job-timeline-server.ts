@@ -47,6 +47,15 @@ export async function loadJobTimeline(
                     cancelledAt: true,
                     cancelledByUserId: true,
                     cancelReason: true,
+                    // Hold audit — see prisma/migrations/
+                    // 20260829010000_jobcard_held_audit and
+                    // job-timeline.ts kindKey "tlJobHeld". holdReason
+                    // + holdNote already exist; the two new columns
+                    // are heldAt + heldByUserId.
+                    heldAt: true,
+                    heldByUserId: true,
+                    holdReason: true,
+                    holdNote: true,
                 },
             }),
             client.jobStep.findMany({

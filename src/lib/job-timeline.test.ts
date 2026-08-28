@@ -29,6 +29,10 @@ function emptyInput(): BuildTimelineInput {
             cancelledAt: null,
             cancelledByUserId: null,
             cancelReason: null,
+            heldAt: null,
+            heldByUserId: null,
+            holdReason: null,
+            holdNote: null,
         },
         steps: [],
         finding: null,
@@ -214,5 +218,40 @@ describe("buildJobTimeline", () => {
         i.job.cancelReason = null;
         const tl = buildJobTimeline(i);
         expect(tl.find((e) => e.kindKey === "tlJobCancelled")).toBeUndefined();
+    });
+
+    it("hold with actor + reason renders tlJobHeld with holdReason in detail (AR 2026-08-29)", () => {
+        const i = emptyInput();
+        i.job.heldAt = t("2026-08-29T11:00:00Z");
+        i.job.heldByUserId = "u-aisha";
+        i.job.holdReason = "AWAITING_PART";
+        i.job.holdNote = "Alternator SKU on order";
+        const tl = buildJobTimeline(i);
+        const h = tl.find((e) => e.kindKey === "tlJobHeld");
+        expect(h).toBeDefined();
+        expect(h?.actor).toEqual({ name: "Aisha", role: "ADVISOR" });
+        expect(h?.detail).toBe("AWAITING_PART — Alternator SKU on order");
+    });
+
+    it("hold with reason but no note renders detail without the trailing separator", () => {
+        const i = emptyInput();
+        i.job.heldAt = t("2026-08-29T11:00:00Z");
+        i.job.heldByUserId = "u-sara";
+        i.job.holdReason = "AWAITING_APPROVAL";
+        i.job.holdNote = null;
+        const tl = buildJobTimeline(i);
+        const h = tl.find((e) => e.kindKey === "tlJobHeld");
+        expect(h?.detail).toBe("AWAITING_APPROVAL");
+    });
+
+    it("historical hold (pre-migration): heldAt null → NO event", () => {
+        const i = emptyInput();
+        i.job.heldAt = null;
+        i.job.heldByUserId = null;
+        // holdReason may still be populated from the legacy write —
+        // no timeline event without heldAt regardless.
+        i.job.holdReason = "AWAITING_PART";
+        const tl = buildJobTimeline(i);
+        expect(tl.find((e) => e.kindKey === "tlJobHeld")).toBeUndefined();
     });
 });

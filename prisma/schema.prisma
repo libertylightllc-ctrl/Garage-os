@@ -472,6 +472,7 @@ model User {
   invoiceSends         InvoiceSend[]              @relation("InvoiceSentBy")
   voidedInvoices       Invoice[]                  @relation("InvoiceVoidedBy")
   cancelledJobs        JobCard[]                  @relation("JobCancelledBy")
+  heldJobs             JobCard[]                  @relation("JobHeldBy")
   // Slice 3 audits — separate named relations so the User row can be
   // referenced from any of the three roles on an intake collision:
   // attached / released a plate history row, or performed an
@@ -618,6 +619,21 @@ model JobCard {
   heldFrom            JobStatus? // stage to resume to after ON_HOLD
   holdReason          HoldReason? // why it's on hold
   holdNote            String?
+  // AR 2026-08-29 — hold audit. Every OTHER lifecycle state
+  // transition on this model has some form of timestamp + actor
+  // pair; hold had heldFrom + holdReason + holdNote but NO
+  // heldAt (when) and NO heldByUserId (who). "Why is this job
+  // on hold" was answerable via holdReason; "when did it go
+  // on hold and who paused it" wasn't. Both nullable — holds
+  // recorded before the 20260829010000_jobcard_held_audit
+  // migration have both fields null, per docs/business-rules.md.
+  //
+  // Fidelity note: if a job cycles hold → resume → hold, these
+  // columns record the LATEST hold only. Same limitation the
+  // existing holdReason/holdNote columns have today.
+  heldAt              DateTime?
+  heldByUserId        String?
+  heldBy              User?      @relation("JobHeldBy", fields: [heldByUserId], references: [id])
   assignedToId        String? // advisor pre-assignment to a specific tech (optional)
   claimedById         String? // technician who claimed it (PRIMARY) — the atomic claim lock (null = in pool)
   claimedAt           DateTime? // start of the diagnosis-duration window

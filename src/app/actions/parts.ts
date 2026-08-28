@@ -137,7 +137,16 @@ export async function requestPartAction(formData: FormData) {
   if (shouldPauseForRequest(available) && isPausable(job.status)) {
     await prisma.jobCard.update({
       where: { id: job.id },
-      data: { status: "ON_HOLD", heldFrom: job.status as never, holdReason: "AWAITING_PART" },
+      data: {
+        status: "ON_HOLD",
+        heldFrom: job.status as never,
+        holdReason: "AWAITING_PART",
+        // Hold audit (AR 2026-08-29) — user requesting the part
+        // is who paused the job. Timestamp answers "how long has
+        // this been waiting on parts".
+        heldAt: new Date(),
+        heldByUserId: user.id,
+      },
     });
     // Wrench-time stops when the tech asks for a part. Prior shape
     // left the WorkSession open — tech taps request-part, walks to
@@ -236,7 +245,16 @@ async function advanceRequest(formData: FormData, to: PartRequestStatus, note?: 
     if (job && isPausable(job.status)) {
       await prisma.jobCard.update({
         where: { id: req.jobCardId },
-        data: { status: "ON_HOLD", heldFrom: job.status as never, holdReason: "AWAITING_PART" },
+        data: {
+        status: "ON_HOLD",
+        heldFrom: job.status as never,
+        holdReason: "AWAITING_PART",
+        // Hold audit (AR 2026-08-29) — user requesting the part
+        // is who paused the job. Timestamp answers "how long has
+        // this been waiting on parts".
+        heldAt: new Date(),
+        heldByUserId: user.id,
+      },
       });
       // Same rationale as the tech-side request flow above — a job
       // paused for parts is not being worked. AR 2026-08-20 Finding 2.

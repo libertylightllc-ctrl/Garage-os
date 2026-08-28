@@ -95,6 +95,11 @@ export async function jobActionAction(formData: FormData) {
     : "";
   const cancelReason = reasonRaw === "" ? null : reasonRaw;
 
+  // Hold audit (AR 2026-08-29). heldAt + heldByUserId written on
+  // every transition into ON_HOLD. holdReason + holdNote already
+  // captured above. Same discipline as cancellation.
+  const isHolding = action === "HOLD" && next.status === "ON_HOLD";
+
   await prisma.jobCard.update({
     where: { id: job.id },
     data: {
@@ -107,6 +112,12 @@ export async function jobActionAction(formData: FormData) {
             cancelledAt: new Date(),
             cancelledByUserId: user.id,
             cancelReason,
+          }
+        : {}),
+      ...(isHolding
+        ? {
+            heldAt: new Date(),
+            heldByUserId: user.id,
           }
         : {}),
     },

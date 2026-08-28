@@ -594,7 +594,17 @@ export async function setEstimateStatusAction(formData: FormData) {
       if (job && job.status !== "ON_HOLD") {
         await prisma.jobCard.update({
           where: { id: est.jobCardId },
-          data: { status: "ON_HOLD", heldFrom: job.status, holdReason: "AWAITING_APPROVAL" },
+          data: {
+            status: "ON_HOLD",
+            heldFrom: job.status,
+            holdReason: "AWAITING_APPROVAL",
+            // Hold audit (AR 2026-08-29) — advisor sending the
+            // extra-work estimate to the customer is who paused
+            // the job. Timestamp lets an auditor reconstruct
+            // "how long has this been awaiting approval".
+            heldAt: new Date(),
+            heldByUserId: user.id,
+          },
         });
         // Wrench-time stops when a job pauses for extra-work
         // approval — no work happens while we wait for the customer
@@ -856,6 +866,11 @@ export async function sendEstimateToCustomerAction(formData: FormData) {
             status: "ON_HOLD",
             heldFrom: job.status,
             holdReason: "AWAITING_APPROVAL",
+            // Hold audit (AR 2026-08-29) — same as sibling
+            // pause site: whoever initiated the send is the
+            // actor who caused the hold.
+            heldAt: new Date(),
+            heldByUserId: user.id,
           },
         });
         // AR 2026-08-20 Finding 2 — same rationale as the sibling

@@ -56,6 +56,16 @@ export interface BuildTimelineInput {
         cancelledAt: Date | null;
         cancelledByUserId: string | null;
         cancelReason: string | null;
+        // AR 2026-08-29 — hold audit fields. Holds recorded
+        // BEFORE the 20260829010000_jobcard_held_audit migration
+        // have both fields null; NO event is emitted for those.
+        // Fidelity note: a job cycled hold → resume → hold shows
+        // only the LATEST hold in this pair (same limitation as
+        // holdReason today).
+        heldAt: Date | null;
+        heldByUserId: string | null;
+        holdReason: string | null;
+        holdNote: string | null;
     };
     steps: {
         type: string;
@@ -267,6 +277,23 @@ export function buildJobTimeline(input: BuildTimelineInput): TimelineEvent[] {
             actor: actorFor(job.cancelledByUserId, users),
             // Reason is optional; renderer appends when present.
             ...(job.cancelReason ? { detail: job.cancelReason } : {}),
+        });
+    }
+
+    // ── 13. Hold (AR 2026-08-29) ─────────────────────────────────
+    // Latest hold only — holds before the
+    // 20260829010000_jobcard_held_audit migration have heldAt null
+    // and produce no event. Detail carries the holdReason enum key
+    // + optional note; renderer maps the enum through i18n.
+    if (job.heldAt) {
+        const detailParts: string[] = [];
+        if (job.holdReason) detailParts.push(job.holdReason);
+        if (job.holdNote) detailParts.push(job.holdNote);
+        ev.push({
+            at: job.heldAt,
+            kindKey: "tlJobHeld",
+            actor: actorFor(job.heldByUserId, users),
+            ...(detailParts.length > 0 ? { detail: detailParts.join(" — ") } : {}),
         });
     }
 

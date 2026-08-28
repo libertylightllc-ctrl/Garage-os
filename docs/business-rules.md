@@ -312,6 +312,22 @@ or why — only that the status flip happened on or before the row's
 `updatedAt` predates 2026-08-29, the answer is "unattributable —
 see business-rules.md."
 
+**JobCard holds before 2026-08-29** — `JobCard.heldAt` and
+`heldByUserId` were added in migration
+`20260829010000_jobcard_held_audit` (sibling to the cancellation
+migration). `holdReason` + `holdNote` already existed and carried
+context, but not "when" or "who." Holds recorded before the
+migration have both new fields NULL and produce no `tlJobHeld`
+timeline entry. Same rule as cancellations: `updatedAt` is the
+only signal, unattributable in practice.
+
+Also: on both cancellation and hold, if a job cycled through
+multiple transitions (held → resumed → held again), only the
+LATEST occurrence is preserved — same limitation the existing
+`holdReason` field carries today. A per-transition history model
+(JobHoldEvent, JobCancellationHistory) would fix this if the
+audit ever needs it; not built today.
+
 ## How to use this doc
 
 Before shipping a change that touches money, parts, POs, or customer

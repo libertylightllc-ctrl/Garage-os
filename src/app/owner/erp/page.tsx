@@ -17,6 +17,7 @@ import {
     replayErpSyncJobAction,
     resetErpSyncCursorAction,
 } from "@/app/actions/erp-sync";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -121,13 +122,13 @@ export default async function OwnerErpPage({
                             (2026-08-27 incident). Wipes and recreates
                             the row at now(); sync stays on. */}
                         <form action={resetErpSyncCursorAction}>
-                            <button
-                                className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-2"
-                                type="submit"
+                            <SubmitButton
+                                className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-2 disabled:opacity-60"
                                 title="Delete the current cursor and seed a fresh one at now. Skips every ledger row created before this moment. Use when the cursor was accidentally seeded to a past date."
+                                pendingLabel="Resetting…"
                             >
                                 Reset cursor to now
-                            </button>
+                            </SubmitButton>
                         </form>
                     </div>
                 ) : (
@@ -323,12 +324,12 @@ function JobList({
                             </div>
                             <form action={replayErpSyncJobAction}>
                                 <input type="hidden" name="jobId" value={j.id} />
-                                <button
-                                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-2"
-                                    type="submit"
+                                <SubmitButton
+                                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-2 disabled:opacity-60"
+                                    pendingLabel="Replaying…"
                                 >
                                     Replay
-                                </button>
+                                </SubmitButton>
                             </form>
                         </div>
                     </div>

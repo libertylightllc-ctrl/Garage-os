@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { addStepAction } from "@/app/actions/techsteps";
 import { requestPartAction, cancelOwnPartRequestAction } from "@/app/actions/parts";
 import { ConfirmButton } from "@/components/confirm-button";
+import { SubmitButton } from "@/components/submit-button";
 import {
   leaveHelperAction,
   addExtraJobPartAction,
@@ -343,12 +344,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
           {!amHelper && hasWorkProof ? (
             <form action={markCompleteAction} className="mt-4">
               <input type="hidden" name="jobId" value={job.id} />
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+              <SubmitButton
+                className="inline-flex h-12 items-center justify-center rounded-lg px-5 text-base font-semibold bg-brand-900 text-white hover:bg-brand-700 transition-colors dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 disabled:opacity-60"
+                pendingLabel={t("markComplete") + "…"}
               >
                 {t("markComplete")}
-              </button>
+              </SubmitButton>
             </form>
           ) : !amHelper ? (
             // Pre-work-proof state. Surfaces clearly what counts as
@@ -453,9 +454,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               placeholder={t("diagnosisLabel")}
               className="w-full rounded-lg border border-border bg-transparent px-2 py-1 pr-10 text-sm"
             />
-            <button className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors">
+            <SubmitButton
+              className="self-start inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2 transition-colors disabled:opacity-60"
+              pendingLabel={t("saveDraft") + "…"}
+            >
               {t("saveDraft")}
-            </button>
+            </SubmitButton>
           </form>
         )}
 
@@ -810,9 +814,12 @@ export default async function Workshop({ params }: { params: Promise<{ id: strin
               {hasWorkProof ? (
                 <form action={markCompleteAction}>
                   <input type="hidden" name="jobId" value={job.id} />
-                  <button className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60">
+                  <SubmitButton
+                    className="inline-flex h-10 items-center justify-center rounded-lg bg-accent-500 px-4 text-sm font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 disabled:opacity-60"
+                    pendingLabel={t("markComplete") + "…"}
+                  >
                     {t("markComplete")}
-                  </button>
+                  </SubmitButton>
                 </form>
               ) : (
                 <p className="rounded-xl border border-success-500/40 bg-success-50 px-3 py-2 text-xs text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-500">

@@ -4,6 +4,7 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { sendEstimateToCustomerAction } from "@/app/actions/billing";
 import { PrintButton } from "@/components/print-button";
+import { SubmitButton } from "@/components/submit-button";
 import { DocumentHeader } from "@/components/document-header";
 import { CustomerPhoneNudge } from "@/components/customer-phone-nudge";
 import { normalizeToE164 } from "@/lib/wa";
@@ -439,12 +440,17 @@ export default async function EstimatePreview({
         <form action={sendEstimateToCustomerAction}>
           <input type="hidden" name="estimateId" value={est.id} />
           {isDraft ? (
-            <button
-              type="submit"
-              className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+            // sendEstimateToCustomerAction redirects to wa.me (cross-
+            // origin), so a router.refresh after the transition
+            // would fire against a page the browser is already
+            // navigating away from. refreshOnComplete=false.
+            <SubmitButton
+              className="inline-flex h-12 items-center justify-center rounded-lg bg-accent-500 px-5 text-base font-semibold text-brand-900 hover:bg-accent-400 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 disabled:opacity-60"
+              pendingLabel={t("estimateSendToCustomer") + "…"}
+              refreshOnComplete={false}
             >
               {t("estimateSendToCustomer")}
-            </button>
+            </SubmitButton>
           ) : (
             // AR 2026-08-15 estimate-honesty pass. Was a green ✓ pill
             // reading "Sent to the customer · <date>" — both the colour
@@ -478,12 +484,12 @@ export default async function EstimatePreview({
                   : t("estimateSentAt")}
               </span>
               {est.status === "SENT" ? (
-                <button
-                  type="submit"
-                  className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60"
+                <SubmitButton
+                  className="inline-flex h-12 items-center justify-center rounded-lg border border-border bg-transparent px-5 text-base font-semibold text-text hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/60 disabled:opacity-60"
+                  refreshOnComplete={false}
                 >
                   {t("estimateResendViaWhatsApp")}
-                </button>
+                </SubmitButton>
               ) : null}
             </div>
           )}

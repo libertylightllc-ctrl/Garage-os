@@ -55,6 +55,40 @@ function makeStub(handlers: Array<{
     return { fetchImpl, calls };
 }
 
+describe("pushCustomer — leaf customer_group + territory (2026-08-28 HTTP 417)", () => {
+    it("customer_group and territory are LEAF nodes, never Frappe group roots (never begin with 'All ')", async () => {
+        const { fetchImpl, calls } = makeStub([
+            { match: (url) => url.includes("filters="), respond: () => jsonResponse(200, { data: [] }) },
+            {
+                match: (url, init) => url.endsWith("/api/resource/Customer") && init.method === "POST",
+                respond: () => jsonResponse(200, { data: { name: "CUST-2026-00001" } }),
+            },
+            {
+                match: (url) => url.includes("/api/resource/Customer/CUST-2026-00001"),
+                respond: () => jsonResponse(200, {
+                    data: { name: "CUST-2026-00001", garageos_customer_id: "cust-y" },
+                }),
+            },
+        ]);
+        const { pushCustomer } = await import("@/lib/erp-sync/pushers");
+        await pushCustomer(
+            creds,
+            { id: "cust-y", name: "Test", phone: null, trn: null },
+            { fetchImpl },
+        );
+        const post = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
+        // Both must NOT start with "All " — Frappe convention for
+        // group nodes (is_group: 1), which are unselectable and
+        // return HTTP 417 ValidationError.
+        expect(String(post.customer_group)).not.toMatch(/^All /);
+        expect(String(post.territory)).not.toMatch(/^All /);
+        // Explicit pin on the current values so a silent taxonomy
+        // change surfaces here.
+        expect(post.customer_group).toBe("Commercial");
+        expect(post.territory).toBe("United Arab Emirates");
+    });
+});
+
 describe("pushCustomer — mandatory naming_series (finding #1)", () => {
     it("sends naming_series so Frappe doesn't reject with 'Series is mandatory'", async () => {
         const { fetchImpl, calls } = makeStub([

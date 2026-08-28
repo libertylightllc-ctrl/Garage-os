@@ -97,8 +97,24 @@ export async function pushCustomer(
         {
             customer_name: customer.name,
             customer_type: "Individual",
-            customer_group: "All Customer Groups",
-            territory: "All Territories",
+            // AR 2026-08-28 (finding: first live push landed
+            // HTTP 417 "Cannot select a Group type Customer Group /
+            // Territory"): Frappe rejects group NODES for both
+            // fields; only LEAF values are selectable. `All
+            // Customer Groups` and `All Territories` are the
+            // roots (`is_group: 1`).
+            //
+            // Hardcoded to the pilot's taxonomy: `Commercial`
+            // and `United Arab Emirates`. If a second shop later
+            // needs a different group (Fleet) or territory (KSA,
+            // Rest Of The World), lift these to per-garage envs
+            // then — YAGNI for one shop today.
+            //
+            // Pin test asserts neither value ever begins with
+            // "All " (Frappe's group-node convention) so a
+            // silent revert to a root re-triggers the 417.
+            customer_group: "Commercial",
+            territory: "United Arab Emirates",
             // AR 2026-08-27 (manual test finding #1): naming_series is
             // mandatory on Customer with no default and Selling
             // Settings.cust_master_name = "Naming Series" (§3). Without

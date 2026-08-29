@@ -432,6 +432,28 @@ export async function pushPayment(
             received_amount: pay.amount,
             posting_date: ymd(pay.paidAt),
             company: creds.companyName,
+            // AR 2026-08-30 — DO NOT drop `paid_from`. Investigated
+            // and confirmed correct against the live instance
+            // (commits a456fcd → ea4f55d cycle). The wire logs
+            // proved references[] + docstatus:1 land in a SINGLE
+            // POST — the payment is NOT create-then-allocate.
+            //
+            // The 4-row GL that a Payment Entry produces:
+            //   Cr Trade Receivable  (allocation-side header)
+            //   Dr Cash/Bank
+            //   Cr Trade Receivable  (party-account settlement)
+            //   Dr Trade Receivable  (advance-account clearing)
+            //
+            // ...is ERPNext's expected server-side reconciliation
+            // behaviour under Company setting
+            // `book_advance_payments_in_separate_party_account = 1`
+            // (§3 of the brief). We keep that setting ON because
+            // it's what routes deposits (pushAdvance) to Customer
+            // Deposits rather than Trade Receivable — both §5a
+            // gates depend on it and the 50%-advance terms these
+            // garages use REQUIRE it. Nets right, books balance,
+            // paid_from is correct. If someone asks "why 4 rows",
+            // see the note in ERPNEXT_SYNC_BRIEF.md §4 first.
             paid_from: acct(ACCOUNT_TEMPLATES.RECEIVABLE, creds.companyAbbr),
             paid_to: acct(ACCOUNT_TEMPLATES.CASH_BANK, creds.companyAbbr),
             // AR 2026-08-27 (manual test finding #3): Cash/Bank - GOS is

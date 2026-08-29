@@ -120,12 +120,29 @@ CR  VAT 5% - GOS                        tax
   produce a single net credit row. That is already our shape — nothing is lost.
 
 ### Payment recorded
+The net posting is `DR Cash/Bank / CR Trade Receivable`, but ERPNext writes it as FOUR GL rows,
+not two:
 ```
+CR  Trade Receivable - GOS   (+party)   amount     (allocation-side header)
 DR  Cash/Bank - GOS                     amount     (paid_to)
-CR  Trade Receivable - GOS   (+party)   amount     (paid_from)
+CR  Trade Receivable - GOS   (+party)   amount     (party-account settlement)
+DR  Trade Receivable - GOS   (+party)   amount     (advance-account clearing)
 ```
 - `references[]` row `{reference_doctype: "Sales Invoice", reference_name, allocated_amount}`.
   Without it the payment posts but the invoice stays open.
+- **Four rows is EXPECTED, not a bug.** ERPNext's server-side reconciliation behaviour under
+  Company `book_advance_payments_in_separate_party_account = 1` books through the advance
+  account and clears it in the same voucher. The extra `DR Trade Receivable + CR Trade
+  Receivable` pair is that clearing, not a create-then-allocate mistake.
+- **Do NOT turn `book_advance_payments_in_separate_party_account` off to "fix" the four-row
+  shape.** That setting is what routes deposits (Advance Payment Entries, §5a) to Customer
+  Deposits instead of Trade Receivable. Both §5a gates depend on it and the 50%-advance terms
+  these garages use REQUIRE it. Four tidy rows on a payment is the fair price for correct
+  deposit handling.
+- Investigated 2026-08-30 (commits `a456fcd` → `ea4f55d`): dropping `paid_from` was an
+  attempted fix that did nothing. Wire logs confirmed `references[]` + `docstatus: 1` DO
+  land in a single POST — not create-then-allocate. `paid_from = "Trade Receivable - GOS"`
+  was never wrong; both are back in the payload.
 
 ### Advance taken (deposit)
 ```

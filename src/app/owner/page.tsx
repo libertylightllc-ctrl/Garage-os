@@ -24,6 +24,7 @@ import {
   advisorActivity,
 } from "@/lib/owner-metrics";
 import { techWrenchTime, STALE_SESSION_MIN } from "@/lib/work-session-reports";
+import { DashboardTiles } from "@/components/dashboard-tiles";
 
 export const dynamic ="force-dynamic";
 
@@ -326,6 +327,16 @@ export default async function OwnerHome({
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl xl:max-w-7xl">
       <AppNav role="OWNER" active="dashboard"/>
       <h1 className="text-2xl font-semibold tracking-tight">{t("ownerDashboard")}</h1>
+
+      {/* AR 2026-08-30 — money-at-a-glance band. Every value here
+          is ledger-derived so this agrees with what the accountant
+          sees in ERPNext. If the two ever diverge, that's a bug
+          worth surfacing here, not a number to smooth over. See
+          src/lib/owner-dashboard.ts head comment for the rules. */}
+      <DashboardTiles
+        garageId={session.user.garageId}
+        role={session.user.role}
+      />
 
       {metricsHadError ? (
         <div className="rounded-xl border border-warning-500/40 bg-warning-50 px-4 py-2.5 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">

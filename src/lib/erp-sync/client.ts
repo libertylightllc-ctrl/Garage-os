@@ -70,6 +70,22 @@ async function request(
         headers["Content-Type"] = "application/json";
     }
 
+    // AR 2026-08-30 — diagnostic logging. AR's second live payment
+    // push produced a 4-row GL matching the "unreferenced-then-
+    // reconciled" pattern despite our POST body containing both
+    // references[] and docstatus:1. Frappe on ERPNext 16 may be
+    // ignoring docstatus in the POST body (create as DRAFT
+    // regardless), producing that shape when something later
+    // submits the draft. Log request + response so we can read
+    // the wire, not the code. Temporary — remove once diagnosed.
+    // Auth header stripped; secrets never logged.
+    const DEBUG = true;
+    if (DEBUG && opts.method !== "GET") {
+        console.log(
+            `[erp-client] REQ ${opts.method} ${opts.path}${query} body=${bodyStr ?? "(none)"}`,
+        );
+    }
+
     let lastErr: unknown = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         const ctrl = new AbortController();
@@ -87,6 +103,11 @@ async function request(
                 parsed = JSON.parse(txt);
             } catch {
                 // Non-JSON body — keep as string; will surface in error msg
+            }
+            if (DEBUG && opts.method !== "GET") {
+                console.log(
+                    `[erp-client] RESP ${opts.method} ${opts.path} status=${res.status} body=${txt.slice(0, 4000)}`,
+                );
             }
             if (res.status >= 500) {
                 // Retryable server error. Log so ops can see the

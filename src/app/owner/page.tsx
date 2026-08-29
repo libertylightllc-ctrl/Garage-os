@@ -352,9 +352,16 @@ export default async function OwnerHome({
           is ledger-derived so this agrees with what the accountant
           sees in ERPNext. If the two ever diverge, that's a bug
           worth surfacing here, not a number to smooth over. See
-          src/lib/owner-dashboard.ts head comment for the rules. */}
+          src/lib/owner-dashboard.ts head comment for the rules.
+
+          Passes `gids` (all branches aggregated via companyGarageIds)
+          — same scope Copilot uses, matches CLAUDE.md's "Owner
+          (all branches)" rule. Previously passed the single
+          session garageId, which under-scoped multi-branch owners
+          to the root only. Same class of divergence AR flagged in
+          the Copilot fix. */}
       <DashboardTiles
-        garageId={session.user.garageId}
+        garageId={gids}
         role={session.user.role}
       />
 

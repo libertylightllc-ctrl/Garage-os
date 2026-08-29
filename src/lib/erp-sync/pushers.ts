@@ -432,22 +432,7 @@ export async function pushPayment(
             received_amount: pay.amount,
             posting_date: ymd(pay.paidAt),
             company: creds.companyName,
-            // AR 2026-08-28 (finding: first live payment ACC-PAY-2026-
-            // 00011 posted FOUR GL rows instead of two — a phantom
-            // DR AR / CR AR pair). Sending `paid_from` explicitly
-            // ALONGSIDE `references[]` makes ERPNext double-book:
-            // the header row uses paid_from/paid_to, and the
-            // reference-derived allocation row uses the reference's
-            // default_account which resolves to the same AR. Two
-            // rows become four, netting right but noisy on the
-            // ledger.
-            //
-            // Fix: let ERPNext auto-derive paid_from from the
-            // customer's default receivable when references[] fully
-            // covers the amount. Cleanest 2-row posting.
-            // pushAdvance keeps sending paid_from explicitly —
-            // that path REQUIRES it so ERPNext can rewrite to
-            // Customer Deposits (§4 of the brief).
+            paid_from: acct(ACCOUNT_TEMPLATES.RECEIVABLE, creds.companyAbbr),
             paid_to: acct(ACCOUNT_TEMPLATES.CASH_BANK, creds.companyAbbr),
             // AR 2026-08-27 (manual test finding #3): Cash/Bank - GOS is
             // typed Bank, so Payment Entry requires reference_no +

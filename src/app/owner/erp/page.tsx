@@ -121,14 +121,23 @@ export default async function OwnerErpPage({
                             a cursor seeded to a past date by accident
                             (2026-08-27 incident). Wipes and recreates
                             the row at now(); sync stays on. */}
+                        {/* AR 2026-08-30 — plain <button> restored.
+                            SubmitButton was applied here as part of
+                            the first-click-swallowed sweep, but this
+                            control was never verified broken (browser-
+                            agent's ref-click was the false positive
+                            signal). Wrapping a control that isn't
+                            broken with a disabled+pendingLabel
+                            behaviour change is a UX change nobody
+                            asked for. */}
                         <form action={resetErpSyncCursorAction}>
-                            <SubmitButton
-                                className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-2 disabled:opacity-60"
+                            <button
+                                className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-surface-2"
+                                type="submit"
                                 title="Delete the current cursor and seed a fresh one at now. Skips every ledger row created before this moment. Use when the cursor was accidentally seeded to a past date."
-                                pendingLabel="Resetting…"
                             >
                                 Reset cursor to now
-                            </SubmitButton>
+                            </button>
                         </form>
                     </div>
                 ) : (

@@ -292,6 +292,22 @@ shop's actually-saved wording.
 
 ---
 
+## 9. companyGarageIds does not verify ownership
+
+The multi-branch helper at `src/lib/branches.ts` — `companyGarageIds(garageId)` — walks the `Garage.branchOfId` self-relation. It reads the input garage's `branchOfId`, resolves the company root as `branchOfId ?? id`, and returns `[root, ...children where branchOfId === root]`. There is no ownership check anywhere in that path.
+
+Every caller today is safe **by convention, not enforcement**. The convention is that OWNER accounts get created on the company root garage by the sign-up flow. Given that, walking up via `branchOfId` and back down to siblings stays inside the caller's own tree. That's what keeps `/owner` (the dashboard, the money band, Copilot's aggregated queries, `listBranches`, and everything downstream of `gids`) from leaking data.
+
+**Two latent risks** the next feature that touches company structure needs to plug:
+
+- **OWNER account placed on a branch garage.** If a future franchisee model lets one OWNER own just one branch — not the whole company — `companyGarageIds` climbs to the root and sweeps every sibling. The franchisee sees revenue, unpaid AR, tech productivity, and payroll for branches they don't own. Plug: enforce at the walker (accept only garageIds whose owner-of-record is the caller) or gate at the callers.
+
+- **Branch hierarchy deeper than one level.** `branchOfId` is a self-relation, so `branchOf.branchOf` is expressible in the schema even though no code creates it today. The walker looks one level up and one level down only. Any grandchild garage silently falls out of the aggregation — nobody sees its numbers, nobody gets an error. Under-scoping is quieter than over-sharing but still wrong. Plug: recursive walk (`WITH RECURSIVE` CTE or Prisma-side traversal until fixpoint), or a hard rule at branch creation that rejects `branchOfId` on any garage that is already a branch.
+
+**Rule for the fix:** neither risk should be closed in isolation. The moment either becomes real (franchisee sign-up flow, sub-branch creation), audit **every** call site of `companyGarageIds` and `scopeWhere` — `/owner` dashboard tiles, Copilot, `/owner/billing`, `/owner/staff`, `/owner/analytics`, the ledger reports — and either add an ownership check inside `companyGarageIds` (preferred, single point of enforcement) or refactor callers to pass an explicitly-authorized garageId list.
+
+**Common violation shape**: shipping the franchisee model with `companyGarageIds` unchanged, or deepening the branch hierarchy with the walker unchanged, and testing only the happy path (one franchisee on one branch of a single-level tree). The bug shows up when a franchisee has ambient access to sibling branch data on any page that aggregates by `gids`, or when the owner of a deep hierarchy notices their P&L numbers stopped rolling up.
+
 ---
 
 ## Historical audit gaps

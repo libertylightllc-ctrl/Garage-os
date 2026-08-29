@@ -10,8 +10,6 @@ import { getT, getLocale } from "@/i18n/server";
 import { pluralize } from "@/i18n/plural";
 import type { MessageKey } from "@/i18n/config";
 import {
-  revenue,
-  profitThisMonth,
   carsToday,
   inventoryHealth,
   lowStockParts,
@@ -25,6 +23,7 @@ import {
 } from "@/lib/owner-metrics";
 import { techWrenchTime, STALE_SESSION_MIN } from "@/lib/work-session-reports";
 import { DashboardTiles } from "@/components/dashboard-tiles";
+import { grossProfitMonth } from "@/lib/owner-dashboard";
 
 export const dynamic ="force-dynamic";
 
@@ -53,8 +52,22 @@ async function answerCopilot(t: T, garageId: string | string[], question: string
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   switch (classifyIntent(question)) {
     case "PROFIT_MONTH": {
-      const p = await profitThisMonth(garageId, now);
-      return fill(t("ansProfit"), { v: money(p) });
+      // Share the exact computation the dashboard's Gross-profit
+      // tile uses — same source of truth, same unknown-cost
+      // discipline. Previously used profitThisMonth() from
+      // owner-metrics.ts which silently omits missing PART cost;
+      // that produced a number-looks-right-but-isn't answer to
+      // the same question the dashboard now refuses to fake. See
+      // AR's message 2026-08-30 on this class of divergence.
+      const gp = await grossProfitMonth(garageId, now);
+      if (gp.state === "incomplete") {
+        return fill(t("ansProfitIncomplete"), {
+          missing: String(gp.invoicesMissingCost),
+          total: String(gp.invoicesTotal),
+          revenue: money(gp.revenue),
+        });
+      }
+      return fill(t("ansProfit"), { v: money(gp.profit) });
     }
     case "WHO_OWES": {
       const rows = await whoOwes(garageId, now);
@@ -248,9 +261,13 @@ export default async function OwnerHome({
   // metricsHadError surfaces a non-blocking banner so the owner knows
   // some numbers may be missing — better than silent failures pretending
   // everything is fine.
+  // AR 2026-08-30 — dropped revenue() and profitThisMonth() from
+  // the fetch. The old strip's Revenue / Profit tiles that used
+  // them were removed (duplicates of the DashboardTiles band, and
+  // profitThisMonth silently omitted missing PART cost). Copilot's
+  // PROFIT_MONTH now uses grossProfitMonth() directly. No caller
+  // for those old numbers left on this page.
   const settled = await Promise.allSettled([
-    revenue(gids, monthFrom),
-    profitThisMonth(gids, now),
     carsToday(gids, now),
     inventoryHealth(gids),
     weekTrend(gids, now),
@@ -267,16 +284,14 @@ export default async function OwnerHome({
     console.error(`[owner] metric query ${idx} failed:`, r.reason);
     return fb;
   };
-  const rev = v(0, 0);
-  const profit = v(1, 0);
-  const cars = v(2, 0);
-  const inv = v(3, { low: 0, total: 0 });
-  const trend = v(4, { thisWeek: 0, lastWeek: 0, delta: 0 });
-  const usage = v(5, { events: 0, costUsd: 0 });
-  const acceptance = v(6, { confirmed: 0, rejected: 0, rate: null as number | null });
-  const confirmMins = v(7, null as number | null);
-  const techWork = v(8, [] as Awaited<ReturnType<typeof technicianWork>>);
-  const lowStock = v(9, { items: [], low: 0 } as Awaited<ReturnType<typeof lowStockParts>>);
+  const cars = v(0, 0);
+  const inv = v(1, { low: 0, total: 0 });
+  const trend = v(2, { thisWeek: 0, lastWeek: 0, delta: 0 });
+  const usage = v(3, { events: 0, costUsd: 0 });
+  const acceptance = v(4, { confirmed: 0, rejected: 0, rate: null as number | null });
+  const confirmMins = v(5, null as number | null);
+  const techWork = v(6, [] as Awaited<ReturnType<typeof technicianWork>>);
+  const lowStock = v(7, { items: [], low: 0 } as Awaited<ReturnType<typeof lowStockParts>>);
   const wrenchFrom = wrenchMode === "week"
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
     : new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -313,11 +328,16 @@ export default async function OwnerHome({
     });
   }
 
+  // AR 2026-08-30 — trimmed after DashboardTiles landed. Revenue
+  // and Profit were duplicates of the new band's ledger-derived
+  // versions (and the old profit silently omitted missing PART
+  // cost — the exact class of bug we're eliminating). Satisfaction
+  // was a hardcoded "—" placeholder with no source, dropped until
+  // there's data behind it. Cars-today and Inventory are unique:
+  // today-scope intake counter and stock-health pill, orthogonal
+  // to the month-scoped band above.
   const metrics: { icon: string; key: MessageKey; value: string }[] = [
-    { icon:"💰", key:"mRevenueMo", value: money(rev) },
-    { icon:"📈", key:"mProfitMo", value: money(profit) },
     { icon:"🚗", key:"mCarsToday", value: String(cars) },
-    { icon:"⭐", key:"mSatisfaction", value:"—"},
     { icon:"📦", key:"mInventory", value: `${inv.low} ${t("low")} / ${inv.total}` },
   ];
 
@@ -344,15 +364,12 @@ export default async function OwnerHome({
         </div>
       ) : null}
 
-      {/* Metric cards — equal heights via flex+grow so a longer label
-          on one card doesn't make its neighbours shorter. text-2xl
-          icon sized uniformly across all 5 cards. Value uses tabular-
-          nums so digit widths line up between adjacent cards (e.g.
-          revenue + profit decimals stack).
-          Grid: 2 cols on small phones, 5 across from md (768px) up.
-          `sm:grid-cols-5` used to kick in at 640px which crushed each
-          tile to ~116px and wrapped "AED 14500.00" to two lines. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      {/* Metric cards — cars-today + inventory. Two-column layout
+          at every width now that the strip is down to two tiles;
+          the earlier md:grid-cols-5 crushed AED amounts and
+          truncated mid-character in the 980-1023 px window before
+          the money band displaced Revenue/Profit here. */}
+      <div className="grid grid-cols-2 gap-3">
         {metrics.map((m) => (
           <div
             key={m.key}

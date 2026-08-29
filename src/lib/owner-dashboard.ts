@@ -113,15 +113,24 @@ function sameWindowEndLastMonth(now: Date, tz: string = TZ_DUBAI): Date {
     return new Date(startOfPrevMonthInTz(now, tz).getTime() + elapsed);
 }
 
+// Every function in this file accepts `string | string[]` so an
+// owner's aggregated multi-branch view is a first-class caller
+// (matches how src/lib/owner-metrics.ts widens the same shape).
+// Copilot's PROFIT_MONTH intent depends on this to share
+// grossProfitMonth() with the dashboard.
+type GarageArg = string | string[];
+const garageWhere = (g: GarageArg) =>
+    Array.isArray(g) ? { in: g } : g;
+
 async function ledgerSum(
-    garageId: string,
+    garageId: GarageArg,
     account: string,
     field: "credit" | "debit",
     from: Date,
     to: Date,
 ): Promise<number> {
     const agg = await prisma.ledgerEntry.aggregate({
-        where: { garageId, account, createdAt: { gte: from, lt: to } },
+        where: { garageId: garageWhere(garageId), account, createdAt: { gte: from, lt: to } },
         _sum: { [field]: true } as { credit?: true; debit?: true },
     });
     return Number(agg._sum[field] ?? 0);
@@ -139,7 +148,7 @@ export type MonthPair = {
  * DEBIT-normal account (cash comes IN as a debit).
  */
 export async function cashReceived(
-    garageId: string,
+    garageId: GarageArg,
     now: Date = new Date(),
 ): Promise<MonthPair> {
     const thisStart = startOfMonthInTz(now);
@@ -156,7 +165,7 @@ export async function cashReceived(
  * CREDIT-normal account (sales booked as credit).
  */
 export async function revenueMonth(
-    garageId: string,
+    garageId: GarageArg,
     now: Date = new Date(),
 ): Promise<MonthPair> {
     const thisStart = startOfMonthInTz(now);
@@ -200,7 +209,7 @@ export type AgingBuckets = {
  *     the number to display.
  */
 export async function unpaidInvoicesAging(
-    garageId: string,
+    garageId: GarageArg,
     now: Date = new Date(),
 ): Promise<AgingBuckets> {
     // Every AR-touching ledger row for this garage. Grouped by
@@ -218,7 +227,7 @@ export async function unpaidInvoicesAging(
     // via their FKs.
     const rows = await prisma.ledgerEntry.findMany({
         where: {
-            garageId,
+            garageId: garageWhere(garageId),
             account: ACCOUNTS.AR,
         },
         select: {
@@ -374,7 +383,7 @@ export type GrossProfit =
  * JobProfitCard.
  */
 export async function grossProfitMonth(
-    garageId: string,
+    garageId: GarageArg,
     now: Date = new Date(),
 ): Promise<GrossProfit> {
     const thisStart = startOfMonthInTz(now);
@@ -385,7 +394,7 @@ export async function grossProfitMonth(
     // on all invoices for the month total.
     const invoices = await prisma.invoice.findMany({
         where: {
-            garageId,
+            garageId: garageWhere(garageId),
             issuedAt: { gte: thisStart, lt: now },
         },
         select: {
@@ -448,18 +457,19 @@ export async function grossProfitMonth(
  * exact month cutoff without a JS-side status filter.
  */
 export async function jobsCompletedMonth(
-    garageId: string,
+    garageId: GarageArg,
     now: Date = new Date(),
 ): Promise<MonthPair> {
     const thisStart = startOfMonthInTz(now);
     const lastStart = startOfPrevMonthInTz(now);
     const lastEnd = sameWindowEndLastMonth(now);
+    const where = garageWhere(garageId);
     const [thisMonth, lastMonth] = await Promise.all([
         prisma.jobCard.count({
-            where: { garageId, deliveredAt: { gte: thisStart, lt: now } },
+            where: { garageId: where, deliveredAt: { gte: thisStart, lt: now } },
         }),
         prisma.jobCard.count({
-            where: { garageId, deliveredAt: { gte: lastStart, lt: lastEnd } },
+            where: { garageId: where, deliveredAt: { gte: lastStart, lt: lastEnd } },
         }),
     ]);
     return { thisMonth, lastMonthSameWindow: lastMonth };

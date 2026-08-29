@@ -185,7 +185,11 @@ export async function DashboardTiles({
     role,
     now = new Date(),
 }: {
-    garageId: string;
+    // string | string[] so an owner's aggregated multi-branch view
+    // is the natural caller shape (see companyGarageIds in
+    // owner/page.tsx). Copilot's PROFIT_MONTH intent shares the
+    // same widened compute functions in owner-dashboard.ts.
+    garageId: string | string[];
     role: string;
     now?: Date;
 }) {

@@ -236,7 +236,7 @@ describe("recordSupplierPaymentAction — C5 invariants", { retry: 2 }, () => {
             }),
         );
         expect(to).toContain("error=");
-        expect(to.toLowerCase()).toContain("allocation total");
+        expect(decodeURIComponent(to).toLowerCase()).toContain("allocation total");
         const payments = await prisma.supplierPayment.findMany({ where: { garageId: gId } });
         expect(payments.length).toBe(0);
     });
@@ -255,7 +255,7 @@ describe("recordSupplierPaymentAction — C5 invariants", { retry: 2 }, () => {
             }),
         );
         expect(to).toContain("error=");
-        expect(to.toLowerCase()).toContain("over-allocation");
+        expect(decodeURIComponent(to).toLowerCase()).toContain("over-allocation");
         const payments = await prisma.supplierPayment.findMany({ where: { garageId: gId } });
         expect(payments.length).toBe(0);
         // Bill unchanged.
@@ -370,7 +370,7 @@ describe("voidSupplierBillAction — C5 hard-block", { retry: 2 }, () => {
         mockAuth.mockResolvedValueOnce(owner());
         const to = await callWithRedirect(voidSupplierBillAction, form({ billId: bill.id }));
         expect(to).toContain("error=");
-        expect(to.toLowerCase()).toContain("allocated payment");
+        expect(decodeURIComponent(to).toLowerCase()).toContain("allocated payment");
         // Bill unchanged from the payment state — still PARTIALLY_PAID, not VOID.
         const b = await prisma.supplierBill.findUnique({ where: { id: bill.id } });
         expect(b?.status).toBe("PARTIALLY_PAID");

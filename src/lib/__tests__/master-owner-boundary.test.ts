@@ -108,6 +108,14 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // 2026-08-20 audit). Widened alongside the structural check below.
   { file: "src/app/actions/onboarding.ts", action: "addBayAction" },
   { file: "src/app/actions/onboarding.ts", action: "removeBayAction" },
+  // Payables (AR 2026-08-30 C5). Recording a supplier payment and
+  // voiding a supplier bill are both OWNER + MASTER — payables sits
+  // on the MASTER-permitted operational list per AR's stated call
+  // ("Owner and master only" for the supplier ledger). The pages
+  // that submit to these land in C6 with the matching
+  // requireAnyRole(["OWNER", "MASTER"]) page guard.
+  { file: "src/app/actions/supplier-payments.ts", action: "recordSupplierPaymentAction" },
+  { file: "src/app/actions/supplier-payments.ts", action: "voidSupplierBillAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER

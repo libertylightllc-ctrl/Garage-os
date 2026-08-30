@@ -206,11 +206,13 @@ describe("receivePurchaseOrderAction — Payables C3", { retry: 2 }, () => {
         await prisma.garage.update({ where: { id: gOn }, data: { billSeq: 0 } });
 
         mockAuth.mockResolvedValueOnce(owner(gOn));
-        const to = await call(receivePurchaseOrderAction, form({ poId, [`recv_${lineId}`]: "10" }));
-        // Action throws on the unique-constraint violation. The
-        // action doesn't catch it — Next surfaces as an error redirect
-        // or a raw throw depending on hosting. We just verify state.
-        void to;
+        // The action throws on the SupplierBill unique-constraint
+        // violation (P2002 from Prisma). Assert it explicitly so a
+        // future change that swallows the throw fails this test
+        // loudly, then verify state below.
+        await expect(
+            receivePurchaseOrderAction(form({ poId, [`recv_${lineId}`]: "10" })),
+        ).rejects.toThrow();
 
         // Nothing advanced.
         const stock = await prisma.part.findUnique({ where: { id: partId } });

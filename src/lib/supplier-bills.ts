@@ -35,9 +35,16 @@ export interface CreateBillFromReceiveInput {
     garageId: string;
     supplierId: string;
     purchaseOrderId: string;
-    /** Frozen at bill creation — usually the tx's `new Date()` mirror
-     * of the PO's receivedAt. */
+    /** Date printed on the supplier's tax invoice — captured on the
+     * receive form (defaults to today; operator overrides to match
+     * the paper). Aging clocks in C6 start from this date, not the
+     * receive timestamp. */
     billDate: Date;
+    /** Supplier's own invoice number from the paper. Optional; no
+     * uniqueness — suppliers reuse numbers across years. Purpose:
+     * match this row back to the supplier's paper when they query
+     * a balance. */
+    supplierInvoiceRef: string | null;
     /** Garage-wide VAT rate as a 4-dp decimal (0.05 = 5%). Reused from
      * Garage.vatRate — one legal VAT rate per country, no separate
      * purchase-side field. */
@@ -153,6 +160,7 @@ export async function createBillFromReceive(
             purchaseOrderId: input.purchaseOrderId,
             billNumber: g.billSeq,
             billDate: input.billDate,
+            supplierInvoiceRef: input.supplierInvoiceRef,
             subtotal,
             vatAmount,
             total,

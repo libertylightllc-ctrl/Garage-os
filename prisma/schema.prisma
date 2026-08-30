@@ -1820,7 +1820,18 @@ model SupplierBill {
   billNumber      Int
   // = PurchaseOrder.receivedAt at creation. Frozen; a later receive on the
   // same PO creates its OWN bill with its own billDate.
+  // Date printed on the supplier's tax invoice. Captured on the
+  // receive form (defaults to today; operator overrides to match
+  // the supplier's paper). Aging clocks (C6) start from THIS date,
+  // not the receive timestamp — "Net 30 from invoice date" is
+  // industry standard, and a supplier who invoiced last Tuesday
+  // ages against last Tuesday even if the parts arrived today.
   billDate        DateTime
+  // Supplier's own invoice number as printed on the paper. Optional;
+  // NO uniqueness — suppliers reuse numbers across years and a
+  // duplicate should never block a receive. Purpose: match this row
+  // back to the supplier's paper when they query a balance.
+  supplierInvoiceRef String?
   subtotal        Decimal             @db.Decimal(12, 2)
   // VAT-input is 0 in MVP (gross-bill discipline, AR 2026-08-30 Q1
   // default). Column reserved so a later VAT-recovery phase does not
@@ -1904,21 +1915,22 @@ model SupplierPaymentAllocation {
 // durably persist. Triggers themselves land in the next migration
 // (Payables C2), not this one.
 model SupplierBillDeleteAudit {
-  id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
-  supplierBillId String
-  garageId       String
-  supplierId     String
-  billNumber     Int
-  status         String
-  subtotal       Decimal  @db.Decimal(12, 2)
-  vatAmount      Decimal  @db.Decimal(12, 2)
-  total          Decimal  @db.Decimal(12, 2)
-  paidAmount     Decimal  @db.Decimal(12, 2)
-  billDate       DateTime
-  outcome        String
-  attemptedBy    String
-  note           String?
-  attemptedAt    DateTime @default(now())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  supplierBillId     String
+  garageId           String
+  supplierId         String
+  billNumber         Int
+  status             String
+  subtotal           Decimal  @db.Decimal(12, 2)
+  vatAmount          Decimal  @db.Decimal(12, 2)
+  total              Decimal  @db.Decimal(12, 2)
+  paidAmount         Decimal  @db.Decimal(12, 2)
+  billDate           DateTime
+  supplierInvoiceRef String?
+  outcome            String
+  attemptedBy        String
+  note               String?
+  attemptedAt        DateTime @default(now())
 
   @@index([garageId])
   @@index([outcome])

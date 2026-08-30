@@ -912,9 +912,48 @@ export default async function PurchaseOrderDetailPage({
                     invoice (rounding, mixed-rate items). */}
               {garage?.payablesEnabled ? (
                 <div className="space-y-2 rounded-md border border-border/60 bg-surface/50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    From the supplier&apos;s tax invoice
+                  </p>
+                  {/* AR 2026-08-30 C4.5 — label emphasizes that these
+                      fields come from the supplier's paper, not from
+                      the moment you're keying the receive. The date
+                      matters for aging (Net 30 clocks from invoice
+                      date, not receipt date). */}
                   <label className="flex items-center justify-between gap-3 text-sm">
                     <span className="min-w-0">
-                      <span className="font-medium">Supplier bill subtotal</span>
+                      <span className="font-medium">Invoice date</span>
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        Date printed on the supplier&apos;s tax invoice. Aging clocks from here.
+                      </span>
+                    </span>
+                    <input
+                      name="billDate"
+                      type="date"
+                      defaultValue={new Date().toISOString().slice(0, 10)}
+                      aria-label="Supplier invoice date"
+                      className="w-40 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-sm tabular-nums"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="font-medium">Invoice number</span>
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        Supplier&apos;s own invoice number (as printed). Optional.
+                      </span>
+                    </span>
+                    <input
+                      name="supplierInvoiceRef"
+                      type="text"
+                      maxLength={64}
+                      placeholder="e.g. INV-2026-4711"
+                      aria-label="Supplier invoice number"
+                      className="w-40 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="font-medium">Subtotal</span>
                       <span className="ms-2 text-xs text-muted-foreground">
                         Stock lines auto-summed. Override when the bill also covers direct-fit parts.
                       </span>
@@ -931,7 +970,7 @@ export default async function PurchaseOrderDetailPage({
                   </label>
                   <label className="flex items-center justify-between gap-3 text-sm">
                     <span className="min-w-0">
-                      <span className="font-medium">Supplier VAT amount</span>
+                      <span className="font-medium">VAT amount</span>
                       <span className="ms-2 text-xs text-muted-foreground">
                         Auto-calculated at {Math.round(Number(garage.vatRate ?? 0) * 100)}%. Override to match the supplier&apos;s tax invoice.
                       </span>

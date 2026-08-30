@@ -715,6 +715,22 @@ export async function receivePurchaseOrderAction(formData: FormData) {
       fail("VAT amount must be a non-negative number.", back);
     }
   }
+  // Supplier tax invoice date + reference — captured on the receive
+  // form. billDate defaults to today when blank; aging clocks in C6
+  // start from it. supplierInvoiceRef is optional; no uniqueness
+  // (suppliers reuse numbers). AR 2026-08-30 C4.5.
+  const billDateRaw = String(formData.get("billDate") ?? "").trim();
+  let billDate: Date = new Date();
+  if (payablesEnabled && billDateRaw !== "") {
+    // <input type="date"> submits YYYY-MM-DD. Parse and reject junk.
+    const parsed = new Date(billDateRaw);
+    if (isNaN(parsed.getTime())) {
+      fail("Bill date is not a valid date.", back);
+    }
+    billDate = parsed;
+  }
+  const supplierInvoiceRefRaw = String(formData.get("supplierInvoiceRef") ?? "").trim();
+  const supplierInvoiceRef = supplierInvoiceRefRaw === "" ? null : supplierInvoiceRefRaw;
 
   // Two receipt lists — stock and direct-fit. They share the qty +
   // outstanding-cap logic but write different tables inside the
@@ -1019,7 +1035,8 @@ export async function receivePurchaseOrderAction(formData: FormData) {
           garageId: user.garageId,
           supplierId: po.supplierId,
           purchaseOrderId: po.id,
-          billDate: new Date(),
+          billDate,
+          supplierInvoiceRef,
           vatRate: garageVatRate,
           stockReceipts: stockReceipts.map((s) => ({
             receiveNow: s.receiveNow,

@@ -265,6 +265,49 @@ describe("receivePurchaseOrderAction — Payables C3", { retry: 2 }, () => {
         expect(Number(bills[0].total)).toBe(262.5);
     });
 
+    it("Captures billDate + supplierInvoiceRef from the form (C4.5)", async () => {
+        const { poId, lineId } = await seedPo(gOn, { unitCost: "20.00", qty: 5 });
+        mockAuth.mockResolvedValueOnce(owner(gOn));
+        await call(
+            receivePurchaseOrderAction,
+            form({
+                poId,
+                [`recv_${lineId}`]: "5",
+                billDate: "2026-08-15",
+                supplierInvoiceRef: "INV-2026-4711",
+            }),
+        );
+
+        const bills = await prisma.supplierBill.findMany({ where: { garageId: gOn } });
+        expect(bills.length).toBe(1);
+        expect(bills[0].supplierInvoiceRef).toBe("INV-2026-4711");
+        // billDate stored as the operator typed (Aug 15), not the
+        // receive timestamp — proves aging (C6) will clock from the
+        // supplier's paper.
+        expect(bills[0].billDate.toISOString().slice(0, 10)).toBe("2026-08-15");
+    });
+
+    it("supplierInvoiceRef has no uniqueness — duplicates allowed", async () => {
+        // Suppliers reuse invoice numbers across years. Two bills
+        // with the same ref must not conflict.
+        const setup1 = await seedPo(gOn, { unitCost: "10.00", qty: 1 });
+        mockAuth.mockResolvedValueOnce(owner(gOn));
+        await call(
+            receivePurchaseOrderAction,
+            form({ poId: setup1.poId, [`recv_${setup1.lineId}`]: "1", supplierInvoiceRef: "DUP-1" }),
+        );
+        const setup2 = await seedPo(gOn, { unitCost: "10.00", qty: 1 });
+        mockAuth.mockResolvedValueOnce(owner(gOn));
+        await call(
+            receivePurchaseOrderAction,
+            form({ poId: setup2.poId, [`recv_${setup2.lineId}`]: "1", supplierInvoiceRef: "DUP-1" }),
+        );
+        const bills = await prisma.supplierBill.findMany({
+            where: { garageId: gOn, supplierInvoiceRef: "DUP-1" },
+        });
+        expect(bills.length).toBe(2);
+    });
+
     it("Flag ON + null-cost line only → no bill (skip on subtotal=0)", async () => {
         // Legacy pre-Layer-0 line with unitCost = null. Receive still
         // moves stock; bill creation skips because subtotal would be 0.

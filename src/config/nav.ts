@@ -37,6 +37,7 @@ import {
   BarChart3,
   FileSpreadsheet,
   Contact,
+  Coins,
 } from "lucide-react";
 import type { StaffRole } from "@/lib/roles";
 import type { MessageKey } from "@/i18n/config";
@@ -74,6 +75,10 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
       { key: "suppliers", href: "/owner/suppliers", labelKey: "tabSuppliers", icon: Truck },
       { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
+      // Payables (AR 2026-08-30 C6). Placed alongside Purchasing per
+      // AR's placement call — "what do I owe" is a top-level owner
+      // question, not tucked under a purchasing submenu.
+      { key: "payables", href: "/owner/payables", labelKey: "tabPayables", icon: Coins },
       // Accounts (cashier) — the customer-invoice list. Page guard at
       // /cashier already admits OWNER; adding it here closes the
       // nav-vs-guard inconsistency AR caught 2026-08-12. Placed with
@@ -155,6 +160,9 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
       { key: "inventory", href: "/owner/inventory", labelKey: "tabInventory", icon: Boxes },
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
+      // Payables — operational per AR's placement, page + actions
+      // both use requireOperational (OWNER + MASTER).
+      { key: "payables", href: "/owner/payables", labelKey: "tabPayables", icon: Coins },
       { key: "whatsapp", href: "/advisor/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],
   },

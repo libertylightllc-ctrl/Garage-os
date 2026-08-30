@@ -332,6 +332,16 @@ export const ACCOUNTS = {
   // when the invoice is generated. See advanceLedger() /
   // advanceMigrationLedger() below — slice 6b.
   DEPOSITS: "Customer Deposits",
+  // Supplier side — added 2026-08-30 with the Payables phase. Full
+  // accrual: goods receipt posts DR Inventory / CR AP; supplier
+  // payment posts DR AP / CR Cash (per allocation); invoice issue
+  // posts DR COGS / CR Inventory (per PART line, when unit cost is
+  // known — skips with a warning when it isn't, same discipline as
+  // the /owner Gross-profit tile). Ledger accounts declared here in
+  // one commit; writers land in later commits.
+  AP: "Accounts Payable",
+  INVENTORY: "Inventory",
+  COGS: "Cost of Goods Sold",
 } as const;
 
 /** Issuing an invoice: DR AR (total) / CR Sales (subtotal) + CR VAT Payable (vat). */

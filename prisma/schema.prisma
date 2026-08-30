@@ -277,6 +277,7 @@ model Garage {
   settingsJson           Json?
   invoiceSeq             Int      @default(0) // per-garage gapless invoice counter
   jobSeq                 Int      @default(0) // per-garage gapless Job Card No counter
+  billSeq                Int      @default(0) // per-garage gapless SupplierBill counter (Payables phase, AR 2026-08-30)
   isPilot                Boolean  @default(true) // pilots are NEVER charged (subscription billing)
   logoUrl                String? // garage-uploaded brand logo (Supabase public URL); null = use default GarageOS brand. Set via uploadGarageLogoAction; appears on dashboard nav + invoice + estimate + customer-facing links.
   // Shop-wide default markup applied to catalogue + cost-based estimate
@@ -382,6 +383,8 @@ model Garage {
   bays               Bay[]
   ledgerEntries      LedgerEntry[]
   advancePayments    AdvancePayment[]
+  supplierBills      SupplierBill[]
+  supplierPayments   SupplierPayment[]
   aiEvents           AiEvent[]
   subscription       Subscription?
   whatsAppAccount    WhatsAppAccount?
@@ -1217,6 +1220,8 @@ model Supplier {
 
   parts          Part[]
   purchaseOrders PurchaseOrder[]
+  bills          SupplierBill[]
+  payments       SupplierPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1294,6 +1299,7 @@ model PurchaseOrder {
   lines     PurchaseOrderLine[]
   sends     PurchaseOrderSend[]
   movements PartMovement[]
+  bills     SupplierBill[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1778,6 +1784,152 @@ model AdvancePaymentDeleteAudit {
   attemptedBy      String
   note             String?
   attemptedAt      DateTime  @default(now())
+
+  @@index([garageId])
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
+// ---------- Payables (AR 2026-08-30) ----------
+// Full-accrual supplier side. Goods receipt auto-creates a bill and posts
+// DR Inventory / CR AP; each SupplierPayment allocates its full amount
+// across one or more open bills (no on-account balances) and posts
+// DR AP / CR Cash per allocation. Bill void with allocated payments is
+// blocked at the app; row DELETE on any of these three tables is blocked
+// at the DB. Corrections are compensating entries only.
+//
+// The bill number is per-garage sequential + gapless, allocated via
+// Garage.billSeq increment (same discipline as invoiceSeq / jobSeq).
+// Rendered as "BILL-YYYY-NNNN" in the UI; the raw Int lives in the
+// column so cross-year uniqueness stays enforced by (garageId, billNumber).
+model SupplierBill {
+  id              String              @id @default(cuid())
+  garageId        String
+  garage          Garage              @relation(fields: [garageId], references: [id])
+  supplierId      String
+  supplier        Supplier            @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
+  billNumber      Int
+  // = PurchaseOrder.receivedAt at creation. Frozen; a later receive on the
+  // same PO creates its OWN bill with its own billDate.
+  billDate        DateTime
+  subtotal        Decimal             @db.Decimal(12, 2)
+  // VAT-input is 0 in MVP (gross-bill discipline, AR 2026-08-30 Q1
+  // default). Column reserved so a later VAT-recovery phase does not
+  // require a schema change.
+  vatAmount       Decimal             @default(0) @db.Decimal(12, 2)
+  total           Decimal             @db.Decimal(12, 2)
+  // Running sum of allocations. Kept as a materialized column (updated
+  // by recordSupplierPaymentAction inside the tx) so the list view
+  // doesn't need a per-row aggregate to render balance. Ledger is
+  // still the source of truth — if this drifts, the divergence is a
+  // bug worth surfacing, not a friendlier number to show.
+  paidAmount      Decimal             @default(0) @db.Decimal(12, 2)
+  status          SupplierBillStatus  @default(OPEN)
+
+  allocations SupplierPaymentAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([garageId, billNumber])
+  @@index([garageId, status])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+}
+
+enum SupplierBillStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+// One supplier payment event. amount = SUM(allocations.amount) —
+// enforced at the action (cross-row invariant, not expressible as a
+// DB CHECK). No on-account balances: a lump sum paid against N
+// bills allocates across N rows here.
+model SupplierPayment {
+  id         String   @id @default(cuid())
+  garageId   String
+  garage     Garage   @relation(fields: [garageId], references: [id])
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  amount     Decimal  @db.Decimal(12, 2)
+  method     String
+  paidAt     DateTime @default(now())
+  note       String?
+
+  allocations SupplierPaymentAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId])
+  @@index([supplierId])
+  @@index([paidAt])
+}
+
+// Join row — one row per (payment, bill) with the amount applied to
+// that bill from that payment. LedgerEntry rows keyed to allocation.id
+// (sourceType='SUPPLIER_PAYMENT_ALLOCATION') so the aging query can
+// resolve DR AP entries back to specific bills the same way the
+// customer-side unpaidInvoicesAging resolves Payment → invoice today.
+model SupplierPaymentAllocation {
+  id                String          @id @default(cuid())
+  supplierPaymentId String
+  supplierPayment   SupplierPayment @relation(fields: [supplierPaymentId], references: [id])
+  supplierBillId    String
+  supplierBill      SupplierBill    @relation(fields: [supplierBillId], references: [id])
+  amount            Decimal         @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([supplierPaymentId])
+  @@index([supplierBillId])
+}
+
+// Delete-audit tables — same shape as InvoiceDeleteAudit /
+// PaymentDeleteAudit. The BEFORE DELETE trigger writes 'blocked' here
+// and RAISEs (rolling back both the audit insert and the DELETE, per
+// the existing guard's escape-hatch semantics). Only 'allowed' rows
+// durably persist. Triggers themselves land in the next migration
+// (Payables C2), not this one.
+model SupplierBillDeleteAudit {
+  id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  supplierBillId String
+  garageId       String
+  supplierId     String
+  billNumber     Int
+  status         String
+  subtotal       Decimal  @db.Decimal(12, 2)
+  vatAmount      Decimal  @db.Decimal(12, 2)
+  total          Decimal  @db.Decimal(12, 2)
+  paidAmount     Decimal  @db.Decimal(12, 2)
+  billDate       DateTime
+  outcome        String
+  attemptedBy    String
+  note           String?
+  attemptedAt    DateTime @default(now())
+
+  @@index([garageId])
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
+model SupplierPaymentDeleteAudit {
+  id                String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  supplierPaymentId String
+  garageId          String
+  supplierId        String
+  amount            Decimal  @db.Decimal(12, 2)
+  method            String
+  paidAt            DateTime
+  outcome           String
+  attemptedBy       String
+  note              String?
+  attemptedAt       DateTime @default(now())
 
   @@index([garageId])
   @@index([outcome])

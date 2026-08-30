@@ -245,6 +245,26 @@ describe("receivePurchaseOrderAction — Payables C3", { retry: 2 }, () => {
         expect(Number(bills[0].total)).toBe(104.76);
     });
 
+    it("Subtotal override wins (mixed stock + direct-fit reconciliation)", async () => {
+        // AR 2026-08-30 C3.1 — direct-fit lines don't count toward
+        // the auto-calc subtotal (they never enter Inventory). If a
+        // supplier bill mixes stock + direct-fit parts, the operator
+        // types the true subtotal to reconcile. The override wins.
+        const { poId, lineId } = await seedPo(gOn, { unitCost: "50.00", qty: 2 });
+        mockAuth.mockResolvedValueOnce(owner(gOn));
+        // Auto-calc would be 2 × 50 = 100. Override: 250 (extra 150
+        // is direct-fit parts on the same paper invoice).
+        await call(
+            receivePurchaseOrderAction,
+            form({ poId, [`recv_${lineId}`]: "2", billSubtotal: "250" }),
+        );
+        const bills = await prisma.supplierBill.findMany({ where: { garageId: gOn } });
+        expect(bills.length).toBe(1);
+        expect(Number(bills[0].subtotal)).toBe(250);
+        expect(Number(bills[0].vatAmount)).toBe(12.5); // 250 × 0.05
+        expect(Number(bills[0].total)).toBe(262.5);
+    });
+
     it("Flag ON + null-cost line only → no bill (skip on subtotal=0)", async () => {
         // Legacy pre-Layer-0 line with unitCost = null. Receive still
         // moves stock; bill creation skips because subtotal would be 0.

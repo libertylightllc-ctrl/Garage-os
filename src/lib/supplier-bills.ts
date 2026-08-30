@@ -44,6 +44,14 @@ export interface CreateBillFromReceiveInput {
     vatRate: Prisma.Decimal | number;
     stockReceipts: StockReceiptForBill[];
     directReceipts: DirectReceiptForBill[];
+    /** If set, replaces the auto-calc subtotal. Operator-typed to
+     * reconcile a supplier bill that genuinely covers both stock
+     * lines AND direct-fit lines from the same PO — the auto-calc
+     * only counts stock (direct-fit never enters Inventory). Also
+     * used when the supplier's tax invoice differs from the shop's
+     * line-by-line math for any other reason. Blank = auto-calc.
+     * See AR 2026-08-30 Q2. */
+    subtotalOverride: number | null;
     /** If set, replaces the auto-calc VAT amount. Operator-typed on
      * the receive form to match the supplier's actual tax invoice
      * (rounding differences, exempt-item mixes). */
@@ -80,30 +88,45 @@ export async function createBillFromReceive(
     tx: TxClient,
     input: CreateBillFromReceiveInput,
 ): Promise<CreatedBill> {
-    // Subtotal — sum of every accepted line's receiveNow × unitCost.
-    // Stock lines with null unitCost contribute 0 (skipped from the
-    // sum; not fabricated). Direct-fit lines always have a cost by
-    // the receive form's pre-check.
-    let subtotal = 0;
-    let anyCostedLine = false;
+    // Subtotal auto-calc — sum of STOCK lines' receiveNow × unitCost
+    // ONLY. Direct-fit lines are deliberately excluded (AR 2026-08-30
+    // Q2): they never enter Inventory, so DR Inventory for them would
+    // be a false debit; and the direct-fit cost already flows through
+    // the estimate/invoice line, where C4's COGS post captures it —
+    // billing it again here would double-count into COGS at invoice
+    // time. Stock lines with null unitCost contribute 0 (not
+    // fabricated).
+    //
+    // If a supplier bill genuinely covers both stock AND direct-fit
+    // parts (rare — one paper invoice for a mixed shipment), the
+    // operator uses `subtotalOverride` on the receive form to enter
+    // the supplier's actual total. That's a real-world reconciliation,
+    // not something the app should guess.
+    let autoSubtotal = 0;
+    let anyStockCostedLine = false;
     for (const s of input.stockReceipts) {
         const cost = toNum(s.unitCost);
         if (cost > 0) {
-            subtotal += s.receiveNow * cost;
-            anyCostedLine = true;
+            autoSubtotal += s.receiveNow * cost;
+            anyStockCostedLine = true;
         }
     }
-    for (const d of input.directReceipts) {
-        subtotal += d.receiveNow * d.receivedUnitCost;
-        anyCostedLine = true;
-    }
-    subtotal = round2(subtotal);
+    autoSubtotal = round2(autoSubtotal);
 
-    if (!anyCostedLine || subtotal === 0) {
-        // Nothing to bill for — the receive itself still lands (stock
-        // moves, PartMovement rows written), but AP stays out. This
-        // keeps the "don't fake missing cost" rule and doesn't force
-        // the operator to fill in a cost they don't have yet.
+    // Operator override wins when provided (non-null, non-negative).
+    // Blank = use the auto-calc.
+    const subtotal =
+        input.subtotalOverride !== null && input.subtotalOverride >= 0
+            ? round2(input.subtotalOverride)
+            : autoSubtotal;
+
+    if (subtotal === 0) {
+        // Nothing to bill for — receive itself still lands (stock
+        // moves, PartMovement rows written; direct-fit JobPartReceipt
+        // rows written), but AP stays out. Direct-fit-only receives
+        // land here (direct-fit doesn't count toward the stock
+        // subtotal, and no operator override was supplied). Null-cost
+        // stock lines with no override also land here.
         return { bill: null, skippedNoCost: true };
     }
 

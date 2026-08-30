@@ -693,9 +693,20 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   });
   const payablesEnabled = garageForPayables?.payablesEnabled === true;
   const garageVatRate = garageForPayables?.vatRate ?? 0;
-  // Optional operator override — matches the supplier's actual tax
-  // invoice VAT amount when it differs from the auto-calc (rounding,
-  // mixed-rate items). Blank = use the auto-calc.
+  // Optional operator overrides on the receive form. Both blank =
+  // auto-calc (subtotal from stock lines × unitCost, VAT from
+  // subtotal × Garage.vatRate). Overrides win when provided — used
+  // to reconcile a supplier bill that mixes stock + direct-fit
+  // parts (subtotal override), and rounding differences on the
+  // supplier's tax invoice (VAT override). See AR 2026-08-30 Q2.
+  const subtotalOverrideRaw = String(formData.get("billSubtotal") ?? "").trim();
+  const subtotalOverride =
+    subtotalOverrideRaw === "" ? null : Number(subtotalOverrideRaw);
+  if (payablesEnabled && subtotalOverrideRaw !== "") {
+    if (!Number.isFinite(subtotalOverride) || (subtotalOverride ?? -1) < 0) {
+      fail("Bill subtotal must be a non-negative number.", back);
+    }
+  }
   const vatOverrideRaw = String(formData.get("billVatAmount") ?? "").trim();
   const vatAmountOverride =
     vatOverrideRaw === "" ? null : Number(vatOverrideRaw);
@@ -1014,10 +1025,15 @@ export async function receivePurchaseOrderAction(formData: FormData) {
             receiveNow: s.receiveNow,
             unitCost: s.unitCost,
           })),
+          // Direct-fit receipts are passed for context (skippedNoCost
+          // reasoning, future use), but the helper does NOT add them
+          // to the auto-calc subtotal — direct-fit never enters
+          // Inventory. See AR 2026-08-30 Q2.
           directReceipts: directReceipts.map((d) => ({
             receiveNow: d.receiveNow,
             receivedUnitCost: d.receivedUnitCost,
           })),
+          subtotalOverride,
           vatAmountOverride,
         });
       }

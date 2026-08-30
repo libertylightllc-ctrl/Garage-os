@@ -201,6 +201,7 @@ const en = {
   tabInventory: "Inventory",
   tabSuppliers: "Suppliers",
   tabPurchasing: "Purchasing",
+  tabPayables: "Payables",
   tabBilling: "Billing",
   // inventory — parts catalog (Phase 1)
   inventoryTitle: "Parts inventory",
@@ -2215,6 +2216,7 @@ const ar: typeof en = {
   tabInventory: "المخزون",
   tabSuppliers: "الموردون",
   tabPurchasing: "المشتريات",
+  tabPayables: "الذمم الدائنة",
   tabBilling: "الاشتراك",
   // inventory — parts catalog (Phase 1)
   inventoryTitle: "مخزون القطع",

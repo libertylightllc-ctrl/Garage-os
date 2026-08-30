@@ -52,6 +52,10 @@ describe("NAV config", () => {
             "/owner/hours",
             "/owner/suppliers",
             "/owner/purchasing",
+            // Payables (AR 2026-08-30 C6) — supplier ledger, sits
+            // alongside Purchasing per AR's placement call. Owner sees
+            // it; MASTER sees it (operational).
+            "/owner/payables",
             // Accounts (customer invoice list) — added 2026-08-12
             // after AR flagged that the /cashier page guard already
             // admits OWNER but the nav offered no way to reach it.
@@ -99,6 +103,7 @@ describe("NAV config", () => {
             "/owner/purchasing",
             "/owner/inventory",
             "/owner/hours",
+            "/owner/payables",
             "/advisor/whatsapp",
         ],
     };

@@ -71,6 +71,11 @@ const NAV: Record<StaffRole, RoleNav> = {
             { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
             { href: "/owner/suppliers", labelKey: "tabSuppliers", key: "suppliers" },
             { href: "/owner/purchasing", labelKey: "tabPurchasing", key: "purchasing" },
+            // Payables (AR 2026-08-30 C6). Placed alongside Purchasing
+            // per AR's guidance — an owner asking "what do I owe"
+            // should find it at top-level in owner nav, not tucked
+            // under a purchasing submenu.
+            { href: "/owner/payables", labelKey: "tabPayables", key: "payables" },
             { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
             { href: "/owner/ledger", labelKey: "tabLedger", key: "ledger" },
             { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
@@ -116,6 +121,9 @@ const NAV: Record<StaffRole, RoleNav> = {
         ],
         more: [
             { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
+            // Payables — operational surface, permitted for MASTER
+            // (page + action guards both use requireOperational).
+            { href: "/owner/payables", labelKey: "tabPayables", key: "payables" },
             { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
             { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
             { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },

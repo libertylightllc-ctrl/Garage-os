@@ -30,6 +30,7 @@ import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { appUrl } from "@/lib/whatsapp";
 import { getLocale, getT } from "@/i18n/server";
 import { logPoSend } from "@/lib/po-send-log";
+import { createBillFromReceive } from "@/lib/supplier-bills";
 
 // Inventory Phase 2 — purchasing. OWNER-only, garage-scoped: garageId
 // always from the session, and every supplier/part/PO id is re-checked
@@ -680,6 +681,30 @@ export async function receivePurchaseOrderAction(formData: FormData) {
   if (po.status !== "ORDERED" && po.status !== "PARTIALLY_RECEIVED")
     fail("Only an ordered order can be received.", back);
 
+  // Payables (AR 2026-08-30). Read the garage's rollout flag + VAT
+  // rate BEFORE the tx opens — cheaper than doing it inside, and
+  // the values are stable within one request. When flag=false the
+  // tx behaves exactly as it did before this commit; when true it
+  // additionally creates a SupplierBill + posts DR Inventory /
+  // DR VAT-Input / CR AP inside the same tx (createBillFromReceive).
+  const garageForPayables = await prisma.garage.findUnique({
+    where: { id: user.garageId },
+    select: { payablesEnabled: true, vatRate: true },
+  });
+  const payablesEnabled = garageForPayables?.payablesEnabled === true;
+  const garageVatRate = garageForPayables?.vatRate ?? 0;
+  // Optional operator override — matches the supplier's actual tax
+  // invoice VAT amount when it differs from the auto-calc (rounding,
+  // mixed-rate items). Blank = use the auto-calc.
+  const vatOverrideRaw = String(formData.get("billVatAmount") ?? "").trim();
+  const vatAmountOverride =
+    vatOverrideRaw === "" ? null : Number(vatOverrideRaw);
+  if (payablesEnabled && vatOverrideRaw !== "") {
+    if (!Number.isFinite(vatAmountOverride) || (vatAmountOverride ?? -1) < 0) {
+      fail("VAT amount must be a non-negative number.", back);
+    }
+  }
+
   // Two receipt lists — stock and direct-fit. They share the qty +
   // outstanding-cap logic but write different tables inside the
   // transaction. AR 2026-08-16 direct-fit split.
@@ -966,6 +991,36 @@ export async function receivePurchaseOrderAction(formData: FormData) {
           receivedAt: allFull ? new Date() : null,
         },
       });
+
+      // Payables (AR 2026-08-30). Gated by per-garage payablesEnabled
+      // flag. When off (every existing garage's default) this branch
+      // is never taken and the tx behaves exactly as it did before
+      // this commit — proven by the flag-false test in the C3 suite.
+      //
+      // When on, the helper creates a SupplierBill and posts DR
+      // Inventory + DR VAT-Input / CR AP against it. A throw here
+      // rolls back the ENTIRE receive (stock, PartMovement, POLine
+      // qty, PO status) — deliberate atomicity, per AR's failure-
+      // isolation rule. Partial success (stock in, no bill) would be
+      // worse than "retry the receive."
+      if (payablesEnabled) {
+        await createBillFromReceive(tx, {
+          garageId: user.garageId,
+          supplierId: po.supplierId,
+          purchaseOrderId: po.id,
+          billDate: new Date(),
+          vatRate: garageVatRate,
+          stockReceipts: stockReceipts.map((s) => ({
+            receiveNow: s.receiveNow,
+            unitCost: s.unitCost,
+          })),
+          directReceipts: directReceipts.map((d) => ({
+            receiveNow: d.receiveNow,
+            receivedUnitCost: d.receivedUnitCost,
+          })),
+          vatAmountOverride,
+        });
+      }
     });
   } catch (e) {
     if (e instanceof OverReceiveError) {

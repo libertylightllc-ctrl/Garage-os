@@ -57,7 +57,17 @@ export default async function PurchaseOrderDetailPage({
   const orderMode = rawMode === "order";
   const garage = await prisma.garage.findUnique({
     where: { id: session.user.garageId },
-    select: { name: true, trn: true, address: true, country: true, logoUrl: true },
+    select: {
+      name: true,
+      trn: true,
+      address: true,
+      country: true,
+      logoUrl: true,
+      // Payables rollout gate — the VAT-amount input on the receive
+      // form only renders when this is true. AR 2026-08-30 C3.
+      payablesEnabled: true,
+      vatRate: true,
+    },
   });
   const tz = countryToTimeZone(garage?.country ?? "UAE");
 
@@ -890,6 +900,33 @@ export default async function PurchaseOrderDetailPage({
                   </div>
                 );
               })}
+              {/* Payables (AR 2026-08-30 C3). Rendered only when the
+                  garage has flipped payablesEnabled. Auto-calc from
+                  Garage.vatRate — the operator overrides only when
+                  the supplier's actual tax invoice shows a different
+                  VAT amount (rounding, mixed-rate line items). Left
+                  blank = use the auto-calc. */}
+              {garage?.payablesEnabled ? (
+                <div className="rounded-md border border-border/60 bg-surface/50 p-3">
+                  <label className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0">
+                      <span className="font-medium">Supplier VAT amount</span>
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        Auto-calculated at {Math.round(Number(garage.vatRate ?? 0) * 100)}%. Override to match the supplier&apos;s tax invoice.
+                      </span>
+                    </span>
+                    <input
+                      name="billVatAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Auto"
+                      aria-label="Bill VAT amount override"
+                      className="w-28 shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-right text-sm tabular-nums"
+                    />
+                  </label>
+                </div>
+              ) : null}
               <div className="pt-1">
                 <Button type="submit" variant="hero">{t("poReceiveButton")}</Button>
               </div>

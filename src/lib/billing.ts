@@ -342,6 +342,13 @@ export const ACCOUNTS = {
   AP: "Accounts Payable",
   INVENTORY: "Inventory",
   COGS: "Cost of Goods Sold",
+  // Input VAT — reclaimable against output VAT. Debit-normal (asset).
+  // Every purchase-side ledger post at receive time splits total into
+  // subtotal + VAT: DR Inventory (subtotal) + DR VAT-Input (vat) /
+  // CR AP (total). Balance of this account = reclaimable input tax
+  // outstanding; the VAT-Payable balance already tracks output tax
+  // owed. Difference is the net VAT settlement each period.
+  VAT_INPUT: "VAT Recoverable",
 } as const;
 
 /** Issuing an invoice: DR AR (total) / CR Sales (subtotal) + CR VAT Payable (vat). */

@@ -346,6 +346,13 @@ model Garage {
   // Phase 1 of §8. Nothing reads this yet — Phase 2 wires it into the
   // tailer's WHERE clause.
   erpSyncEnabled         Boolean  @default(false)
+  // Payables (AR 2026-08-30). Off by default — no existing garage's
+  // receivePurchaseOrderAction path changes. Per-garage rollout gate:
+  // when true, a goods receipt auto-creates a SupplierBill and posts
+  // DR Inventory + DR VAT-Input / CR AP inside the same tx as the
+  // PartMovement writes. When false, receive is unchanged (same code
+  // path as before this shipped). Same shape as erpSyncEnabled.
+  payablesEnabled        Boolean  @default(false)
   // Shop-wide fallback for cold-start outbound customer messages
   // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
   // falls through to "en" as last resort. UAE default was Arabic

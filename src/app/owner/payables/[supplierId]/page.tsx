@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { PrintButton } from "@/components/print-button";
 import { agingBuckets } from "@/lib/supplier-aging";
 import { voidSupplierBillAction } from "@/app/actions/supplier-payments";
 import { RecordPaymentForm } from "./pay-form";
@@ -141,26 +142,44 @@ export default async function PayablesSupplierPage({
   const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl">
-      <AppNav role={session.user.role as "OWNER" | "MASTER"} active="payables" />
+    <main
+      data-print-document="supplier-statement"
+      className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6 lg:max-w-6xl print:max-w-none print:p-0"
+    >
+      <div className="print:hidden">
+        <AppNav role={session.user.role as "OWNER" | "MASTER"} active="payables" />
+      </div>
 
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <div className="text-xs text-text-mute">
+          <div className="text-xs text-text-mute print:hidden">
             <Link href="/owner/payables" className="hover:underline">Payables</Link>
             {" › "}
             {supplier.name}
           </div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{supplier.name}</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            {supplier.name}
+            <span className="ms-2 hidden text-base font-normal text-text-mute print:inline">
+              — Supplier Statement
+            </span>
+          </h1>
+          <div className="mt-1 hidden text-xs text-text-mute print:block">
+            Generated {todayIso}
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-text-mute">Total outstanding</div>
-          <div className="text-xl font-semibold tabular-nums">{money(aging.total)}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-text-mute">Total outstanding</div>
+            <div className="text-xl font-semibold tabular-nums">{money(aging.total)}</div>
+          </div>
+          <PrintButton className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-sm font-medium hover:bg-surface-2 print:hidden">
+            🖨 Print
+          </PrintButton>
         </div>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
+        <div className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500 print:hidden">
           {error}
         </div>
       ) : null}
@@ -196,7 +215,7 @@ export default async function PayablesSupplierPage({
               <th className="px-3 py-2 text-start font-semibold">Entry</th>
               <th className="px-3 py-2 text-end font-semibold">Amount</th>
               <th className="px-3 py-2 text-end font-semibold">Balance</th>
-              <th className="px-3 py-2 text-end font-semibold" />
+              <th className="px-3 py-2 text-end font-semibold print:hidden" />
             </tr>
           </thead>
           <tbody>
@@ -224,7 +243,7 @@ export default async function PayablesSupplierPage({
                   <td className="px-3 py-2 text-end tabular-nums text-text-mute">
                     {money(row.balanceAfter)}
                   </td>
-                  <td className="px-3 py-2 text-end">
+                  <td className="px-3 py-2 text-end print:hidden">
                     {row.canVoid && row.billId ? (
                       <form action={voidSupplierBillAction}>
                         <input type="hidden" name="billId" value={row.billId} />
@@ -246,19 +265,23 @@ export default async function PayablesSupplierPage({
 
       {/* Record-payment form (client component for live allocation
           math + submit-disabled UX). Hidden when there are no open
-          bills to allocate against. */}
-      {openBillsForForm.length > 0 ? (
-        <RecordPaymentForm
-          supplierId={supplier.id}
-          supplierName={supplier.name}
-          openBills={openBillsForForm}
-          todayIso={todayIso}
-        />
-      ) : (
-        <div className="rounded-xl border border-border bg-surface p-4 text-center text-sm text-text-mute">
-          No open bills. Nothing to pay right now.
-        </div>
-      )}
+          bills to allocate against. Print-hidden — the printable
+          statement is a document a shop hands a supplier, not an
+          input surface. */}
+      <div className="print:hidden">
+        {openBillsForForm.length > 0 ? (
+          <RecordPaymentForm
+            supplierId={supplier.id}
+            supplierName={supplier.name}
+            openBills={openBillsForForm}
+            todayIso={todayIso}
+          />
+        ) : (
+          <div className="rounded-xl border border-border bg-surface p-4 text-center text-sm text-text-mute">
+            No open bills. Nothing to pay right now.
+          </div>
+        )}
+      </div>
     </main>
   );
 }

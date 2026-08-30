@@ -310,6 +310,63 @@ Every caller today is safe **by convention, not enforcement**. The convention is
 
 ---
 
+## 10. Payables is accrual on the supplier side, with named gaps
+
+Full accrual, per AR 2026-08-30: goods receipt posts a liability (`DR Inventory + DR VAT-Input / CR AP`) inside the same transaction as the stock movement. Every SupplierBill exists because a receive event created it — there is no "enter a bill" step, no draft bill. What the shop physically received is what the shop legally owes.
+
+**Rollout gate.** Every garage ships with `Garage.payablesEnabled = false`. The receive path when the flag is off is byte-identical to what shipped before the Payables phase — zero risk to existing shops. Enable per garage after a pilot receive verifies the ledger balances. Rollback is the flag flip; existing bills stay, new receives skip.
+
+**Ledger shape on receive:**
+```
+DR Inventory      subtotal
+DR VAT Recoverable vatAmount          [omitted when vat = 0]
+CR Accounts Payable subtotal + vat
+sourceType="SUPPLIER_BILL", sourceId=bill.id
+```
+
+**Ledger shape on payment (per allocation, one pair per allocated bill):**
+```
+DR Accounts Payable  allocation.amount
+CR Cash/Bank         allocation.amount
+sourceType="SUPPLIER_PAYMENT_ALLOCATION", sourceId=allocation.id
+```
+
+**Ledger shape on bill void:**
+```
+DR Accounts Payable   total
+CR Inventory          subtotal
+CR VAT Recoverable    vatAmount   [when vat > 0]
+sourceType="SUPPLIER_BILL_ADJUSTMENT", sourceId=bill.id
+```
+
+Distinct `sourceType='SUPPLIER_BILL_ADJUSTMENT'` (never overloading `SUPPLIER_BILL`) so a future returns / credit-note flow can be counted separately at ledger-report time. Same discipline as `INVOICE_VOID` on the customer side.
+
+**Direct-fit lines don't post to AP.** A direct-fit receive delivers parts straight to a customer's job (`JobPartReceipt`); the parts never enter Inventory. If we booked `DR Inventory` for them, the account would misstate physical stock, and C4's future COGS post would double-count the cost via `InvoiceLine.unitCost`. So the auto-calc subtotal counts stock lines only. If a supplier bill genuinely covers both stock AND direct-fit from one PO, the operator uses `billSubtotal` on the receive form to reconcile — that's a real-world exception, not something the app guesses at.
+
+**Aging clocks from `billDate`, not `receivedAt`.** UAE convention is Net 30 from invoice date. A supplier who dated their tax invoice last Tuesday ages against last Tuesday even if the parts arrived today. Captured on the receive form (label: "Date printed on the supplier's tax invoice"), defaults to today for the reflex case, operator adjusts when the paper differs.
+
+**No on-account balances.** Every SupplierPayment must allocate its full amount across one or more open bills. Sum-of-allocations must equal payment amount — enforced in `recordSupplierPaymentAction`, refused with a clear message before write. A lump-sum payment against three bills creates three allocation rows summing to the payment amount, not one unallocated blob the operator has to reconcile later. This is the class of thing that turns "how much does this supplier owe me" into unanswerable.
+
+**Void discipline (bills):** a SupplierBill with any allocated payments is hard-blocked from voiding at the action layer. The refusal names each payment (date, method, amount) so the operator finds and reverses them first. Correction path for a paid-and-mis-received bill: supplier issues a credit note, shop records it (compensating negative-amount bill — not yet wired; the refusal message is honest about the current gap).
+
+**Delete discipline (rows):** DB triggers block DELETE on `SupplierBill`, `SupplierPayment`, and `SupplierPaymentAllocation` — same class as the 2026-08-19 78-orphan-Payment guard extension. A SQL-editor DELETE writes an audit row and RAISEs; a session that genuinely needs to delete sets a per-tx `app.allow_supplier_*_delete='true'` flag and captures a note. The app never exposes a delete action for any of these tables. Correction path is void or compensating entry, never delete.
+
+**Common violation shape:** "add a delete action for the operator, they know what they're doing" — this repeats the exact class we spent the 2026-08-19 audit closing. Every delete on a ledger-writing row is a leak vector. If the operator needs to correct an amount, they void the wrong bill and re-receive, or record a compensating payment. Never a delete.
+
+### Known gaps (revisit triggers named)
+
+**C4 deferred — Inventory ledger never closes.** The invoice-generation path does NOT post `DR COGS / CR Inventory` at invoice time. GarageOS's own profit surfaces (JobProfitCard, /owner Gross-profit tile) read `InvoiceLine.unitCost` directly and are unaffected. But the Inventory ledger accumulates forever (receives debit it, nothing credits it), and ERPNext's P&L shows Sales revenue against zero COGS — a fake 100% margin. Consequence during rollout: Inventory balance in the ledger diverges from physical stock; it will run **negative** for a while because pre-cutover stock sold post-cutover consumes Inventory without a matching pre-cutover receive.
+
+Revisit trigger: **the first shop that reads ERPNext's P&L, or asks about the balance-sheet Inventory figure.** At that point, C4 ships (adds the `DR COGS / CR Inventory` post to `generateInvoiceForJobAction`, skip-with-warning on missing PART unitCost, same `payablesEnabled` flag gate as C3).
+
+**No opening-inventory backfill.** When a garage flips `payablesEnabled` for the first time, existing stock has no ledger presence — the first invoice that sells pre-cutover stock (post-C4) would drive Inventory negative. Chosen intentionally per AR 2026-08-30: honest arithmetic over a fabricated opening balance. If a shop enables Payables AND turns on C4 AND then reads their balance sheet, expect the wash. Correction path: script a one-time `DR Inventory / CR Opening Balance Equity` = `SUM(Part.qtyOnHand × Part.cost)` per garage at cutover.
+
+**Supplier payment void action doesn't exist.** In MVP a supplier payment cannot be undone. Correction = compensating payment (record a new payment for a negative amount against the same bill — actually rejected by the action's positive-amount validation, so the real MVP correction path is: contact supplier for credit note, then record it as a negative-amount SupplierBill, which itself isn't wired either). Named because the bill-void refusal message points at "reverse the payment first" but the action doesn't exist yet.
+
+**Common violation shape (for all three gaps):** enable Payables on a garage that reads its own balance sheet without shipping C4 first. Enable on a garage with significant existing inventory without the opening-balance backfill. Ship the supplier-payment-void action without also shipping the negative-bill / credit-note flow it enables. Each of these has a clear trigger — don't preempt any of them.
+
+---
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

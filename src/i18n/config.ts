@@ -366,6 +366,9 @@ const en = {
   purchasingOpen: "Open",
   purchasingClosed: "Closed",
   noPurchaseOrders: "No purchase orders yet.",
+  // AR 2026-08-30 bug #1A. When the tenant has POs but the current
+  // tab is empty. {tab} is filled with the tab label at render.
+  noPurchaseOrdersInTab: "No purchase orders in the “{tab}” tab.",
   // Stale-write banners on the PO detail page. editPoLineAction
   // narrows its UPDATE by the row's `updatedAt`; if another tab has
   // saved since this form loaded, the count is 0 and the action
@@ -2358,6 +2361,7 @@ const ar: typeof en = {
   purchasingOpen: "مفتوحة",
   purchasingClosed: "مغلقة",
   noPurchaseOrders: "لا توجد أوامر شراء بعد.",
+  noPurchaseOrdersInTab: "لا توجد أوامر شراء في علامة التبويب “{tab}”.",
   poLineStaleError: "قام شخص آخر بتغيير هذا السطر أثناء فتحه لديك. يعرض الصف أدناه القيم الحالية — أعد تطبيق تعديلك إذا كنت لا تزال ترغب في التغيير.",
   poLineNotFoundError: "تم حذف هذا السطر أثناء فتحه لديك. أعد تحميل الصفحة لعرض الأسطر الحالية.",
   notFoundTitle: "غير موجود",

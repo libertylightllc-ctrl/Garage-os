@@ -104,8 +104,37 @@ export const PURCHASE_ORDER_TABS: readonly PurchaseOrderTab[] = [
 /** Default tab when no ?status= is present. ORDERED is the "real work
  *  in flight" bucket — unsent drafts are paperwork, terminal statuses
  *  are read-only, so ORDERED is where the owner most often wants to
- *  land. */
+ *  land.
+ *
+ *  Used as the FALLBACK for pickDefaultTab (below) when every tab has
+ *  a zero count — a brand-new tenant lands on ORDERED with empty
+ *  copy. For an active tenant with data, pickDefaultTab prefers the
+ *  first non-empty tab in the display order so the operator doesn't
+ *  land on a lie ("no purchase orders" when there ARE purchase
+ *  orders, just in another tab). AR 2026-08-30 bug #1. */
 export const DEFAULT_PURCHASE_ORDER_TAB: PurchaseOrderTab = "ORDERED";
+
+/** Pick the tab to land on when no ?status= is in the URL. Prefers
+ *  the first non-empty tab in the display order (UNSENT_DRAFT →
+ *  AWAITING_SUPPLIER → ORDERED → PARTIALLY_RECEIVED → RECEIVED →
+ *  CANCELLED) so a working shop lands on ORDERED (the most common
+ *  populated tab), a fresh tenant lands on UNSENT_DRAFT once they
+ *  have a draft, and an empty tenant falls back to
+ *  DEFAULT_PURCHASE_ORDER_TAB (still ORDERED — its 0 counter with
+ *  the tab-specific empty-state copy reads honestly). AR 2026-08-30
+ *  bug #1. */
+export function pickDefaultTab(
+  countByTab: ReadonlyMap<PurchaseOrderTab, number>,
+): PurchaseOrderTab {
+  // Prefer ORDERED specifically if it has POs — that's the "real
+  // work in flight" bucket the owner wants first, per the same
+  // reasoning DEFAULT_PURCHASE_ORDER_TAB pins.
+  if ((countByTab.get("ORDERED") ?? 0) > 0) return "ORDERED";
+  for (const tab of PURCHASE_ORDER_TABS) {
+    if ((countByTab.get(tab) ?? 0) > 0) return tab;
+  }
+  return DEFAULT_PURCHASE_ORDER_TAB;
+}
 
 /** i18n label key per tab. The two draft tabs get their own keys
  *  ("To send" / "Awaiting supplier"); the rest reuse the existing

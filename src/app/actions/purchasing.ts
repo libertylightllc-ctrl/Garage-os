@@ -321,9 +321,33 @@ async function parseVehicleFormFields(
 async function ownedPO(poId: string, garageId: string) {
   const po = await prisma.purchaseOrder.findFirst({
     where: { id: poId, garageId },
-    select: { id: true, status: true },
+    // `intent` needed for the Refined-A destination check on add/edit
+    // line — a DRAFT/ORDER PO can't accept a line with no destination
+    // (no partId, no JC#, no source estimate line). QUOTE-intent
+    // DRAFTs (RFQs) legitimately hold destination-less free-text
+    // lines while waiting on a supplier quote. AR 2026-08-30 (bug #2).
+    select: { id: true, status: true, intent: true },
   });
   return po;
+}
+
+// AR 2026-08-30 (bug #2). A PO line has a "receive destination"
+// when at least one of these three holds:
+//   - partId set          → will stock-in on receive
+//   - sourceEstimateLineId → direct-fit via the source estimate → job
+//   - vehicleJobNumber    → direct-fit via the line's captured JC#
+// A line without ANY of the three CANNOT be received — receive
+// refuses because direct-fit needs a job and stock needs a Part. So
+// a PO that carries such a line into ORDERED becomes stuck the
+// moment it starts receiving. This helper is the invariant that
+// setPoStatusAction (DRAFT → ORDERED) and addPoLineAction
+// (on DRAFT/ORDER) enforce.
+export function lineHasReceiveDestination(l: {
+  partId: string | null;
+  sourceEstimateLineId: string | null;
+  vehicleJobNumber: number | null;
+}): boolean {
+  return l.partId !== null || l.sourceEstimateLineId !== null || l.vehicleJobNumber !== null;
 }
 
 /**
@@ -418,6 +442,31 @@ export async function addPoLineAction(formData: FormData) {
     if (poDefault) {
       vehicleSnapshot = buildStandaloneVehicleSnapshot(
         poDefaultToStandalone(poDefault),
+      );
+    }
+  }
+
+  // Refined-A destination check (AR 2026-08-30 bug #2). On a
+  // DRAFT/ORDER PO ("I'm committing to buy"), every line must have
+  // a receive destination — otherwise the operator would reach
+  // receive and find the line unfulfillable. Blocked at line-add.
+  //
+  // A DRAFT/QUOTE PO (RFQ) legitimately holds free-text lines with
+  // no destination while waiting on a supplier quote — that's the
+  // whole point of an RFQ. This branch is bypassed for QUOTE
+  // intent. The QUOTE → ORDER transition (via setPoStatusAction
+  // Mark Ordered) applies the same invariant with a named-lines
+  // refusal.
+  if (po.intent === "ORDER") {
+    const willHaveDestination =
+      match?.id !== null && match?.id !== undefined
+        ? true
+        : vehicleSnapshot.vehicleJobNumber !== null &&
+          vehicleSnapshot.vehicleJobNumber !== undefined;
+    if (!willHaveDestination) {
+      fail(
+        `Can't add "${lineText}" — a purchase order line needs a destination. Pick a catalogue part (goes into stock) OR set a Job Card number on the line (direct-fit to that car). RFQs (quote-only) can hold free-text lines; use a Request for Quotation if you're still waiting on a supplier quote.`,
+        back,
       );
     }
   }
@@ -562,15 +611,36 @@ export async function setPoStatusAction(formData: FormData) {
     // quotation into a purchase order; every other surface (title,
     // WhatsApp body, print, public link) derives from status, not
     // from prices. See docs/po-doc-kind rule.
+    //
+    // AR 2026-08-30 bug #2 — Refined A: every line must ALSO have a
+    // receive destination (partId, sourceEstimateLineId, or
+    // vehicleJobNumber). This catches QUOTE-intent PO lines that
+    // legitimately existed as free-text while awaiting a quote —
+    // at Mark Ordered they must be linked to a Part (stock) or
+    // attached to a JC# (direct-fit), else the PO would become
+    // stuck at receive time (bug #2 root cause).
     const lines = await prisma.purchaseOrderLine.findMany({
       where: { purchaseOrderId: po.id },
-      select: { unitCost: true },
+      select: {
+        id: true, description: true, unitCost: true,
+        partId: true, sourceEstimateLineId: true, vehicleJobNumber: true,
+      },
     });
     if (!canMarkOrdered(lines)) {
       fail(
         lines.length === 0
           ? "Add at least one line before ordering."
           : "Every line needs a supplier price before you can order (blank = still waiting for a quote; 0 is fine).",
+        back,
+      );
+    }
+    const noDestination = lines.filter((l) => !lineHasReceiveDestination(l));
+    if (noDestination.length > 0) {
+      const names = noDestination
+        .map((l) => `"${l.description ?? "(no description)"}"`)
+        .join(", ");
+      fail(
+        `Can't order — ${noDestination.length} line(s) have no destination: ${names}. Either link each line to a catalogue part (goes into stock on receive) or set a Job Card number on the line (direct-fit to that car). Otherwise receive will refuse them.`,
         back,
       );
     }

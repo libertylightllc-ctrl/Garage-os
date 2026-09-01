@@ -7,7 +7,7 @@ import { ButtonLink } from "@/components/ui/button";
 import type { Prisma, PurchaseOrderStatus } from "@/generated/prisma/client";
 import {
   PURCHASE_ORDER_TABS,
-  DEFAULT_PURCHASE_ORDER_TAB,
+  pickDefaultTab,
   purchaseOrderTabLabelKey,
   tabHasImplicitSentFilter,
   tabToUrlParam,
@@ -167,20 +167,13 @@ export default async function PurchasingPage({
   } = await searchParams;
   const garageId = session.user.garageId;
 
-  const currentTab = urlParamToTab(rawStatus) ?? DEFAULT_PURCHASE_ORDER_TAB;
-  const currentKind = parseKindFilter(rawKind);
-  // The two DRAFT-split tabs encode the sent axis in the tab itself —
-  // the pill would either duplicate or contradict. On those tabs we
-  // ignore the incoming ?sent= param and hide the pill in the render.
-  const currentSent = tabHasImplicitSentFilter(currentTab)
-    ? "all"
-    : parseSentFilter(rawSent);
-
-  // Per-tab counts fuel the tab badges. Kept independent of the kind
-  // filter — the tab count reflects the total for that tab, not the
-  // filtered subset. If we counted the filtered subset, switching
-  // tabs would show badges that don't match what you actually find
-  // on that tab.
+  // Per-tab counts fuel the tab badges AND the smart-default tab
+  // pick (AR 2026-08-30 bug #1B). Computed unconditionally before
+  // the tab picker so pickDefaultTab has real counts to reason
+  // about. Kept independent of the kind filter — tab count = total
+  // for that tab, not the filtered subset. If we counted the
+  // filtered subset, switching tabs would show badges that don't
+  // match what you find on that tab.
   //
   // Two queries: (1) groupBy status → post-DRAFT tab counts, plus
   // total-DRAFT for the split; (2) count of AWAITING_SUPPLIER (DRAFT
@@ -206,6 +199,22 @@ export default async function PurchasingPage({
   countByTab.set("PARTIALLY_RECEIVED", rawByStatus.get("PARTIALLY_RECEIVED") ?? 0);
   countByTab.set("RECEIVED", rawByStatus.get("RECEIVED") ?? 0);
   countByTab.set("CANCELLED", rawByStatus.get("CANCELLED") ?? 0);
+  const totalAcrossTabs = Array.from(countByTab.values()).reduce((s, n) => s + n, 0);
+
+  // Tab pick — URL param wins; otherwise pickDefaultTab prefers the
+  // first non-empty tab (with an ORDERED-first bias for working
+  // shops), falling back to ORDERED for a completely empty tenant.
+  // AR 2026-08-30 bug #1B — a fresh tenant landing on an empty
+  // ORDERED tab with counters showing activity elsewhere reads as
+  // broken.
+  const currentTab = urlParamToTab(rawStatus) ?? pickDefaultTab(countByTab);
+  const currentKind = parseKindFilter(rawKind);
+  // The two DRAFT-split tabs encode the sent axis in the tab itself —
+  // the pill would either duplicate or contradict. On those tabs we
+  // ignore the incoming ?sent= param and hide the pill in the render.
+  const currentSent = tabHasImplicitSentFilter(currentTab)
+    ? "all"
+    : parseSentFilter(rawSent);
 
   // Build the where clause. Kind + sent filters push into Prisma so
   // pagination reflects the filtered set, not the pre-filtered set with
@@ -619,7 +628,18 @@ export default async function PurchasingPage({
                     colSpan={7}
                     className="px-4 py-12 text-center text-muted-foreground"
                   >
-                    {t("noPurchaseOrders")}
+                    {/* AR 2026-08-30 bug #1A. When the tenant has ANY
+                        POs but none in the current tab, "No purchase
+                        orders yet" is a lie — the counters visibly
+                        show the others. Tab-specific copy tells the
+                        truth. When the tenant is genuinely empty the
+                        "yet" language stays. */}
+                    {totalAcrossTabs === 0
+                      ? t("noPurchaseOrders")
+                      : t("noPurchaseOrdersInTab").replace(
+                          "{tab}",
+                          t(purchaseOrderTabLabelKey(currentTab)),
+                        )}
                   </td>
                 </tr>
               ) : null}

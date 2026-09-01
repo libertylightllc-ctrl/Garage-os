@@ -24,7 +24,7 @@ import {
 } from "@/lib/po-vehicle";
 import type { StandaloneVehicleInput } from "@/lib/po-vehicle";
 import { purchaseOrderMessage } from "@/lib/po-message";
-import { poDocKind, isLineUnpriced, canMarkOrdered } from "@/lib/po-doc-kind";
+import { poDocKind, isLineUnpriced, canMarkOrdered, lineHasReceiveDestination } from "@/lib/po-doc-kind";
 import { normalizeToE164, buildWaMeUrl } from "@/lib/wa";
 import { ensurePublicToken, newPublicToken } from "@/lib/document-tokens";
 import { appUrl } from "@/lib/whatsapp";
@@ -331,24 +331,6 @@ async function ownedPO(poId: string, garageId: string) {
   return po;
 }
 
-// AR 2026-08-30 (bug #2). A PO line has a "receive destination"
-// when at least one of these three holds:
-//   - partId set          → will stock-in on receive
-//   - sourceEstimateLineId → direct-fit via the source estimate → job
-//   - vehicleJobNumber    → direct-fit via the line's captured JC#
-// A line without ANY of the three CANNOT be received — receive
-// refuses because direct-fit needs a job and stock needs a Part. So
-// a PO that carries such a line into ORDERED becomes stuck the
-// moment it starts receiving. This helper is the invariant that
-// setPoStatusAction (DRAFT → ORDERED) and addPoLineAction
-// (on DRAFT/ORDER) enforce.
-export function lineHasReceiveDestination(l: {
-  partId: string | null;
-  sourceEstimateLineId: string | null;
-  vehicleJobNumber: number | null;
-}): boolean {
-  return l.partId !== null || l.sourceEstimateLineId !== null || l.vehicleJobNumber !== null;
-}
 
 /**
  * Add a line to a DRAFT purchase order.

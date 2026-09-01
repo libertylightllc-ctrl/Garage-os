@@ -200,3 +200,28 @@ export function poStatusDisplayKey(
     }
     return `poStatus_${po.status}`;
 }
+
+// AR 2026-08-30 (bug #2). A PO line has a "receive destination"
+// when at least one of these three holds:
+//   - partId set          → will stock-in on receive
+//   - sourceEstimateLineId → direct-fit via the source estimate → job
+//   - vehicleJobNumber    → direct-fit via the line's captured JC#
+// A line without ANY of the three CANNOT be received — receive
+// refuses because direct-fit needs a job and stock needs a Part. So
+// a PO that carries such a line into ORDERED becomes stuck the
+// moment it starts receiving. This helper is the invariant that
+// setPoStatusAction (DRAFT → ORDERED) and addPoLineAction (on
+// DRAFT/ORDER) enforce.
+//
+// Lives in this module (not in src/app/actions/purchasing.ts) so it
+// can be exported alongside the other PO-shape helpers here without
+// Next.js rejecting it — Server Actions files ("use server") can
+// only export async functions.
+export interface LineForDestinationCheck {
+    partId: string | null;
+    sourceEstimateLineId: string | null;
+    vehicleJobNumber: number | null;
+}
+export function lineHasReceiveDestination(l: LineForDestinationCheck): boolean {
+    return l.partId !== null || l.sourceEstimateLineId !== null || l.vehicleJobNumber !== null;
+}

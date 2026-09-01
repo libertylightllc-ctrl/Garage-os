@@ -367,6 +367,52 @@ Revisit trigger: **the first shop that reads ERPNext's P&L, or asks about the ba
 
 ---
 
+## 11. Stranded purchase orders — close, don't reverse (design, unbuilt)
+
+**Status: designed, not built.** The build trigger is a real shop reaching a stranded PO in production. As of 2026-08-30 (Refined-A destination invariant on `addPoLineAction` + `setPoStatusAction`), no new PO can reach this state — every ORDERED line must have a receive destination (partId, sourceEstimateLineId, or vehicleJobNumber). The only known stranded PO is `PO-SMOKE-001` on demo-garage, a CI smoke-test fixture. Building the recovery flow now is solving a problem the invariant just eliminated. Section preserved so if a real shop ever hits this, the design is ready and the implementation is roughly one hour.
+
+**The state that needs recovery.** A PO reaches PARTIALLY_RECEIVED with a line that:
+- has zero received qty, AND
+- has no `partId` (no stock destination), AND
+- has no `sourceEstimateLineId` and no `vehicleJobNumber` (no direct-fit destination).
+
+Receive refuses it (direct-fit needs a job, stock needs a Part). Cancel refuses it (`setPoStatusAction` refuses CANCELLED on PARTIALLY_RECEIVED). Line edit / add / remove refuse it (DRAFT-only). The PO is stranded — no in-app path forward.
+
+**The recovery pattern: close the PO, don't try to reverse it.**
+
+**Status name: `CLOSED`, not `VOID`.** VOID implies reversal. Nothing here reverses — the received goods are on the shelf (or in a customer's car via direct-fit), the SupplierBill for them stands, the ledger entries stand, any payment allocations against the bill stand. "Closed" is honest: this PO can accept no more receiving, everything already received keeps its state. VOID rejected on those grounds.
+
+**What CLOSED changes:**
+- `PurchaseOrder.status` → `CLOSED`. Terminal.
+- No future receive / add-line / edit-line / remove-line accepted. Same locks as CANCELLED / RECEIVED.
+- Outstanding qty on every line becomes dead — the unreceived portion (whether 4 of 10 or the full 2 of 2 on a stranded line) is dropped from the operator's view of "what's still coming."
+
+**What CLOSED does NOT touch:**
+- `PartMovement` rows for prior receives — stay (audit trail).
+- `Part.qtyOnHand` — stays (parts on the shelf don't move because the PO closes).
+- `JobPartReceipt` rows for direct-fit prior receives — stay.
+- `SupplierBill` rows created from those receives — stand. Every one keeps its `purchaseOrderId` link to the (now CLOSED) parent — the paper trail survives.
+- `LedgerEntry` rows from the bill (`DR Inventory + DR VAT-Input / CR AP`) — stand.
+- `SupplierPaymentAllocation` rows against those bills — stand.
+
+**No ledger writes at close time.** There's nothing to reverse. Everything posted was posted for something that actually happened (goods arrived, bill was raised, maybe payment allocated). What DIDN'T happen (the outstanding qty) was never posted — so no rows to undo. This is why "close" is honest and "void" would be misleading.
+
+**Reissue is out of scope.** A shop that still wants the outstanding parts creates a fresh PO for them. That's what they'd do anyway. Auto-creating a PO from a closed one is a convenience for a case that no longer occurs post-Refined-A; rejected.
+
+**Implementation sketch (when the trigger fires):**
+- Schema: `ALTER TYPE "PurchaseOrderStatus" ADD VALUE 'CLOSED';` — one-line migration, non-destructive (Postgres allows enum extension without dropping).
+- Action: `closePurchaseOrderAction(formData)` — `requireOperational` (OWNER + MASTER). Refuses on DRAFT (use cancel), RECEIVED (nothing outstanding), CANCELLED, CLOSED. Accepts ORDERED, PARTIALLY_RECEIVED. Sets `status = CLOSED`. No ledger writes. Add to `OPERATIONAL_ACTIONS` in [master-owner-boundary.test.ts](src/lib/__tests__/master-owner-boundary.test.ts).
+- UI: "Close this PO" button on the PO detail page when status ∈ {ORDERED, PARTIALLY_RECEIVED}. Confirmation copy: "Close this PO? Received lines, their bill, and any payments stand — nothing reverses. N unreceived lines will be dropped. This can't be undone."
+- Tab: `CLOSED` as its own tab in `PURCHASE_ORDER_TABS` — same "counter deserves its own tab" reasoning that added Partly-received. Section = CLOSED (terminal).
+- `poDocKind`: CLOSED always has `orderedAt` set (only ORDERED/PARTIALLY_RECEIVED can be closed) → PO doc kind.
+- Tests: rejects on unallowed statuses; sets CLOSED on allowed statuses; PartMovement + Part.qtyOnHand + SupplierBill + LedgerEntry + SupplierPaymentAllocation counts UNCHANGED before/after close.
+
+**Trigger for building:** the first real shop (not a fixture, not a smoke test) reaches a PO stranded in a way that Refined A didn't prevent. Possible vectors: a schema migration that lets a line drop its destination post-order, a hydrated flow that creates lines without checking, direct SQL. If none of those happen, this rule stays theoretical and the enum + action stay unbuilt.
+
+**Common violation shape:** building this recovery flow proactively "just in case," then discovering a year later the CLOSED status has never been used and nobody remembers the semantics. Wait for a real trigger. The spec above is the whole design; when the trigger comes, ship it in one commit.
+
+---
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

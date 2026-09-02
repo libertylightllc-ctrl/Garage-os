@@ -353,17 +353,37 @@ Distinct `sourceType='SUPPLIER_BILL_ADJUSTMENT'` (never overloading `SUPPLIER_BI
 
 **Common violation shape:** "add a delete action for the operator, they know what they're doing" — this repeats the exact class we spent the 2026-08-19 audit closing. Every delete on a ledger-writing row is a leak vector. If the operator needs to correct an amount, they void the wrong bill and re-receive, or record a compensating payment. Never a delete.
 
+### C4 SHIPPED (AR 2026-09-02) — COGS at invoice, per-garage flag
+
+Every generated invoice with `Garage.cogsEnabled = true` posts a matching COGS pair inside the same transaction as the invoice's AR/Sales/VAT ledger:
+
+```
+DR Cost of Goods Sold   SUM(PART qty × InvoiceLine.unitCost)
+CR Inventory            SUM(PART qty × InvoiceLine.unitCost)
+sourceType="INVOICE_COGS", sourceId=invoice.id
+```
+
+Reads the **frozen** `InvoiceLine.unitCost` snapshot, not live `Part.cost` — that snapshot was taken at invoice-generation time via `resolveLineCost` and is what the shop actually paid (or the advisor's typed cost, for free-text lines). See `src/lib/invoice-cost-snapshot.ts` for the rule the snapshot follows.
+
+**All-or-nothing per invoice.** If any PART line has `unitCost = null`, the whole COGS post is skipped. Same "don't fake data" discipline as rule 12 (VAT-on-expenses). Consequence: the invoice's revenue lands in the ledger with no matching COGS, and the P&L classifies that revenue as gross margin — visible + honest, not silently wrong. Pre-C4 invoices with unpopulated `unitCost` fall into this bucket permanently.
+
+**Void reverses.** `voidInvoiceAction` posts `DR Inventory / CR COGS = original SUM` under `sourceType="INVOICE_COGS_ADJUSTMENT"` when the void'd invoice had a COGS pair. Same discipline as `INVOICE_VOID` (customer side) and `SUPPLIER_BILL_ADJUSTMENT` (supplier side) — reversing pairs never overload the original sourceType so they stay countable at ledger-report time.
+
+**Recompute replaces, doesn't append.** `recomputeInvoice` (fires on every editable-invoice line change) deletes the existing COGS pair and re-posts fresh. Three qty edits still leave one pair, not three. Pinned by test `src/lib/__tests__/invoice-cogs.test.ts`.
+
+**Labour is NOT COGS.** LABOR / FEE / DISCOUNT lines are excluded from the COGS SUM even though they carry a `lineTotal` on the invoice. Labour on a repair job is a delivered service, not a cost of goods — its counterpart on the P&L is technician salary (an expense, rule 12), captured separately. Booking labour revenue against a labour-COGS row double-counts the same wages. Gross margin excludes labour cost entirely; net margin subtracts salary via the P&L Salaries line.
+
+**Rollout gate.** Every garage ships with `Garage.cogsEnabled = false`. Same shape as `payablesEnabled` — enable per garage after a proof invoice verifies the ledger balances. Rollback is the flag flip; existing COGS ledger rows stay (that's the whole point of a ledger). Demo Garage flipped on 2026-09-02 and holds a proof invoice `INV-2026-0061` = DR 80 / CR 80 for the "2 × 40" arithmetic case.
+
+**Cutover invariant.** Invoices generated before `cogsEnabled` was flipped for a garage stay permanently uncosted — no back-fill script, no retroactive re-post. The ledger tells the honest story of what the software knew when the invoice landed. A shop's P&L for a period spanning the cutover date will show a partial COGS line (only post-cutover invoices contribute); this shows up in E3 coverage notes as "N of M invoices costed."
+
 ### Known gaps (revisit triggers named)
 
-**C4 deferred — Inventory ledger never closes.** The invoice-generation path does NOT post `DR COGS / CR Inventory` at invoice time. GarageOS's own profit surfaces (JobProfitCard, /owner Gross-profit tile) read `InvoiceLine.unitCost` directly and are unaffected. But the Inventory ledger accumulates forever (receives debit it, nothing credits it), and ERPNext's P&L shows Sales revenue against zero COGS — a fake 100% margin. Consequence during rollout: Inventory balance in the ledger diverges from physical stock; it will run **negative** for a while because pre-cutover stock sold post-cutover consumes Inventory without a matching pre-cutover receive.
-
-Revisit trigger: **the first shop that reads ERPNext's P&L, or asks about the balance-sheet Inventory figure.** At that point, C4 ships (adds the `DR COGS / CR Inventory` post to `generateInvoiceForJobAction`, skip-with-warning on missing PART unitCost, same `payablesEnabled` flag gate as C3).
-
-**No opening-inventory backfill.** When a garage flips `payablesEnabled` for the first time, existing stock has no ledger presence — the first invoice that sells pre-cutover stock (post-C4) would drive Inventory negative. Chosen intentionally per AR 2026-08-30: honest arithmetic over a fabricated opening balance. If a shop enables Payables AND turns on C4 AND then reads their balance sheet, expect the wash. Correction path: script a one-time `DR Inventory / CR Opening Balance Equity` = `SUM(Part.qtyOnHand × Part.cost)` per garage at cutover.
+**No opening-inventory backfill.** When a garage flips `payablesEnabled` and `cogsEnabled` for the first time, existing stock has no ledger presence — the first invoice that sells pre-cutover stock consumes Inventory without a matching pre-cutover receive, driving Inventory **negative** in the ledger. Chosen intentionally per AR 2026-08-30: honest arithmetic over a fabricated opening balance. If a shop enables both flags AND then reads their balance sheet, expect the wash. Correction path: script a one-time `DR Inventory / CR Opening Balance Equity` = `SUM(Part.qtyOnHand × Part.cost)` per garage at cutover.
 
 **Supplier payment void action doesn't exist.** In MVP a supplier payment cannot be undone. Correction = compensating payment (record a new payment for a negative amount against the same bill — actually rejected by the action's positive-amount validation, so the real MVP correction path is: contact supplier for credit note, then record it as a negative-amount SupplierBill, which itself isn't wired either). Named because the bill-void refusal message points at "reverse the payment first" but the action doesn't exist yet.
 
-**Common violation shape (for all three gaps):** enable Payables on a garage that reads its own balance sheet without shipping C4 first. Enable on a garage with significant existing inventory without the opening-balance backfill. Ship the supplier-payment-void action without also shipping the negative-bill / credit-note flow it enables. Each of these has a clear trigger — don't preempt any of them.
+**Common violation shape (for both gaps):** enable Payables + COGS on a garage with significant existing inventory without the opening-balance backfill. Ship the supplier-payment-void action without also shipping the negative-bill / credit-note flow it enables. Each has a clear trigger — don't preempt either.
 
 ---
 

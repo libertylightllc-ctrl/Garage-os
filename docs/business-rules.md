@@ -460,19 +460,28 @@ Net across both pairs = 0 on every account. The original record stays in the DB 
 
 **Common violation shape:** "add a delete-expense button, operators complain about not being able to fix mistakes fast enough." Deletes on ledger-writing rows are the exact class we spent the 2026-08-19 audit closing (78 orphaned Payment rows) and every subsequent phase locking down (Payables C2 / C5, this rule). The correction path is void + new expense with the right details. The strikethrough in the history table and the reversing pair in the ledger are the honest record.
 
-### Deferred: VAT input on expenses
+### E1f SHIPPED (AR 2026-09-02) — VAT split on expenses
 
-MVP records expenses at gross — the full amount goes to the expense account, no VAT split. That's wrong on paper for a shop that claims input VAT on rent, utilities, professional fees, and marketing, because E4's VAT summary will understate the reclaim on the shop's Form 201.
+The `Expense` schema now carries three money columns: `total` (was `amount`), `subtotal`, and `vatAmount`. Every `recordExpenseAction` posts the three-row shape when VAT is present, two-row shape when it isn't:
 
-**Why we deferred:** getting the VAT capture wrong is worse than the missing feature. Wrong number on a tax return produces a real problem; a missing reclaim opportunity is a known-and-flagged gap. Same shape as the Payables VAT decision at C3 — capture correctly the first time OR defer.
+```
+DR <expense account>   subtotal
+DR VAT Recoverable     vatAmount   [omitted when vatAmount = 0]
+CR Cash/Bank           total
+sourceType='EXPENSE', sourceId=expense.id
+```
 
-**Build trigger:** before E4 (VAT summary). By the time E4 lands, VAT capture on expenses must be in — an accountant reading the summary needs the input VAT split for every expense that carries a supplier tax invoice. The shape to build:
-- `Expense.subtotal` + `Expense.vatAmount` columns (schema addition, split from the current single `amount` at migration time by treating all existing rows as `subtotal=amount, vatAmount=0` — MVP data was gross by design).
-- Receive-form VAT override alongside the amount input, defaulting to auto-calc from `Garage.vatRate` — same shape as the Payables C3 supplier-bill form.
-- Ledger post gains a `DR VAT-Input (vatAmount)` row alongside `DR <expense account> (subtotal)`; the credit to Cash/Bank stays at `total`. Same shape as C3's `DR Inventory + DR VAT-Input / CR AP` bill post.
-- Void mirrors: reverse the VAT row too.
+Void mirrors — reverses the VAT row too when the original had one; skipped when it didn't. Same discipline as C4a's `INVOICE_COGS_ADJUSTMENT` reversal.
 
-**Report the VAT shape separately before starting E4.** Don't skip the report — the accountant-facing form 201 is where wrong numbers surface as a real problem.
+**VAT defaults to zero on the form — not auto-calc from `Garage.vatRate`.** AR 2026-09-02: auto-calc would silently claim reclaimable input VAT on SALARIES (payroll is out of scope for VAT) and BANK_CHARGES (UAE bank fees are typically exempt). A wrong figure on Form 201 is a real problem; a missing entry is a known one. Zero-default forces the operator to explicitly assert a non-zero — see the form's live subtotal caption + refuse-on-mismatch counter (same shape as the payment allocation counter, per AR 2026-09-02).
+
+**Invariant: `total = subtotal + vatAmount`.** Enforced two places:
+1. Client-side: the record-expense form's VAT input turns red and refuses to submit when `vatAmount > total` (see `ExpenseAmountFields.tsx`).
+2. Server-side: `recordExpenseAction` refuses the same case with a clear message, so a scripted / bookmarked submit can't bypass the client check.
+
+**Cutover invariant (rule 10 discipline).** Pre-E1f rows were back-filled as `subtotal = total, vatAmount = 0`. Back-calcing `total × 5/105` into a reclaim number the operator never asserted would fabricate data. The 1 row on Prod at cutover (Demo RENT AED 5,000, VOID) reads as gross-with-zero-VAT permanently; the operator can void + re-record if the landlord actually invoiced VAT and the reclaim matters.
+
+**Category caveat, not a blocker.** The form shows the VAT input on every category (including SALARIES / BANK_CHARGES). Hiding the field on some categories reads as the system enforcing a tax rule it doesn't understand — some banks do charge VAT on FX / card processing / merchant services, and the operator has to be able to enter it. The default-zero + explicit-entry protocol carries the discipline, not the visibility of the field.
 
 ---
 

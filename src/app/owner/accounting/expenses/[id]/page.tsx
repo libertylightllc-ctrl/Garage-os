@@ -110,13 +110,23 @@ export default async function ExpenseDetailPage({
                 </div>
             ) : null}
 
-            {/* Header facts */}
+            {/* Header facts. Total (gross) is the load-bearing
+                money — that's what the shop actually paid. Net + VAT
+                render only when there's a VAT split to explain
+                (pre-E1f rows post as gross-with-zero-VAT and read
+                back as total==subtotal, vatAmount==0). */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Fact label="Amount" value={money(Number(expense.amount))} />
+                <Fact label="Amount paid" value={money(Number(expense.total))} />
                 <Fact label="Date" value={isoDate(expense.paidAt)} />
                 <Fact label="Method" value={expense.method} />
                 <Fact label="Supplier" value={expense.supplier?.name ?? "—"} />
             </div>
+            {Number(expense.vatAmount) > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+                    <Fact label="Net (posts to expense)" value={money(Number(expense.subtotal))} />
+                    <Fact label="VAT (reclaimable)" value={money(Number(expense.vatAmount))} />
+                </div>
+            ) : null}
 
             {expense.note ? (
                 <div className="rounded-xl border border-border bg-surface p-4 text-sm">

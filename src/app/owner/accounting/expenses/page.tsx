@@ -3,6 +3,7 @@ import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
 import { recordExpenseAction } from "@/app/actions/expenses";
+import { ExpenseAmountFields } from "./ExpenseAmountFields";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,11 @@ export default async function ExpensesListPage({
     const monthTotalByCategory = new Map<string, number>();
     let monthTotal = 0;
     for (const e of monthExpenses) {
-        const amt = Number(e.amount);
+        // MTD tile still sums the total (gross) — that's what
+        // "money spent this month" means to the operator, not the
+        // net that lands on the P&L. E1f split affects the ledger
+        // + P&L, not this operator-facing sanity band.
+        const amt = Number(e.total);
         monthTotalByCategory.set(e.category, (monthTotalByCategory.get(e.category) ?? 0) + amt);
         monthTotal += amt;
     }
@@ -156,17 +161,7 @@ export default async function ExpensesListPage({
                             ))}
                         </select>
                     </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                        <span className="font-medium">Amount (AED)</span>
-                        <input
-                            name="amount"
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            required
-                            className="rounded-md border border-border bg-transparent px-2 py-1.5 text-right tabular-nums"
-                        />
-                    </label>
+                    <ExpenseAmountFields />
                     <label className="flex flex-col gap-1 text-sm">
                         <span className="font-medium">Payment method</span>
                         <select
@@ -283,7 +278,12 @@ export default async function ExpensesListPage({
                                     <td
                                         className={`px-3 py-2 text-end tabular-nums font-medium ${e.status === "VOID" ? "text-text-mute line-through" : ""}`}
                                     >
-                                        {money(Number(e.amount))}
+                                        {money(Number(e.total))}
+                                        {Number(e.vatAmount) > 0 ? (
+                                            <div className="text-xs font-normal text-text-mute">
+                                                incl. VAT {money(Number(e.vatAmount))}
+                                            </div>
+                                        ) : null}
                                     </td>
                                     <td className="px-3 py-2 text-end text-xs">
                                         {e.status === "VOID" ? (

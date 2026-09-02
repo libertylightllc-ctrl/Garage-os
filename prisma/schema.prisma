@@ -1982,7 +1982,31 @@ model Expense {
   garageId      String
   garage        Garage          @relation(fields: [garageId], references: [id])
   category      ExpenseCategory
-  amount        Decimal         @db.Decimal(12, 2)
+  // Money split — E1f (AR 2026-09-02) added subtotal + vatAmount
+  // ahead of E4 (VAT summary). Rule 12: shop reclaims input VAT on
+  // rent, utilities, tools, professional fees, etc; the pre-E1f
+  // single-amount shape was systematically wrong on Form 201.
+  //
+  // total     = what cash actually left the shop (was `amount`).
+  // vatAmount = reclaimable input VAT the operator EXPLICITLY entered.
+  //             Defaults to 0 in the form — auto-calc from
+  //             Garage.vatRate would silently claim VAT on categories
+  //             that never carry it (SALARIES, most BANK_CHARGES),
+  //             which corrupts the reclaim more than a missing entry
+  //             does. Zero-default forces operator assertion.
+  // subtotal  = total − vatAmount, stored for read-side simplicity
+  //             (VAT summary + P&L don't recompute per read).
+  //
+  // Invariant: total = subtotal + vatAmount. Enforced in
+  // recordExpenseAction — form refuses when vatAmount > total.
+  //
+  // Migration back-filled all pre-E1f rows as subtotal=amount,
+  // vatAmount=0 per rule 12 cutover discipline: inventing a
+  // 5/105 back-calc where no operator ever asserted it would
+  // fabricate reclaim data.
+  total         Decimal         @db.Decimal(12, 2)
+  subtotal      Decimal         @db.Decimal(12, 2)
+  vatAmount     Decimal         @db.Decimal(12, 2)
   // When cash left the shop. Single date because direct posting has
   // no accrual/paid distinction (per AR's Q3 direct-posting call).
   paidAt        DateTime

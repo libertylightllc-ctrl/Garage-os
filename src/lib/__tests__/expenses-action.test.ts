@@ -95,7 +95,13 @@ describe("recordExpenseAction — E1c direct posting", { retry: 2 }, () => {
         expect(expenses.length).toBe(1);
         const e = expenses[0];
         expect(e.category).toBe("RENT");
-        expect(Number(e.amount)).toBe(5000);
+        // E1f — expense schema split: total (gross) + subtotal + vatAmount.
+        // Legacy `amount` form input still accepted as backward-compat;
+        // the DB stores it as total, with vatAmount defaulting to 0 (no
+        // auto-calc — see rule 12 + recordExpenseAction).
+        expect(Number(e.total)).toBe(5000);
+        expect(Number(e.subtotal)).toBe(5000);
+        expect(Number(e.vatAmount)).toBe(0);
         expect(e.method).toBe("Bank Transfer");
         expect(e.status).toBe("ACTIVE");
         expect(e.note).toBe("September rent");
@@ -245,5 +251,135 @@ describe("voidExpenseAction — reversing pair", { retry: 2 }, () => {
             where: { sourceType: "EXPENSE", sourceId: expense.id },
         });
         expect(entries.length).toBe(4);
+    });
+});
+
+describe("recordExpenseAction — E1f VAT split", () => {
+    it("Non-zero VAT → 3-row ledger (DR expense subtotal + DR VAT_INPUT vat / CR Cash total), balanced", async () => {
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(
+            recordExpenseAction,
+            form({
+                category: "RENT",
+                total: "1050",
+                vatAmount: "50",
+                method: "Bank Transfer",
+                paidAt: "2026-09-15",
+                note: "Office rent inc. 5% VAT",
+            }),
+        );
+        const [e] = await prisma.expense.findMany({ where: { garageId: gId } });
+        expect(Number(e.total)).toBe(1050);
+        expect(Number(e.subtotal)).toBe(1000);
+        expect(Number(e.vatAmount)).toBe(50);
+
+        const rows = await prisma.ledgerEntry.findMany({
+            where: { sourceType: "EXPENSE", sourceId: e.id },
+            orderBy: { account: "asc" },
+        });
+        expect(rows.length).toBe(3);
+        const dr = rows.reduce((s, r) => s + Number(r.debit), 0);
+        const cr = rows.reduce((s, r) => s + Number(r.credit), 0);
+        expect(dr).toBe(1050);
+        expect(cr).toBe(1050);
+        const byAcc = new Map(rows.map((r) => [r.account, { d: Number(r.debit), c: Number(r.credit) }]));
+        expect(byAcc.get(ACCOUNTS.EXP_RENT)).toEqual({ d: 1000, c: 0 });
+        expect(byAcc.get(ACCOUNTS.VAT_INPUT)).toEqual({ d: 50, c: 0 });
+        expect(byAcc.get(ACCOUNTS.CASH)).toEqual({ d: 0, c: 1050 });
+    });
+
+    it("Zero VAT (or omitted) → 2-row ledger, pre-E1f shape preserved", async () => {
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(
+            recordExpenseAction,
+            form({
+                category: "SALARIES",
+                total: "5000",
+                // vatAmount omitted → defaults to 0
+                method: "Cash",
+                paidAt: "2026-09-15",
+            }),
+        );
+        const [e] = await prisma.expense.findMany({ where: { garageId: gId } });
+        expect(Number(e.vatAmount)).toBe(0);
+        const rows = await prisma.ledgerEntry.findMany({
+            where: { sourceType: "EXPENSE", sourceId: e.id },
+        });
+        // No VAT row when vatAmount = 0 — same 2-row shape as pre-E1f.
+        expect(rows.length).toBe(2);
+        const accounts = rows.map((r) => r.account).sort();
+        expect(accounts).toEqual([ACCOUNTS.CASH, ACCOUNTS.EXP_SALARIES].sort());
+    });
+
+    it("vatAmount > total refused with clear message; nothing persisted", async () => {
+        mockAuth.mockResolvedValueOnce(owner());
+        const to = await call(
+            recordExpenseAction,
+            form({
+                category: "UTILITIES",
+                total: "100",
+                vatAmount: "500",
+                method: "Cash",
+            }),
+        );
+        expect(decodeURIComponent(to).toLowerCase()).toContain("vat amount");
+        expect(decodeURIComponent(to).toLowerCase()).toContain("more than the total");
+        expect(await prisma.expense.count({ where: { garageId: gId } })).toBe(0);
+        expect(
+            await prisma.ledgerEntry.count({ where: { garageId: gId, sourceType: "EXPENSE" } }),
+        ).toBe(0);
+    });
+
+    it("Void with VAT → 3 reversing rows posted, net across all 6 rows = 0 per account", async () => {
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(
+            recordExpenseAction,
+            form({
+                category: "TOOLS",
+                total: "210",
+                vatAmount: "10",
+                method: "Card",
+                paidAt: "2026-09-15",
+            }),
+        );
+        const [e] = await prisma.expense.findMany({ where: { garageId: gId } });
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(voidExpenseAction, form({ expenseId: e.id }));
+
+        const rows = await prisma.ledgerEntry.findMany({
+            where: { sourceType: "EXPENSE", sourceId: e.id },
+        });
+        expect(rows.length).toBe(6); // 3 record + 3 reverse
+        const netByAccount = new Map<string, number>();
+        for (const r of rows) {
+            const net = Number(r.debit) - Number(r.credit);
+            netByAccount.set(r.account, (netByAccount.get(r.account) ?? 0) + net);
+        }
+        expect(netByAccount.get(ACCOUNTS.EXP_TOOLS)).toBe(0);
+        expect(netByAccount.get(ACCOUNTS.VAT_INPUT)).toBe(0);
+        expect(netByAccount.get(ACCOUNTS.CASH)).toBe(0);
+    });
+
+    it("Void without VAT (flag was zero) → 2 reversing rows only, no stray VAT_INPUT reversal", async () => {
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(
+            recordExpenseAction,
+            form({
+                category: "MISC",
+                total: "40",
+                // no vatAmount
+                method: "Cash",
+            }),
+        );
+        const [e] = await prisma.expense.findMany({ where: { garageId: gId } });
+        mockAuth.mockResolvedValueOnce(owner());
+        await call(voidExpenseAction, form({ expenseId: e.id }));
+
+        const rows = await prisma.ledgerEntry.findMany({
+            where: { sourceType: "EXPENSE", sourceId: e.id },
+        });
+        expect(rows.length).toBe(4); // 2 record + 2 reverse
+        const vatRows = rows.filter((r) => r.account === ACCOUNTS.VAT_INPUT);
+        expect(vatRows.length).toBe(0);
     });
 });

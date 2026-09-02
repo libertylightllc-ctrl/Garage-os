@@ -112,11 +112,17 @@ export async function computeVatSummary(
     // VAT_PAYABLE is CR-normal — output VAT owed to FTA increases the
     // credit side. Flip sign so the display shows a positive collected
     // number instead of a negative debit-normal balance.
-    const outputVat = -balance(payableRows);
+    //
+    // `+ 0` coerces the signed-zero the unary minus produces on an
+    // empty balance: `-0 !== +0` under Object.is (vitest .toBe), and
+    // a P&L that renders "AED −0.00" reads as broken. `0 + 0 = +0`
+    // per spec, so this normalizes safely without touching non-zero
+    // values.
+    const outputVat = -balance(payableRows) + 0;
     // VAT_INPUT is DR-normal — reclaimable input tax already carries
     // the correct sign as a debit balance.
     const inputVat = balance(inputRows);
-    const netPayable = Math.round((outputVat - inputVat) * 100) / 100;
+    const netPayable = Math.round((outputVat - inputVat) * 100) / 100 + 0;
 
     return {
         fromDate,

@@ -37,14 +37,13 @@ export default async function AccountingHubPage() {
             visibleTo: "OWNER_MASTER",
             icon: "🪙",
         },
-        // E1d will insert:
-        //   {
-        //     href: "/owner/accounting/expenses",
-        //     title: "Expenses",
-        //     blurb: "Money spent that isn't parts. Rent, salaries, utilities.",
-        //     visibleTo: "OWNER_MASTER",
-        //     icon: "🧾",
-        //   },
+        {
+            href: "/owner/accounting/expenses",
+            title: "Expenses",
+            blurb: "Money spent that isn't parts. Rent, salaries, utilities, tools, and everything else that shows up on the P&L.",
+            visibleTo: "OWNER_MASTER",
+            icon: "🧾",
+        },
         {
             href: "/owner/accounting/export",
             title: "CSV export",

@@ -199,12 +199,10 @@ export default async function VatSummaryPage({
                             <Link href="/settings" className="underline">
                                 Settings
                             </Link>{" "}
-                            so future invoices land in the right box. Pre-cutover invoices
-                            need an operator-run backfill script to inherit the setting —
-                            contact support to run it. Don&apos;t void &amp; reissue a sent
-                            invoice just to fix this: voiding burns an invoice number, posts
-                            reversal entries, and creates a credit note the customer
-                            didn&apos;t ask for.
+                            so future invoices land in the right box. Don&apos;t void &amp;
+                            reissue a sent invoice just to fix this: voiding burns an invoice
+                            number, posts reversal entries, and creates a credit note the
+                            customer didn&apos;t ask for.
                         </div>
                     </div>
                 ) : null}

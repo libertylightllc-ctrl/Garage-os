@@ -119,6 +119,11 @@ const OPERATIONAL_ACTIONS: readonly ActionSite[] = [
   // requireAnyRole(["OWNER", "MASTER"]) page guard.
   { file: "src/app/actions/supplier-payments.ts", action: "recordSupplierPaymentAction" },
   { file: "src/app/actions/supplier-payments.ts", action: "voidSupplierBillAction" },
+  // Accounting E1c (AR 2026-09-02) — expense record + void. Both
+  // OWNER + MASTER. The Accounting hub (E1a0) is OWNER + MASTER;
+  // Expenses lives under the hub with the same guard shape.
+  { file: "src/app/actions/expenses.ts", action: "recordExpenseAction" },
+  { file: "src/app/actions/expenses.ts", action: "voidExpenseAction" },
 ];
 
 // One action per owner-only file to pin the negative case — MASTER

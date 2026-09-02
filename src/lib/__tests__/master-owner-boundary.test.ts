@@ -48,7 +48,10 @@ const OWNER_ONLY: readonly string[] = [
   // Accounting export (CSV downloads of COA/journal/invoices/payments/
   // customers). Ships the entire financial position of the business —
   // financial-reporting bucket per CLAUDE.md, MASTER stays barred.
-  "src/app/owner/accounting/page.tsx",
+  // Moved from /owner/accounting to /owner/accounting/export in E1a0
+  // (AR 2026-08-30) when the parent /owner/accounting became a hub
+  // landing open to MASTER. The export child stays OWNER-only.
+  "src/app/owner/accounting/export/page.tsx",
   // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
   // toggle + dead-letter replay — same finance/admin bucket as
   // billing and ledger, MASTER stays barred.

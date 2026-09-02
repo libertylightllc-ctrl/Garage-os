@@ -37,7 +37,6 @@ import {
   BarChart3,
   FileSpreadsheet,
   Contact,
-  Coins,
 } from "lucide-react";
 import type { StaffRole } from "@/lib/roles";
 import type { MessageKey } from "@/i18n/config";
@@ -78,7 +77,14 @@ export const NAV: Record<StaffRole, RoleNav> = {
       // Payables (AR 2026-08-30 C6). Placed alongside Purchasing per
       // AR's placement call — "what do I owe" is a top-level owner
       // question, not tucked under a purchasing submenu.
-      { key: "payables", href: "/owner/payables", labelKey: "tabPayables", icon: Coins },
+      // Accounting (E1a0, AR 2026-08-30) — hub for the accounting
+      // section. Consolidates what used to be top-level Payables and
+      // Accounting-export nav entries; grows with Expenses / P&L /
+      // VAT / trial balance as E1d–E5 land. Individual children keep
+      // their own guards (Payables OWNER+MASTER, CSV export OWNER-
+      // only, etc.); the hub is OWNER+MASTER and shows tiles the
+      // caller can actually enter.
+      { key: "accounting", href: "/owner/accounting", labelKey: "tabAccounting", icon: FileSpreadsheet },
       // Accounts (cashier) — the customer-invoice list. Page guard at
       // /cashier already admits OWNER; adding it here closes the
       // nav-vs-guard inconsistency AR caught 2026-08-12. Placed with
@@ -87,7 +93,6 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "accounts", href: "/cashier", labelKey: "tabAccounts", icon: CreditCard },
       { key: "billing", href: "/owner/billing", labelKey: "tabBilling", icon: Receipt },
       { key: "ledger", href: "/owner/ledger", labelKey: "tabLedger", icon: BookOpen },
-      { key: "accounting", href: "/owner/accounting", labelKey: "tabAccounting", icon: FileSpreadsheet },
       { key: "whatsapp", href: "/owner/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
       { key: "erpSync", href: "/owner/erp", labelKey: "tabErpSync", icon: Boxes },
     ],
@@ -160,9 +165,11 @@ export const NAV: Record<StaffRole, RoleNav> = {
       { key: "purchasing", href: "/owner/purchasing", labelKey: "tabPurchasing", icon: ShoppingCart },
       { key: "inventory", href: "/owner/inventory", labelKey: "tabInventory", icon: Boxes },
       { key: "hours", href: "/owner/hours", labelKey: "tabHours", icon: Clock },
-      // Payables — operational per AR's placement, page + actions
-      // both use requireOperational (OWNER + MASTER).
-      { key: "payables", href: "/owner/payables", labelKey: "tabPayables", icon: Coins },
+      // Accounting hub — Payables now lives here as one of its
+      // children (E1a0, AR 2026-08-30). MASTER's hub view shows
+      // Payables + future Expenses; Export stays OWNER-only inside
+      // the hub.
+      { key: "accounting", href: "/owner/accounting", labelKey: "tabAccounting", icon: FileSpreadsheet },
       { key: "whatsapp", href: "/advisor/whatsapp", labelKey: "tabWhatsapp", icon: MessageSquare },
     ],
   },

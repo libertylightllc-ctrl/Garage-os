@@ -1944,7 +1944,7 @@ const en = {
   // (COA / journal / invoices / payments / customers) + a companion
   // chart-of-accounts mapping doc. Sits in the More sheet next to
   // Ledger.
-  tabAccounting: "Accounting export",
+  tabAccounting: "Accounting",
   tabErpSync: "ERPNext sync",
   acctExportHeading: "Accounting export",
   acctExportIntro: "Download the shop's financial data as CSVs for import into your accounting system. Every download is logged.",
@@ -3707,7 +3707,7 @@ const ar: typeof en = {
   colApprovalTimeShort: "متوسط",
   colApprovalTimeTitle: "متوسط الوقت من إرسال التقدير إلى قرار العميل",
   tabLedger: "السجل",
-  tabAccounting: "تصدير للمحاسبة",
+  tabAccounting: "المحاسبة",
   tabErpSync: "مزامنة ERPNext",
   acctExportHeading: "تصدير للمحاسبة",
   acctExportIntro: "نزّل بيانات الكراج المالية كملفات CSV لاستيرادها في نظامك المحاسبي. كل عملية تنزيل تُسجَّل.",

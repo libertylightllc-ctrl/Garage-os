@@ -71,11 +71,10 @@ const NAV: Record<StaffRole, RoleNav> = {
             { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
             { href: "/owner/suppliers", labelKey: "tabSuppliers", key: "suppliers" },
             { href: "/owner/purchasing", labelKey: "tabPurchasing", key: "purchasing" },
-            // Payables (AR 2026-08-30 C6). Placed alongside Purchasing
-            // per AR's guidance — an owner asking "what do I owe"
-            // should find it at top-level in owner nav, not tucked
-            // under a purchasing submenu.
-            { href: "/owner/payables", labelKey: "tabPayables", key: "payables" },
+            // Accounting hub (E1a0, AR 2026-08-30). Payables moved
+            // under this hub alongside the CSV export; Expenses / P&L
+            // / VAT / trial balance land here as E1d–E5 ship.
+            { href: "/owner/accounting", labelKey: "tabAccounting", key: "accounting" },
             { href: "/owner/billing", labelKey: "tabBilling", key: "billing" },
             { href: "/owner/ledger", labelKey: "tabLedger", key: "ledger" },
             { href: "/owner/whatsapp", labelKey: "tabWhatsapp", key: "whatsapp" },
@@ -121,9 +120,10 @@ const NAV: Record<StaffRole, RoleNav> = {
         ],
         more: [
             { href: "/owner/hours", labelKey: "tabHours", key: "hours" },
-            // Payables — operational surface, permitted for MASTER
-            // (page + action guards both use requireOperational).
-            { href: "/owner/payables", labelKey: "tabPayables", key: "payables" },
+            // Accounting hub (E1a0, AR 2026-08-30). MASTER's view of
+            // the hub shows Payables + future Expenses; CSV export
+            // stays OWNER-only.
+            { href: "/owner/accounting", labelKey: "tabAccounting", key: "accounting" },
             { href: "/advisor/vehicles", labelKey: "tabVehicles", key: "vehicles" },
             { href: "/advisor/bookings", labelKey: "tabBookings", key: "bookings" },
             { href: "/advisor/parts", labelKey: "tabParts", key: "parts" },

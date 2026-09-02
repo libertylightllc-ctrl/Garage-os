@@ -1,113 +1,96 @@
-import { requireRole } from "@/lib/guard";
+import Link from "next/link";
+import { requireAnyRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
-import { getT } from "@/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Accounting export — owner-side download page (AR 2026-08-23).
+ * Accounting hub — E1a0 (AR 2026-08-30).
  *
- * Five CSV downloads + a pointer at the chart-of-accounts mapping doc.
- * Date-range default = current month (accountants work in periods; a
- * full-history export is an explicit deliberate choice, not the miss-
- * a-param outcome).
+ * Landing page for the accounting section. Routes what used to be
+ * top-level owner pages (Payables, Accounting export) under one
+ * roof, ready to grow with Expenses (E1d), P&L (E3), VAT (E4),
+ * and Trial Balance (E5) as they land.
  *
- * Guard: OWNER only. Per the spec (CLAUDE.md), financial reporting
- * pages stay OWNER-only — MASTER is barred from this surface because
- * the export contains the entire financial position of the business.
- *
- * Every download route (/api/accounting/export?file=...) writes one
- * row to AccountingExportLog before serving the file. Nothing else
- * on this page or its downstream route mutates business data.
+ * OWNER + MASTER on the hub itself. Individual children keep their
+ * own guards — the Export card is only visible to OWNER because
+ * the CSV export contains the entire financial position and stays
+ * OWNER-only per CLAUDE.md financial-reporting rule.
  */
-export default async function AccountingExportPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ from?: string; to?: string }>;
-}) {
-    await requireRole("OWNER");
-    const t = await getT();
-    const sp = await searchParams;
+export default async function AccountingHubPage() {
+    const session = await requireAnyRole(["OWNER", "MASTER"]);
+    const role = session.user.role as "OWNER" | "MASTER";
+    const isOwner = role === "OWNER";
 
-    // Default range: first of current month (UTC) → today (UTC). The
-    // UI form pre-fills these; the API route enforces the same
-    // default when params are absent or malformed.
-    const now = new Date();
-    const isoDate = (d: Date) => d.toISOString().slice(0, 10);
-    const defaultFrom = isoDate(
-        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
-    );
-    const defaultTo = isoDate(
-        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
-    );
-    const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : defaultFrom;
-    const to = sp.to && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : defaultTo;
+    interface Tile {
+        href: string;
+        title: string;
+        blurb: string;
+        visibleTo: "OWNER_ONLY" | "OWNER_MASTER";
+        icon: string; // emoji glyph, cheap + theme-safe
+    }
+    const tiles: Tile[] = [
+        {
+            href: "/owner/payables",
+            title: "Payables",
+            blurb: "What you owe suppliers. Bills, payments, statements, aging.",
+            visibleTo: "OWNER_MASTER",
+            icon: "🪙",
+        },
+        // E1d will insert:
+        //   {
+        //     href: "/owner/accounting/expenses",
+        //     title: "Expenses",
+        //     blurb: "Money spent that isn't parts. Rent, salaries, utilities.",
+        //     visibleTo: "OWNER_MASTER",
+        //     icon: "🧾",
+        //   },
+        {
+            href: "/owner/accounting/export",
+            title: "CSV export",
+            blurb: "Download journal, invoices, payments, customers, chart-of-accounts for your accountant.",
+            visibleTo: "OWNER_ONLY",
+            icon: "📤",
+        },
+        // E3 → P&L. E4 → VAT summary. E5 → Trial balance + balance sheet.
+        // Each lands as its own tile in the display order accountants
+        // read them: operational (Payables, Expenses) → periodic reports
+        // (P&L, VAT) → proofs (TB, BS) → export.
+    ];
 
-    const files: Array<{ key: string; labelKey: string; descKey: string }> = [
-        { key: "chart-of-accounts", labelKey: "acctExportChartLabel", descKey: "acctExportChartDesc" },
-        { key: "journal", labelKey: "acctExportJournalLabel", descKey: "acctExportJournalDesc" },
-        { key: "invoices", labelKey: "acctExportInvoicesLabel", descKey: "acctExportInvoicesDesc" },
-        { key: "payments", labelKey: "acctExportPaymentsLabel", descKey: "acctExportPaymentsDesc" },
-        { key: "customers", labelKey: "acctExportCustomersLabel", descKey: "acctExportCustomersDesc" },
-    ] as const;
+    const visible = tiles.filter((t) => t.visibleTo === "OWNER_MASTER" || isOwner);
 
     return (
-        <main className="mx-auto max-w-3xl p-4 pb-24">
-            <AppNav role="OWNER" active="accounting" />
-            <h1 className="mt-4 text-xl font-semibold">{t("acctExportHeading")}</h1>
-            <p className="mt-1 text-sm text-text-mute">{t("acctExportIntro")}</p>
+        <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6">
+            <AppNav role={role} active="accounting" />
+            <div>
+                <h1 className="text-2xl font-semibold tracking-tight">Accounting</h1>
+                <p className="mt-1 text-sm text-text-mute">
+                    Your books in one place. Growing with the phase — Expenses, P&amp;L, VAT and
+                    trial balance land here as they ship.
+                </p>
+            </div>
 
-            {/* Date-range form — GET so a bookmark of a specific range works. */}
-            <form method="GET" className="mt-4 flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1 text-xs text-text-mute">
-                    {t("acctExportFromLabel")}
-                    <input
-                        type="date"
-                        name="from"
-                        defaultValue={from}
-                        className="rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono tabular-nums"
-                    />
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-text-mute">
-                    {t("acctExportToLabel")}
-                    <input
-                        type="date"
-                        name="to"
-                        defaultValue={to}
-                        className="rounded-md border border-border bg-transparent px-3 py-2 text-sm font-mono tabular-nums"
-                    />
-                </label>
-                <button
-                    type="submit"
-                    className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-700 dark:bg-white dark:text-brand-900 dark:hover:bg-zinc-200"
-                >
-                    {t("acctExportApplyRange")}
-                </button>
-            </form>
-
-            <ul className="mt-6 flex flex-col gap-2">
-                {files.map((f) => (
-                    <li
-                        key={f.key}
-                        className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {visible.map((tile) => (
+                    <Link
+                        key={tile.href}
+                        href={tile.href}
+                        className="group flex flex-col gap-2 rounded-xl border border-border bg-surface p-5 shadow-sm transition hover:border-border-strong hover:bg-surface-2"
                     >
-                        <div>
-                            <div className="text-sm font-semibold">{t(f.labelKey as never)}</div>
-                            <div className="mt-0.5 text-xs text-text-mute">{t(f.descKey as never)}</div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-2xl" aria-hidden="true">
+                                {tile.icon}
+                            </span>
+                            <span className="text-base font-semibold">{tile.title}</span>
                         </div>
-                        <a
-                            href={`/api/accounting/export?file=${f.key}&from=${from}&to=${to}`}
-                            className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-surface-3"
-                        >
-                            ⤓ {t("acctExportDownloadCta")}
-                        </a>
-                    </li>
+                        <p className="text-sm text-text-mute">{tile.blurb}</p>
+                        <span className="mt-auto text-xs text-text-mute group-hover:text-text">
+                            Open →
+                        </span>
+                    </Link>
                 ))}
-            </ul>
-
-            <p className="mt-6 rounded-lg border border-border bg-surface-2 px-4 py-3 text-xs text-text-mute">
-                {t("acctExportMappingPointer")}
-            </p>
+            </div>
         </main>
     );
 }

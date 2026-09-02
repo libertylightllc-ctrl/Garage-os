@@ -52,21 +52,17 @@ describe("NAV config", () => {
             "/owner/hours",
             "/owner/suppliers",
             "/owner/purchasing",
-            // Payables (AR 2026-08-30 C6) — supplier ledger, sits
-            // alongside Purchasing per AR's placement call. Owner sees
-            // it; MASTER sees it (operational).
-            "/owner/payables",
             // Accounts (customer invoice list) — added 2026-08-12
             // after AR flagged that the /cashier page guard already
             // admits OWNER but the nav offered no way to reach it.
             "/cashier",
             "/owner/billing",
             "/owner/ledger",
-            // Accounting export (COA/journal/invoices/payments/customers
-            // CSV downloads) — added 2026-08-23. OWNER-only surface,
-            // barred from MASTER because it contains the entire
-            // financial position of the business (financial-reporting
-            // bucket, per CLAUDE.md).
+            // Accounting hub (E1a0, AR 2026-08-30) — landing page for
+            // the accounting section. Consolidates Payables + CSV
+            // export + Expenses/P&L/VAT/TB as they land. Hub itself
+            // is OWNER + MASTER; children keep their own guards (CSV
+            // export stays OWNER-only inside the hub).
             "/owner/accounting",
             "/owner/whatsapp",
             // ERPNext sync (Phase 5, AR 2026-08-27) — finance surface,
@@ -103,7 +99,10 @@ describe("NAV config", () => {
             "/owner/purchasing",
             "/owner/inventory",
             "/owner/hours",
-            "/owner/payables",
+            // Accounting hub (E1a0) — Payables now lives under here.
+            // MASTER's hub view shows Payables + future Expenses;
+            // Export is OWNER-only.
+            "/owner/accounting",
             "/advisor/whatsapp",
         ],
     };

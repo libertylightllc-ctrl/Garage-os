@@ -413,6 +413,49 @@ Receive refuses it (direct-fit needs a job, stock needs a Part). Cancel refuses 
 
 ---
 
+## 12. Expenses are direct-posting, void-not-delete, VAT deferred
+
+Money spent that isn't parts — rent, salaries, utilities, tools, marketing, bank charges, office supplies, repairs & maintenance, professional fees, motor-vehicle, and a catch-all. Recorded as a cash-out event, not as a liability awaiting payment. Payables handles the "we owe the supplier" flow; expenses handle "money already left the shop."
+
+**Direct posting.** Every `Expense` row writes one balanced ledger pair on record, inside the same tx as the row itself:
+```
+DR <expense account>   amount
+CR Cash/Bank           amount
+sourceType='EXPENSE', sourceId=expense.id
+```
+
+No AP intermediary, no accrual step, no "record the bill, pay it later" workflow. If a shop wants to track an unpaid supplier bill, that's Payables and it already exists. An expense IS the payment.
+
+**One `sourceType='EXPENSE'` on every ledger row related to an expense.** Category (11-value enum: `RENT` / `SALARIES` / `UTILITIES` / `TOOLS` / `VEHICLE` / `MARKETING` / `BANK_CHARGES` / `OFFICE` / `REPAIRS_MAINT` / `PROF_FEES` / `MISC`) lives on the `Expense` row, not in `sourceType`. Same principle as the customer-side single `INVOICE` sourceType with detail on the line — makes ledger queries simpler than 11 sourceTypes for what is conceptually one event class.
+
+**11 expense accounts on the ledger** (`ACCOUNTS.EXP_*` in `src/lib/billing.ts`), one per category, all debit-normal. `ACCOUNT_TYPES` registry classifies each as EXPENSE alongside the pre-existing `COGS`. E5's trial balance / P&L / balance sheet reads the registry directly — no naming-convention magic, no special-casing for new expense categories.
+
+**Void, never delete.** Corrections happen via `voidExpenseAction` which:
+- Sets `Expense.status='VOID'`, and
+- Posts a reversing pair `DR Cash/Bank / CR <expense account>` under the same `sourceType='EXPENSE'` + `sourceId`.
+
+Net across both pairs = 0 on every account. The original record stays in the DB (audit) and stays visible in the UI marked "Void" with a strikethrough amount. The detail page shows a "Net per account" footer once voided, confirming every account netted with a green ✓.
+
+**Delete-guard trigger** (E1b migration): DB refuses `DELETE FROM "Expense"` without a per-tx session flag `app.allow_expense_delete='true'`. Every attempt writes to `ExpenseDeleteAudit`. Same class as the six existing ledger-source delete-guards (Invoice / Payment / AdvancePayment / SupplierBill / SupplierPayment / SupplierPaymentAllocation). App exposes no delete action; correction is void + re-record.
+
+**Common violation shape:** "add a delete-expense button, operators complain about not being able to fix mistakes fast enough." Deletes on ledger-writing rows are the exact class we spent the 2026-08-19 audit closing (78 orphaned Payment rows) and every subsequent phase locking down (Payables C2 / C5, this rule). The correction path is void + new expense with the right details. The strikethrough in the history table and the reversing pair in the ledger are the honest record.
+
+### Deferred: VAT input on expenses
+
+MVP records expenses at gross — the full amount goes to the expense account, no VAT split. That's wrong on paper for a shop that claims input VAT on rent, utilities, professional fees, and marketing, because E4's VAT summary will understate the reclaim on the shop's Form 201.
+
+**Why we deferred:** getting the VAT capture wrong is worse than the missing feature. Wrong number on a tax return produces a real problem; a missing reclaim opportunity is a known-and-flagged gap. Same shape as the Payables VAT decision at C3 — capture correctly the first time OR defer.
+
+**Build trigger:** before E4 (VAT summary). By the time E4 lands, VAT capture on expenses must be in — an accountant reading the summary needs the input VAT split for every expense that carries a supplier tax invoice. The shape to build:
+- `Expense.subtotal` + `Expense.vatAmount` columns (schema addition, split from the current single `amount` at migration time by treating all existing rows as `subtotal=amount, vatAmount=0` — MVP data was gross by design).
+- Receive-form VAT override alongside the amount input, defaulting to auto-calc from `Garage.vatRate` — same shape as the Payables C3 supplier-bill form.
+- Ledger post gains a `DR VAT-Input (vatAmount)` row alongside `DR <expense account> (subtotal)`; the credit to Cash/Bank stays at `total`. Same shape as C3's `DR Inventory + DR VAT-Input / CR AP` bill post.
+- Void mirrors: reverse the VAT row too.
+
+**Report the VAT shape separately before starting E4.** Don't skip the report — the accountant-facing form 201 is where wrong numbers surface as a real problem.
+
+---
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

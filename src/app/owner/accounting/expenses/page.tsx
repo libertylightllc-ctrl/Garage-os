@@ -101,29 +101,31 @@ export default async function ExpensesListPage({
                 </div>
             ) : null}
 
-            {/* Month-to-date band. Only shown when there's activity;
-                a fresh tenant with zero expenses this month sees the
-                record form and history straight away. */}
-            {monthExpenses.length > 0 ? (
-                <div className="rounded-xl border border-border bg-surface p-4">
-                    <div className="flex items-baseline justify-between gap-3">
-                        <div className="text-xs uppercase tracking-wide text-text-mute">
-                            This month
-                        </div>
-                        <div className="text-xl font-semibold tabular-nums">{money(monthTotal)}</div>
+            {/* Month-to-date band — always rendered, even when the
+                total is zero. AR 2026-09-02: an owner who records an
+                expense, voids it, and watches the tile disappear
+                will wonder whether the page broke. Showing AED 0.00
+                is the honest feedback. The inner top-categories list
+                stays gated (nothing to list = don't render the list
+                — that's an absence-is-honest case). */}
+            <div className="rounded-xl border border-border bg-surface p-4">
+                <div className="flex items-baseline justify-between gap-3">
+                    <div className="text-xs uppercase tracking-wide text-text-mute">
+                        This month
                     </div>
-                    {topCategories.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-mute">
-                            {topCategories.map(([cat, amt]) => (
-                                <span key={cat}>
-                                    {CATEGORY_LABEL[cat] ?? cat}:{" "}
-                                    <span className="tabular-nums font-medium text-text">{money(amt)}</span>
-                                </span>
-                            ))}
-                        </div>
-                    ) : null}
+                    <div className="text-xl font-semibold tabular-nums">{money(monthTotal)}</div>
                 </div>
-            ) : null}
+                {topCategories.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-mute">
+                        {topCategories.map(([cat, amt]) => (
+                            <span key={cat}>
+                                {CATEGORY_LABEL[cat] ?? cat}:{" "}
+                                <span className="tabular-nums font-medium text-text">{money(amt)}</span>
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
 
             {/* Record form. Server-action submit — no client component
                 needed. Category + method + date are the required

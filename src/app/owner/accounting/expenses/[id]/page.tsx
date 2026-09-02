@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAnyRole } from "@/lib/guard";
 import { prisma } from "@/lib/prisma";
 import { AppNav } from "@/components/app-nav";
+import { PrintButton } from "@/components/print-button";
 import { voidExpenseAction } from "@/app/actions/expenses";
 
 export const dynamic = "force-dynamic";
@@ -63,30 +64,48 @@ export default async function ExpenseDetailPage({
 
     const isActive = expense.status === "ACTIVE";
 
-    return (
-        <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 p-6">
-            <AppNav role={session.user.role as "OWNER" | "MASTER"} active="accounting" />
+    const todayIso = isoDate(new Date());
 
-            <div>
-                <div className="text-xs text-text-mute">
-                    <Link href="/owner/accounting" className="hover:underline">Accounting</Link>
-                    {" › "}
-                    <Link href="/owner/accounting/expenses" className="hover:underline">Expenses</Link>
-                    {" › "}
-                    {CATEGORY_LABEL[expense.category] ?? expense.category}
+    return (
+        <main
+            data-print-document="expense-record"
+            className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 p-6 print:max-w-none print:p-0"
+        >
+            <div className="print:hidden">
+                <AppNav role={session.user.role as "OWNER" | "MASTER"} active="accounting" />
+            </div>
+
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <div>
+                    <div className="text-xs text-text-mute print:hidden">
+                        <Link href="/owner/accounting" className="hover:underline">Accounting</Link>
+                        {" › "}
+                        <Link href="/owner/accounting/expenses" className="hover:underline">Expenses</Link>
+                        {" › "}
+                        {CATEGORY_LABEL[expense.category] ?? expense.category}
+                    </div>
+                    <h1 className="mt-1 flex flex-wrap items-baseline gap-3 text-2xl font-semibold tracking-tight">
+                        {CATEGORY_LABEL[expense.category] ?? expense.category}
+                        <span
+                            className={`text-sm font-medium ${isActive ? "text-emerald-700 dark:text-emerald-400" : "text-text-mute"}`}
+                        >
+                            {isActive ? "Active" : "Void"}
+                        </span>
+                        <span className="ms-1 hidden text-base font-normal text-text-mute print:inline">
+                            — Expense Record
+                        </span>
+                    </h1>
+                    <div className="mt-1 hidden text-xs text-text-mute print:block">
+                        Generated {todayIso}
+                    </div>
                 </div>
-                <h1 className="mt-1 flex flex-wrap items-baseline gap-3 text-2xl font-semibold tracking-tight">
-                    {CATEGORY_LABEL[expense.category] ?? expense.category}
-                    <span
-                        className={`text-sm font-medium ${isActive ? "text-emerald-700 dark:text-emerald-400" : "text-text-mute"}`}
-                    >
-                        {isActive ? "Active" : "Void"}
-                    </span>
-                </h1>
+                <PrintButton className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-transparent px-3 text-sm font-medium hover:bg-surface-2 print:hidden">
+                    🖨 Print
+                </PrintButton>
             </div>
 
             {error ? (
-                <div className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500">
+                <div className="rounded-xl border border-danger-500/40 bg-danger-50 px-4 py-2.5 text-sm text-danger-700 dark:border-danger-500/30 dark:bg-danger-500/10 dark:text-danger-500 print:hidden">
                     {error}
                 </div>
             ) : null}
@@ -174,11 +193,13 @@ export default async function ExpenseDetailPage({
                 ) : null}
             </div>
 
-            {/* Void affordance — only while ACTIVE */}
+            {/* Void affordance — only while ACTIVE. Hidden on print
+                — the printable record is a reference document, not
+                an input surface. */}
             {isActive ? (
                 <form
                     action={voidExpenseAction}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 print:hidden"
                 >
                     <input type="hidden" name="expenseId" value={expense.id} />
                     <div className="text-sm text-text-mute">

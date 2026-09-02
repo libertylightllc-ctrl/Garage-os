@@ -392,6 +392,7 @@ model Garage {
   advancePayments    AdvancePayment[]
   supplierBills      SupplierBill[]
   supplierPayments   SupplierPayment[]
+  expenses           Expense[]
   aiEvents           AiEvent[]
   subscription       Subscription?
   whatsAppAccount    WhatsAppAccount?
@@ -1229,6 +1230,7 @@ model Supplier {
   purchaseOrders PurchaseOrder[]
   bills          SupplierBill[]
   payments       SupplierPayment[]
+  expenses       Expense[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1949,6 +1951,88 @@ model SupplierPaymentDeleteAudit {
   attemptedBy       String
   note              String?
   attemptedAt       DateTime @default(now())
+
+  @@index([garageId])
+  @@index([outcome])
+  @@index([attemptedAt])
+}
+
+// ---------- Expenses (E1a, AR 2026-08-30) ----------
+// Money spent that isn't parts — rent, salaries, utilities, tools,
+// etc. Direct posting per AR's Q3: an expense IS the cash-out event,
+// no AP intermediary, no accrual step. Every row writes one
+// balanced ledger pair on record (DR <expense account> / CR Cash),
+// keyed sourceType='EXPENSE' (single source type per AR's Q2 —
+// category is on the row, not in sourceType).
+//
+// VAT-input split deferred (E4 follow-up) per AR's Q4 — MVP expenses
+// post gross. Rule 12 will document the deferral.
+model Expense {
+  id            String          @id @default(cuid())
+  garageId      String
+  garage        Garage          @relation(fields: [garageId], references: [id])
+  category      ExpenseCategory
+  amount        Decimal         @db.Decimal(12, 2)
+  // When cash left the shop. Single date because direct posting has
+  // no accrual/paid distinction (per AR's Q3 direct-posting call).
+  paidAt        DateTime
+  method        String          // Cash / Bank Transfer / Card / Cheque / Other
+  // Optional supplier link — a shop that pays rent to a supplier row
+  // (some track landlords as suppliers) can tie the expense to it.
+  // Nullable; most expenses (salaries, bank charges) won't have one.
+  supplierId    String?
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  note          String?
+  // Supabase storage URL for a scanned receipt. Upload UI ships as
+  // a follow-up commit — MVP accepts a typed URL only. Nullable.
+  attachmentUrl String?
+  // ACTIVE / VOID lifecycle. Correction path = void + re-record, per
+  // AR's void-not-delete discipline (matches SupplierBill.status).
+  status        ExpenseStatus   @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId, paidAt])
+  @@index([garageId, status])
+  @@index([supplierId])
+}
+
+enum ExpenseCategory {
+  RENT
+  SALARIES
+  UTILITIES
+  TOOLS
+  VEHICLE
+  MARKETING
+  BANK_CHARGES
+  OFFICE
+  REPAIRS_MAINT
+  PROF_FEES
+  MISC
+}
+
+enum ExpenseStatus {
+  ACTIVE
+  VOID
+}
+
+// Delete-audit table — same shape as SupplierBillDeleteAudit. The
+// BEFORE DELETE trigger (lands in E1b) writes here and RAISEs.
+// Only 'allowed' rows durably persist per the escape-hatch pattern.
+model ExpenseDeleteAudit {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  expenseId   String
+  garageId    String
+  category    String
+  amount      Decimal  @db.Decimal(12, 2)
+  paidAt      DateTime
+  method      String
+  status      String
+  outcome     String
+  attemptedBy String
+  note        String?
+  attemptedAt DateTime @default(now())
 
   @@index([garageId])
   @@index([outcome])

@@ -349,7 +349,69 @@ export const ACCOUNTS = {
   // outstanding; the VAT-Payable balance already tracks output tax
   // owed. Difference is the net VAT settlement each period.
   VAT_INPUT: "VAT Recoverable",
+  // ---------- Expenses (E1a, AR 2026-08-30) ----------
+  // 11 standard UAE-garage expense accounts. All debit-normal.
+  // Every recordExpenseAction posts DR one of these / CR Cash/Bank
+  // (see E1c). One `sourceType='EXPENSE'` on the LedgerEntry rows
+  // per AR's Q2 — category lives on the Expense row, not in
+  // sourceType, so the ledger surface stays simple.
+  //
+  // Hardcoded (matches the existing chart pattern). No per-garage
+  // editable chart yet — same "wait for a real ask" discipline
+  // that keeps SALES as one revenue account across every shop.
+  EXP_RENT: "Rent Expense",
+  EXP_SALARIES: "Salaries & Wages Expense",
+  EXP_UTILITIES: "Utilities Expense",
+  EXP_TOOLS: "Tools & Equipment Expense",
+  EXP_VEHICLE: "Motor Vehicle Expense",
+  EXP_MARKETING: "Marketing Expense",
+  EXP_BANK_CHARGES: "Bank Charges",
+  EXP_OFFICE: "Office Supplies Expense",
+  EXP_REPAIRS_MAINT: "Repairs & Maintenance Expense",
+  EXP_PROF_FEES: "Professional Fees Expense",
+  EXP_MISC: "Miscellaneous Expense",
 } as const;
+
+// ---------- Account classification (E1a, AR 2026-08-30) ----------
+//
+// Explicit registry so E5's trial balance / P&L / balance sheet can
+// group accounts into TB sections without string-matching account
+// names. Every account declared in ACCOUNTS above must appear here.
+// The test in src/lib/__tests__/billing-account-types.test.ts pins
+// exhaustiveness — a new account added to ACCOUNTS without adding a
+// row here fails the build.
+//
+// EQUITY isn't yet used (no Retained Earnings / Owner's Capital
+// accounts exist). When E5 lands and closes net income to Retained
+// Earnings, an EQUITY row lands here alongside the constant.
+export type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE";
+
+export const ACCOUNT_TYPES: Record<string, AccountType> = {
+  // Assets
+  [ACCOUNTS.AR]:        "ASSET",
+  [ACCOUNTS.CASH]:      "ASSET",
+  [ACCOUNTS.INVENTORY]: "ASSET",
+  [ACCOUNTS.VAT_INPUT]: "ASSET",
+  // Liabilities
+  [ACCOUNTS.AP]:          "LIABILITY",
+  [ACCOUNTS.VAT_PAYABLE]: "LIABILITY",
+  [ACCOUNTS.DEPOSITS]:    "LIABILITY",
+  // Revenue
+  [ACCOUNTS.SALES]:     "REVENUE",
+  // Expenses
+  [ACCOUNTS.COGS]:               "EXPENSE",
+  [ACCOUNTS.EXP_RENT]:           "EXPENSE",
+  [ACCOUNTS.EXP_SALARIES]:       "EXPENSE",
+  [ACCOUNTS.EXP_UTILITIES]:      "EXPENSE",
+  [ACCOUNTS.EXP_TOOLS]:          "EXPENSE",
+  [ACCOUNTS.EXP_VEHICLE]:        "EXPENSE",
+  [ACCOUNTS.EXP_MARKETING]:      "EXPENSE",
+  [ACCOUNTS.EXP_BANK_CHARGES]:   "EXPENSE",
+  [ACCOUNTS.EXP_OFFICE]:         "EXPENSE",
+  [ACCOUNTS.EXP_REPAIRS_MAINT]:  "EXPENSE",
+  [ACCOUNTS.EXP_PROF_FEES]:      "EXPENSE",
+  [ACCOUNTS.EXP_MISC]:           "EXPENSE",
+};
 
 /** Issuing an invoice: DR AR (total) / CR Sales (subtotal) + CR VAT Payable (vat). */
 export function invoiceLedger(subtotal: number, vatAmount: number, total: number): LedgerLine[] {

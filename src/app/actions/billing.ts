@@ -24,6 +24,7 @@ import {
   lineEditErrorCode,
   findZeroPricedPartLines,
   formatInvoiceNo,
+  ACCOUNTS,
   type DraftLine,
   type LineKind,
 } from "@/lib/billing";
@@ -1058,7 +1059,14 @@ export async function generateInvoiceAction(formData: FormData) {
     const g = await tx.garage.update({
       where: { id: user.garageId },
       data: { invoiceSeq: { increment: 1 } },
-      select: { invoiceSeq: true, name: true, trn: true, phone: true },
+      select: {
+        invoiceSeq: true,
+        name: true,
+        trn: true,
+        phone: true,
+        // C4a — flag for the COGS post that follows. Off = pre-C4 shape.
+        cogsEnabled: true,
+      },
     });
     const seq = g.invoiceSeq;
 
@@ -1169,6 +1177,63 @@ export async function generateInvoiceAction(formData: FormData) {
       })),
     });
 
+    // C4a — COGS at invoice (AR 2026-09-02). Same tx as the invoice
+    // ledger post above. Gated by garage.cogsEnabled so a garage
+    // that hasn't flipped the flag sees the pre-C4 invoice ledger
+    // unchanged. When enabled:
+    //   • All-or-nothing per invoice. If any PART line has null
+    //     unitCost, skip the COGS post entirely. Same "don't fake
+    //     missing cost" discipline as the /owner Gross-profit tile
+    //     and JobProfitCard. E3's P&L will name uncostable invoices
+    //     via its coverage line.
+    //   • Reads unitCost from the frozen InvoiceLine snapshots via
+    //     resolveLineCost(l) — same helper used above at line-create.
+    //     No live Part.cost read here; the invoice records what was
+    //     true when it was issued.
+    //   • Post shape: DR COGS / CR Inventory for SUM(qty × unitCost).
+    //     sourceType='INVOICE_COGS' distinct from 'INVOICE' so the
+    //     void reversal can find (and reverse) the COGS pair
+    //     specifically. Same discipline as SUPPLIER_BILL vs
+    //     SUPPLIER_BILL_ADJUSTMENT.
+    if (g.cogsEnabled) {
+      const partLines = mergedLines.filter((l) => l.kind === "PART");
+      if (partLines.length > 0) {
+        const partCosts = partLines.map((l) => resolveLineCost(l));
+        const allCosted = partCosts.every((c) => c !== null);
+        if (allCosted) {
+          let cogsTotal = 0;
+          for (let i = 0; i < partLines.length; i++) {
+            const cost = Number(partCosts[i]!);
+            const qty = Number(partLines[i].qty);
+            cogsTotal += qty * cost;
+          }
+          cogsTotal = Math.round(cogsTotal * 100) / 100;
+          if (cogsTotal > 0) {
+            await tx.ledgerEntry.createMany({
+              data: [
+                {
+                  garageId: user.garageId,
+                  account: ACCOUNTS.COGS,
+                  debit: cogsTotal,
+                  credit: 0,
+                  sourceType: "INVOICE_COGS",
+                  sourceId: inv.id,
+                },
+                {
+                  garageId: user.garageId,
+                  account: ACCOUNTS.INVENTORY,
+                  debit: 0,
+                  credit: cogsTotal,
+                  sourceType: "INVOICE_COGS",
+                  sourceId: inv.id,
+                },
+              ],
+            });
+          }
+        }
+      }
+    }
+
     // ── Slice 6b: migrate advance payments onto the new invoice ──
     // Any AdvancePayment rows recorded against this job (after estimate
     // approval, before TECH_COMPLETE) get pulled in now. For each:
@@ -1271,7 +1336,18 @@ async function ownedEditableInvoice(invoiceId: string, garageId: string) {
 }
 
 async function recomputeInvoice(invoiceId: string, garageId: string) {
-  const lines = await prisma.invoiceLine.findMany({ where: { invoiceId } });
+  const [lines, garage] = await Promise.all([
+    prisma.invoiceLine.findMany({ where: { invoiceId } }),
+    // C4a — recompute needs cogsEnabled to know whether to re-post
+    // the COGS pair too. Fetched here rather than passed in so
+    // every existing caller (addInvoiceLineAction, editInvoiceLineAction,
+    // removeInvoiceLineAction, top-up path in generateInvoiceAction)
+    // keeps its signature.
+    prisma.garage.findUnique({
+      where: { id: garageId },
+      select: { cogsEnabled: true },
+    }),
+  ]);
   const draft: DraftLine[] = lines.map((l) => ({
     kind: l.kind as LineKind,
     description: l.description,
@@ -1301,6 +1377,48 @@ async function recomputeInvoice(invoiceId: string, garageId: string) {
         sourceId: invoiceId,
       })),
     });
+
+    // C4a — replace COGS rows on recompute so a line edit that
+    // adds/removes/changes a PART line keeps the ledger in step.
+    // All-or-nothing per invoice: any null unitCost → no COGS post
+    // for this invoice. Reads directly from the frozen InvoiceLine
+    // snapshots (no live Part.cost re-read here — those were locked
+    // at line-create time via resolveLineCost).
+    if (garage?.cogsEnabled) {
+      await tx.ledgerEntry.deleteMany({
+        where: { sourceType: "INVOICE_COGS", sourceId: invoiceId },
+      });
+      const partLines = lines.filter((l) => l.kind === "PART");
+      if (partLines.length > 0 && partLines.every((l) => l.unitCost !== null)) {
+        let cogsTotal = 0;
+        for (const l of partLines) {
+          cogsTotal += Number(l.qty) * Number(l.unitCost);
+        }
+        cogsTotal = Math.round(cogsTotal * 100) / 100;
+        if (cogsTotal > 0) {
+          await tx.ledgerEntry.createMany({
+            data: [
+              {
+                garageId,
+                account: ACCOUNTS.COGS,
+                debit: cogsTotal,
+                credit: 0,
+                sourceType: "INVOICE_COGS",
+                sourceId: invoiceId,
+              },
+              {
+                garageId,
+                account: ACCOUNTS.INVENTORY,
+                debit: 0,
+                credit: cogsTotal,
+                sourceType: "INVOICE_COGS",
+                sourceId: invoiceId,
+              },
+            ],
+          });
+        }
+      }
+    }
   });
 }
 
@@ -2021,6 +2139,54 @@ export async function voidInvoiceAction(formData: FormData) {
         sourceId: inv.id,
       })),
     });
+
+    // C4a — reverse the COGS pair too if the invoice had one. Looks
+    // up actual INVOICE_COGS rows rather than recomputing from
+    // InvoiceLine — handles the edge cases cleanly:
+    //   • cogsEnabled was flipped OFF after generation → no COGS
+    //     rows exist → nothing to reverse.
+    //   • cogsEnabled was flipped ON after generation → still no
+    //     COGS rows for THIS invoice (generation happened when off)
+    //     → nothing to reverse.
+    //   • Skipped-at-generation invoice (any null PART unitCost) →
+    //     no COGS rows → nothing to reverse.
+    // Only touches the ledger when the COGS pair actually exists,
+    // reversal always matches whatever landed. sourceType
+    // 'INVOICE_COGS_ADJUSTMENT' keeps reversals countable at
+    // ledger-report time, same discipline as SUPPLIER_BILL_ADJUSTMENT.
+    const cogsRows = await tx.ledgerEntry.findMany({
+      where: {
+        garageId: user.garageId,
+        sourceType: "INVOICE_COGS",
+        sourceId: inv.id,
+      },
+      select: { debit: true },
+    });
+    if (cogsRows.length > 0) {
+      const cogsTotal = cogsRows.reduce((s, r) => s + Number(r.debit), 0);
+      if (cogsTotal > 0) {
+        await tx.ledgerEntry.createMany({
+          data: [
+            {
+              garageId: user.garageId,
+              account: ACCOUNTS.COGS,
+              debit: 0,
+              credit: cogsTotal,
+              sourceType: "INVOICE_COGS_ADJUSTMENT",
+              sourceId: inv.id,
+            },
+            {
+              garageId: user.garageId,
+              account: ACCOUNTS.INVENTORY,
+              debit: cogsTotal,
+              credit: 0,
+              sourceType: "INVOICE_COGS_ADJUSTMENT",
+              sourceId: inv.id,
+            },
+          ],
+        });
+      }
+    }
   });
 
   revalidatePath(back);
@@ -2082,7 +2248,14 @@ export async function reissueInvoiceAction(formData: FormData) {
     const g = await tx.garage.update({
       where: { id: user.garageId },
       data: { invoiceSeq: { increment: 1 } },
-      select: { invoiceSeq: true, name: true, trn: true, phone: true },
+      select: {
+        invoiceSeq: true,
+        name: true,
+        trn: true,
+        phone: true,
+        // C4a — flag for the COGS post that follows. Off = pre-C4 shape.
+        cogsEnabled: true,
+      },
     });
 
     // Re-snapshot the customer TRN — it may have been corrected on

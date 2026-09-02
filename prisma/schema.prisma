@@ -353,6 +353,16 @@ model Garage {
   // PartMovement writes. When false, receive is unchanged (same code
   // path as before this shipped). Same shape as erpSyncEnabled.
   payablesEnabled        Boolean  @default(false)
+  // COGS at invoice (AR 2026-09-02, C4a). Off by default — no
+  // existing garage's generateInvoiceAction path changes. When
+  // true, the invoice ledger post additionally writes DR COGS /
+  // CR Inventory for SUM(PART qty × unitCost) from the frozen
+  // InvoiceLine snapshots, all-or-nothing per invoice (any null
+  // unitCost → skip the whole COGS post). Void reverses the pair
+  // when it exists. Enables the P&L (E3) to read parts-cost from
+  // the ledger. Same rollout shape as payablesEnabled — prove on
+  // Demo Garage first, then flip per-garage.
+  cogsEnabled            Boolean  @default(false)
   // Shop-wide fallback for cold-start outbound customer messages
   // (AR 2026-08-19). Null = the shop hasn't set one; the resolver
   // falls through to "en" as last resort. UAE default was Arabic

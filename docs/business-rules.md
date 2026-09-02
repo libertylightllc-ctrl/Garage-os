@@ -486,10 +486,16 @@ The P&amp;L computes from `LedgerEntry` rows alone — no aggregation over `Invo
 
 **Coverage banner.** Two conditions surface a warning next to the report:
 
-1. `garage.cogsEnabled = false` **and** revenue &gt; 0 → the whole COGS line is zero because the per-garage flag is off. Explanation: enable after a proof invoice balances (rule 10). Until then Gross Profit overstates.
-2. `cogsEnabled = true` but not every invoice in the period has a COGS pair → "N of M invoices costed." Explanation: pre-cutover invoices stay uncosted permanently (rule 10 cutover invariant), and any invoice whose PART line had a null unitCost skipped its COGS post (rule 10 all-or-nothing).
+1. `garage.cogsEnabled = false` **and** revenue &gt; 0 → the whole COGS line is zero because the per-garage flag is off. Explanation: cost tracking hasn't been switched on for this garage. Until then Gross Profit overstates.
+2. `cogsEnabled = true` but not every invoice in the period has a COGS pair → "N of M invoices costed (X%)." Explanation: invoices raised before cost tracking was switched on stay uncosted; invoices whose PART lines had no supplier cost recorded also skipped their cost-of-sales entry (see the C4 rollout in rule 10 for the technical mechanism).
 
 Full coverage (or zero revenue) → no banner. Same "surface the gap, don't fake it" discipline as rule 12 on VAT.
+
+**Customer-facing text has no internal spec references.** Rule numbers, `cogsEnabled` flag names, `sourceType` values, "cutover" jargon — those live in code comments and this doc. The banner and every other operator surface uses plain wording: "cost tracking is off" not "cogsEnabled=false", "invoices raised before cost tracking was switched on" not "pre-cutover invoices stay uncosted (rule 10)". A shop owner reads the P&amp;L; they never opened this file. If the banner sends them here to understand what a warning means, the banner failed.
+
+**Coverage percentage stays prominent as coverage improves.** At 2% ("1 of 48 invoices costed") the raw ratio is self-evidently absurd — the banner does easy work. At 70% ("42 of 60 invoices costed") the margin reads plausibly and Gross Profit LOOKS trustworthy at a glance; the banner is doing the load-bearing work of naming that 18 invoices are missing cost data. That's exactly when the percentage cannot shrink into a body sentence. The banner renders the "N of M (X%)" line in `text-base font-semibold` inside a warning-tinted border regardless of the ratio, and the explanatory body stays smaller. Don't reintroduce a "warn louder when the number is worse" gradient — the loudest signal has to be there when the number is *closest to plausible*, because that's when the operator most needs the reminder.
+
+**Coverage banner prints alongside the P&amp;L.** The coverage line is inside `data-print-document="pnl"` with NO `print:hidden` class. A printed P&amp;L that leaves the office without the coverage caveat beside it is the document that gets believed at face value by whoever reads it next (accountant, bank, spouse). The nav / filter / preset buttons hide on print; the numbers and their caveats do not.
 
 **Half-open interval.** Date filter uses `[from, to)` — a row at exactly `to` is excluded. Consequence: "September 2026" = `from = 2026-09-01, to = 2026-10-01`. A ledger post at `2026-10-01 00:00:00Z` lands in October, not September. Documented in the page's "To (exclusive)" label; test `src/lib/__tests__/pnl.test.ts` pins the boundary behaviour.
 

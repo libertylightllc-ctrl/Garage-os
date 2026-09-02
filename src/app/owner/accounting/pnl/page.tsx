@@ -19,13 +19,22 @@ export const dynamic = "force-dynamic";
  * rule. Date range from URL (?from=YYYY-MM-DD&to=YYYY-MM-DD), defaulting
  * to month-to-date. Presets link to fresh URLs — no client-side state.
  *
- * Coverage banner:
- *   • cogsEnabled=false → "COGS accounting is off for this garage.
- *     Turn it on in staff settings once you're ready to see cost-of-
- *     sales in reports." (surfaces the WHY of a missing COGS line)
- *   • cogsEnabled=true + partial coverage → "N of M invoices in this
- *     period are costed. Pre-cutover invoices stay uncosted (rule 10)."
+ * Coverage banner (customer-facing text — no internal rule numbers,
+ * see rule 13 "stay prominent" note):
+ *   • cogsEnabled=false → "Cost tracking is off for this garage.
+ *     Revenue is real. COGS shows AED 0 because parts-cost tracking
+ *     hasn't been switched on yet."
+ *   • cogsEnabled=true + partial coverage → "N of M invoices costed
+ *     (X%)" in text-base/semibold so the percentage stays prominent
+ *     even at 70%+ coverage when the raw ratio stops being alarming;
+ *     body explains "invoices raised before cost tracking was
+ *     switched on stay uncosted."
  *   • Full coverage → no banner.
+ *
+ * Banner is inside data-print-document="pnl" (no print:hidden) —
+ * prints alongside the P&L body. A P&L that leaves the building
+ * without the coverage line beside it is the document that gets
+ * believed.
  */
 export default async function PnlPage({
     searchParams,
@@ -146,12 +155,11 @@ export default async function PnlPage({
                 {/* Coverage banner — only when there's something to explain */}
                 {pnl.coverage.cogsFlagOff && pnl.revenueTotal > 0 ? (
                     <div className="rounded-lg border border-warning-500/40 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-                        <div className="font-medium">COGS accounting is off for this garage.</div>
+                        <div className="font-medium">Cost tracking is off for this garage.</div>
                         <div className="mt-1 text-xs">
-                            Revenue is real. Cost of Goods Sold shows AED 0 because the per-garage
-                            COGS flag hasn't been turned on yet — enable it after a proof invoice
-                            balances (see rule 10). Until then, Gross Profit here overstates by
-                            the parts-cost of every invoice generated this period.
+                            Revenue is real. Cost of Goods Sold shows AED 0 because parts-cost
+                            tracking hasn't been switched on yet. Until it is, Gross Profit
+                            here overstates by the parts-cost of every invoice raised this period.
                         </div>
                     </div>
                 ) : null}
@@ -159,14 +167,15 @@ export default async function PnlPage({
                 pnl.coverage.invoicesTotal > 0 &&
                 pnl.coverage.invoicesCosted < pnl.coverage.invoicesTotal ? (
                     <div className="rounded-lg border border-warning-500/40 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
-                        <div className="font-medium">
+                        <div className="text-base font-semibold">
                             {pnl.coverage.invoicesCosted} of {pnl.coverage.invoicesTotal} invoices costed
                             ({coveragePct}%)
                         </div>
                         <div className="mt-1 text-xs">
-                            Pre-cutover invoices stay uncosted permanently (rule 10). Any invoice
-                            whose PART line was missing a supplier cost also skipped its COGS
-                            post. Gross Profit here overstates by the parts-cost of the{" "}
+                            Invoices raised before cost tracking was switched on stay uncosted.
+                            Invoices whose PART lines had no supplier cost recorded also skipped
+                            their cost-of-sales entry. Gross Profit here overstates by the
+                            parts-cost of the{" "}
                             {pnl.coverage.invoicesTotal - pnl.coverage.invoicesCosted} uncosted
                             invoice(s) in this period.
                         </div>

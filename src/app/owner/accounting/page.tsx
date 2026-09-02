@@ -52,6 +52,13 @@ export default async function AccountingHubPage() {
             icon: "📈",
         },
         {
+            href: "/owner/accounting/vat",
+            title: "VAT summary",
+            blurb: "Output VAT, input VAT, net payable — the figures your accountant transcribes into Form 201 on the FTA portal. Owner-only.",
+            visibleTo: "OWNER_ONLY",
+            icon: "🧮",
+        },
+        {
             href: "/owner/accounting/export",
             title: "CSV export",
             blurb: "Download journal, invoices, payments, customers, chart-of-accounts for your accountant.",

@@ -512,6 +512,26 @@ Full coverage (or zero revenue) → no banner. Same "surface the gap, don't fake
 
 **Common violation shape:** "let's read Invoice.total in the P&amp;L instead of joining ledger, it's simpler." That's the divergence path — an invoice's total changes on edit and void, and the ledger has the history; the Invoice row has only the current state. The auditor sees the ledger. If the P&amp;L reads Invoice.total, they diverge, and the wrong one is the report. Same shape as computing Gross Profit from `Part.cost` live rather than the frozen `InvoiceLine.unitCost` — the snapshot exists so old invoices don't rewrite on today's price movements (see `src/lib/invoice-cost-snapshot.ts`).
 
+## 14. VAT summary reads the ledger and doesn&apos;t file returns
+
+The VAT summary (E4, AR 2026-09-02) computes from `LedgerEntry` rows only — output VAT from `VAT_PAYABLE` (CR-normal, flipped for display), input VAT from `VAT_INPUT` (DR-normal). No aggregation over `Invoice.vatAmount` / `Expense.vatAmount` / `SupplierBill.vatAmount`. Same rule 13 discipline as the P&amp;L — reading the source tables lets the report diverge from the ledger the auditor sees, and there is no version of that where the ledger is the wrong one.
+
+**Net payable formula.** `netPayable = outputVat − inputVat`. Positive means the shop owes the FTA; negative means a refund is due. The number is presented that way on the page (labeled "Net VAT payable" or "Net VAT refund" depending on sign) — no unsigned absolute value that leaves the direction ambiguous.
+
+**Void reversals net cleanly.** `INVOICE_VOID` posts `DR VAT_PAYABLE` reversing the original CR; `SUPPLIER_BILL_ADJUSTMENT` posts `CR VAT_INPUT` reversing the original DR; `EXPENSE` void reverses the VAT row when it exists (E1f). Reading VAT balances across ALL sourceTypes gives the correct net — the summary never double-counts a voided invoice or expense.
+
+**Coverage banner — same shape as the P&amp;L coverage note.** Two conditions:
+1. `expensesTotal &gt; 0` AND `expensesWithVat = 0` → **every** ACTIVE expense in the period reads zero VAT. Usually means nobody entered the split when recording them; the reclaim is under-reported. Banner names the number and directs to the Expenses page.
+2. Partial coverage (some carry VAT, some don&apos;t) → legitimate for salaries, most bank charges, and any zero-VAT supplier; but flagged so the operator can review. Percentage renders `text-base font-semibold` per rule 13 &sect;"stay prominent as coverage improves".
+
+Supplier bills also carry a coverage count, but informational only — Payables C3 enforces VAT capture at receive-form time, so a zero-VAT bill on that side is a deliberate operator choice, not an omission.
+
+**Half-open interval.** `[from, to)`. A ledger post at `2026-10-01 00:00:00Z` lands in Q4, not Q3. Quarter presets (`Q1..Q4`) generate boundaries `[YYYY-Qm-01, YYYY-Q(m+3)-01)`.
+
+**We produce figures, we don&apos;t file.** Every mention of the return on the page names the FTA portal as the filing surface. The page carries an always-visible "This is a working summary, not a return" note that prints alongside the numbers (same discipline as the P&amp;L coverage banner). The page never has a "Submit return" button, a "Mark filed" toggle, or anything else that could be misread as filing. Corrections, adjustments, and the actual submission live on `tax.gov.ae`; this page is what the accountant transcribes into the boxes there.
+
+**Common violation shape:** "add a `Mark as filed` toggle on the VAT summary so the operator can track what they&apos;ve submitted." That toggle is a Form 201 tracking system, and it belongs on the FTA portal or the accountant&apos;s ledger — not here. Once we start tracking filing state we start being wrong about it (the FTA rejects a submission, the operator forgets to unmark), and the shop&apos;s record diverges from the government&apos;s. If a shop needs to track what they&apos;ve filed, that&apos;s a separate feature request that spec first.
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

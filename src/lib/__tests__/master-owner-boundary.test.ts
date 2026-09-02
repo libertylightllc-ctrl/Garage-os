@@ -56,6 +56,10 @@ const OWNER_ONLY: readonly string[] = [
   // COGS, gross + net profit. Owner-only per financial-reporting
   // rule — same bucket as ledger + analytics + billing.
   "src/app/owner/accounting/pnl/page.tsx",
+  // VAT summary (E4, AR 2026-09-02). Reads the ledger to compute
+  // output VAT / input VAT / net payable for a quarter. Same
+  // financial-reporting bucket as P&L + ledger — MASTER stays barred.
+  "src/app/owner/accounting/vat/page.tsx",
   // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
   // toggle + dead-letter replay — same finance/admin bucket as
   // billing and ledger, MASTER stays barred.

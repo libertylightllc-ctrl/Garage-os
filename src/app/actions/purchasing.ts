@@ -1003,6 +1003,13 @@ export async function receivePurchaseOrderAction(formData: FormData) {
             garageId: user.garageId,
             purchaseOrderId: po.id,
             kind: "PO_RECEIPT",
+            // E6 (AR 2026-09-03) — snapshot unit cost so the purchase
+            // summary can compute per-part spend without inferring
+            // from PoLine.unitCost (which drifts across partial
+            // receives). r.unitCost is the frozen PO-line value at
+            // the time of this receive. Nullable — rare legacy
+            // pre-Layer-0 lines had no unitCost captured.
+            unitCost: r.unitCost,
           },
         });
       }
@@ -1155,7 +1162,10 @@ export async function returnPurchaseOrderAction(formData: FormData) {
   const po = await prisma.purchaseOrder.findFirst({
     where: { id: poId, garageId: user.garageId },
     include: {
-      lines: { select: { id: true, partId: true, receivedQty: true, returnedQty: true } },
+      // unitCost added for E6 — PartMovement snapshots the cost at
+      // return-time too, matching the receive path. Same value the
+      // original PO_RECEIPT wrote, so a return reverses cleanly.
+      lines: { select: { id: true, partId: true, receivedQty: true, returnedQty: true, unitCost: true } },
       supplier: { select: { name: true } },
     },
   });
@@ -1165,7 +1175,7 @@ export async function returnPurchaseOrderAction(formData: FormData) {
 
   // Parse the per-line "return now" quantities. Each must be a whole number
   // between 0 and what's still returnable (receivedQty − alreadyReturned).
-  const returns: { lineId: string; partId: string; receivedQty: number; returnNow: number }[] = [];
+  const returns: { lineId: string; partId: string; receivedQty: number; returnNow: number; unitCost: typeof po.lines[number]["unitCost"] }[] = [];
   for (const l of po.lines) {
     const raw = String(formData.get(`ret_${l.id}`) ?? "").trim();
     const n = raw === "" ? 0 : Number(raw);
@@ -1179,7 +1189,7 @@ export async function returnPurchaseOrderAction(formData: FormData) {
       fail("Link a catalogue part to this line before returning to supplier.", back);
     }
     if (n > 0 && l.partId !== null) {
-      returns.push({ lineId: l.id, partId: l.partId, receivedQty: l.receivedQty, returnNow: n });
+      returns.push({ lineId: l.id, partId: l.partId, receivedQty: l.receivedQty, returnNow: n, unitCost: l.unitCost });
     }
   }
   if (returns.length === 0) fail("Enter a quantity to return on at least one line.", back);
@@ -1212,6 +1222,11 @@ export async function returnPurchaseOrderAction(formData: FormData) {
             garageId: user.garageId,
             purchaseOrderId: po.id,
             kind: "PO_RETURN",
+            // E6 — mirror the receive-side snapshot. Positive dirham
+            // value on a negative delta = "we sent back this many
+            // dirhams' worth of parts." The purchase summary nets
+            // returns against receives on the same partId.
+            unitCost: r.unitCost,
           },
         });
       }

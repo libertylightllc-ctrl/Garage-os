@@ -33,6 +33,11 @@ const OPEN_TO_MASTER: readonly string[] = [
   "src/app/owner/inventory/[id]/page.tsx",
   "src/app/owner/inventory/import/[id]/page.tsx",
   "src/app/owner/bays/page.tsx",
+  // Purchase summary (E6, AR 2026-09-03). "What did I buy and what
+  // did I pay" — operator surface, sits with Payables + Purchasing +
+  // Inventory. MASTER-open unlike the P&L / VAT financial-reporting
+  // pages.
+  "src/app/owner/accounting/purchases/page.tsx",
 ];
 
 // The 8 owner-only routes MASTER must NOT be able to load. Every one

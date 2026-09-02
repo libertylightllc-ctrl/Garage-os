@@ -45,6 +45,13 @@ export default async function AccountingHubPage() {
             icon: "🧾",
         },
         {
+            href: "/owner/accounting/purchases",
+            title: "Purchases",
+            blurb: "What you bought and what you paid — by supplier and by part.",
+            visibleTo: "OWNER_MASTER",
+            icon: "🛒",
+        },
+        {
             href: "/owner/accounting/pnl",
             title: "Profit & Loss",
             blurb: "Revenue, cost of goods sold, expenses, gross and net profit. Owner-only.",

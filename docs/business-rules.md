@@ -560,6 +560,25 @@ Concretely — for any Invoice column that only feeds reports, the correction pa
 
 **Backfill discipline for pre-cutover invoices.** The E4b migration back-fills `Invoice.emirate` from `Garage.emirate` per row (null-safe: garages without emirate leave their invoices null too). Rule 14 discloses that pre-cutover invoices carry an INFERRED value from the garage's current setting — accurate if the shop never moved, best-effort if it did. The auditor reading the export knows the field wasn't captured at generation time; the per-invoice snapshot is authoritative for anything raised after cutover.
 
+## 15. Purchase summary reads the ledger and doesn&apos;t merge stock with direct-fit
+
+The purchase summary (E6, AR 2026-09-03) answers &quot;what did I buy and what did I pay&quot; — an operator surface, MASTER + OWNER open, distinct from the P&amp;L / VAT / Trial-Balance financial-reporting bucket. Same ledger-only discipline (rules 13 + 14) for money numbers: `totalPurchased` from `VAT_INPUT`+`INVENTORY`-side AP credits (`sourceType='SUPPLIER_BILL'` netted with `SUPPLIER_BILL_ADJUSTMENT`), `totalPaid` from AP debits (`sourceType='SUPPLIER_PAYMENT_ALLOCATION'`). Nothing reads `SupplierBill.total` or `SupplierPayment.amount` for the totals; those tables answer &quot;what is the current state&quot; not &quot;what happened in this period.&quot;
+
+**Stock and direct-fit are separate flows and stay separate in the report.** Direct-fit lines don&apos;t post to AP (rule 10) — the parts never enter Inventory, the shop pays the supplier out of hand or the operator uses the `billSubtotal` override to reconcile a mixed bill. Consequences for this report:
+- `totalPurchased` (from AP) EXCLUDES direct-fit spend.
+- The by-part breakdown reads from `PartMovement` (stock only) — direct-fit parts land on `JobPartReceipt`, which the by-part query does NOT union in.
+- A coverage banner surfaces direct-fit spend explicitly, so an owner comparing &quot;total purchased&quot; to &quot;by-part total&quot; sees the gap named rather than guesses at it.
+
+**Never merge the two into a single &quot;total spent&quot; number.** Merging looks convenient but breaks the AP invariant every downstream number (Payables aging, supplier statements, cash-flow forecasting) relies on. The right answer to &quot;what did I spend&quot; over a period is two numbers: purchases-on-account + direct-fit-out-of-hand. The report presents them separately and names the split. Same &quot;surface the gap, don&apos;t fake it&quot; discipline as rule 13.
+
+**By-part spend reads the frozen snapshot on `PartMovement.unitCost`, not the live `Part.cost`.** Live `Part.cost` is a rolling weighted average — reading it at report time attributes today&apos;s cost to a receive that happened last quarter, producing a number that changes every time a new receive shifts the average. The snapshot (added E6, populated at receive-write time by `receivePurchaseOrderAction`) freezes what was actually paid on that specific receive. Historical pre-E6 rows carry null `unitCost`; the by-part row still shows the qty but the spend renders as &quot;—&quot; and the coverage banner names the uncosted-movement count. Same discipline as `InvoiceLine.unitCost` (rule 10) and `Invoice.emirate` (rule 14): frozen at write, never live-recomputed, cutover rows disclosed.
+
+**Never parse `PartMovement.reason` for structural information.** The `reason` field is free-text human context (&quot;Received PO REF-123 — Al Falah Motors&quot;) written for operator readability. It is NOT a structural link. Anything the report needs to know about a movement — which PO it came from, which supplier, what the cost was — must come from typed columns (`purchaseOrderId`, `partId`, `unitCost`, joined-through `Part`/`PurchaseOrder`/`Supplier`). A report that parses `reason` breaks silently the first time a writer changes the string, and the drift is invisible until an accountant asks why the numbers stopped matching.
+
+**Outstanding is a snapshot, not a period aggregate.** &quot;What do I still owe this supplier&quot; asks about current state, not about a date range. The by-supplier &quot;Outstanding&quot; column sums `SupplierBill.total − paidAmount` across all non-VOID bills for that supplier, regardless of `billDate`. Consequence: two runs of the report over different periods can show the same &quot;Outstanding&quot; number for a supplier — that&apos;s correct behaviour, not a bug. The banner clarifies this in one line.
+
+**Common violation shape:** &quot;the operator wants one big Purchases number, merge stock + direct-fit.&quot; Every subsequent report that reconciles against AP (Payables, statements, the P&amp;L&apos;s Cost of Goods Sold line) then diverges from the merged number, and the shop&apos;s books stop tying out. If the operator&apos;s question is &quot;how much cash left the shop for parts,&quot; that&apos;s a different report — combine the AP-payment number with direct-fit-cash and label it as a cash-flow view, not a purchase view.
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

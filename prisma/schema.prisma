@@ -1631,6 +1631,15 @@ model PartMovement {
   purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
   kind            PartMovementKind @default(MANUAL_ADJUSTMENT)
   delta           Int
+  // Snapshot of per-unit cost at the time this movement was written.
+  // AR 2026-09-03 (E6) — required for the /owner/accounting/purchases
+  // by-part spend breakdown. Only meaningful when kind='PO_RECEIPT'
+  // or 'PO_RETURN'; MANUAL_ADJUSTMENT + GOODS_ISSUE writers leave it
+  // null. Historical rows (pre-E6) are null and read as "unknown cost"
+  // on the purchase summary — coverage note names the count.
+  // Nullable, no backfill script (2 historical rows on Prod at
+  // cutover; same discipline as rule 14 emirate cutover).
+  unitCost        Decimal?         @db.Decimal(12, 2)
   reason          String
 
   createdAt DateTime @default(now())

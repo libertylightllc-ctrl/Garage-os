@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireOperational } from "@/lib/action-guards";
 import type { Lang } from "@/lib/receptionist";
+import { isEmirate } from "@/lib/emirate";
 
 // Self-serve account/garage settings. Each action is keyed to
 // session.user.id (or session.user.garageId for owner-only actions) —
@@ -362,4 +363,41 @@ export async function updateGarageDefaultLangAction(formData: FormData) {
   });
   revalidatePath("/settings");
   redirect("/settings?ok=garage-default-lang");
+}
+
+/**
+ * Operational: garage's UAE emirate (AR 2026-09-03, E4b).
+ *
+ * Backing the per-invoice emirate snapshot rule 14 pins. Every
+ * invoice generated after this setting is filled reads
+ * Garage.emirate inside the generation tx and freezes the value
+ * onto Invoice.emirate. Historical invoices with a null emirate
+ * are back-filled by the migration.
+ *
+ * Empty submit → clear (nullable). Clearing means "not set yet";
+ * subsequent invoice generation will write null to Invoice.emirate
+ * and the VAT summary will bucket them into an "unassigned" row
+ * with a coverage banner. Same "surface the gap, don't fake it"
+ * discipline as rule 13.
+ *
+ * Role gate: requireOperational — same tier as address, TRN,
+ * defaultPartsMarkupPct, etc. All shop-configuration settings
+ * that shape how invoices are issued.
+ */
+export async function updateGarageEmirateAction(formData: FormData) {
+  const session = await requireOperational();
+  const raw = String(formData.get("emirate") ?? "").trim();
+  const emirate = raw === "" ? null : raw;
+  if (emirate !== null && !isEmirate(emirate)) {
+    back("emirate-invalid");
+  }
+  await prisma.garage.update({
+    where: { id: session.garageId },
+    data: { emirate },
+  });
+  revalidatePath("/settings");
+  // No ?ok= — the visible page state (the <select> now defaulting to
+  // the saved value) is confirmation. Skipping the banner avoids a
+  // fanout of new i18n keys for a single new setting.
+  redirect("/settings");
 }

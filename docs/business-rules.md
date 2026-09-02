@@ -532,6 +532,28 @@ Supplier bills also carry a coverage count, but informational only — Payables 
 
 **Common violation shape:** "add a `Mark as filed` toggle on the VAT summary so the operator can track what they&apos;ve submitted." That toggle is a Form 201 tracking system, and it belongs on the FTA portal or the accountant&apos;s ledger — not here. Once we start tracking filing state we start being wrong about it (the FTA rejects a submission, the operator forgets to unmark), and the shop&apos;s record diverges from the government&apos;s. If a shop needs to track what they&apos;ve filed, that&apos;s a separate feature request that spec first.
 
+### E4b — per-emirate seven-box breakdown (AR 2026-09-03)
+
+Form 201 splits standard-rated supplies across the seven emirates (boxes 1a–1g). The VAT summary produces one row per emirate that had activity, in Form 201 order (Abu Dhabi → Dubai → Sharjah → Ajman → UAQ → RAK → Fujairah). Columns: Standard-rated supplies, Adjustments, Net.
+
+**Emirate is snapshot on the invoice, not read from the garage live.** `Invoice.emirate` is captured by `generateInvoiceAction` inside the same tx that creates the invoice — same freeze-at-issue discipline as `InvoiceLine.unitCost`, `customerTrn`, `advisorNameSnapshot`. A garage that later moves office or adds a branch NEVER rewrites the emirate on invoices that were already issued: Form 201 for a prior quarter is final, and any per-emirate rewrite would put the shop out of sync with what they already declared to the FTA.
+
+**`reissueInvoiceAction` reads Garage.emirate fresh**, not the voided invoice's snapshot. Reason: the whole point of reissue is that the void was wrong; if the void was wrong *because* the emirate was wrong, the reissue picks up the newly-corrected setting.
+
+**Void reversal has no separate emirate.** `INVOICE_VOID` ledger rows join back to the ORIGINAL `Invoice` row via `sourceId` — the reversal always lands in the same emirate box as the original, regardless of what `Garage.emirate` is at void time. Pinned by test "Cross-quarter void inherits ORIGINAL emirate even if Garage.emirate changed" in `src/lib/__tests__/vat-summary.test.ts`.
+
+**Standard vs Adjustments split** (Option A per AR 2026-09-03 — query change, no schema change):
+- **Standard column** for an emirate = sum of VAT_PAYABLE contributions from `INVOICE` rows in the period + same-period `INVOICE_VOID` reversals (nets against the original sale). Every invoice raised inside the period reports here.
+- **Adjustments column** for an emirate = sum of VAT_PAYABLE contributions from `INVOICE_VOID` rows in the period whose ORIGINAL invoice was raised OUTSIDE the period. Cross-quarter voids only.
+
+Reason: the FTA convention for prior-period voids is the Adjustments column, not a subtraction from the current quarter's Standard row. The original invoice was already declared on its own quarter's Form 201 and can't be re-declared; the reversal shows up as an adjustment on the current return.
+
+**Null-emirate invoices render as an "Unassigned" bucket.** Any invoice whose `Invoice.emirate` snapshot is null (pre-cutover invoices where the garage's emirate wasn't set, or invoices raised while `Garage.emirate = null`) lands in a highlighted `Unassigned` row on the VAT summary table with a "no Form 201 box" label. The coverage banner surfaces the count so the operator can either backfill `Garage.emirate` + void + reissue the affected invoices, or accept the gap. Same "surface the gap, don't fake it" discipline as rule 12 and 13.
+
+**Input VAT stays entity-level.** No per-emirate split on the reclaim side. Form 201 treats input VAT at entity level (one number for the whole shop) — a purchase for the Dubai branch or the Sharjah branch reclaims into the same pool.
+
+**Backfill discipline for pre-cutover invoices.** The E4b migration back-fills `Invoice.emirate` from `Garage.emirate` per row (null-safe: garages without emirate leave their invoices null too). Rule 14 discloses that pre-cutover invoices carry an INFERRED value from the garage's current setting — accurate if the shop never moved, best-effort if it did. The auditor reading the export knows the field wasn't captured at generation time; the per-invoice snapshot is authoritative for anything raised after cutover.
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

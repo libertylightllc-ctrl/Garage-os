@@ -1066,9 +1066,18 @@ export async function generateInvoiceAction(formData: FormData) {
         phone: true,
         // C4a — flag for the COGS post that follows. Off = pre-C4 shape.
         cogsEnabled: true,
+        // E4b (AR 2026-09-03) — emirate snapshot at generation time.
+        // Rule 14: freeze the value onto Invoice.emirate; a garage that
+        // later moves office / adds a branch never rewrites this
+        // invoice's emirate. Null when the owner hasn't set it yet;
+        // VAT summary surfaces null-emirate invoices via the coverage
+        // banner so the shop can either backfill Garage.emirate + void
+        // + reissue, or accept an "unassigned" Form 201 box.
+        emirate: true,
       },
     });
     const seq = g.invoiceSeq;
+    const emirateSnapshot = g.emirate;
 
     // Snapshot the customer's TRN at invoice-issue time. FTA rule: the
     // TRN printed on a tax invoice is what applied when it was issued;
@@ -1125,6 +1134,9 @@ export async function generateInvoiceAction(formData: FormData) {
         number: seq,
         // Frozen at issue — never rewritten by a later customer.trn edit.
         customerTrn: customerTrnSnapshot,
+        // E4b — emirate snapshot from the garage at generation time.
+        // Same freeze-at-issue discipline as customerTrn / unitCost.
+        emirate: emirateSnapshot,
         issuedAt: now,
         dueDate,
         subtotal,
@@ -2255,6 +2267,12 @@ export async function reissueInvoiceAction(formData: FormData) {
         phone: true,
         // C4a — flag for the COGS post that follows. Off = pre-C4 shape.
         cogsEnabled: true,
+        // E4b — same as generateInvoiceAction. Reads Garage.emirate
+        // FRESH (not from the voided invoice's snapshot) — the whole
+        // point of reissue is that the void was wrong; if the void
+        // was wrong because the emirate was wrong, the reissue picks
+        // up the newly-corrected setting.
+        emirate: true,
       },
     });
 
@@ -2277,6 +2295,7 @@ export async function reissueInvoiceAction(formData: FormData) {
         number: g.invoiceSeq,
         previousInvoiceId: voided.id,
         customerTrn: customerTrnSnapshot,
+        emirate: g.emirate,
         issuedAt: now,
         dueDate,
         subtotal,

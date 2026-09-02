@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/guard";
 import { AppNav } from "@/components/app-nav";
 import { PrintButton } from "@/components/print-button";
 import { computeVatSummary } from "@/lib/vat-summary";
+import { EMIRATE_LABEL } from "@/lib/emirate";
 
 /** AR: negative deltas render as "−AED 1500.00", never "AED -1500.00". */
 function money(n: number): string {
@@ -10,25 +11,28 @@ function money(n: number): string {
     return `AED ${n.toFixed(2)}`;
 }
 
+function emirateLabel(bucket: string): string {
+    if (bucket === "Unassigned") return "Unassigned";
+    return EMIRATE_LABEL[bucket as keyof typeof EMIRATE_LABEL] ?? bucket;
+}
+
 export const dynamic = "force-dynamic";
 
 /**
- * VAT Summary — E4 (AR 2026-09-02).
+ * VAT summary — E4 + E4b (AR 2026-09-02 / 2026-09-03).
  *
- * Reads LedgerEntry via computeVatSummary(). Owner-only, financial
- * reporting bucket. Date range from URL with quarterly presets;
- * defaults to the current calendar quarter.
+ * Reads LedgerEntry via computeVatSummary(). Owner-only. Date range
+ * from URL with quarterly presets; defaults to the current calendar
+ * quarter.
+ *
+ * Table shape matches Form 201's per-emirate section: rows for each
+ * emirate that had activity in the period (in Form 201 order), plus
+ * an "Unassigned" row when null-emirate invoices touched the period.
+ * Columns: Standard-rated supplies (net + VAT) and Adjustments (net
+ * + VAT). See rule 14 for the Standard-vs-Adjustments split rules.
  *
  * Copy discipline: we produce the figures, we don't file. Every
  * mention of the return names the FTA portal as the filing surface.
- *
- * Coverage banner (rule 12 pattern):
- *   • cogsFlag off analogue for expenses — if the period has ACTIVE
- *     expenses but none carry VAT, the reclaim is under-reported.
- *     The banner surfaces it in plain wording.
- *   • Supplier bills coverage is informational only — Payables C3
- *     enforces VAT capture at receive-form time, so a zero-VAT bill
- *     is a deliberate operator choice, not an omission.
  */
 export default async function VatSummaryPage({
     searchParams,
@@ -38,8 +42,6 @@ export default async function VatSummaryPage({
     const session = await requireRole("OWNER");
     const params = await searchParams;
 
-    // Default: current calendar quarter. UAE VAT filing is quarterly
-    // for most shops; the operator can widen or narrow via the form.
     const now = new Date();
     const currentQuarter = Math.floor(now.getUTCMonth() / 3);
     const defaultFrom = new Date(Date.UTC(now.getUTCFullYear(), currentQuarter * 3, 1));
@@ -55,11 +57,8 @@ export default async function VatSummaryPage({
     const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
     const rangeLabel = `${fmtDate(fromDate)} → ${fmtDate(new Date(toDate.getTime() - 1))}`;
 
-    // Quarter presets — links with different query strings.
-    const quarterStart = (year: number, q: number) =>
-        fmtDate(new Date(Date.UTC(year, q * 3, 1)));
-    const quarterEnd = (year: number, q: number) =>
-        fmtDate(new Date(Date.UTC(year, q * 3 + 3, 1)));
+    const quarterStart = (year: number, q: number) => fmtDate(new Date(Date.UTC(year, q * 3, 1)));
+    const quarterEnd = (year: number, q: number) => fmtDate(new Date(Date.UTC(year, q * 3 + 3, 1)));
     const prevQ = currentQuarter === 0 ? 3 : currentQuarter - 1;
     const prevQYear = currentQuarter === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
     const presets = [
@@ -77,9 +76,7 @@ export default async function VatSummaryPage({
             label: "Year to date",
             from: fmtDate(new Date(Date.UTC(now.getUTCFullYear(), 0, 1))),
             to: fmtDate(
-                new Date(
-                    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
-                ),
+                new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)),
             ),
         },
     ];
@@ -88,12 +85,16 @@ export default async function VatSummaryPage({
         vat.coverage.expensesTotal > 0
             ? Math.round((vat.coverage.expensesWithVat / vat.coverage.expensesTotal) * 100)
             : null;
-    const noExpenseVat =
-        vat.coverage.expensesTotal > 0 && vat.coverage.expensesWithVat === 0;
+    const noExpenseVat = vat.coverage.expensesTotal > 0 && vat.coverage.expensesWithVat === 0;
     const partialExpenseVat =
         vat.coverage.expensesTotal > 0 &&
         vat.coverage.expensesWithVat > 0 &&
         vat.coverage.expensesWithVat < vat.coverage.expensesTotal;
+    const unassignedInvoices =
+        vat.coverage.invoicesInPeriod > 0 &&
+        vat.coverage.invoicesWithEmirate < vat.coverage.invoicesInPeriod;
+    const missingEmirateCount =
+        vat.coverage.invoicesInPeriod - vat.coverage.invoicesWithEmirate;
 
     return (
         <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 p-6">
@@ -140,7 +141,6 @@ export default async function VatSummaryPage({
                     </p>
                 </div>
 
-                {/* Date range form + quarter presets */}
                 <form
                     method="get"
                     className="flex flex-wrap items-end gap-3 border-b border-border pb-4 print:hidden"
@@ -179,18 +179,37 @@ export default async function VatSummaryPage({
                     </div>
                 </form>
 
-                {/* Coverage banner — plain wording, prominent count.
-                    Two conditions:
-                      1. No expenses in the period carry VAT → the
-                         reclaim is under-reported.
-                      2. Partial — some do, some don't. Legitimate,
-                         but flag it so the operator can review. */}
+                {/* Coverage banners — plain wording, load-bearing count.
+                    Three conditions, evaluated independently:
+                      1. Any invoice without an emirate → the Standard
+                         row has an "Unassigned" bucket the accountant
+                         can't post to a Form 201 box.
+                      2. No expenses carry VAT → reclaim under-reported.
+                      3. Partial expense VAT coverage → operator review. */}
+                {unassignedInvoices ? (
+                    <div className="rounded-lg border border-warning-500/40 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
+                        <div className="text-base font-semibold">
+                            {missingEmirateCount} of {vat.coverage.invoicesInPeriod} invoice
+                            {vat.coverage.invoicesInPeriod === 1 ? "" : "s"} in this period
+                            {" "}don&apos;t have an emirate assigned
+                        </div>
+                        <div className="mt-1 text-xs">
+                            Their VAT lands in an &quot;Unassigned&quot; row below — Form 201 has no
+                            box for that. Set the emirate in{" "}
+                            <Link href="/settings" className="underline">
+                                Settings
+                            </Link>
+                            , then void + reissue the invoices to update the snapshot. Pre-cutover
+                            invoices carry an inferred value from the garage&apos;s current setting.
+                        </div>
+                    </div>
+                ) : null}
                 {noExpenseVat ? (
                     <div className="rounded-lg border border-warning-500/40 bg-warning-50 px-4 py-3 text-sm text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-500">
                         <div className="text-base font-semibold">
                             None of {vat.coverage.expensesTotal} expense
-                            {vat.coverage.expensesTotal === 1 ? "" : "s"} in this period
-                            carry a VAT amount
+                            {vat.coverage.expensesTotal === 1 ? "" : "s"} in this period carry
+                            a VAT amount
                         </div>
                         <div className="mt-1 text-xs">
                             Zero VAT on every expense usually means nobody entered the split
@@ -214,31 +233,88 @@ export default async function VatSummaryPage({
                     </div>
                 ) : null}
 
-                {/* The three headline numbers */}
-                <section className="grid gap-3 sm:grid-cols-3">
-                    <NumberCard label="Output VAT" sublabel="collected from invoices" amount={vat.outputVat} />
-                    <NumberCard label="Input VAT" sublabel="paid on purchases + expenses" amount={vat.inputVat} />
-                    <NumberCard
-                        label={vat.netPayable >= 0 ? "Net VAT payable" : "Net VAT refund"}
-                        sublabel={
-                            vat.netPayable >= 0
-                                ? "owed to the FTA"
-                                : "reclaimable from the FTA"
-                        }
-                        amount={Math.abs(vat.netPayable)}
-                        emphasize
-                    />
+                {/* Per-emirate table — the seven-box display. Rows are
+                    only emitted for emirates with activity in the
+                    period. Empty period = no rows + a plain note. */}
+                <section>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-mute">
+                        Standard-rated supplies by emirate (Form 201, boxes 1a–1g)
+                    </h3>
+                    {vat.byEmirate.length === 0 ? (
+                        <p className="text-sm text-text-mute">
+                            No standard-rated supplies or adjustments in this period.
+                        </p>
+                    ) : (
+                        <div className="overflow-hidden rounded-lg border border-border">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-border bg-surface-2/40 text-xs uppercase tracking-wide text-text-mute">
+                                        <th className="px-3 py-2 text-start font-semibold">Emirate</th>
+                                        <th className="px-3 py-2 text-end font-semibold">Standard VAT</th>
+                                        <th className="px-3 py-2 text-end font-semibold">Adjustments</th>
+                                        <th className="px-3 py-2 text-end font-semibold">Net VAT</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {vat.byEmirate.map((row) => (
+                                        <tr
+                                            key={row.emirate}
+                                            className={`border-b border-border/60 last:border-0 ${row.emirate === "Unassigned" ? "bg-warning-50 dark:bg-warning-500/10" : ""}`}
+                                        >
+                                            <td className="px-3 py-2">
+                                                {emirateLabel(row.emirate)}
+                                                {row.emirate === "Unassigned" ? (
+                                                    <span className="ms-2 text-xs text-warning-700 dark:text-warning-500">
+                                                        no Form 201 box
+                                                    </span>
+                                                ) : null}
+                                            </td>
+                                            <td className="px-3 py-2 text-end tabular-nums">
+                                                {money(row.standardVat)}
+                                            </td>
+                                            <td className="px-3 py-2 text-end tabular-nums">
+                                                {row.adjustmentVat === 0 ? "—" : money(row.adjustmentVat)}
+                                            </td>
+                                            <td className="px-3 py-2 text-end tabular-nums font-medium">
+                                                {money(row.netVat)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    <tr className="border-t-2 border-border bg-surface-2/60">
+                                        <td className="px-3 py-2 font-semibold">Total</td>
+                                        <td className="px-3 py-2 text-end tabular-nums font-semibold">
+                                            {money(vat.outputVat)}
+                                        </td>
+                                        <td className="px-3 py-2 text-end tabular-nums font-semibold">
+                                            {vat.adjustmentsVat === 0 ? "—" : money(vat.adjustmentsVat)}
+                                        </td>
+                                        <td className="px-3 py-2 text-end tabular-nums font-semibold">
+                                            {money(vat.outputVat - vat.adjustmentsVat)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    <p className="mt-2 text-xs text-text-mute">
+                        Standard = VAT on invoices raised this period. Adjustments = VAT on
+                        voids reversing prior-quarter invoices; posted to the ORIGINAL invoice&apos;s
+                        emirate (see rule 14).
+                    </p>
                 </section>
 
-                {/* Working breakdown — accountants want to see the
-                    two-line arithmetic below the headline. */}
+                {/* Bottom-line arithmetic */}
                 <section className="rounded-lg border border-border/60 bg-surface-2/30 p-4 text-sm">
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-mute">
                         Working
                     </h3>
                     <div className="flex items-baseline justify-between border-b border-border/40 py-1">
-                        <span>Output VAT (Sales Revenue × 5%, from invoices)</span>
+                        <span>Output VAT (standard-rated supplies × 5%, this period)</span>
                         <span className="tabular-nums">{money(vat.outputVat)}</span>
+                    </div>
+                    <div className="flex items-baseline justify-between border-b border-border/40 py-1">
+                        <span>Less: Adjustments (prior-period voids)</span>
+                        <span className="tabular-nums">{money(vat.adjustmentsVat)}</span>
                     </div>
                     <div className="flex items-baseline justify-between border-b border-border/40 py-1">
                         <span>Less: Input VAT (reclaimable on purchases + expenses)</span>
@@ -254,35 +330,32 @@ export default async function VatSummaryPage({
                     </div>
                 </section>
 
-                {/* Coverage footer — always visible, even at 100%.
-                    Same pattern as the P&L: the operator needs to know
-                    the denominator, not just the ratio. */}
                 <section className="rounded-lg border border-border/60 bg-surface-2/30 p-4 text-xs">
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-mute">
                         Coverage
                     </h3>
                     <div className="flex flex-wrap gap-x-6 gap-y-1">
                         <span>
-                            Expenses:{" "}
+                            Invoices with emirate:{" "}
                             <span className="tabular-nums font-medium text-text">
-                                {vat.coverage.expensesWithVat} of {vat.coverage.expensesTotal}
-                            </span>{" "}
-                            carry VAT
+                                {vat.coverage.invoicesWithEmirate} of {vat.coverage.invoicesInPeriod}
+                            </span>
                         </span>
                         <span>
-                            Supplier bills:{" "}
+                            Expenses with VAT:{" "}
+                            <span className="tabular-nums font-medium text-text">
+                                {vat.coverage.expensesWithVat} of {vat.coverage.expensesTotal}
+                            </span>
+                        </span>
+                        <span>
+                            Supplier bills with VAT:{" "}
                             <span className="tabular-nums font-medium text-text">
                                 {vat.coverage.supplierBillsWithVat} of {vat.coverage.supplierBillsTotal}
-                            </span>{" "}
-                            carry VAT
+                            </span>
                         </span>
                     </div>
                 </section>
 
-                {/* Filing reminder — always visible, prints too.
-                    A printed VAT summary that leaves the office without
-                    this note is the document that gets treated as a
-                    return. Rule 13 print discipline applies here. */}
                 <section className="rounded-lg border border-border/60 bg-surface-2/30 p-4 text-xs text-text-mute">
                     <div className="font-medium text-text">This is a working summary, not a return.</div>
                     <div className="mt-1">
@@ -301,33 +374,5 @@ export default async function VatSummaryPage({
                 </section>
             </div>
         </main>
-    );
-}
-
-function NumberCard({
-    label,
-    sublabel,
-    amount,
-    emphasize,
-}: {
-    label: string;
-    sublabel: string;
-    amount: number;
-    emphasize?: boolean;
-}) {
-    return (
-        <div
-            className={`rounded-lg border p-4 ${emphasize ? "border-border bg-surface-2/60" : "border-border/60 bg-surface-2/30"}`}
-        >
-            <div className="text-xs font-semibold uppercase tracking-wide text-text-mute">
-                {label}
-            </div>
-            <div className="text-xs text-text-mute">{sublabel}</div>
-            <div
-                className={`mt-2 tabular-nums ${emphasize ? "text-2xl font-bold" : "text-xl font-semibold"}`}
-            >
-                {amount < 0 ? `−AED ${Math.abs(amount).toFixed(2)}` : `AED ${amount.toFixed(2)}`}
-            </div>
-        </div>
     );
 }

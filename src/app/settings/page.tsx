@@ -17,7 +17,9 @@ import {
   updateGarageEstimateTermsAction,
   updateGarageInvoiceTermsAction,
   updateGaragePhoneAction,
+  updateGarageEmirateAction,
 } from "@/app/actions/settings";
+import { EMIRATE_LABEL, EMIRATE_ORDER } from "@/lib/emirate";
 import { removeGarageLogoAction } from "@/app/actions/garage-logo";
 import { GarageLogoForm } from "@/components/garage-logo-form";
 import { getT } from "@/i18n/server";
@@ -131,6 +133,7 @@ export default async function SettingsPage({
           estimateTerms: true,
           invoiceTerms: true,
           phone: true,
+          emirate: true,
         },
       })
     : null;
@@ -314,6 +317,41 @@ export default async function SettingsPage({
               <div>
                 <Button type="submit">{t("settingsSave")}</Button>
               </div>
+            </form>
+
+            {/* AR 2026-09-03 (E4b) — UAE emirate for Form 201 per-
+                emirate breakdown on the VAT summary. Snapshot to
+                Invoice.emirate at generation time; changing this
+                setting doesn't rewrite historical invoices. See
+                rule 14 for the snapshot discipline. */}
+            <form
+              action={updateGarageEmirateAction}
+              className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
+            >
+              <label htmlFor="garage-emirate" className="text-xs text-text-mute">
+                UAE emirate (for VAT Form 201)
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <select
+                  id="garage-emirate"
+                  name="emirate"
+                  defaultValue={garage?.emirate ?? ""}
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+                >
+                  <option value="">— not set —</option>
+                  {EMIRATE_ORDER.map((e) => (
+                    <option key={e} value={e}>
+                      {EMIRATE_LABEL[e]}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit">{t("settingsSave")}</Button>
+              </div>
+              <span className="text-[11px] text-text-mute">
+                Every invoice raised after this is set carries the value as a
+                permanent snapshot. Historical invoices don&apos;t update — void +
+                reissue if a past invoice needs a different emirate.
+              </span>
             </form>
 
             {/* AR 2026-08-25 Batch F1 — shop main phone. Falls

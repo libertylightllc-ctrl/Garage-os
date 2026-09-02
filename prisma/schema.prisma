@@ -76,6 +76,21 @@ enum InvoiceStatus {
   VOID
 }
 
+// UAE emirate — used by Garage.emirate + Invoice.emirate (E4b,
+// AR 2026-09-03) so the VAT summary produces Form 201's per-emirate
+// seven-box breakdown. Values match FTA canonical spelling on
+// tax.gov.ae; changing them means changing what the FTA import/export
+// pipeline expects, so pin these before adding a country enum.
+enum Emirate {
+  AbuDhabi
+  Dubai
+  Sharjah
+  Ajman
+  UmmAlQuwain
+  RasAlKhaimah
+  Fujairah
+}
+
 enum ClearanceStatus {
   NA
   PENDING
@@ -270,6 +285,15 @@ model Garage {
   id                     String   @id @default(cuid())
   name                   String
   country                String   @default("UAE")
+  // AR 2026-09-03 (E4b) — UAE emirate for Form 201's per-emirate
+  // seven-box breakdown. Nullable during rollout: the operator
+  // sets it via /settings once, then generateInvoiceAction snapshots
+  // it onto Invoice.emirate at generation. See rule 14 for the
+  // snapshot-vs-live-read discipline and the coverage-banner shape
+  // for invoices missing an emirate. Only meaningful when
+  // country="UAE"; multi-country expansion (Phase 2) may extend
+  // the enum or split it per-country then.
+  emirate                Emirate?
   trn                    String? // tax registration number (was vatNumber)
   branchOfId             String? // Phase-2 hook; Phase 1 is single-garage
   branchOf               Garage?  @relation("GarageBranches", fields: [branchOfId], references: [id])
@@ -1013,6 +1037,24 @@ model Invoice {
   vatAmount       Decimal         @db.Decimal(12, 2)
   total           Decimal         @db.Decimal(12, 2)
   qrPayload       String? // KSA hook — exists day one
+  // AR 2026-09-03 (E4b) — emirate snapshot at generation time. See
+  // rule 14 for the discipline: read Garage.emirate ONCE inside the
+  // generation tx and freeze the value onto this row. A garage that
+  // later changes its emirate (moves office, adds a branch) doesn't
+  // rewrite the emirate on invoices that were already issued —
+  // Form 201 for a prior quarter must never change.
+  //
+  // Void reversal (INVOICE_VOID ledger rows) has NO separate emirate
+  // — the VAT summary joins the reversal back to this Invoice row
+  // via sourceId, so the reversal always lands in the same emirate
+  // box as the original. Same discipline as InvoiceLine.unitCost.
+  //
+  // Nullable during rollout: pre-cutover invoices are back-filled
+  // from Garage.emirate (which may itself be null for a garage the
+  // operator hasn't set yet). Coverage banner surfaces null-emirate
+  // invoices on the VAT summary so the shop can either backfill
+  // the garage's setting + re-void or accept an "unassigned" box.
+  emirate         Emirate?
   status          InvoiceStatus   @default(DRAFT)
   clearanceStatus ClearanceStatus @default(NA) // KSA hook
 

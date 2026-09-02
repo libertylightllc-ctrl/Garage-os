@@ -194,13 +194,17 @@ export default async function VatSummaryPage({
                             {" "}don&apos;t have an emirate assigned
                         </div>
                         <div className="mt-1 text-xs">
-                            Their VAT lands in an &quot;Unassigned&quot; row below — Form 201 has no
-                            box for that. Set the emirate in{" "}
+                            Their VAT lands in an &quot;Unassigned&quot; row below — Form 201 has
+                            no box for that. Set the emirate in{" "}
                             <Link href="/settings" className="underline">
                                 Settings
-                            </Link>
-                            , then void + reissue the invoices to update the snapshot. Pre-cutover
-                            invoices carry an inferred value from the garage&apos;s current setting.
+                            </Link>{" "}
+                            so future invoices land in the right box. Pre-cutover invoices
+                            need an operator-run backfill script to inherit the setting —
+                            contact support to run it. Don&apos;t void &amp; reissue a sent
+                            invoice just to fix this: voiding burns an invoice number, posts
+                            reversal entries, and creates a credit note the customer
+                            didn&apos;t ask for.
                         </div>
                     </div>
                 ) : null}

@@ -476,6 +476,27 @@ MVP records expenses at gross — the full amount goes to the expense account, n
 
 ---
 
+## 13. Profit &amp; Loss reads the ledger, and labour is not COGS
+
+The P&amp;L computes from `LedgerEntry` rows alone — no aggregation over `Invoice`, `Expense`, or `Part.cost`. The whole point of full-accrual bookkeeping is that the ledger is the single source of truth; a report that ignores it is a report that will disagree with the auditor's export. `src/lib/pnl.ts` reads REVENUE-typed accounts (CR-normal, flipped for display), `COGS` (DR-normal), and every EXPENSE-typed account (DR-normal), summed via a helper that turns a bag of rows into a signed balance. Zero-balance accounts don't render as lines — the shop that only paid rent this month sees a rent line, not eleven expense rows padded with AED 0.
+
+**Labour is not COGS.** A LABOR line on an invoice contributes to Sales Revenue via the standard `INVOICE` post (`DR AR / CR Sales`). It has no counterpart on the COGS side. Technician salary — the actual cost of delivering that labour — enters the ledger only when the shop records a salary payment via `recordExpenseAction`, landing as `DR EXP_SALARIES / CR Cash`. Booking labour revenue against a labour-COGS row would double-count the same wages: once as the invoice's COGS pair, once as the salary expense. Gross Profit therefore includes labour revenue in full; Net Profit subtracts salaries via the P&amp;L Salaries line. Rule 10 has the same statement in prose; this rule pins it as a P&amp;L invariant.
+
+**Consequence for shops that don't record staff salaries.** A P&amp;L with revenue but zero Salaries line reads as a shop with no staff. It's not — it's a shop that hasn't recorded a salary payment yet. The page doesn't warn about this today; the ask is that operator training + rule 12 (expenses discipline) get salaries entered as they're paid. If the gap becomes noise, the next iteration adds a Salaries-coverage warning next to the coverage banner for COGS.
+
+**Coverage banner.** Two conditions surface a warning next to the report:
+
+1. `garage.cogsEnabled = false` **and** revenue &gt; 0 → the whole COGS line is zero because the per-garage flag is off. Explanation: enable after a proof invoice balances (rule 10). Until then Gross Profit overstates.
+2. `cogsEnabled = true` but not every invoice in the period has a COGS pair → "N of M invoices costed." Explanation: pre-cutover invoices stay uncosted permanently (rule 10 cutover invariant), and any invoice whose PART line had a null unitCost skipped its COGS post (rule 10 all-or-nothing).
+
+Full coverage (or zero revenue) → no banner. Same "surface the gap, don't fake it" discipline as rule 12 on VAT.
+
+**Half-open interval.** Date filter uses `[from, to)` — a row at exactly `to` is excluded. Consequence: "September 2026" = `from = 2026-09-01, to = 2026-10-01`. A ledger post at `2026-10-01 00:00:00Z` lands in October, not September. Documented in the page's "To (exclusive)" label; test `src/lib/__tests__/pnl.test.ts` pins the boundary behaviour.
+
+**Timezone note.** The MVP reads UTC boundaries from the operator's date-picker input. UAE is UTC+4, so a receipt logged at 23:30 local on Sept 30 lands at 19:30 UTC same day — close enough that month-boundary drift is rare and never large. A per-garage timezone flip is a future enhancement, not blocking rule-10 rollout. If a shop's P&amp;L for a single day disagrees with what they expect by one late-night receipt, this is the reason.
+
+**Common violation shape:** "let's read Invoice.total in the P&amp;L instead of joining ledger, it's simpler." That's the divergence path — an invoice's total changes on edit and void, and the ledger has the history; the Invoice row has only the current state. The auditor sees the ledger. If the P&amp;L reads Invoice.total, they diverge, and the wrong one is the report. Same shape as computing Gross Profit from `Part.cost` live rather than the frozen `InvoiceLine.unitCost` — the snapshot exists so old invoices don't rewrite on today's price movements (see `src/lib/invoice-cost-snapshot.ts`).
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

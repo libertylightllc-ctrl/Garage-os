@@ -45,13 +45,20 @@ export default async function AccountingHubPage() {
             icon: "🧾",
         },
         {
+            href: "/owner/accounting/pnl",
+            title: "Profit & Loss",
+            blurb: "Revenue, cost of goods sold, expenses, gross and net profit. Owner-only.",
+            visibleTo: "OWNER_ONLY",
+            icon: "📈",
+        },
+        {
             href: "/owner/accounting/export",
             title: "CSV export",
             blurb: "Download journal, invoices, payments, customers, chart-of-accounts for your accountant.",
             visibleTo: "OWNER_ONLY",
             icon: "📤",
         },
-        // E3 → P&L. E4 → VAT summary. E5 → Trial balance + balance sheet.
+        // E4 → VAT summary. E5 → Trial balance + balance sheet.
         // Each lands as its own tile in the display order accountants
         // read them: operational (Payables, Expenses) → periodic reports
         // (P&L, VAT) → proofs (TB, BS) → export.

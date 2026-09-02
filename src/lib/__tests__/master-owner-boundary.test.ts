@@ -52,6 +52,10 @@ const OWNER_ONLY: readonly string[] = [
   // (AR 2026-08-30) when the parent /owner/accounting became a hub
   // landing open to MASTER. The export child stays OWNER-only.
   "src/app/owner/accounting/export/page.tsx",
+  // P&L (E3b, AR 2026-09-02). Reads the ledger to compute revenue,
+  // COGS, gross + net profit. Owner-only per financial-reporting
+  // rule — same bucket as ledger + analytics + billing.
+  "src/app/owner/accounting/pnl/page.tsx",
   // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
   // toggle + dead-letter replay — same finance/admin bucket as
   // billing and ledger, MASTER stays barred.

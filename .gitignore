@@ -103,3 +103,19 @@ diff.txt
 .auth/
 playwright-report/
 test-results/
+
+# One-off Prod investigation probes + rollout tooling. AR 2026-09-02.
+# These get created ad-hoc during incidents (payables → DrCar → C4a
+# rollout) and are never long-lived. Blocking them in .gitignore
+# prevents two failure modes:
+#   1. `vercel deploy --archive=tgz` bundles the working tree,
+#      including untracked files — a broken probe (wrong enum
+#      reference, stale schema import) then fails Vercel typecheck.
+#   2. Accidental `git add scripts/` sweeps a probe into a commit.
+# If a probe becomes worth keeping (turns into a supported ops
+# runner), rename off the `probe-` prefix or drop the .mts extension
+# and add an explicit exception here.
+scripts/probe-*.mts
+scripts/seed-*-proof*.mts
+scripts/flip-*.mts
+scripts/bump-*.mts

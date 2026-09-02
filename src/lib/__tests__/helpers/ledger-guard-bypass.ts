@@ -40,6 +40,12 @@ export async function withDeleteGuardBypass<T>(
     await tx.$executeRawUnsafe(`SET LOCAL app.allow_invoice_delete = 'true'`);
     await tx.$executeRawUnsafe(`SET LOCAL app.allow_payment_delete = 'true'`);
     await tx.$executeRawUnsafe(`SET LOCAL app.allow_advance_delete = 'true'`);
+    // Payables (2026-08-30) + Expenses (2026-09-02) delete-guards.
+    // Extended here so test cleanups don't need per-flag boilerplate.
+    await tx.$executeRawUnsafe(`SET LOCAL app.allow_supplier_bill_delete = 'true'`);
+    await tx.$executeRawUnsafe(`SET LOCAL app.allow_supplier_payment_delete = 'true'`);
+    await tx.$executeRawUnsafe(`SET LOCAL app.allow_supplier_allocation_delete = 'true'`);
+    await tx.$executeRawUnsafe(`SET LOCAL app.allow_expense_delete = 'true'`);
     await tx.$executeRawUnsafe(`SET LOCAL app.delete_note = 'test-cleanup'`);
     return fn(tx);
   }, { timeout: 30_000 });

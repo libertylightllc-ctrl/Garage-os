@@ -59,6 +59,13 @@ export default async function AccountingHubPage() {
             icon: "📈",
         },
         {
+            href: "/owner/accounting/statements",
+            title: "Trial balance & balance sheet",
+            blurb: "Every account balance, the balance-sheet equation, and whether the books tie out. Owner-only.",
+            visibleTo: "OWNER_ONLY",
+            icon: "⚖️",
+        },
+        {
             href: "/owner/accounting/vat",
             title: "VAT summary",
             blurb: "Output VAT, input VAT, net payable — the figures your accountant transcribes into Form 201 on the FTA portal. Owner-only.",

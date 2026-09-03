@@ -579,6 +579,28 @@ The purchase summary (E6, AR 2026-09-03) answers &quot;what did I buy and what d
 
 **Common violation shape:** &quot;the operator wants one big Purchases number, merge stock + direct-fit.&quot; Every subsequent report that reconciles against AP (Payables, statements, the P&amp;L&apos;s Cost of Goods Sold line) then diverges from the merged number, and the shop&apos;s books stop tying out. If the operator&apos;s question is &quot;how much cash left the shop for parts,&quot; that&apos;s a different report — combine the AP-payment number with direct-fit-cash and label it as a cash-flow view, not a purchase view.
 
+## 16. Trial balance + balance sheet — derived equity, no closing entries
+
+The trial balance and balance sheet (E5, AR 2026-09-03) both read `LedgerEntry` directly, same rule 13/14/15 discipline. Owner-only surface, financial-reporting bucket.
+
+**Equity is a derived figure. No closing entries are posted to the ledger.** Accumulated profit renders on the balance sheet as `Revenue − COGS − Expenses (all time)`, labeled explicitly &quot;Accumulated profit (all time, derived)&quot;. No `RETAINED_EARNINGS` account exists in `ACCOUNTS` today — the EQUITY-type slot in `ACCOUNT_TYPES` is reserved for a future opening-balance-equity or period-close phase, but none of the writers currently post to it.
+
+**Why no closing entries.** Period-close writes to the ledger: `DR Revenue / CR Retained Earnings`, `DR Retained Earnings / CR Expenses`. Once posted, the closed period&apos;s Revenue + Expense accounts read zero, and a shop that later discovers a missing invoice or a mispriced expense within the closed period has three bad options: reopen the close (audit paper trail), amend externally (books diverge from source-of-truth), or void-and-re-record with a fresh entry that&apos;s dated to the current period (misleading history). AR 2026-09-03: a derived figure is always correct and always reversible. The trade-off — losing the &quot;Retained Earnings vs Current Period Net Income&quot; split an accountant expects on a formal balance sheet — is worth it for the shops we serve today, which don&apos;t formally close periods.
+
+**Deferred period-close.** Build trigger: **a shop asks to close a year for tax filing**, or an audit requires locked-period books. The mechanism (schema: `ACCOUNTS.RETAINED_EARNINGS`, `Garage.lastClosedPeriodEnd`, `PeriodClose` audit table; guards on every ledger writer to refuse pre-close dates) is spelled out in the E5 pre-build report. Don&apos;t build it before a shop asks — every ledger writer&apos;s guard makes it a load-bearing change, and a period-close feature that nobody uses is worse than none.
+
+**Coverage inheritance from the P&amp;L.** Accumulated profit derives from Revenue − COGS − Expenses, so the balance sheet inherits every gap the P&amp;L has:
+- `cogsEnabled = false` → equity line overstates by the parts-cost of every invoice ever raised (banner says as much, plain wording).
+- `cogsEnabled = true` + partial coverage → equity line overstates by the parts-cost of the uncosted invoices across the shop&apos;s whole history.
+
+Same coverage-banner shape as rule 13/14, with the same specificity — but scoped to ALL TIME rather than a period, because the balance sheet is a point-in-time snapshot.
+
+**Imbalance is a signal, not a plug.** If `Assets − (Liabilities + Equity) ≠ 0`, the balance sheet renders &quot;Out of balance by AED X.XX&quot; explicitly. It does not hide the delta and does not plug it against equity. Reason: every writer we ship posts DR = CR pairs; a non-zero delta means either a writer has a bug or the ledger has been touched outside the app. Making it visible is how it gets caught. The trial balance&apos;s Sum(DR) vs Sum(CR) is the same signal at the row-total level.
+
+**Common violation shape:** &quot;the equity line is confusing, let&apos;s show &apos;Retained Earnings&apos; and &apos;This Period Net Income&apos; as two lines like a normal balance sheet.&quot; Splitting requires either (a) posting closing entries — which invites rule 14&apos;s never-rewrite-history problem — or (b) faking the split by picking an arbitrary cutoff date. Both are worse than the honest single line. If a shop needs the split for their accountant, they can produce it externally by running the P&amp;L for the year and reading the equity line as &quot;prior years + this year.&quot;
+
+Another violation shape: &quot;the balance sheet is out of balance — quietly plug the difference into equity.&quot; Rule 16 explicitly refuses this. The imbalance is telling the operator that the ledger has a bug; the correct answer is to investigate the ledger, not to hide the number.
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

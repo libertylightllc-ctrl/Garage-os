@@ -65,6 +65,9 @@ const OWNER_ONLY: readonly string[] = [
   // output VAT / input VAT / net payable for a quarter. Same
   // financial-reporting bucket as P&L + ledger — MASTER stays barred.
   "src/app/owner/accounting/vat/page.tsx",
+  // Trial balance + balance sheet (E5, AR 2026-09-03). Financial
+  // reporting bucket — OWNER-only, same as ledger + analytics.
+  "src/app/owner/accounting/statements/page.tsx",
   // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
   // toggle + dead-letter replay — same finance/admin bucket as
   // billing and ledger, MASTER stays barred.

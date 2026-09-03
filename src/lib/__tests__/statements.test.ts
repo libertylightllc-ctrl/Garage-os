@@ -31,7 +31,31 @@ async function cleanup() {
         await tx.ledgerEntry.deleteMany({ where: { garageId: { startsWith: P } } });
         await tx.invoice.deleteMany({ where: { garageId: { startsWith: P } } });
     });
+    await prisma.jobCard.deleteMany({ where: { garageId: { startsWith: P } } });
+    await prisma.vehicle.deleteMany({
+        where: { customer: { garageId: { startsWith: P } } },
+    });
+    await prisma.customer.deleteMany({ where: { garageId: { startsWith: P } } });
     await prisma.garage.deleteMany({ where: { id: { startsWith: P } } });
+}
+
+async function seedJobCard(id: string, num: number) {
+    const cust = await prisma.customer.create({
+        data: { garageId: gId, name: `${id}-c`, phone: `999500${num}`.slice(-10) },
+    });
+    const veh = await prisma.vehicle.create({
+        data: { customerId: cust.id, plate: `STM-${num}`, make: "T", model: "H" },
+    });
+    return prisma.jobCard.create({
+        data: {
+            garageId: gId,
+            number: num,
+            vehicleId: veh.id,
+            complaint: id,
+            mileageIn: 1,
+            status: "APPROVED",
+        },
+    });
 }
 beforeEach(async () => {
     await cleanup();
@@ -144,13 +168,14 @@ describe("computeStatements — E5", () => {
             { account: ACCOUNTS.SALES, credit: 100, sourceType: "INVOICE", sourceId: "i2" },
             { account: ACCOUNTS.VAT_PAYABLE, credit: 5, sourceType: "INVOICE", sourceId: "i2" },
         ]);
-        // Seed 2 invoices for the count
+        // Seed 2 invoices for the count. Need a jobCard for FK.
+        const job = await seedJobCard("j1", 1);
         await prisma.invoice.createMany({
             data: [
                 {
                     id: "i1",
                     garageId: gId,
-                    jobCardId: "j1",
+                    jobCardId: job.id,
                     number: 1,
                     issuedAt: IN_HIST,
                     dueDate: IN_HIST,
@@ -162,7 +187,7 @@ describe("computeStatements — E5", () => {
                 {
                     id: "i2",
                     garageId: gId,
-                    jobCardId: "j1",
+                    jobCardId: job.id,
                     number: 2,
                     issuedAt: IN_HIST,
                     dueDate: IN_HIST,

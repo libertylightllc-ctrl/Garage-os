@@ -180,6 +180,13 @@ describe("commit customer batch — phone-match discipline (rule 17 + rule 8)", 
     });
 
     it("Same-file duplicate: same phone + different name → first creates, second refused", async () => {
+        // No pre-existing customer with this phone — first row creates,
+        // second row's dedupe treats the just-created row as "existing"
+        // (its create landed inside the same tx), so the refusal reason
+        // reads "existing customer" not "earlier row" — same outcome,
+        // same operator fix. The "earlier row" branch only fires on
+        // rows past the first mismatch when the create failed for some
+        // other reason.
         const csv =
             "Customer,Phone\n" +
             "Original Name,+971501234567\n" +
@@ -192,7 +199,8 @@ describe("commit customer batch — phone-match discipline (rule 17 + rule 8)", 
         expect(decodeURIComponent(to2)).toContain("committed=1");
         expect(decodeURIComponent(to2)).toContain("failed=1");
         const errors = await prisma.ledgerImportError.findMany({ where: { batchId } });
-        expect(errors[0].reason).toContain("earlier row");
+        expect(errors[0].reason).toContain("Original Name"); // names the first-row customer
+        expect(errors[0].reason).toContain("Different Name"); // names the CSV row
     });
 });
 

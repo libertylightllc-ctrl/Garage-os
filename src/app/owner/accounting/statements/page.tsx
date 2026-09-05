@@ -46,7 +46,7 @@ export default async function StatementsPage({
 
     const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
     const asOfLabel = fmtDate(new Date(asOf.getTime() - 1)); // last day INCLUDED
-    const totalEquity = s.accumulatedProfit;
+    const totalEquity = s.openingBalanceEquity + s.accumulatedProfit;
     const totalLiabilitiesAndEquity = s.liabilities + totalEquity;
 
     const coveragePct =
@@ -119,6 +119,25 @@ export default async function StatementsPage({
                     </div>
                 </form>
 
+                {/* OBE coverage note — plain wording. If a shop
+                    imported opening balances, name the number so an
+                    owner reading the balance sheet doesn't see
+                    equity they can't explain. */}
+                {s.openingBalanceEquity !== 0 ? (
+                    <div className="rounded-lg border border-info-500/40 bg-info-50 px-4 py-3 text-sm text-info-700 dark:border-info-500/30 dark:bg-info-500/10 dark:text-info-500">
+                        <div className="font-medium">
+                            Equity includes {money(s.openingBalanceEquity)} carried in from a
+                            previous system.
+                        </div>
+                        <div className="mt-1 text-xs">
+                            This is what your customers owed you, what you owed suppliers,
+                            what was on the shelf, and cash in the till when the shop
+                            switched to GarageOS. Shown as a separate equity line so it
+                            stays distinct from what the shop has earned since.
+                        </div>
+                    </div>
+                ) : null}
+
                 {/* Coverage banner — same shape as the P&L. Cumulative
                     across all time (not period). */}
                 {s.coverage.cogsFlagOff && s.accumulatedProfit > 0 ? (
@@ -168,6 +187,12 @@ export default async function StatementsPage({
                             <BalanceSheetSide
                                 title="Equity"
                                 rows={[
+                                    ...(s.openingBalanceEquity !== 0
+                                        ? [{
+                                            account: "Opening Balance Equity (carried in)",
+                                            amount: s.openingBalanceEquity,
+                                        }]
+                                        : []),
                                     {
                                         account: "Accumulated profit (all time, derived)",
                                         amount: s.accumulatedProfit,

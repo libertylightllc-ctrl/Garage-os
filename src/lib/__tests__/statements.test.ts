@@ -97,7 +97,51 @@ describe("computeStatements — E5", () => {
         expect(s.totalCredits).toBe(0);
         expect(s.assets).toBe(0);
         expect(s.liabilities).toBe(0);
+        expect(s.openingBalanceEquity).toBe(0);
         expect(s.accumulatedProfit).toBe(0);
+        expect(s.outOfBalanceBy).toBe(0);
+    });
+
+    it("E7 — opening balance import posts to OBE, balances, shows on its own line", async () => {
+        // AR opening balance for a customer we carried in: they owed
+        // us AED 5,000 at cutover. The OB import writes:
+        //   DR AR 5000 / CR OPENING_BALANCE_EQUITY 5000
+        // No CR Sales, no CR VAT_Payable — pre-cutover activity was
+        // already declared to the FTA on the old system's return.
+        await ledger([
+            { account: ACCOUNTS.AR, debit: 5000, sourceType: "OPENING_BALANCE", sourceId: "ob1" },
+            { account: ACCOUNTS.OPENING_BALANCE_EQUITY, credit: 5000, sourceType: "OPENING_BALANCE", sourceId: "ob1" },
+        ]);
+        const s = await computeStatements(gId, AS_OF);
+        expect(s.assets).toBe(5000);
+        expect(s.liabilities).toBe(0);
+        expect(s.openingBalanceEquity).toBe(5000);
+        expect(s.accumulatedProfit).toBe(0); // did NOT hit Sales
+        expect(s.outOfBalanceBy).toBe(0);
+    });
+
+    it("E7 — inventory opening balance (rule 10 cutover shape) balances", async () => {
+        await ledger([
+            { account: ACCOUNTS.INVENTORY, debit: 12000, sourceType: "OPENING_BALANCE", sourceId: "ob-inv" },
+            { account: ACCOUNTS.OPENING_BALANCE_EQUITY, credit: 12000, sourceType: "OPENING_BALANCE", sourceId: "ob-inv" },
+        ]);
+        const s = await computeStatements(gId, AS_OF);
+        expect(s.assets).toBe(12000);
+        expect(s.openingBalanceEquity).toBe(12000);
+        expect(s.outOfBalanceBy).toBe(0);
+    });
+
+    it("E7 — vendor opening balance (we owe supplier) balances", async () => {
+        // We owed a supplier AED 3,000 at cutover:
+        //   DR OPENING_BALANCE_EQUITY 3000 / CR AP 3000
+        await ledger([
+            { account: ACCOUNTS.OPENING_BALANCE_EQUITY, debit: 3000, sourceType: "OPENING_BALANCE", sourceId: "ob-v1" },
+            { account: ACCOUNTS.AP, credit: 3000, sourceType: "OPENING_BALANCE", sourceId: "ob-v1" },
+        ]);
+        const s = await computeStatements(gId, AS_OF);
+        expect(s.assets).toBe(0);
+        expect(s.liabilities).toBe(3000);
+        expect(s.openingBalanceEquity).toBe(-3000); // OBE went negative — vendor debt exceeded any assets brought in
         expect(s.outOfBalanceBy).toBe(0);
     });
 

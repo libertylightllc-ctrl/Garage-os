@@ -370,6 +370,27 @@ export const ACCOUNTS = {
   EXP_REPAIRS_MAINT: "Repairs & Maintenance Expense",
   EXP_PROF_FEES: "Professional Fees Expense",
   EXP_MISC: "Miscellaneous Expense",
+  // ---------- Equity (E7, AR 2026-09-03) ----------
+  // Opening Balance Equity — the QuickBooks-standard target for
+  // migration opening balances. Every OPENING_BALANCE import row
+  // credits or debits this account so:
+  //   • the balance sheet balances from day one (equity absorbs the
+  //     net of assets − liabilities at cutover);
+  //   • no CR Sales row lands for pre-cutover AR balances (which
+  //     would inflate current-period revenue on the P&L);
+  //   • no CR VAT_Payable row lands for pre-cutover receivables
+  //     (which would over-declare on the FTA return).
+  //
+  // Written ONCE at cutover, then never touched by any writer. A
+  // correction on an OB row voids the original OB pair + posts a
+  // fresh OB pair (OPENING_BALANCE_ADJUSTMENT), same discipline as
+  // INVOICE_VOID.
+  //
+  // Balance-sheet render: this account's balance shows on its own
+  // line ("Opening Balance Equity"), and the derived accumulated-
+  // profit line (Revenue − COGS − Expenses) shows separately. Rule 16
+  // pins the split: one carried in, one earned.
+  OPENING_BALANCE_EQUITY: "Opening Balance Equity",
 } as const;
 
 // ---------- Account classification (E1a, AR 2026-08-30) ----------
@@ -411,6 +432,8 @@ export const ACCOUNT_TYPES: Record<string, AccountType> = {
   [ACCOUNTS.EXP_REPAIRS_MAINT]:  "EXPENSE",
   [ACCOUNTS.EXP_PROF_FEES]:      "EXPENSE",
   [ACCOUNTS.EXP_MISC]:           "EXPENSE",
+  // Equity (E7, AR 2026-09-03)
+  [ACCOUNTS.OPENING_BALANCE_EQUITY]: "EQUITY",
 };
 
 /** Issuing an invoice: DR AR (total) / CR Sales (subtotal) + CR VAT Payable (vat). */

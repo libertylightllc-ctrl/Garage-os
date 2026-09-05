@@ -67,9 +67,11 @@ export interface StatementsResult {
     assets: number;
     /** Sum of LIABILITY balances (CR − DR across all LIABILITY-typed accounts). */
     liabilities: number;
+    /** Sum of EQUITY balances (CR − DR across all EQUITY-typed accounts). Today this is OPENING_BALANCE_EQUITY only — populated by the E7 import when a shop migrates from another system, zero otherwise. */
+    openingBalanceEquity: number;
     /** DERIVED accumulated profit = Revenue − COGS − Expenses. No closing entries posted. */
     accumulatedProfit: number;
-    /** Balance-sheet equation check: assets − (liabilities + accumulatedProfit). Zero when the ledger is consistent (which it always is unless a writer has a bug). */
+    /** Balance-sheet equation check: assets − (liabilities + openingBalanceEquity + accumulatedProfit). Zero when the ledger is consistent (which it always is unless a writer has a bug). */
     outOfBalanceBy: number;
     coverage: StatementsCoverage;
 }
@@ -174,6 +176,7 @@ export async function computeStatements(
     // Balance sheet arithmetic. Each type reads its own accounts.
     let assets = 0;
     let liabilities = 0;
+    let equity = 0;
     let revenue = 0;
     let cogs = 0;
     let expenses = 0;
@@ -194,15 +197,18 @@ export async function computeStatements(
                 else expenses += drCr;
                 break;
             case "EQUITY":
-                // Not yet used — no writers touch EQUITY-typed
-                // accounts. Reserved for a future OPENING_BALANCE_EQUITY
-                // or RETAINED_EARNINGS constant. See rule 16.
+                // OPENING_BALANCE_EQUITY (E7) — populated by the
+                // opening-balance import when a shop migrates. CR-normal
+                // (a positive credit balance = "the shop had this much
+                // net worth carried in from the old system"). See rule 16.
+                equity += -drCr;
                 break;
         }
     }
 
     const accumulatedProfit = normZero(round2(revenue - cogs - expenses));
-    const totalEquity = accumulatedProfit; // no other equity accounts today
+    const openingBalanceEquity = normZero(round2(equity));
+    const totalEquity = openingBalanceEquity + accumulatedProfit;
     const totalLiabilitiesAndEquity = round2(liabilities + totalEquity);
     const outOfBalanceBy = normZero(round2(round2(assets) - totalLiabilitiesAndEquity));
 
@@ -213,6 +219,7 @@ export async function computeStatements(
         totalCredits,
         assets: normZero(round2(assets)),
         liabilities: normZero(round2(liabilities)),
+        openingBalanceEquity,
         accumulatedProfit,
         outOfBalanceBy,
         coverage: {

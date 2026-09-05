@@ -29,6 +29,15 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/guard";
 import { ACCOUNTS } from "@/lib/billing";
 import { parseOpeningBalanceCsv, type ParsedOpeningBalanceRow } from "@/lib/import/parse-openbal";
+import {
+    parseCustomerCsv,
+    parseVendorCsv,
+    parseItemCsv,
+    type ParsedCustomerRow,
+    type ParsedVendorRow,
+    type ParsedItemRow,
+} from "@/lib/import/parse-customer";
+import { normalizeUaePhone } from "@/lib/normalize";
 import type { Prisma } from "@/generated/prisma/client";
 
 function fail(msg: string, path = "/owner/accounting/import"): never {
@@ -194,15 +203,17 @@ export async function commitLedgerImportBatchAction(formData: FormData) {
     if (batch.status !== "DRAFT") {
         fail(`Import batch is already ${batch.status.toLowerCase()}.`, `/owner/accounting/import/${batchId}`);
     }
-    if (batch.kind !== "OPENING_BALANCE") {
-        // Step 3 extends this action to CUSTOMER / VENDOR / ITEM.
-        // Until then, refuse cleanly rather than silently no-op.
-        fail(
-            `Committing ${batch.kind.toLowerCase()} imports isn't wired yet — step 3 ships that path.`,
-            `/owner/accounting/import/${batchId}`,
-        );
+    if (batch.kind === "CUSTOMER") {
+        return commitCustomerBatch(batch, session);
+    }
+    if (batch.kind === "VENDOR") {
+        return commitVendorBatch(batch, session);
+    }
+    if (batch.kind === "ITEM") {
+        return commitItemBatch(batch, session);
     }
 
+    // OPENING_BALANCE — falls through to the existing OB commit.
     const stored = batch.parsedRowsJson as unknown as StoredOpenBalRow[];
 
     // Fetch every customer + existing OB entries ONCE — same shape as
@@ -358,4 +369,404 @@ export async function discardLedgerImportBatchAction(formData: FormData) {
     });
     revalidatePath("/owner/accounting/import");
     redirect("/owner/accounting/import?discarded=1");
+}
+
+// ─── Step 3 (AR 2026-09-03) — customer / vendor / item import ────
+//
+// All three follow the same shape as the OB path but write to
+// domain tables (Customer / Supplier / Part) instead of the ledger.
+// Idempotent-per-row: existing rows are SKIPPED (not overwritten),
+// so a re-upload of the same CSV no-ops on already-imported rows
+// and creates only the new ones.
+
+interface StoredCustomerRow {
+    rowIndex: number;
+    name: string;
+    phone: string;
+    email: string | null;
+    address: string | null;
+}
+interface StoredVendorRow {
+    rowIndex: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    trn: string | null;
+}
+interface StoredItemRow {
+    rowIndex: number;
+    sku: string;
+    name: string;
+    price: number;
+    cost: number;
+}
+interface CustomerPreviewSummary {
+    totalRows: number;
+    willCreate: number;
+    willSkip: number;
+    willFail: number;
+    parseErrors: { rowIndex: number; reason: string }[];
+}
+
+type BatchStub = { id: string; parsedRowsJson: Prisma.JsonValue };
+type Sess = { user: { id: string; garageId: string; role: string } };
+
+export async function previewCustomerImportAction(formData: FormData) {
+    const session = await requireRole("OWNER");
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) fail("Choose a CSV file to upload.");
+    if (file.size > 2 * 1024 * 1024) fail("File is larger than 2 MB.");
+    const csv = await file.text();
+    let parsed;
+    try {
+        parsed = parseCustomerCsv(csv);
+    } catch (e) {
+        fail(e instanceof Error ? e.message : "CSV parse failed.");
+    }
+    const existing = await prisma.customer.findMany({
+        where: { garageId: session.user.garageId },
+        select: { phone: true },
+    });
+    const existingKeys = new Set(existing.map((c) => normalizeUaePhone(c.phone)));
+    const seenInFile = new Set<string>();
+    let willCreate = 0;
+    let willSkip = 0;
+    for (const r of parsed.rows) {
+        const key = normalizeUaePhone(r.phone);
+        if (existingKeys.has(key) || seenInFile.has(key)) willSkip++;
+        else {
+            willCreate++;
+            seenInFile.add(key);
+        }
+    }
+    const summary: CustomerPreviewSummary = {
+        totalRows: parsed.rows.length + parsed.errors.length,
+        willCreate,
+        willSkip,
+        willFail: parsed.errors.length,
+        parseErrors: parsed.errors.map((e) => ({ rowIndex: e.rowIndex, reason: e.reason })),
+    };
+    const stored: StoredCustomerRow[] = parsed.rows.map((r) => ({
+        rowIndex: r.rowIndex,
+        name: r.name,
+        phone: r.phone,
+        email: r.email,
+        address: r.address,
+    }));
+    const batch = await prisma.ledgerImportBatch.create({
+        data: {
+            garageId: session.user.garageId,
+            uploadedByUserId: session.user.id,
+            kind: "CUSTOMER",
+            status: "DRAFT",
+            fileName: file.name,
+            parsedRowsJson: stored as unknown as Prisma.InputJsonValue,
+            previewSummaryJson: summary as unknown as Prisma.InputJsonValue,
+        },
+    });
+    revalidatePath("/owner/accounting/import");
+    redirect(`/owner/accounting/import/${batch.id}`);
+}
+
+async function commitCustomerBatch(batch: BatchStub, session: Sess) {
+    const stored = batch.parsedRowsJson as unknown as StoredCustomerRow[];
+    const existing = await prisma.customer.findMany({
+        where: { garageId: session.user.garageId },
+        select: { phone: true },
+    });
+    const knownKeys = new Set(existing.map((c) => normalizeUaePhone(c.phone)));
+    const errors: { rowIndex: number; rowJson: Prisma.InputJsonValue; reason: string }[] = [];
+    let created = 0;
+    let skipped = 0;
+    for (const row of stored) {
+        const key = normalizeUaePhone(row.phone);
+        if (knownKeys.has(key)) {
+            skipped++;
+            continue;
+        }
+        try {
+            // Customer has no `address` column today — the parser reads
+            // it (for operator visibility in the preview + error row
+            // dumps) but we don't persist it. Adding an address column
+            // + display surfaces is a separate concern; if a shop needs
+            // per-customer addresses on invoices they use the existing
+            // per-invoice `remarks` block. See rule 17.
+            await prisma.customer.create({
+                data: {
+                    garageId: session.user.garageId,
+                    name: row.name,
+                    phone: row.phone,
+                    email: row.email,
+                },
+            });
+            knownKeys.add(key);
+            created++;
+        } catch (e) {
+            errors.push({
+                rowIndex: row.rowIndex,
+                rowJson: row as unknown as Prisma.InputJsonValue,
+                reason: e instanceof Error ? `Write failed: ${e.message}` : "Write failed.",
+            });
+        }
+    }
+    await prisma.ledgerImportBatch.update({
+        where: { id: batch.id },
+        data: {
+            status: "COMMITTED",
+            committedAt: new Date(),
+            committedByUserId: session.user.id,
+        },
+    });
+    if (errors.length > 0) {
+        await prisma.ledgerImportError.createMany({
+            data: errors.map((e) => ({
+                batchId: batch.id,
+                rowIndex: e.rowIndex,
+                rowJson: e.rowJson,
+                reason: e.reason,
+            })),
+        });
+    }
+    revalidatePath("/owner/accounting/import");
+    revalidatePath(`/owner/accounting/import/${batch.id}`);
+    revalidatePath("/advisor/customers");
+    redirect(
+        `/owner/accounting/import/${batch.id}?committed=${created}&skipped=${skipped}&failed=${errors.length}`,
+    );
+}
+
+export async function previewVendorImportAction(formData: FormData) {
+    const session = await requireRole("OWNER");
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) fail("Choose a CSV file to upload.");
+    if (file.size > 2 * 1024 * 1024) fail("File is larger than 2 MB.");
+    const csv = await file.text();
+    let parsed;
+    try {
+        parsed = parseVendorCsv(csv);
+    } catch (e) {
+        fail(e instanceof Error ? e.message : "CSV parse failed.");
+    }
+    const existing = await prisma.supplier.findMany({
+        where: { garageId: session.user.garageId },
+        select: { name: true },
+    });
+    const existingKeys = new Set(existing.map((v) => v.name.trim().toLowerCase()));
+    const seenInFile = new Set<string>();
+    let willCreate = 0;
+    let willSkip = 0;
+    for (const r of parsed.rows) {
+        const key = r.name.trim().toLowerCase();
+        if (existingKeys.has(key) || seenInFile.has(key)) willSkip++;
+        else {
+            willCreate++;
+            seenInFile.add(key);
+        }
+    }
+    const summary: CustomerPreviewSummary = {
+        totalRows: parsed.rows.length + parsed.errors.length,
+        willCreate,
+        willSkip,
+        willFail: parsed.errors.length,
+        parseErrors: parsed.errors.map((e) => ({ rowIndex: e.rowIndex, reason: e.reason })),
+    };
+    const stored: StoredVendorRow[] = parsed.rows.map((r) => ({
+        rowIndex: r.rowIndex,
+        name: r.name,
+        phone: r.phone,
+        email: r.email,
+        trn: r.trn,
+    }));
+    const batch = await prisma.ledgerImportBatch.create({
+        data: {
+            garageId: session.user.garageId,
+            uploadedByUserId: session.user.id,
+            kind: "VENDOR",
+            status: "DRAFT",
+            fileName: file.name,
+            parsedRowsJson: stored as unknown as Prisma.InputJsonValue,
+            previewSummaryJson: summary as unknown as Prisma.InputJsonValue,
+        },
+    });
+    revalidatePath("/owner/accounting/import");
+    redirect(`/owner/accounting/import/${batch.id}`);
+}
+
+async function commitVendorBatch(batch: BatchStub, session: Sess) {
+    const stored = batch.parsedRowsJson as unknown as StoredVendorRow[];
+    const existing = await prisma.supplier.findMany({
+        where: { garageId: session.user.garageId },
+        select: { name: true },
+    });
+    const known = new Set(existing.map((v) => v.name.trim().toLowerCase()));
+    const errors: { rowIndex: number; rowJson: Prisma.InputJsonValue; reason: string }[] = [];
+    let created = 0;
+    let skipped = 0;
+    for (const row of stored) {
+        const key = row.name.trim().toLowerCase();
+        if (known.has(key)) {
+            skipped++;
+            continue;
+        }
+        try {
+            await prisma.supplier.create({
+                data: {
+                    garageId: session.user.garageId,
+                    name: row.name,
+                    phone: row.phone,
+                    email: row.email,
+                    trn: row.trn,
+                },
+            });
+            known.add(key);
+            created++;
+        } catch (e) {
+            errors.push({
+                rowIndex: row.rowIndex,
+                rowJson: row as unknown as Prisma.InputJsonValue,
+                reason: e instanceof Error ? `Write failed: ${e.message}` : "Write failed.",
+            });
+        }
+    }
+    await prisma.ledgerImportBatch.update({
+        where: { id: batch.id },
+        data: {
+            status: "COMMITTED",
+            committedAt: new Date(),
+            committedByUserId: session.user.id,
+        },
+    });
+    if (errors.length > 0) {
+        await prisma.ledgerImportError.createMany({
+            data: errors.map((e) => ({
+                batchId: batch.id,
+                rowIndex: e.rowIndex,
+                rowJson: e.rowJson,
+                reason: e.reason,
+            })),
+        });
+    }
+    revalidatePath("/owner/accounting/import");
+    revalidatePath(`/owner/accounting/import/${batch.id}`);
+    revalidatePath("/owner/suppliers");
+    redirect(
+        `/owner/accounting/import/${batch.id}?committed=${created}&skipped=${skipped}&failed=${errors.length}`,
+    );
+}
+
+export async function previewItemImportAction(formData: FormData) {
+    const session = await requireRole("OWNER");
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) fail("Choose a CSV file to upload.");
+    if (file.size > 2 * 1024 * 1024) fail("File is larger than 2 MB.");
+    const csv = await file.text();
+    let parsed;
+    try {
+        parsed = parseItemCsv(csv);
+    } catch (e) {
+        fail(e instanceof Error ? e.message : "CSV parse failed.");
+    }
+    const existing = await prisma.part.findMany({
+        where: { garageId: session.user.garageId },
+        select: { sku: true },
+    });
+    const existingKeys = new Set(existing.map((p) => p.sku));
+    const seenInFile = new Set<string>();
+    let willCreate = 0;
+    let willSkip = 0;
+    for (const r of parsed.rows) {
+        if (existingKeys.has(r.sku) || seenInFile.has(r.sku)) willSkip++;
+        else {
+            willCreate++;
+            seenInFile.add(r.sku);
+        }
+    }
+    const summary: CustomerPreviewSummary = {
+        totalRows: parsed.rows.length + parsed.errors.length,
+        willCreate,
+        willSkip,
+        willFail: parsed.errors.length,
+        parseErrors: parsed.errors.map((e) => ({ rowIndex: e.rowIndex, reason: e.reason })),
+    };
+    const stored: StoredItemRow[] = parsed.rows.map((r) => ({
+        rowIndex: r.rowIndex,
+        sku: r.sku,
+        name: r.name,
+        price: r.price,
+        cost: r.cost,
+    }));
+    const batch = await prisma.ledgerImportBatch.create({
+        data: {
+            garageId: session.user.garageId,
+            uploadedByUserId: session.user.id,
+            kind: "ITEM",
+            status: "DRAFT",
+            fileName: file.name,
+            parsedRowsJson: stored as unknown as Prisma.InputJsonValue,
+            previewSummaryJson: summary as unknown as Prisma.InputJsonValue,
+        },
+    });
+    revalidatePath("/owner/accounting/import");
+    redirect(`/owner/accounting/import/${batch.id}`);
+}
+
+async function commitItemBatch(batch: BatchStub, session: Sess) {
+    const stored = batch.parsedRowsJson as unknown as StoredItemRow[];
+    const existing = await prisma.part.findMany({
+        where: { garageId: session.user.garageId },
+        select: { sku: true },
+    });
+    const known = new Set(existing.map((p) => p.sku));
+    const errors: { rowIndex: number; rowJson: Prisma.InputJsonValue; reason: string }[] = [];
+    let created = 0;
+    let skipped = 0;
+    for (const row of stored) {
+        if (known.has(row.sku)) {
+            skipped++;
+            continue;
+        }
+        try {
+            await prisma.part.create({
+                data: {
+                    garageId: session.user.garageId,
+                    sku: row.sku,
+                    name: row.name,
+                    price: row.price,
+                    cost: row.cost,
+                },
+            });
+            known.add(row.sku);
+            created++;
+        } catch (e) {
+            errors.push({
+                rowIndex: row.rowIndex,
+                rowJson: row as unknown as Prisma.InputJsonValue,
+                reason: e instanceof Error ? `Write failed: ${e.message}` : "Write failed.",
+            });
+        }
+    }
+    await prisma.ledgerImportBatch.update({
+        where: { id: batch.id },
+        data: {
+            status: "COMMITTED",
+            committedAt: new Date(),
+            committedByUserId: session.user.id,
+        },
+    });
+    if (errors.length > 0) {
+        await prisma.ledgerImportError.createMany({
+            data: errors.map((e) => ({
+                batchId: batch.id,
+                rowIndex: e.rowIndex,
+                rowJson: e.rowJson,
+                reason: e.reason,
+            })),
+        });
+    }
+    revalidatePath("/owner/accounting/import");
+    revalidatePath(`/owner/accounting/import/${batch.id}`);
+    revalidatePath("/owner/inventory");
+    redirect(
+        `/owner/accounting/import/${batch.id}?committed=${created}&skipped=${skipped}&failed=${errors.length}`,
+    );
 }

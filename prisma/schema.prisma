@@ -425,6 +425,7 @@ model Garage {
   ledgerEntries      LedgerEntry[]
   advancePayments    AdvancePayment[]
   supplierBills      SupplierBill[]
+  ledgerImportBatches LedgerImportBatch[]
   supplierPayments   SupplierPayment[]
   expenses           Expense[]
   aiEvents           AiEvent[]
@@ -527,6 +528,8 @@ model User {
   plateHistoryReleased VehiclePlateHistory[]      @relation("PlateHistoryReleasedBy")
   ownershipTransfers   VehicleOwnershipTransfer[] @relation("OwnershipTransferBy")
   intakeDraftsCreated  IntakeDraft[]              @relation("IntakeDraftCreatedBy")
+  ledgerImportsUploaded  LedgerImportBatch[]      @relation("LedgerImportBatchUploader")
+  ledgerImportsCommitted LedgerImportBatch[]      @relation("LedgerImportBatchCommitter")
 
   // Last successful sign-in for this staff user. Written by the
   // baseProvider in src/auth.ts on every authorize() pass — best-effort,
@@ -2122,6 +2125,96 @@ model ExpenseDeleteAudit {
   @@index([garageId])
   @@index([outcome])
   @@index([attemptedAt])
+}
+
+// ---------- Import batches (E7, AR 2026-09-03) ----------
+//
+// Two-phase CSV import with a preview-then-commit gate. The parse
+// action writes a DRAFT batch (parsed rows in `parsedRowsJson` +
+// preview summary); the commit action reads that batch and applies
+// per-row idempotent inserts, marking the batch COMMITTED. Rejected
+// rows land in LedgerImportError with their reason.
+//
+// One row per import file. The `kind` names the target (customer /
+// vendor / item / opening balance). Preview + commit share the same
+// row so a browser reload between the two doesn't lose the parsed
+// data.
+//
+// Not itself a ledger-writing table — the ledger writes it produces
+// carry sourceType='OPENING_BALANCE' (or nothing, for the non-ledger
+// kinds). A future audit-hardening phase may add a delete-guard
+// trigger; deferred until a shop actually needs the trace back.
+//
+// See rule 17 (ships with E7b) for the discipline: idempotent-per-row,
+// per-row failure reporting, never write on upload, refuse re-import
+// for opening balances.
+
+model LedgerImportBatch {
+  id                String              @id @default(cuid())
+  garageId          String
+  garage            Garage              @relation(fields: [garageId], references: [id])
+  uploadedByUserId  String
+  uploadedBy        User                @relation("LedgerImportBatchUploader", fields: [uploadedByUserId], references: [id])
+  kind              LedgerImportKind
+  status            LedgerImportStatus  @default(DRAFT)
+  fileName          String
+  // Parsed rows as JSON — the exact shape the previewer built from
+  // the CSV. Committer reads this back, not the original file. Kept
+  // as JSON (not a normalised child table) because rows vary per kind
+  // and the total is capacity-bounded (one operator upload, one shop).
+  parsedRowsJson    Json
+  // Summary counters computed by the previewer: create / skip / fail.
+  // Rendered on the preview page without needing to re-scan
+  // parsedRowsJson.
+  previewSummaryJson Json
+  // Populated when a row is committed successfully; the operator can
+  // see who ran the commit + when it landed.
+  committedAt       DateTime?
+  committedByUserId String?
+  committedBy       User?               @relation("LedgerImportBatchCommitter", fields: [committedByUserId], references: [id])
+  discardedAt       DateTime?
+  note              String?
+
+  errors            LedgerImportError[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([garageId, status])
+  @@index([garageId, kind])
+  @@index([uploadedByUserId])
+}
+
+// One row per line the committer refused. `rowJson` snapshots the
+// parsed row so the operator can see exactly what was rejected;
+// `reason` names why in plain wording (duplicate phone, missing
+// required field, opening-balance already imported for this
+// customer, etc). rowIndex is the 1-based line in the CSV (excluding
+// the header), so the operator can find it in their file.
+model LedgerImportError {
+  id        String            @id @default(cuid())
+  batchId   String
+  batch     LedgerImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowIndex  Int
+  rowJson   Json
+  reason    String
+
+  createdAt DateTime @default(now())
+
+  @@index([batchId])
+}
+
+enum LedgerImportKind {
+  CUSTOMER
+  VENDOR
+  ITEM
+  OPENING_BALANCE
+}
+
+enum LedgerImportStatus {
+  DRAFT      // uploaded, parsed, preview computed, awaiting operator's Commit
+  COMMITTED  // Commit ran; per-row inserts applied
+  DISCARDED  // operator chose Discard on the preview; nothing written
 }
 
 // ---------- WhatsApp ----------

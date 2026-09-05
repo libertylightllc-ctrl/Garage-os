@@ -102,7 +102,12 @@ describe("parseOpeningBalanceCsv — parser", () => {
     });
 
     it("Missing required column → throws (whole file unusable)", () => {
-        expect(() => parseOpeningBalanceCsv("Name,Amount\nX,100")).toThrow(/Missing "Balance"/);
+        // "Name" matches the customer alias, "Amount" matches the balance
+        // alias — but As of is absent. Parser checks columns in order;
+        // the first missing one throws.
+        expect(() => parseOpeningBalanceCsv("Name,Amount\nX,100")).toThrow(/Missing "As of"/);
+        // And an explicit missing-Balance case (no Balance alias):
+        expect(() => parseOpeningBalanceCsv("Customer,As of\nX,2026-06-01")).toThrow(/Missing "Balance"/);
     });
 
     it("Per-row failures surface in errors[], not rows[]", () => {

@@ -68,6 +68,12 @@ const OWNER_ONLY: readonly string[] = [
   // Trial balance + balance sheet (E5, AR 2026-09-03). Financial
   // reporting bucket — OWNER-only, same as ledger + analytics.
   "src/app/owner/accounting/statements/page.tsx",
+  // Import from QuickBooks (E7b, AR 2026-09-03). Owner-only — bulk
+  // writes to Customer / Supplier / Part / ledger, sensitive enough
+  // to keep out of MASTER's operational surface. Financial reporting
+  // + bulk-write bucket.
+  "src/app/owner/accounting/import/page.tsx",
+  "src/app/owner/accounting/import/[batchId]/page.tsx",
   // ERPNext sync (Phase 5 operator surface, AR 2026-08-27). Flag
   // toggle + dead-letter replay — same finance/admin bucket as
   // billing and ledger, MASTER stays barred.

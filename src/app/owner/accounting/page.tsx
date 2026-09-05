@@ -79,6 +79,13 @@ export default async function AccountingHubPage() {
             visibleTo: "OWNER_ONLY",
             icon: "📤",
         },
+        {
+            href: "/owner/accounting/import",
+            title: "Import from QuickBooks",
+            blurb: "Bring customers, vendors, items, and opening balances across from your old system. Preview before commit; nothing writes on upload.",
+            visibleTo: "OWNER_ONLY",
+            icon: "📥",
+        },
         // E4 → VAT summary. E5 → Trial balance + balance sheet.
         // Each lands as its own tile in the display order accountants
         // read them: operational (Payables, Expenses) → periodic reports

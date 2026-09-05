@@ -607,6 +607,40 @@ Same coverage-banner shape as rule 13/14, with the same specificity — but scop
 
 Another violation shape: &quot;the balance sheet is out of balance — quietly plug the difference into equity.&quot; Rule 16 explicitly refuses this. The imbalance is telling the operator that the ledger has a bug; the correct answer is to investigate the ledger, not to hide the number.
 
+## 17. CSV imports are preview-then-commit, per-row idempotent, opening balances post to OBE
+
+The QuickBooks-migration import (E7, AR 2026-09-03) uses a two-phase gate: parse writes a DRAFT `LedgerImportBatch` with the parsed rows in `parsedRowsJson`, and commit reads the same batch to apply per-row inserts. Never write on upload; the preview page shows what WILL happen before the operator confirms. Discard throws the batch away without writing.
+
+**Never write on upload.** Parse is idempotent by design — a shop that uploads the same file three times gets three DRAFT batches and zero real writes until they Commit one. The batch is the source of truth between preview and commit: a browser reload doesn&apos;t lose the parsed data; a different operator can pick up the preview and commit. Two-phase enforcement lives in `LedgerImportBatch.status` (`DRAFT` / `COMMITTED` / `DISCARDED`); committing a `COMMITTED` batch refuses at the action layer.
+
+**Idempotent per row.** The commit path never rolls the whole file back on a single-row failure. Row 400 rejecting doesn&apos;t undo rows 1-399. Failures land in `LedgerImportError` with the parsed row snapshot + a plain-wording reason (customer not found, ambiguous name, already imported), so the operator can find the row in their CSV, correct it, and re-upload just the failed subset. Same discipline as `recordSupplierPaymentAction`&apos;s per-allocation transaction shape (rule 10 §payment discipline).
+
+**Opening balances post to Opening Balance Equity, never to Sales.** The customer-A/R opening-balance importer writes:
+
+```
+DR Accounts Receivable       balance
+CR Opening Balance Equity    balance
+sourceType='OPENING_BALANCE'
+sourceId='<batchId>:<rowIndex>:<customerId>'
+createdAt=<row's As-of date>
+```
+
+The vendor-A/P side (when it ships as a sibling kind) mirrors: `DR OBE / CR AP`. Rule 16 pins why this direction is load-bearing — posting `CR Sales` for a pre-cutover balance inflates current-period revenue on the P&amp;L, over-declares output VAT on Form 201, and hides the "carried in" number in a place an accountant can&apos;t distinguish from real activity. OBE is the honest target; the balance sheet renders it as a distinct equity line ("carried in") separate from accumulated profit ("earned").
+
+**Opening-balance idempotency.** An import commit refuses when the target customer already has any `OPENING_BALANCE` ledger entry against `AR`. Same-file duplicates are caught too — a CSV that lists "Al Falah Motors" twice writes one pair, then rejects the second row as already-imported (tracked in-memory during the commit loop). Correction path when needed: void the OB row (post a reversing pair under `OPENING_BALANCE_ADJUSTMENT`), never edit-in-place. Rule 14&apos;s never-rewrite-history invariant applies.
+
+**Date-per-row from the CSV.** `LedgerEntry.createdAt` is set to the row&apos;s `As of` date, not the upload time. Aging clocks from the operator-stated date; a shop that wants Net-30 aging on migrated bills enters the ORIGINAL invoice date. A shop starting fresh just enters the cutover date and gets 0-days-aged rows — legitimate for that intent.
+
+**Name matching is strict and case-insensitive.** OB rows resolve to a customer by exact (trimmed, lowercased) name match within the garage. Zero matches → row rejected "customer not found — import customers first, then re-upload." Multiple matches → row rejected "ambiguous — N customers with this name." No auto-create (Customer.phone is required and the OB CSV has no phone data), no fuzzy matching (silent wrong-customer would corrupt the AR ledger). Operator&apos;s workflow: import customers first (name + phone, dedupe by phone), then import opening balances (name-match).
+
+**Parse-time errors are file-scoped; row errors are row-scoped.** A missing required column throws — the whole file is unusable, the parser refuses to guess column positions. A single bad row (blank customer name, non-number balance, negative amount, bad date) lands in the parse result&apos;s `errors[]`, doesn&apos;t crash the parser, and shows up in the preview&apos;s "will fail" count. Same shape at commit time: parse errors don&apos;t retry; row-level match errors are recomputed on commit (a customer created between preview and commit changes the outcome from "not found" to "matched" — recompute rather than freeze).
+
+**No reason-parsing.** Every downstream reader (VAT summary, balance sheet, ledger export) discovers opening-balance rows by `sourceType='OPENING_BALANCE'`, never by parsing a text field on the ledger row. Same rule 15 discipline as PO_RECEIPT movements.
+
+**Common violation shape:** "just post the opening balance as an invoice — same shape as a normal sale, keeps things simple." That flows through every downstream report as new revenue, over-declares VAT, and confuses the operator&apos;s accountant during the migration review. The DR AR / CR OBE shape is what accountants expect to see for a migration; anything else is guaranteed to require unwinding.
+
+Another violation shape: "write on upload — the operator will confirm anyway." The confirm step exists precisely because CSV imports go wrong: a wrong column ordering, a comma inside a quoted field parsed as a separator, a stale export from the source system. Writing on upload turns a preview mistake into a ledger cleanup task. Never.
+
 ## Historical audit gaps
 
 Where a fix adds a new audit column to a table, prior rows can't

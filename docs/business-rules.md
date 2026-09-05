@@ -633,6 +633,16 @@ The vendor-A/P side (when it ships as a sibling kind) mirrors: `DR OBE / CR AP`.
 
 **Name matching is strict and case-insensitive.** OB rows resolve to a customer by exact (trimmed, lowercased) name match within the garage. Zero matches → row rejected "customer not found — import customers first, then re-upload." Multiple matches → row rejected "ambiguous — N customers with this name." No auto-create (Customer.phone is required and the OB CSV has no phone data), no fuzzy matching (silent wrong-customer would corrupt the AR ledger). Operator&apos;s workflow: import customers first (name + phone, dedupe by phone), then import opening balances (name-match).
 
+**Customer import: same phone + different name is refused, not merged (AR 2026-09-05).** Building on the rule 8 precedent — the duplicate-customer probe from batch 8 refused to auto-merge two existing customer records with the same phone number and wrote it into the spec as a decision only the operator can make. The import runs the same discipline. A CSV row whose normalised phone matches an existing customer:
+- **Same name** (case-insensitive, trimmed) → skip as idempotent no-op.
+- **Different name** → refuse the row, list it in `LedgerImportError` with a reason that names both the existing customer and the CSV row, and count it as a distinct "needs a decision" category on the preview.
+
+The refusal wording tells the operator what to change ("fix the CSV to either match the existing name or use a different phone, then re-upload"). The name comparison is case-insensitive after trim; "Ahmed Syed" and "AHMED SYED" skip, "Ahmed Syed" and "Ahmed S." refuses.
+
+Same rule inside a single file: two CSV rows sharing a normalised phone but not a name → first creates, second refused.
+
+The whole point is that "same phone, different name" is one of two things — the same person spelled two ways, or two different people sharing a landline — and both need the operator to decide which. An import that silently picked "skip existing" (the default before this rule) treated the first case correctly and the second case wrongly. Refuse-and-report is the honest surface.
+
 **Parse-time errors are file-scoped; row errors are row-scoped.** A missing required column throws — the whole file is unusable, the parser refuses to guess column positions. A single bad row (blank customer name, non-number balance, negative amount, bad date) lands in the parse result&apos;s `errors[]`, doesn&apos;t crash the parser, and shows up in the preview&apos;s "will fail" count. Same shape at commit time: parse errors don&apos;t retry; row-level match errors are recomputed on commit (a customer created between preview and commit changes the outcome from "not found" to "matched" — recompute rather than freeze).
 
 **No reason-parsing.** Every downstream reader (VAT summary, balance sheet, ledger export) discovers opening-balance rows by `sourceType='OPENING_BALANCE'`, never by parsing a text field on the ledger row. Same rule 15 discipline as PO_RECEIPT movements.

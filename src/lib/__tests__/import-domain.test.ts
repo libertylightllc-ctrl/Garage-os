@@ -111,13 +111,12 @@ describe("parsers", () => {
     });
 });
 
-describe("commit customer batch — phone-normalised dedupe", () => {
-    it("Skips existing customer with same normalised phone", async () => {
-        // Prime with a customer whose phone normalises to same key as one CSV row
-        await prisma.customer.create({ data: { garageId: gId, name: "Existing", phone: "971501234567" } });
+describe("commit customer batch — phone-match discipline (rule 17 + rule 8)", () => {
+    it("Same phone + SAME name → skip as idempotent no-op", async () => {
+        await prisma.customer.create({ data: { garageId: gId, name: "Al Falah Motors", phone: "971501234567" } });
         const csv =
             "Customer,Phone,Email\n" +
-            "Al Falah Motors,+971 50 123 4567,a@b.com\n" + // same normalised phone → skip
+            "Al Falah Motors,+971 50 123 4567,a@b.com\n" + // same person, formatted differently
             "New Customer,971509999999,c@d.com";
         mockAuth.mockResolvedValueOnce(owner());
         const to1 = await call(previewCustomerImportAction, form({ file: csvFile("c.csv", csv) }));
@@ -126,15 +125,50 @@ describe("commit customer batch — phone-normalised dedupe", () => {
         const to2 = await call(commitLedgerImportBatchAction, form({ batchId }));
         expect(decodeURIComponent(to2)).toContain("committed=1");
         expect(decodeURIComponent(to2)).toContain("skipped=1");
-        const created = await prisma.customer.count({ where: { garageId: gId } });
-        expect(created).toBe(2); // Existing + New Customer
+        expect(decodeURIComponent(to2)).toContain("failed=0");
+        expect(await prisma.customer.count({ where: { garageId: gId } })).toBe(2);
     });
 
-    it("Same-file duplicate: first creates, second skips", async () => {
+    it("Same phone + DIFFERENT name → refuse (rule 17: never auto-merge)", async () => {
+        await prisma.customer.create({ data: { garageId: gId, name: "Ahmed Syed", phone: "971501234567" } });
         const csv =
             "Customer,Phone,Email\n" +
-            "First Row,+971501234567,\n" +
-            "Second Row Same Phone,971501234567,";
+            "AHMED S.,+971 50 123 4567,\n" + // same phone, different name spelling
+            "New Customer,971509999999,";
+        mockAuth.mockResolvedValueOnce(owner());
+        const to1 = await call(previewCustomerImportAction, form({ file: csvFile("c.csv", csv) }));
+        const batchId = to1.split("/").pop()!.split("?")[0];
+        // Preview should show 1 create + 0 skip + 1 needs-decision
+        const batch = await prisma.ledgerImportBatch.findUnique({ where: { id: batchId } });
+        const summary = batch?.previewSummaryJson as unknown as { willCreate: number; willSkip: number; needsDecision: number };
+        expect(summary.willCreate).toBe(1);
+        expect(summary.willSkip).toBe(0);
+        expect(summary.needsDecision).toBe(1);
+
+        mockAuth.mockResolvedValueOnce(owner());
+        const to2 = await call(commitLedgerImportBatchAction, form({ batchId }));
+        // Commit refuses the mismatch, creates only the new one
+        expect(decodeURIComponent(to2)).toContain("committed=1");
+        expect(decodeURIComponent(to2)).toContain("skipped=0");
+        expect(decodeURIComponent(to2)).toContain("failed=1");
+        // Existing customer's name is NOT touched
+        const existing = await prisma.customer.findFirst({
+            where: { garageId: gId, phone: "971501234567" },
+            select: { name: true },
+        });
+        expect(existing?.name).toBe("Ahmed Syed"); // NOT rewritten to AHMED S.
+        // Error names the existing customer so the operator can act
+        const errors = await prisma.ledgerImportError.findMany({ where: { batchId } });
+        expect(errors).toHaveLength(1);
+        expect(errors[0].reason).toContain("Ahmed Syed");
+        expect(errors[0].reason).toContain("AHMED S.");
+    });
+
+    it("Same-file duplicate: same phone + same name → first creates, second skips", async () => {
+        const csv =
+            "Customer,Phone\n" +
+            "First Row,+971501234567\n" +
+            "First Row,971501234567"; // same normalised phone AND same name
         mockAuth.mockResolvedValueOnce(owner());
         const to1 = await call(previewCustomerImportAction, form({ file: csvFile("c.csv", csv) }));
         const batchId = to1.split("/").pop()!.split("?")[0];
@@ -142,6 +176,23 @@ describe("commit customer batch — phone-normalised dedupe", () => {
         const to2 = await call(commitLedgerImportBatchAction, form({ batchId }));
         expect(decodeURIComponent(to2)).toContain("committed=1");
         expect(decodeURIComponent(to2)).toContain("skipped=1");
+        expect(decodeURIComponent(to2)).toContain("failed=0");
+    });
+
+    it("Same-file duplicate: same phone + different name → first creates, second refused", async () => {
+        const csv =
+            "Customer,Phone\n" +
+            "Original Name,+971501234567\n" +
+            "Different Name,971501234567";
+        mockAuth.mockResolvedValueOnce(owner());
+        const to1 = await call(previewCustomerImportAction, form({ file: csvFile("c.csv", csv) }));
+        const batchId = to1.split("/").pop()!.split("?")[0];
+        mockAuth.mockResolvedValueOnce(owner());
+        const to2 = await call(commitLedgerImportBatchAction, form({ batchId }));
+        expect(decodeURIComponent(to2)).toContain("committed=1");
+        expect(decodeURIComponent(to2)).toContain("failed=1");
+        const errors = await prisma.ledgerImportError.findMany({ where: { batchId } });
+        expect(errors[0].reason).toContain("earlier row");
     });
 });
 

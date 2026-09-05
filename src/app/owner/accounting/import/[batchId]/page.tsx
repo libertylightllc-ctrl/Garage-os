@@ -46,6 +46,9 @@ export default async function ImportBatchPage({
         willCreate: number;
         willSkip: number;
         willFail: number;
+        /** Customer-import only — phone matches existing customer
+         *  but name differs. Refused on commit (rule 17 + rule 8). */
+        needsDecision?: number;
         parseErrors: { rowIndex: number; reason: string }[];
     };
 
@@ -127,9 +130,16 @@ export default async function ImportBatchPage({
                 <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-text-mute">
                     Preview summary
                 </h2>
-                <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className={`grid gap-3 text-sm ${summary.needsDecision !== undefined ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                     <SummaryCell label="Would create" value={summary.willCreate} tone="ok" />
                     <SummaryCell label="Would skip" value={summary.willSkip} tone="mute" />
+                    {summary.needsDecision !== undefined ? (
+                        <SummaryCell
+                            label="Needs a decision"
+                            value={summary.needsDecision}
+                            tone={summary.needsDecision > 0 ? "warn" : "mute"}
+                        />
+                    ) : null}
                     <SummaryCell label="Would fail" value={summary.willFail} tone={summary.willFail > 0 ? "warn" : "mute"} />
                 </div>
                 <p className="mt-2 text-xs text-text-mute">
@@ -137,6 +147,15 @@ export default async function ImportBatchPage({
                     commit — a customer/vendor/part added between preview and commit changes
                     &quot;fail&quot; to &quot;create&quot;.
                 </p>
+                {summary.needsDecision !== undefined && summary.needsDecision > 0 ? (
+                    <p className="mt-2 text-xs text-warning-700 dark:text-warning-500">
+                        &quot;Needs a decision&quot; rows: phone matches an existing customer but the
+                        name is different. That&apos;s the same person spelled two ways, or two
+                        different people sharing a landline — the import won&apos;t guess. On
+                        commit these rows will be refused and listed below with the existing
+                        name so you can resolve in the CSV.
+                    </p>
+                ) : null}
             </section>
 
             {/* Parse errors — file-format issues surfaced by the parser */}
